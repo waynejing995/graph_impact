@@ -1,0 +1,69 @@
+- generic [ref=e2] [box=0,0,1440,900]:
+  - banner [ref=e3] [box=0,0,1440,52]:
+    - generic [ref=e4] [box=16,19,220,15]: ASIP Evidence Workbench
+    - textbox "Global symbol search" [ref=e5] [box=248,10,797,32]: GCVM_L2_CNTL
+    - generic [ref=e6] [box=1057,14,278,24]:
+      - generic [ref=e7] [box=1057,14,183,24]: "Ollama: nomic-embed-text"
+      - generic [ref=e9] [box=1247,14,87,24]: "Index: ready"
+    - generic [ref=e10] [box=1347,14,77,24]: amd-mvp1
+  - main [ref=e11] [box=0,52,1440,848]:
+    - navigation "ASIP sections" [ref=e12] [box=0,52,220,848]:
+      - link "Evidence Search" [ref=e13] [cursor=pointer] [box=12,64,195,34]:
+        - /url: "#"
+      - link "Graph Explorer" [ref=e14] [cursor=pointer] [box=12,98,195,34]:
+        - /url: "#"
+      - link "Corpus" [ref=e15] [cursor=pointer] [box=12,132,195,34]:
+        - /url: "#"
+      - link "Resolver Profiles" [ref=e16] [cursor=pointer] [box=12,166,195,34]:
+        - /url: "#"
+      - link "Acceptance Tests" [ref=e17] [cursor=pointer] [box=12,200,195,34]:
+        - /url: "#"
+      - link "Settings" [ref=e18] [cursor=pointer] [box=12,234,195,34]:
+        - /url: "#"
+    - generic [ref=e19] [box=220,52,860,848]:
+      - generic [ref=e20] [box=234,66,832,32]:
+        - textbox "Evidence query" [ref=e21] [box=234,66,730,32]: Who writes regGCVM_L2_CNTL?
+        - button "Run query" [ref=e22] [box=974,66,92,32]
+      - generic [ref=e23] [box=234,110,832,24]:
+        - generic [ref=e24] [box=234,110,62,24]: Code
+        - generic [ref=e26] [box=304,110,79,24]: Register
+        - generic [ref=e28] [box=391,110,55,24]: Doc
+        - generic [ref=e30] [box=453,110,55,24]: PDF
+      - table "Evidence results" [ref=e32] [box=234,146,832,134]:
+        - row "GCVM_L2_CNTL write 0.94 drivers/gpu/drm/amd/amdgpu/gmc_v11_0.c:122" [ref=e65] [box=235,147,830,44]:
+          - code [ref=e35] [box=267,162,308,14]: GCVM_L2_CNTL
+          - generic [ref=e36] [box=585,157,96,24]: write
+          - generic [ref=e66] [box=691,161,72,15]: "0.94"
+          - generic [ref=e67] [box=773,161,280,15]: drivers/gpu/drm/amd/amdgpu/gmc_v11_0.c:122
+        - row "ENABLE_L2_CACHE field_set 0.91 gc_11_0_0_sh_mask.h:44" [ref=e68] [box=235,191,830,44]:
+          - code [ref=e39] [box=267,206,308,14]: ENABLE_L2_CACHE
+          - generic [ref=e40] [box=585,201,96,24]: field_set
+          - generic [ref=e69] [box=691,205,72,15]: "0.91"
+          - generic [ref=e70] [box=773,205,280,15]: gc_11_0_0_sh_mask.h:44
+        - row "GC VM mention 0.72 amd-instinct-mi300-cdna3.pdf#page=1" [ref=e71] [box=235,235,830,44]:
+          - code [ref=e43] [box=267,250,308,14]: GC VM
+          - generic [ref=e44] [box=585,245,96,24]: mention
+          - generic [ref=e72] [box=691,250,72,15]: "0.72"
+          - generic [ref=e73] [box=773,250,280,15]: amd-instinct-mi300-cdna3.pdf#page=1
+    - complementary [ref=e45] [box=1080,52,360,848]:
+      - heading "Resolved Chain" [level=2] [ref=e46] [box=1095,66,331,17]
+      - generic [ref=e47] [box=1095,95,331,132]:
+        - paragraph [ref=e48] [box=1106,106,309,19]:
+          - code [ref=e49] [box=1106,109,296,14]: WREG32_SOC15(GC, 0, regGCVM_L2_CNTL, tmp)
+        - paragraph [ref=e50] [box=1106,132,309,57]:
+          - code [ref=e51] [box=1118,135,202,52]: adev->reg_offset[GC_HWIP][0][regGCVM_L2_CNTL_BASE_IDX] + regGCVM_L2_CNTL
+        - paragraph [ref=e52] [box=1106,197,309,19]:
+          - code [ref=e53] [box=1118,200,152,14]: register GCVM_L2_CNTL
+      - heading "Register Fields" [level=3] [ref=e54] [box=1095,241,331,14]
+      - paragraph [ref=e55] [box=1095,263,331,19]:
+        - code [ref=e56] [box=1095,266,202,14]: GCVM_L2_CNTL.ENABLE_L2_CACHE
+      - heading "Related Entities" [level=3] [ref=e57] [box=1095,296,331,14]
+      - generic [ref=e58] [box=1095,318,331,87]:
+        - paragraph [ref=e59] [box=1106,329,309,19]:
+          - code [ref=e60] [box=1106,332,87,14]: GCVM_L2_CNTL
+          - text: has_field
+          - code [ref=e61] [box=1255,332,108,14]: ENABLE_L2_CACHE
+        - paragraph [ref=e62] [box=1106,356,309,38]:
+          - code [ref=e63] [box=1106,359,224,14]: gmc_v11_0_init_golden_registers
+          - text: writes
+          - code [ref=e64] [box=1106,378,87,14]: GCVM_L2_CNTL

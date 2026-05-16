@@ -1,7 +1,7 @@
 # ASIP MVP-1 Design
 
 Date: 2026-05-16
-Status: Draft for review
+Status: Ready for MVP-1 implementation
 
 ## 1. Summary
 
@@ -290,7 +290,7 @@ Each evidence item includes at least:
 
 ```text
 id
-source_type: code | doc | register
+source_type: code | doc | register | pdf
 repo
 path
 line_start
@@ -326,6 +326,15 @@ Default direction:
 - OpenAI-compatible embedding/chat endpoints through the same provider abstraction.
 
 Retrieval, embedding, and semantic-edge extraction must not hardcode Ollama-specific request/response logic.
+
+Local model deployment lock for this development machine:
+
+- Machine inspected on 2026-05-16: Apple M4, 24GB memory.
+- Default low-memory embedding model: `nomic-embed-text`, verified through Ollama HTTP embeddings API with 768-dimensional output.
+- Default low-memory semantic-edge model: `qwen2.5:1.5b`, verified through Ollama chat JSON mode for a simple register-field edge extraction.
+- Semantic-edge extraction is disabled by default and loaded only for explicit acceptance tests or configured extraction jobs.
+- Ollama `keep_alive` should be short (`30s` for embeddings, `0s` for semantic-edge smoke tests) so models are not kept resident unnecessarily.
+- Existing larger models such as `qwen3-embedding:4b` and `qwen3.5:4b` may remain optional profiles, but they are not the MVP-1 default because they use more memory.
 
 ## 13. Web UI
 
@@ -535,6 +544,8 @@ MCP:
 
 Use Playwright for the Web UI once the app exists.
 
+Browser-controlled QA is required for Web UI completion. The implementation workflow must open the real local app in a browser, inspect desktop and narrow viewports, capture a screenshot or accessibility snapshot, and verify the workbench is not a marketing landing page.
+
 UI tests should verify:
 
 - The first screen is the evidence workbench, not a landing page.
@@ -607,13 +618,47 @@ Phase 5: Tests and acceptance hardening
 - Provider-switching tests.
 - Real-corpus smoke run.
 
-## 17. Open Implementation Questions
+## 17. Implementation Locks
 
-These are implementation details, not scope blockers:
+These choices close the MVP-1 design plan and are reflected in the implementation plan.
 
-- Exact Python package layout: `packages/core` versus a flatter `apps/api/src/asip`.
-- Exact sqlite-vec packaging and deployment method for macOS/Linux.
-- Exact Ollama embedding model default.
-- Whether MCP runs as a separate app or a thin wrapper over the API/core process.
-- Whether the graph UI starts as a simple relationship panel or an interactive graph canvas.
+Python package layout:
 
+- `packages/core/src/asip` is the reusable Python core package.
+- `apps/api` and `apps/mcp` are thin application packages that import `asip`.
+- Shared retrieval, resolver, indexing, graph, PDF, and provider logic must not live only inside `apps/api` or `apps/web`.
+
+SQLite vector packaging:
+
+- MVP-1 uses `sqlite-vec` through a `VectorStore` adapter.
+- Tests use a deterministic small embedding fixture and exercise the adapter contract.
+- The adapter is the only code path allowed to call extension-specific vector SQL.
+
+Ollama provider default:
+
+- The default local provider profile is named `ollama-local`.
+- The embedding model name is configured in `configs/models/ollama-local.yaml`; the shipped sample value is `nomic-embed-text`.
+- Provider tests mock HTTP responses so unit and integration tests do not require a running local model.
+
+MCP process shape:
+
+- `apps/mcp` runs as a separate MCP server process.
+- It imports `packages/core` directly for local operation and may call the FastAPI service only for UI/session-specific state.
+
+Graph UI scope:
+
+- MVP-1 starts with a bounded relationship panel inside the right inspector.
+- The panel shows selected entity, 1-2 hop neighbors, edge labels, confidence, and evidence links.
+- A full interactive graph canvas is deferred until the evidence workbench and retrieval flow are stable.
+
+Browser QA scope:
+
+- The design preview and future Web UI must be validated with real browser control.
+- QA must check desktop and narrow viewports, left rail, global search, evidence rows, inspector, relationship panel, provider/index status, and source-type indicators.
+- QA evidence should be recorded under `docs/qa/`.
+
+Executable implementation plan:
+
+```text
+docs/superpowers/plans/2026-05-16-asip-mvp1-implementation.md
+```

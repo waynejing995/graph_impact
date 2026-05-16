@@ -1,0 +1,63 @@
+- generic [ref=e2] [box=0,0,390,844]:
+  - banner [ref=e3] [box=0,0,390,52]:
+    - generic [ref=e4] [box=16,10,358,15]: ASIP Evidence Workbench
+    - textbox "Global symbol search" [ref=e5] [box=16,37,358,32]: GCVM_L2_CNTL
+    - generic [ref=e6] [box=16,81,358,24]:
+      - generic [ref=e7] [box=16,81,183,24]: "Ollama: nomic-embed-text"
+      - generic [ref=e9] [box=207,81,87,24]: "Index: ready"
+    - generic [ref=e10] [box=16,117,358,24]: amd-mvp1
+  - main [ref=e11] [box=0,52,390,792]:
+    - navigation "ASIP sections" [ref=e12] [box=0,52,390,116]:
+      - link "Evidence Search" [ref=e13] [cursor=pointer] [box=12,64,123,76]:
+        - /url: "#"
+      - link "Graph Explorer" [ref=e14] [cursor=pointer] [box=143,64,111,76]:
+        - /url: "#"
+      - link "Corpus" [ref=e15] [cursor=pointer] [box=261,64,64,76]:
+        - /url: "#"
+      - link "Resolver Profiles" [ref=e16] [cursor=pointer] [box=333,64,121,76]:
+        - /url: "#"
+      - link "Acceptance Tests" [ref=e17] [cursor=pointer] [box=463,64,127,76]:
+        - /url: "#"
+      - link "Settings" [ref=e18] [cursor=pointer] [box=598,64,70,76]:
+        - /url: "#"
+    - generic [ref=e19] [box=0,168,390,284]:
+      - generic [ref=e20] [box=14,182,362,32]:
+        - textbox "Evidence query" [ref=e21] [box=14,182,260,32]: Who writes regGCVM_L2_CNTL?
+        - button "Run query" [ref=e22] [box=284,182,92,32]
+      - generic [ref=e23] [box=14,226,362,24]:
+        - generic [ref=e24] [box=14,226,62,24]: Code
+        - generic [ref=e26] [box=84,226,79,24]: Register
+        - generic [ref=e28] [box=171,226,55,24]: Doc
+        - generic [ref=e30] [box=233,226,55,24]: PDF
+      - table "Evidence results" [ref=e32] [box=14,262,362,134]:
+        - row "GCVM_L2_CNTL write" [ref=e74] [box=15,263,360,44]:
+          - code [ref=e35] [box=47,278,236,14]: GCVM_L2_CNTL
+          - generic [ref=e36] [box=293,273,70,24]: write
+        - row "ENABLE_L2_CACHE field_set" [ref=e75] [box=15,307,360,44]:
+          - code [ref=e39] [box=47,322,236,14]: ENABLE_L2_CACHE
+          - generic [ref=e40] [box=293,317,70,24]: field_set
+        - row "GC VM mention" [ref=e76] [box=15,351,360,44]:
+          - code [ref=e43] [box=47,366,236,14]: GC VM
+          - generic [ref=e44] [box=293,361,70,24]: mention
+    - complementary [ref=e45] [box=0,453,390,391]:
+      - heading "Resolved Chain" [level=2] [ref=e46] [box=14,468,362,17]
+      - generic [ref=e47] [box=14,496,362,114]:
+        - paragraph [ref=e48] [box=25,507,340,19]:
+          - code [ref=e49] [box=25,510,296,14]: WREG32_SOC15(GC, 0, regGCVM_L2_CNTL, tmp)
+        - paragraph [ref=e50] [box=25,534,340,38]:
+          - code [ref=e51] [box=37,537,318,33]: adev->reg_offset[GC_HWIP][0][regGCVM_L2_CNTL_BASE_IDX] + regGCVM_L2_CNTL
+        - paragraph [ref=e52] [box=25,580,340,19]:
+          - code [ref=e53] [box=37,583,152,14]: register GCVM_L2_CNTL
+      - heading "Register Fields" [level=3] [ref=e54] [box=14,624,362,14]
+      - paragraph [ref=e55] [box=14,646,362,19]:
+        - code [ref=e56] [box=14,649,202,14]: GCVM_L2_CNTL.ENABLE_L2_CACHE
+      - heading "Related Entities" [level=3] [ref=e57] [box=14,679,362,14]
+      - generic [ref=e58] [box=14,701,362,87]:
+        - paragraph [ref=e59] [box=25,712,340,19]:
+          - code [ref=e60] [box=25,715,87,14]: GCVM_L2_CNTL
+          - text: has_field
+          - code [ref=e61] [box=174,715,108,14]: ENABLE_L2_CACHE
+        - paragraph [ref=e62] [box=25,739,340,38]:
+          - code [ref=e63] [box=25,742,224,14]: gmc_v11_0_init_golden_registers
+          - text: writes
+          - code [ref=e64] [box=25,761,87,14]: GCVM_L2_CNTL

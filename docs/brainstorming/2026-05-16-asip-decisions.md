@@ -385,6 +385,128 @@ Expected command ownership:
 - `pnpm` manages the Next.js/shadcn UI workspace.
 - `just` provides top-level project commands for setup, dev, indexing, tests, linting, and common workflows.
 
+## MVP-1 Implementation Locks Chosen
+
+We closed the remaining implementation choices required to make the design plan executable.
+
+Python package layout:
+
+```text
+packages/core/src/asip
+```
+
+`packages/core` owns the reusable ASIP Python core. `apps/api` and `apps/mcp` are thin application packages that import the core. Retrieval, resolver, indexing, graph, PDF, and provider logic should not live only inside FastAPI routes, Next.js routes, or MCP tool handlers.
+
+SQLite vector integration:
+
+```text
+sqlite-vec behind a VectorStore adapter
+```
+
+The adapter is the only layer that should contain extension-specific vector SQL. Unit and integration tests should use deterministic embedding fixtures and validate the adapter contract.
+
+Ollama provider default:
+
+```text
+profile: ollama-local
+sample embedding model: nomic-embed-text
+```
+
+The exact model name is configured in `configs/models/ollama-local.yaml`. Provider tests should mock Ollama and OpenAI-compatible HTTP responses so normal test runs do not require a running model server.
+
+MCP server shape:
+
+```text
+apps/mcp as a separate process importing packages/core
+```
+
+The MCP server should reuse ASIP core logic directly for local operation and only call FastAPI when UI/session-specific service state is required.
+
+Graph UI scope:
+
+```text
+right-inspector relationship panel first
+```
+
+MVP-1 should start with a bounded 1-2 hop relationship panel that shows entity neighbors, edge labels, confidence, and evidence links. A full interactive graph canvas is deferred until the evidence workbench and retrieval flow are stable.
+
+The executable implementation plan is:
+
+```text
+docs/superpowers/plans/2026-05-16-asip-mvp1-implementation.md
+```
+
+## Local Ollama Model Deployment Chosen
+
+We inspected the local development machine:
+
+```text
+CPU: Apple M4
+Memory: 24GB
+Ollama: installed
+```
+
+Existing larger models were present:
+
+```text
+qwen3-embedding:4b
+qwen3.5:4b
+```
+
+`qwen3-embedding:4b` worked for embeddings but loaded with a much larger resident footprint than needed for MVP-1 smoke testing. `qwen3.5:4b` was too slow for the low-memory semantic-edge smoke path.
+
+We deployed and verified smaller Ollama defaults:
+
+```text
+embedding: nomic-embed-text
+semantic-edge JSON smoke: qwen2.5:1.5b
+```
+
+Verification results:
+
+- `nomic-embed-text` returned a 768-dimensional embedding for `GCVM_L2_CNTL register field evidence`.
+- `qwen2.5:1.5b` returned valid JSON in Ollama chat JSON mode for `GCVM_L2_CNTL has field ENABLE_L2_CACHE`.
+- After the smoke tests, `ollama ps` was empty, confirming no model remained resident.
+
+Default MVP-1 model policy:
+
+- Use `nomic-embed-text` for low-memory local embeddings.
+- Keep semantic-edge extraction disabled by default.
+- Use `qwen2.5:1.5b` only for explicit semantic-edge tests/jobs.
+- Configure short keep-alive values to avoid unnecessary memory pressure.
+- Keep larger local models as optional profiles, not defaults.
+
+## Browser-Controlled QA Chosen
+
+We added browser-controlled QA as a required part of the design and implementation workflow.
+
+The current design-plan QA target is a static workbench preview:
+
+```text
+docs/qa/asip-workbench-design-preview.html
+```
+
+The QA record is:
+
+```text
+docs/qa/2026-05-16-asip-browser-and-ollama-qa.md
+```
+
+Implementation must later run browser-controlled QA against the real Next.js app, not only the static design preview.
+
+## Superpowers Execution Workflow Chosen
+
+We confirmed that MVP-1 implementation should follow the Superpowers workflow:
+
+- Use `superpowers:using-git-worktrees` before implementation begins.
+- Use `superpowers:test-driven-development` for production code changes.
+- Use `superpowers:subagent-driven-development` to execute the implementation plan.
+- Dispatch one fresh implementer subagent per plan task.
+- Give each implementer the exact task text and required context instead of making it rediscover the whole plan.
+- Require RED/GREEN verification in every task: write the failing test, run it and confirm the expected failure, implement the minimal code, then run the passing test.
+- After each implementation task, run two review gates: spec compliance review first, then code quality review.
+- Do not move to the next task while either review gate still has open issues.
+
 ## Web UI Design Direction Chosen
 
 We confirmed that the ASIP Web UI should be an engineering evidence workbench, not a marketing landing page.
