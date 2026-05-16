@@ -89,6 +89,19 @@ test("theme toggle supports light and dark modes by default", async ({ page }) =
   await expect(page.locator("html")).toHaveAttribute("data-theme", "dark");
 });
 
+test("light theme persists across route navigation", async ({ page }) => {
+  await page.goto("/corpus");
+  await page.getByRole("button", { name: "Switch to light theme" }).click();
+  await expect(page.locator("html")).toHaveAttribute("data-theme", "light");
+
+  await page.getByRole("link", { name: "Resolver Profiles" }).click();
+
+  await expect(page).toHaveURL(/\/resolver-profiles$/);
+  await expect(page.locator("html")).toHaveAttribute("data-theme", "light");
+  await expect(page.getByRole("button", { name: "Switch to dark theme" })).toBeVisible();
+  await expect.poll(async () => page.evaluate(() => window.localStorage.getItem("asip-theme"))).toBe("light");
+});
+
 test("all routes share the canonical anchor chrome baseline", async ({ page }) => {
   await page.setViewportSize({ width: 2048, height: 1280 });
 

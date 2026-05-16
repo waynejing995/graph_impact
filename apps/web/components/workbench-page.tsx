@@ -15,6 +15,10 @@ type WorkbenchPageProps = {
 };
 
 const providerSettingsStorageKey = "asip-provider-settings";
+const themeStorageKey = "asip-theme";
+const defaultTheme = "dark";
+
+type Theme = "dark" | "light";
 
 type ProviderSettings = {
   provider: "ollama" | "openai-compatible";
@@ -70,7 +74,8 @@ export function WorkbenchPage({ pageId }: WorkbenchPageProps) {
   const config = pageConfigs[pageId];
   const [query, setQuery] = useState(config.query);
   const [runCount, setRunCount] = useState(1);
-  const [theme, setTheme] = useState<"dark" | "light">("dark");
+  const [theme, setTheme] = useState<Theme>(defaultTheme);
+  const [themeReady, setThemeReady] = useState(false);
   const [providerSettings, setProviderSettings] = useState<ProviderSettings>(defaultProviderSettings);
   const [settingsDraft, setSettingsDraft] = useState<ProviderSettingsDraft>(
     settingsToDraft(defaultProviderSettings)
@@ -80,8 +85,19 @@ export function WorkbenchPage({ pageId }: WorkbenchPageProps) {
   const [actionMessage, setActionMessage] = useState("");
 
   useEffect(() => {
+    const storedTheme = readStoredTheme();
+    setTheme(storedTheme);
+    document.documentElement.dataset.theme = storedTheme;
+    setThemeReady(true);
+  }, []);
+
+  useEffect(() => {
+    if (!themeReady) {
+      return;
+    }
     document.documentElement.dataset.theme = theme;
-  }, [theme]);
+    writeStoredTheme(theme);
+  }, [theme, themeReady]);
 
   useEffect(() => {
     setActionMessage("");
@@ -339,6 +355,31 @@ function buildRuntimeEdgeModelConfig(settings: ProviderSettings): RuntimeEdgeMod
 function numberFromDraft(value: string, fallback: string): number {
   const parsed = Number(value);
   return Number.isFinite(parsed) ? parsed : Number(fallback);
+}
+
+function readStoredTheme(): Theme {
+  if (typeof window === "undefined") {
+    return defaultTheme;
+  }
+
+  try {
+    const stored = window.localStorage.getItem(themeStorageKey);
+    return isTheme(stored) ? stored : defaultTheme;
+  } catch {
+    return defaultTheme;
+  }
+}
+
+function writeStoredTheme(theme: Theme) {
+  try {
+    window.localStorage.setItem(themeStorageKey, theme);
+  } catch {
+    // Ignore storage failures; the live page theme still updates.
+  }
+}
+
+function isTheme(value: string | null): value is Theme {
+  return value === "dark" || value === "light";
 }
 
 function ProviderSettingsPanel({
