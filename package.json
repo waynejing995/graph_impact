@@ -1,0 +1,14 @@
+{
+  "name": "graph-impact",
+  "private": true,
+  "packageManager": "pnpm@9.15.4",
+  "scripts": {
+    "dev": "pnpm --filter web dev",
+    "build": "pnpm --filter web build",
+    "lint": "pnpm --filter web lint",
+    "test:ui": "pnpm --filter web test:ui"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.52.0"
+  }
+}

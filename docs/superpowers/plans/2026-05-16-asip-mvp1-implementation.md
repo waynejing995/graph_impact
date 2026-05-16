@@ -28,7 +28,7 @@
 - Vector implementation: `sqlite-vec` behind `asip.storage.vector.VectorStore`
 - Graph persistence: SQLite tables
 - Graph runtime: NetworkX loaded on demand from SQLite edges
-- First graph UI: bounded right-inspector relationship panel, not a full canvas
+- Graph UI: `/graph` is the global weighted relationship graph; page-local relationship summaries may appear in inspectors.
 - Browser QA: required through real browser control for the static design preview now and the real Next.js app during implementation.
 
 ## Local Ollama Model Policy
@@ -1599,8 +1599,62 @@ UI implementation rules:
 - Use `gap-*` spacing utilities rather than `space-*`.
 - Do not use raw Tailwind color classes such as `bg-green-500`; use semantic tokens or the ASIP source variables.
 - Do not create custom badge/span primitives when a shadcn component exists.
-- Do not create a marketing hero, large gradient, decorative blob, large source-type fill, or full graph canvas for MVP-1.
+- Do not create a marketing hero, large gradient, decorative blob, or large source-type fill for MVP-1. `/graph` is the global weighted relationship graph, not a decorative background.
 - Source colors are only small indicators: dots, thin borders, or compact badges.
+
+- [ ] **Step 3A: Generate page-level visual anchors with imagegen**
+
+Before final Web QA, create a separate imagegen visual anchor prompt and raw reference for every first-class Web page or route. These are not decorative assets for the product UI; they are design-reference anchors used by QA to compare the actual rendered page against the intended information density, hierarchy, color use, and page role. All anchors must share the ASIP workbench style, target a 2K-class desktop viewport by default, and support light and dark themes.
+
+Persist each prompt in `docs/visual-anchors/prompts/`, mirror the QA summary in `docs/qa/2026-05-16-web-visual-anchors.md`, preserve raw imagegen outputs under `docs/visual-anchors/imagegen-raw/images/`, and store canonical normalized 2048 x 1280 anchors under `docs/visual-anchors/images/` with the same page id. Canonical anchors must be captured from the live app with the hard baseline in `docs/visual-anchors/prompts/base-workbench-geometry.md`, so topbar, left rail, center workspace, and right inspector do not drift between pages.
+
+Page-level imagegen prompts:
+
+1. `evidence-workbench` for `/`
+
+```text
+Create a high-fidelity product UI visual anchor for an engineering evidence workbench named ASIP Evidence Workbench. Unified ASIP operational interface with default light and dark theme support, not a marketing landing page. Target a 2K-class 16:10 desktop screenshot. Top status bar with corpus selector, global symbol search, Ollama/index status. Left sidebar with Evidence Search active. Center pane has a dense query composer, compact source filters, and evidence rows for code, register, doc, and PDF sources. Right inspector shows Resolved Chain, register fields, related entities, and a relationship summary that links into the global graph. Use small color accents only: code cyan, register amber, doc violet, pdf rose, graph blue, primary green. No gradient blobs, no hero section. Text must be readable and not overlap.
+```
+
+2. `graph-explorer` for `/graph`
+
+```text
+Create a high-fidelity product UI visual anchor for ASIP Graph Explorer at `/graph`, the global weighted relationship graph for the corpus. Unified ASIP operational interface with default light and dark theme support. Target a 2K-class 16:10 desktop screenshot. Left sidebar with Graph Explorer active. Top bar same as ASIP. Center area shows the global weighted graph with entity nodes, weighted relation edges, confidence/weight encoding, and an edge list or path table for selected relationships. Include controls for hops, relation type, confidence threshold, weighting mode, and selected entity GCVM_L2_CNTL. Right inspector shows shortest paths, source-backed evidence, and edge provenance. Use restrained colors: graph blue edges, code cyan, register amber, primary green. Dense operational SaaS layout, no hero, no background art, no oversized cards.
+```
+
+3. `corpus` for `/corpus`
+
+```text
+Create a high-fidelity product UI visual anchor for ASIP Corpus Management. Unified ASIP engineering dashboard with default light and dark theme support. Target a 2K-class 16:10 desktop screenshot. Left sidebar with Corpus active. Main table lists Linux amdgpu, AMD MxGPU, register headers, repo docs, and PDF sources with clone path, commit, file count, indexing status, and last run. Right inspector shows selected corpus metadata, include patterns, PDF conversion status, and FTS/vector counts. Use small source-type badges and status dots. Quiet dense layout for repeated use, no marketing content, no decorative imagery.
+```
+
+4. `resolver-profiles` for `/resolver-profiles`
+
+```text
+Create a high-fidelity product UI visual anchor for ASIP Resolver Profiles. Unified ASIP developer tool with default light and dark theme support. Target a 2K-class 16:10 desktop screenshot. Left sidebar with Resolver Profiles active. Center pane shows profile list for linux-amdgpu, amd-mxgpu, and toy-python. Include editable tables for wrapper names, macro expansion rules, symbol prefixes, device context variables, and non-macro Python extraction rules. Right inspector shows resolved chain preview for WREG32_SOC15 and adapt->reg_offset. Use monospaced code blocks, compact controls, shadcn-style tabs and badges. No hero, no decorative gradients.
+```
+
+5. `acceptance-tests` for `/acceptance`
+
+```text
+Create a high-fidelity product UI visual anchor for ASIP Acceptance Tests. Unified ASIP QA workbench with default light and dark theme support. Target a 2K-class 16:10 desktop screenshot. Left sidebar with Acceptance Tests active. Main pane lists nine MVP queries with pass/fail status, required symbols, model/provider, corpus, duration, and evidence count. Include a selected qwen3.5 full-corpus semantic-edge run showing 9 queries, 7 pass, 2 fail, 1328 files scanned. Right inspector shows failed query details, missing terms, source snippets, and rerun controls. Use compact tables, status badges, and readable code evidence. No marketing hero or decorative background.
+```
+
+6. `settings` for `/settings`
+
+```text
+Create a high-fidelity product UI visual anchor for ASIP Settings. Unified ASIP configuration page with default light and dark theme support. Target a 2K-class 16:10 desktop screenshot. Left sidebar with Settings active. Main pane has provider profiles for Ollama local and OpenAI-compatible APIs, embedding model, semantic edge model, timeout, num_ctx, num_predict, think toggle, and vector backend sqlite-vec. Include storage settings for SQLite FTS5 and NetworkX graph runtime. Right pane shows validation status and recent provider smoke result. Dense shadcn-style form controls with restrained green primary actions. No landing-page style, no gradients, no decorative blobs.
+```
+
+Visual anchor QA pass criteria:
+
+- The actual page screenshot must match the anchor's page role, first-screen information hierarchy, navigation state, and primary panes.
+- The actual page screenshot must match the canonical geometry baseline: 2048 x 1280 canvas, topbar `0,0,2048,72`, left rail `0,72,288`, center content origin `312,96`, and right inspector `1536,72,488`.
+- The actual page must keep the ASIP palette: neutral dark surfaces, primary green, code cyan, register amber, doc violet, pdf rose, graph blue. Source colors stay as small indicators.
+- The default desktop QA target is a 2K-class viewport, and light/dark themes must preserve hierarchy, contrast, and readable source indicators.
+- The actual page must not show a marketing hero, decorative graph background, gradient/blob background, or card-inside-card nesting. Graph Explorer must show `/graph` as the global weighted relationship graph with weighted edges, relation controls, evidence-backed provenance, and path inspection.
+- Text must be readable at desktop and mobile widths with no overlap or clipped controls.
+- QA evidence must include the real page screenshot path, the matching page-level anchor path, viewport size, pass/fail, and concrete visual deviations.
 
 - [ ] **Step 4: Build the workbench shell**
 
@@ -1609,9 +1663,9 @@ The first page must render:
 - Top bar with corpus selector, global search, provider status, and indexing status.
 - Left rail with Evidence Search, Graph Explorer, Corpus, Resolver Profiles, Acceptance Tests, and Settings.
 - Center pane with query composer, filters, and grouped evidence rows.
-- Right inspector with selected evidence detail, resolved chain, fields, related entities, source preview, and relationship panel.
+- Right inspector with selected evidence detail, resolved chain, fields, related entities, source preview, and relationship summary.
 
-The relationship panel must be bounded inside the right inspector with `data-testid="relationship-panel"`. A full graph canvas with `data-testid="graph-canvas"` must not be present in MVP-1.
+The Evidence Search route may keep a bounded right-inspector relationship summary with `data-testid="relationship-panel"`, but `/graph` must render the global weighted relationship graph with weighted edges, relation controls, evidence-backed provenance, and path inspection.
 
 - [ ] **Step 5: Verify and commit**
 

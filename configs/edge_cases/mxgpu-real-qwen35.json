@@ -1,0 +1,97 @@
+{
+  "name": "mxgpu-real-qwen35",
+  "repo": {
+    "url": "https://github.com/amd/MxGPU-Virtualization",
+    "default_source_root": "data/corpora/MxGPU-Virtualization"
+  },
+  "model": {
+    "preferred": "qwen3.5:4b",
+    "fallback": "qwen3.6",
+    "format": "json",
+    "num_ctx": 8192,
+    "temperature": 0,
+    "keep_alive": "0s"
+  },
+  "cases": [
+    {
+      "id": "cp_int_cntl_read_write",
+      "question": "Which register is read and then written in the CP interrupt masking sequence?",
+      "path": "libgv/core/hw/navi3/navi32_reset.c",
+      "start": 1288,
+      "end": 1296,
+      "expected_terms": ["regCP_INT_CNTL"]
+    },
+    {
+      "id": "compute_queue_dequeue_reset",
+      "question": "Which compute queue registers are written during queue dequeue/reset?",
+      "path": "libgv/core/hw/navi3/navi32_reset.c",
+      "start": 1297,
+      "end": 1319,
+      "expected_terms": ["regCP_HQD_DEQUEUE_REQUEST", "regSPI_COMPUTE_QUEUE_RESET"]
+    },
+    {
+      "id": "rlc_fed_pending_field",
+      "question": "Which field of RLC_FED_DRVR_STATUS is set and waited on?",
+      "path": "libgv/core/hw/navi3/navi32_reset.c",
+      "start": 1320,
+      "end": 1328,
+      "expected_terms": ["RLC_FED_DRVR_STATUS", "PENDING"]
+    },
+    {
+      "id": "grbm_soft_reset_fields",
+      "question": "Which GRBM_SOFT_RESET fields are set before the soft reset write?",
+      "path": "libgv/core/hw/navi3/navi32_reset.c",
+      "start": 1344,
+      "end": 1361,
+      "expected_terms": ["GRBM_SOFT_RESET", "SOFT_RESET_CP", "SOFT_RESET_GFX"]
+    },
+    {
+      "id": "gcvm_l2_busy_check",
+      "question": "Which status registers and masks are used to detect UTCL2 busy/hang?",
+      "path": "libgv/core/hw/navi3/navi32_reset.c",
+      "start": 712,
+      "end": 724,
+      "expected_terms": ["regGCVM_L2_STATUS", "GCVM_L2_STATUS__L2_BUSY_MASK"]
+    },
+    {
+      "id": "navi32_reg_offset_base_map",
+      "question": "Which HWIP register offset bases are mapped into adapt->reg_offset?",
+      "path": "libgv/core/hw/navi3/navi32_reg_init.c",
+      "start": 38,
+      "end": 52,
+      "expected_terms": ["adapt->reg_offset", "GC_HWIP", "GC_BASE"]
+    },
+    {
+      "id": "doorbell_interrupt_disable",
+      "question": "Which register field disables doorbell interrupt before reset?",
+      "path": "libgv/core/hw/navi3/navi32_reset.c",
+      "start": 920,
+      "end": 925,
+      "expected_terms": ["BIF_DOORBELL_INT_CNTL", "DOORBELL_INTERRUPT_DISABLE"]
+    },
+    {
+      "id": "kfd_vmid_trap_enable",
+      "question": "Which field enables trap for each KFD VMID?",
+      "path": "libgv/core/hw/navi3/gfx_v11_0.c",
+      "start": 166,
+      "end": 176,
+      "expected_terms": ["SPI_GDBG_PER_VMID_CNTL", "TRAP_EN"]
+    },
+    {
+      "id": "gds_vmid_offset_writes",
+      "question": "Which GDS VMID registers are written through SOC15 offset wrappers?",
+      "path": "libgv/core/hw/navi3/gfx_v11_0.c",
+      "start": 181,
+      "end": 186,
+      "expected_terms": ["regGDS_VMID0_BASE", "regGDS_VMID0_SIZE", "regGDS_GWS_VMID0"]
+    },
+    {
+      "id": "rlc_refclock_reads",
+      "question": "Which RLC refclock timestamp registers are read and rechecked for overflow?",
+      "path": "libgv/core/hw/navi3/navi32_diag_data.c",
+      "start": 207,
+      "end": 219,
+      "expected_terms": ["regRLC_REFCLOCK_TIMESTAMP_MSB", "regRLC_REFCLOCK_TIMESTAMP_LSB"]
+    }
+  ]
+}

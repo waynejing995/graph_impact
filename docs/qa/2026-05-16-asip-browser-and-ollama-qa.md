@@ -69,7 +69,8 @@ Required checks:
 - Right inspector and resolved chain are visible.
 - Relationship panel is visible.
 - Source-type indicators for code, register, and PDF are small indicators.
-- No full graph canvas is present in the MVP-1 preview.
+- The Evidence Search preview keeps graph context bounded to the right-inspector relationship panel.
+- `/graph` must be QA'd separately as the global weighted relationship graph against its own page-level anchor.
 
 ## Result
 
