@@ -41,6 +41,14 @@ export type EvidenceRow = {
   relation: string;
   score: string;
   path: string;
+  snippet?: string;
+  resolved_chain?: string;
+  source_type?: string;
+  entity_type?: string;
+  corpus_id?: string;
+  line_start?: number;
+  line_end?: number;
+  page?: number;
 };
 
 export type PageConfig = {
@@ -190,7 +198,7 @@ export const pageConfigs: Record<PageId, PageConfig> = {
       "GCVM_L2_CNTL connects code, field, doc, and PDF evidence",
       "Weighted global graph emphasizes stronger evidence links"
     ],
-    actionLabel: "Inspect edge provenance"
+    actionLabel: "Generate semantic edges"
   },
   corpus: {
     id: "corpus",

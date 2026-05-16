@@ -1,0 +1,745 @@
+{
+  "source": "asip.acceptance",
+  "generated_at": "2026-05-16T22:59:14+00:00",
+  "db_path": "/tmp/asip-clean-amd-qwen35-provider-2026-05-17.db",
+  "database_health": {
+    "status": "pass",
+    "failure_reasons": []
+  },
+  "provider_settings": {
+    "embedding": {
+      "provider": "ollama",
+      "api_base_url": "http://localhost:11434",
+      "api_path": "/api/embed",
+      "model": "nomic-embed-text:latest",
+      "timeout_seconds": 120
+    },
+    "edge": {
+      "provider": "ollama",
+      "api_base_url": "http://localhost:11434",
+      "api_path": "/api/chat",
+      "model": "qwen3.5:4b",
+      "fallback_model": "",
+      "format": "json",
+      "num_ctx": 4096,
+      "num_predict": 1024,
+      "temperature": 0,
+      "keep_alive": "5m",
+      "think": false,
+      "timeout_seconds": 900
+    }
+  },
+  "provider_checks": {
+    "embedding": {
+      "status": "pass",
+      "provider": "ollama",
+      "model": "nomic-embed-text:latest",
+      "embedding_count": 961,
+      "fallback_count": 0
+    },
+    "semantic_edge": {
+      "status": "pass",
+      "provider": "ollama",
+      "model": "qwen3.5:4b",
+      "edge_count": 1
+    }
+  },
+  "surfaces_checked": [
+    "CLI",
+    "API",
+    "Web",
+    "MCP"
+  ],
+  "summary": {
+    "total": 9,
+    "passed": 9,
+    "partial": 0,
+    "failed": 0
+  },
+  "queries": [
+    {
+      "id": "AQ01",
+      "query": "Who reads or writes regGCVM_L2_CNTL?",
+      "gap_ids": [
+        "G01",
+        "G02",
+        "G03",
+        "G10"
+      ],
+      "required_surfaces": [
+        "CLI",
+        "API",
+        "Web",
+        "MCP"
+      ],
+      "required_source_types": [],
+      "surfaces_checked": [
+        "CLI",
+        "API",
+        "Web",
+        "MCP"
+      ],
+      "missing_surfaces": [],
+      "failure_reasons": [],
+      "provider_checks": {},
+      "status": "pass",
+      "row_count": 24,
+      "evidence_ids": [
+        14,
+        673813,
+        673822,
+        673823,
+        666261,
+        673824,
+        673825,
+        666262,
+        666263,
+        673826,
+        666264,
+        1,
+        3,
+        4,
+        5,
+        6,
+        7,
+        10,
+        11,
+        12,
+        13,
+        2,
+        8,
+        9
+      ],
+      "source_paths": [
+        "libgv/core/hw/navi3/asic_reg/navi3/GC/gc_11_0_0_default.h",
+        "libgv/core/hw/navi3/asic_reg/navi3/GC/gc_11_0_3_offset.h",
+        "libgv/core/hw/navi3/gfx_v11_0.c"
+      ],
+      "source_types": [
+        "code",
+        "register"
+      ],
+      "retrieval_sources": [
+        "fts5",
+        "lexical"
+      ],
+      "graph_node_count": 3,
+      "graph_edge_count": 2,
+      "graph_runtime": "networkx",
+      "empty_state": ""
+    },
+    {
+      "id": "AQ02",
+      "query": "Which fields of GCVM_L2_CNTL are set in MxGPU gfx_v11_0.c?",
+      "gap_ids": [
+        "G01",
+        "G02",
+        "G05",
+        "G10"
+      ],
+      "required_surfaces": [
+        "CLI",
+        "API",
+        "Web"
+      ],
+      "required_source_types": [],
+      "surfaces_checked": [
+        "CLI",
+        "API",
+        "Web",
+        "MCP"
+      ],
+      "missing_surfaces": [],
+      "failure_reasons": [],
+      "provider_checks": {},
+      "status": "pass",
+      "row_count": 24,
+      "evidence_ids": [
+        6,
+        10,
+        12,
+        860540,
+        1349,
+        280550,
+        1386,
+        280551,
+        1387,
+        280552,
+        1388,
+        280553,
+        1389,
+        280554,
+        857609,
+        695496,
+        695497,
+        695498,
+        695499,
+        695500,
+        22547,
+        82942,
+        100644,
+        162324
+      ],
+      "source_paths": [
+        "amdgpu-driver-source-tree.pdf",
+        "libgv/core/hw/AI/asic_reg/mi200/ATHUB/athub_1_0_sh_mask.h",
+        "libgv/core/hw/AI/asic_reg/mi200/GC/gc_9_0_sh_mask.h",
+        "libgv/core/hw/AI/asic_reg/mi200/GC/gc_9_4_2_sh_mask.h",
+        "libgv/core/hw/AI/asic_reg/mi200/GC/gc_9_4_sh_mask.h",
+        "libgv/core/hw/AI/asic_reg/mi200/MMHUB/mmhub_1_7_sh_mask.h",
+        "libgv/core/hw/AI/asic_reg/mi300/ATHUB/athub_1_8_0_sh_mask.h",
+        "libgv/core/hw/navi3/asic_reg/navi3/GC/gc_11_0_3_sh_mask.h",
+        "libgv/core/hw/navi3/gfx_v11_0.c",
+        "smi-lib/docs/reference/amdsmi_py_api.md"
+      ],
+      "source_types": [
+        "code",
+        "doc",
+        "pdf",
+        "register"
+      ],
+      "retrieval_sources": [
+        "fts5",
+        "lexical"
+      ],
+      "graph_node_count": 5,
+      "graph_edge_count": 4,
+      "graph_runtime": "networkx",
+      "empty_state": ""
+    },
+    {
+      "id": "AQ03",
+      "query": "Where is IH_RB_CNTL configured, and which fields are modified?",
+      "gap_ids": [
+        "G01",
+        "G02",
+        "G03",
+        "G10"
+      ],
+      "required_surfaces": [
+        "CLI",
+        "API",
+        "Web"
+      ],
+      "required_source_types": [],
+      "surfaces_checked": [
+        "CLI",
+        "API",
+        "Web",
+        "MCP"
+      ],
+      "missing_surfaces": [],
+      "failure_reasons": [],
+      "provider_checks": {},
+      "status": "pass",
+      "row_count": 24,
+      "evidence_ids": [
+        60,
+        75,
+        71,
+        81,
+        860540,
+        857609,
+        770660,
+        770661,
+        369311,
+        770522,
+        369312,
+        770485,
+        369313,
+        770486,
+        369314,
+        770487,
+        369315,
+        770488,
+        369316,
+        770489,
+        369317,
+        770490,
+        369318,
+        770491
+      ],
+      "source_paths": [
+        "amdgpu-driver-source-tree.pdf",
+        "libgv/core/hw/AI/asic_reg/mi300/NBIO/nbio_7_9_0_sh_mask.h",
+        "libgv/core/hw/AI/mi200/mi200_irqmgr.c",
+        "libgv/core/hw/navi3/asic_reg/navi3/NBIO/nbio_4_3_0_sh_mask.h",
+        "smi-lib/docs/reference/amdsmi_py_api.md"
+      ],
+      "source_types": [
+        "code",
+        "doc",
+        "pdf",
+        "register"
+      ],
+      "retrieval_sources": [
+        "fts5",
+        "lexical"
+      ],
+      "graph_node_count": 2,
+      "graph_edge_count": 1,
+      "graph_runtime": "networkx",
+      "empty_state": ""
+    },
+    {
+      "id": "AQ04",
+      "query": "Which code paths reference SDMA0_QUEUE0_RB_CNTL or SDMA1_QUEUE0_RB_CNTL?",
+      "gap_ids": [
+        "G01",
+        "G02",
+        "G03",
+        "G10"
+      ],
+      "required_surfaces": [
+        "CLI",
+        "API",
+        "Web"
+      ],
+      "required_source_types": [],
+      "surfaces_checked": [
+        "CLI",
+        "API",
+        "Web",
+        "MCP"
+      ],
+      "missing_surfaces": [],
+      "failure_reasons": [],
+      "provider_checks": {},
+      "status": "pass",
+      "row_count": 24,
+      "evidence_ids": [
+        89,
+        100,
+        92,
+        860542,
+        683915,
+        683919,
+        683923,
+        686505,
+        686512,
+        686516,
+        857039,
+        856804,
+        856819,
+        477603,
+        477604,
+        477796,
+        477761,
+        477956,
+        477917,
+        478114,
+        478115,
+        478273,
+        478274,
+        485626
+      ],
+      "source_paths": [
+        "amdgpu-driver-source-tree.pdf",
+        "libgv/core/hw/navi3/asic_reg/navi3/DCN/dcn_3_2_0_sh_mask.h",
+        "libgv/core/hw/navi3/asic_reg/navi3/GC/gc_11_0_3_sh_mask.h",
+        "libgv/core/hw/navi3/navi32_sdma.c",
+        "smi-lib/docs/reference/amdsmi_py_api.md"
+      ],
+      "source_types": [
+        "code",
+        "doc",
+        "pdf",
+        "register"
+      ],
+      "retrieval_sources": [
+        "fts5",
+        "lexical"
+      ],
+      "graph_node_count": 2,
+      "graph_edge_count": 1,
+      "graph_runtime": "networkx",
+      "empty_state": ""
+    },
+    {
+      "id": "AQ05",
+      "query": "Show evidence connecting amdgpu documentation to the amdgpu driver source tree.",
+      "gap_ids": [
+        "G01",
+        "G02",
+        "G08",
+        "G10"
+      ],
+      "required_surfaces": [
+        "CLI",
+        "API",
+        "Web"
+      ],
+      "required_source_types": [
+        "code",
+        "doc",
+        "pdf"
+      ],
+      "surfaces_checked": [
+        "CLI",
+        "API",
+        "Web",
+        "MCP"
+      ],
+      "missing_surfaces": [],
+      "failure_reasons": [],
+      "provider_checks": {},
+      "status": "pass",
+      "row_count": 24,
+      "evidence_ids": [
+        105,
+        121,
+        359135,
+        855036,
+        858169,
+        860080,
+        858170,
+        860081,
+        860535,
+        860540,
+        855044,
+        855045,
+        855047,
+        855048,
+        860536,
+        860541,
+        860537,
+        860542,
+        860538,
+        860543,
+        860534,
+        860539,
+        854895,
+        858630
+      ],
+      "source_paths": [
+        "amdgpu-driver-source-tree.md",
+        "amdgpu-driver-source-tree.pdf",
+        "drivers/gpu/drm/amd/amdgpu/gfx_v10_0.c",
+        "libgv/core/hw/AI/asic_reg/mi300/NBIO/nbio_7_9_0_sh_mask.h",
+        "smi-lib/README.md",
+        "smi-lib/cli/cpp/docs/external/README.md",
+        "smi-lib/docs/reference/amdsmi_py_api.md",
+        "smi-lib/examples/event_monitor/README.md",
+        "smi-lib/py/interface/README.md"
+      ],
+      "source_types": [
+        "code",
+        "doc",
+        "pdf",
+        "register"
+      ],
+      "retrieval_sources": [
+        "fts5",
+        "lexical"
+      ],
+      "graph_node_count": 1,
+      "graph_edge_count": 0,
+      "graph_runtime": "networkx",
+      "empty_state": ""
+    },
+    {
+      "id": "AQ06",
+      "query": "Given WREG32_SOC15(GC, 0, regGCVM_L2_CNTL, tmp), explain the resolved register entity and macro expansion chain.",
+      "gap_ids": [
+        "G02",
+        "G05",
+        "G07",
+        "G10"
+      ],
+      "required_surfaces": [
+        "CLI",
+        "API",
+        "Web",
+        "MCP"
+      ],
+      "required_source_types": [
+        "code",
+        "register"
+      ],
+      "surfaces_checked": [
+        "CLI",
+        "API",
+        "Web",
+        "MCP"
+      ],
+      "missing_surfaces": [],
+      "failure_reasons": [],
+      "provider_checks": {},
+      "status": "pass",
+      "row_count": 24,
+      "evidence_ids": [
+        1,
+        7,
+        13,
+        129,
+        151,
+        14,
+        26,
+        90,
+        101,
+        27,
+        144,
+        122,
+        3,
+        4,
+        5,
+        123,
+        145,
+        6,
+        124,
+        146,
+        8,
+        9,
+        857968,
+        666302
+      ],
+      "source_paths": [
+        "drivers/gpu/drm/amd/amdgpu/gfx_v10_0.c",
+        "libgv/core/hw/navi3/asic_reg/navi3/GC/gc_11_0_0_default.h",
+        "libgv/core/hw/navi3/gfx_v11_0.c",
+        "libgv/core/hw/navi3/navi32_reset.c",
+        "libgv/core/hw/navi3/navi32_sdma.c",
+        "smi-lib/docs/reference/amdsmi_py_api.md"
+      ],
+      "source_types": [
+        "code",
+        "doc",
+        "register"
+      ],
+      "retrieval_sources": [
+        "fts5",
+        "lexical"
+      ],
+      "graph_node_count": 3,
+      "graph_edge_count": 2,
+      "graph_runtime": "networkx",
+      "empty_state": ""
+    },
+    {
+      "id": "AQ07",
+      "query": "Change resolver profile to add or rename one C/C++ register access wrapper, then verify the same resolver engine resolves it without code changes.",
+      "gap_ids": [
+        "G05",
+        "G07",
+        "G10",
+        "G14"
+      ],
+      "required_surfaces": [
+        "CLI",
+        "API",
+        "Web"
+      ],
+      "required_source_types": [],
+      "surfaces_checked": [
+        "CLI",
+        "API",
+        "Web",
+        "MCP"
+      ],
+      "missing_surfaces": [],
+      "failure_reasons": [],
+      "provider_checks": {},
+      "status": "pass",
+      "row_count": 24,
+      "evidence_ids": [
+        242482,
+        491653,
+        491654,
+        491054,
+        491055,
+        491056,
+        491057,
+        491058,
+        491059,
+        491060,
+        491061,
+        491062,
+        492618,
+        492619,
+        492620,
+        492621,
+        492622,
+        492623,
+        492624,
+        492625,
+        492626,
+        493122,
+        493123,
+        860542
+      ],
+      "source_paths": [
+        "amdgpu-driver-source-tree.pdf",
+        "libgv/core/hw/AI/asic_reg/mi200/SDMA1/sdma1_4_2_sh_mask.h",
+        "libgv/core/hw/navi3/asic_reg/navi3/DCN/dcn_3_2_0_sh_mask.h"
+      ],
+      "source_types": [
+        "pdf",
+        "register"
+      ],
+      "retrieval_sources": [
+        "fts5",
+        "lexical"
+      ],
+      "graph_node_count": 1,
+      "graph_edge_count": 0,
+      "graph_runtime": "networkx",
+      "empty_state": ""
+    },
+    {
+      "id": "AQ08",
+      "query": "Add a toy Python resolver profile extracting a configured function-call or string-symbol reference, proving profiles are not macro-only.",
+      "gap_ids": [
+        "G05",
+        "G07",
+        "G10",
+        "G13"
+      ],
+      "required_surfaces": [
+        "CLI",
+        "API",
+        "Web"
+      ],
+      "required_source_types": [],
+      "surfaces_checked": [
+        "CLI",
+        "API",
+        "Web",
+        "MCP"
+      ],
+      "missing_surfaces": [],
+      "failure_reasons": [],
+      "provider_checks": {},
+      "status": "pass",
+      "row_count": 24,
+      "evidence_ids": [
+        858228,
+        858235,
+        860140,
+        860147,
+        395099,
+        759966,
+        395100,
+        759967,
+        395102,
+        759969,
+        395103,
+        759970,
+        763246,
+        763247,
+        763249,
+        763250,
+        763558,
+        763559,
+        763561,
+        763562,
+        763910,
+        763911,
+        763913,
+        860540
+      ],
+      "source_paths": [
+        "amdgpu-driver-source-tree.pdf",
+        "libgv/core/hw/AI/asic_reg/mi300/NBIO/nbio_7_9_0_sh_mask.h",
+        "libgv/core/hw/navi3/asic_reg/navi3/NBIO/nbio_4_3_0_sh_mask.h",
+        "smi-lib/docs/reference/amdsmi_py_api.md",
+        "smi-lib/py/interface/README.md"
+      ],
+      "source_types": [
+        "doc",
+        "pdf",
+        "register"
+      ],
+      "retrieval_sources": [
+        "fts5",
+        "lexical"
+      ],
+      "graph_node_count": 1,
+      "graph_edge_count": 0,
+      "graph_runtime": "networkx",
+      "empty_state": ""
+    },
+    {
+      "id": "AQ09",
+      "query": "Run embedding and optional semantic-edge extraction through a configured Ollama provider, then switch to an OpenAI-compatible provider without changing retrieval or resolver code.",
+      "gap_ids": [
+        "G06",
+        "G09",
+        "G10",
+        "G17"
+      ],
+      "required_surfaces": [
+        "CLI",
+        "API",
+        "Web"
+      ],
+      "required_source_types": [],
+      "surfaces_checked": [
+        "CLI",
+        "API",
+        "Web",
+        "MCP"
+      ],
+      "missing_surfaces": [],
+      "failure_reasons": [],
+      "provider_checks": {
+        "embedding": {
+          "status": "pass",
+          "provider": "ollama",
+          "model": "nomic-embed-text:latest",
+          "embedding_count": 961,
+          "fallback_count": 0
+        },
+        "semantic_edge": {
+          "status": "pass",
+          "provider": "ollama",
+          "model": "qwen3.5:4b",
+          "edge_count": 1
+        }
+      },
+      "status": "pass",
+      "row_count": 24,
+      "evidence_ids": [
+        490794,
+        490805,
+        490795,
+        490806,
+        490807,
+        490808,
+        490796,
+        492166,
+        492167,
+        492168,
+        492169,
+        492170,
+        492171,
+        492172,
+        492173,
+        492174,
+        492713,
+        492714,
+        492715,
+        492716,
+        492717,
+        492718,
+        492719,
+        860542
+      ],
+      "source_paths": [
+        "amdgpu-driver-source-tree.pdf",
+        "libgv/core/hw/navi3/asic_reg/navi3/DCN/dcn_3_2_0_sh_mask.h"
+      ],
+      "source_types": [
+        "pdf",
+        "register"
+      ],
+      "retrieval_sources": [
+        "fts5",
+        "lexical"
+      ],
+      "graph_node_count": 1,
+      "graph_edge_count": 0,
+      "graph_runtime": "networkx",
+      "empty_state": ""
+    }
+  ]
+}

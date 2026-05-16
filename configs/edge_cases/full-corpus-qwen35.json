@@ -20,14 +20,14 @@
       "id": "mxgpu",
       "repo": "https://github.com/amd/MxGPU-Virtualization",
       "default_source_root": "data/corpora/MxGPU-Virtualization",
-      "include": ["**/*.c", "**/*.h"]
+      "include": ["**/*.c", "**/*.h", "**/*.md", "**/*.rst", "**/*.pdf"]
     },
     {
       "id": "linux-amdgpu",
       "repo": "https://github.com/torvalds/linux",
       "default_source_root": "data/corpora/linux",
       "relative_root": "drivers/gpu/drm/amd/amdgpu",
-      "include": ["**/*.c", "**/*.h"]
+      "include": ["**/*.c", "**/*.h", "**/*.md", "**/*.rst", "**/*.pdf"]
     }
   ],
   "queries": [
@@ -62,6 +62,22 @@
       "terms": ["BIF_DOORBELL_INT_CNTL", "DOORBELL_INTERRUPT_DISABLE"],
       "expected_terms": ["BIF_DOORBELL_INT_CNTL", "DOORBELL_INTERRUPT_DISABLE"],
       "max_snippets": 1
+    },
+    {
+      "id": "mxgpu_ih_rb_cntl_fields",
+      "corpus": "mxgpu",
+      "question": "Where is IH_RB_CNTL configured, and which fields are modified?",
+      "terms": ["IH_RB_CNTL", "RB_ENABLE", "ENABLE_INTR"],
+      "expected_terms": ["IH_RB_CNTL", "RB_ENABLE", "ENABLE_INTR"],
+      "max_snippets": 2
+    },
+    {
+      "id": "mxgpu_sdma_queue_rb_cntl",
+      "corpus": "mxgpu",
+      "question": "Which code paths reference SDMA0_QUEUE0_RB_CNTL or SDMA1_QUEUE0_RB_CNTL?",
+      "terms": ["SDMA0_QUEUE0_RB_CNTL", "SDMA1_QUEUE0_RB_CNTL", "RB_ENABLE"],
+      "expected_terms": ["SDMA0_QUEUE0_RB_CNTL", "SDMA1_QUEUE0_RB_CNTL", "RB_ENABLE"],
+      "max_snippets": 2
     },
     {
       "id": "linux_gds_vmid_writes",

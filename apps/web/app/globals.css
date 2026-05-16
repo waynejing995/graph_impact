@@ -66,7 +66,9 @@ textarea {
 .workbench-shell {
   display: grid;
   grid-template-rows: var(--topbar-height) 1fr;
+  height: 100vh;
   min-height: 100vh;
+  overflow: hidden;
   background: var(--background);
 }
 
@@ -107,7 +109,8 @@ textarea {
 }
 
 .global-search,
-.query-input {
+.query-input,
+.metadata-filter-input {
   position: relative;
   display: flex;
   align-items: center;
@@ -179,9 +182,13 @@ textarea {
 
 .composer {
   display: grid;
-  grid-template-columns: 1fr auto;
+  grid-template-columns: minmax(220px, 1fr) minmax(92px, 120px) minmax(128px, 170px) auto;
   gap: 10px;
   margin-bottom: 12px;
+}
+
+.metadata-filter-input .ui-input {
+  min-width: 0;
 }
 
 .filter-row {
@@ -341,6 +348,26 @@ textarea {
   background: #f9fcfb;
 }
 
+.network-empty {
+  display: grid;
+  min-height: 300px;
+  place-items: center;
+  padding: 24px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--surface-2) 82%, transparent);
+  color: var(--muted);
+  text-align: center;
+}
+
+.network-empty code {
+  max-width: min(680px, 100%);
+  overflow-wrap: anywhere;
+  font-family: "SFMono-Regular", ui-monospace, Menlo, Consolas, monospace;
+  font-size: 13px;
+  line-height: 1.45;
+}
+
 .graph-edge-line {
   stroke: var(--graph-edge);
   stroke-width: 2;
@@ -424,13 +451,27 @@ textarea {
 
 .evidence-row {
   display: grid;
-  grid-template-columns: 10px minmax(160px, 1.1fr) 96px 72px minmax(120px, 1fr);
+  grid-template-columns: 10px minmax(150px, 1.1fr) 74px 96px 72px minmax(120px, 1fr);
   gap: 10px;
   align-items: center;
   min-height: 44px;
   padding: 0 12px;
   border-bottom: 1px solid var(--border);
   font-size: 13px;
+}
+
+.evidence-row--corpus {
+  grid-template-columns: 10px 18px minmax(140px, 1.1fr) 74px 112px 72px minmax(120px, 1fr);
+}
+
+.source-type-badge {
+  justify-self: start;
+}
+
+.corpus-index-checkbox {
+  width: 16px;
+  height: 16px;
+  accent-color: var(--success);
 }
 
 .evidence-row:last-child {
@@ -698,7 +739,11 @@ code {
   }
 
   .evidence-row {
-    grid-template-columns: 10px minmax(120px, 1fr) 88px;
+    grid-template-columns: 10px minmax(120px, 1fr) 74px 88px;
+  }
+
+  .evidence-row--corpus {
+    grid-template-columns: 10px 18px minmax(120px, 1fr) 74px 88px;
   }
 
   .network-preview svg {

@@ -31,37 +31,111 @@ test.describe("visual anchor route readiness", () => {
         await expect(page.getByTestId("global-network-graph")).toBeVisible();
         await expect(page.getByLabel("Global weighted network graph")).toBeVisible();
         await expect(page.getByText("weighted connections")).toBeVisible();
-        await expect(page.locator(".graph-edge-line")).toHaveCount(7);
-        await expect(page.locator(".graph-edge-line--w5")).toHaveCount(1);
-        await expect(page.locator(".graph-edge-line--w4")).toHaveCount(1);
-        await expect(page.locator(".graph-edge-line--w3")).toHaveCount(1);
-        await expect(page.locator(".graph-edge-line--w2")).toHaveCount(2);
-        await expect(page.locator(".graph-edge-line--w1")).toHaveCount(2);
+        await expect(page.locator(".graph-edge-line").first()).toHaveAttribute("data-weight");
+        await expect(page.locator(".graph-edge-label").first()).toContainText(/\/ 0\.\d{2}/);
       }
     });
   }
 });
 
-test("graph route renders a weighted global relation graph", async ({ page }) => {
+test("graph route renders API-backed weighted relation graph", async ({ page }) => {
+  let graphApiRequested = false;
+  await page.route(/\/api\/workbench\/graph(?:\?|$)/, async (route) => {
+    graphApiRequested = true;
+    await route.fulfill({
+      contentType: "application/json",
+      body: JSON.stringify({
+        queryId: "GCVM_L2_CNTL",
+        source: "sqlite",
+        nodes: [
+          { id: "API_GRAPH_REGISTER", kind: "register", weight: 3 },
+          { id: "API_GRAPH_FIELD", kind: "field", weight: 2 },
+          { id: "API_GRAPH_PDF", kind: "pdf", weight: 1 }
+        ],
+        edges: [
+          { src: "API_GRAPH_REGISTER", dst: "API_GRAPH_FIELD", relation: "api_sets_field", confidence: 0.91, weight: 0.91 },
+          { src: "API_GRAPH_REGISTER", dst: "API_GRAPH_PDF", relation: "api_relates", confidence: 0.28, weight: 0.28 }
+        ]
+      })
+    });
+  });
+
   await page.goto("/graph");
 
   const strongEdgeWidth = await page.locator(".graph-edge-line--w5").evaluate((node) => {
-    return Number.parseFloat(window.getComputedStyle(node).strokeWidth);
+    return Number.parseFloat(node.getAttribute("stroke-width") ?? "0");
   });
   const weakEdgeWidth = await page.locator(".graph-edge-line--w1").first().evaluate((node) => {
-    return Number.parseFloat(window.getComputedStyle(node).strokeWidth);
+    return Number.parseFloat(node.getAttribute("stroke-width") ?? "0");
   });
+  const strongEdgeWeight = await page.locator(".graph-edge-line--w5").getAttribute("data-weight");
+  const weakEdgeWeight = await page.locator(".graph-edge-line--w1").first().getAttribute("data-weight");
   const centralNodeRadius = await page
     .locator(".graph-bubble--register circle")
+    .first()
     .evaluate((node) => Number.parseFloat(node.getAttribute("r") ?? "0"));
   const peripheralNodeRadius = await page
     .locator(".graph-bubble--neutral circle")
     .evaluate((node) => Number.parseFloat(node.getAttribute("r") ?? "0"));
 
+  expect(graphApiRequested).toBe(true);
+  await expect(page.getByLabel("Global weighted network graph")).toContainText("API_GRAPH_REGISTER");
+  await expect(page.getByLabel("Global weighted network graph")).toContainText("api_sets_field / 0.91");
+  await expect(page.getByLabel("Global weighted network graph")).toContainText("api_relates / 0.28");
+  await expect(page.getByLabel("Global weighted network graph")).not.toContainText("maps_base / 0.68");
+  await expect(page.locator(".graph-edge-line")).toHaveCount(2);
+  expect(Number(strongEdgeWeight)).toBeGreaterThan(Number(weakEdgeWeight));
   expect(strongEdgeWidth).toBeGreaterThan(weakEdgeWidth);
   expect(centralNodeRadius).toBeGreaterThan(peripheralNodeRadius);
-  await expect(page.getByLabel("Global weighted network graph")).toContainText("writes / 0.94");
-  await expect(page.getByLabel("Global weighted network graph")).toContainText("maps_base / 0.68");
+});
+
+test("graph route requests global graph without a default seed and renders API_GLOBAL nodes", async ({ page }) => {
+  await page.route(/\/api\/workbench\/graph(?:\?|$)/, async (route) => {
+    await route.fulfill({
+      contentType: "application/json",
+      body: JSON.stringify({
+        queryId: "global",
+        source: "networkx",
+        graph_runtime: "networkx",
+        nodes: [
+          { id: "API_GLOBAL_REGISTER", kind: "register", weight: 3 },
+          { id: "API_GLOBAL_FIELD", kind: "field", weight: 2 },
+          { id: "API_GLOBAL_DOC", kind: "pdf", weight: 1 }
+        ],
+        edges: [
+          {
+            src: "API_GLOBAL_REGISTER",
+            dst: "API_GLOBAL_FIELD",
+            relation: "api_global_sets_field",
+            confidence: 0.94,
+            weight: 0.94
+          },
+          {
+            src: "API_GLOBAL_REGISTER",
+            dst: "API_GLOBAL_DOC",
+            relation: "api_global_documented_by",
+            confidence: 0.82,
+            weight: 0.82
+          }
+        ]
+      })
+    });
+  });
+
+  const graphRequestPromise = page.waitForRequest((request) => {
+    return new URL(request.url()).pathname === "/api/workbench/graph";
+  });
+  await page.goto("/graph");
+  const graphRequest = await graphRequestPromise;
+
+  const requested = new URL(graphRequest.url());
+  expect(requested.searchParams.has("seed")).toBe(false);
+  expect(requested.searchParams.has("queryId")).toBe(false);
+  expect(requested.toString()).not.toContain("DOORBELL_INTERRUPT_DISABLE");
+  await expect(page.getByLabel("Global weighted network graph")).toContainText("API_GLOBAL_REGISTER");
+  await expect(page.getByLabel("Global weighted network graph")).toContainText("API_GLOBAL_FIELD");
+  await expect(page.getByLabel("Global weighted network graph")).toContainText("API_GLOBAL_DOC");
+  await expect(page.locator(".graph-edge-line")).toHaveCount(2);
 });
 
 test("desktop and mobile screenshots keep the workbench styled", async ({ page }) => {
@@ -153,5 +227,5 @@ test("graph visualization stays visible in light and dark modes", async ({ page 
   await expect(page.locator("html")).toHaveAttribute("data-theme", "light");
   await expect(graph).toBeVisible();
   await expect(graphSvg).toBeVisible();
-  await expect(page.locator(".graph-edge-line--w5")).toBeVisible();
+  await expect(page.locator(".graph-edge-line").first()).toHaveAttribute("data-weight");
 });

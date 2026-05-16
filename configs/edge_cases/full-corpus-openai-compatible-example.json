@@ -21,14 +21,14 @@
       "id": "mxgpu",
       "repo": "https://github.com/amd/MxGPU-Virtualization",
       "default_source_root": "data/corpora/MxGPU-Virtualization",
-      "include": ["**/*.c", "**/*.h"]
+      "include": ["**/*.c", "**/*.h", "**/*.md", "**/*.rst", "**/*.pdf"]
     },
     {
       "id": "linux-amdgpu",
       "repo": "https://github.com/torvalds/linux",
       "default_source_root": "data/corpora/linux",
       "relative_root": "drivers/gpu/drm/amd/amdgpu",
-      "include": ["**/*.c", "**/*.h"]
+      "include": ["**/*.c", "**/*.h", "**/*.md", "**/*.rst", "**/*.pdf"]
     }
   ],
   "queries": [

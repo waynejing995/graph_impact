@@ -48,6 +48,8 @@ class SemanticEdgeFeatureTests(unittest.TestCase):
         self.assertGreaterEqual(config.model.timeout_seconds, 600)
         self.assertGreaterEqual(len(config.queries), 6)
         self.assertEqual({corpus.id for corpus in config.corpora}, {"mxgpu", "linux-amdgpu"})
+        mxgpu = next(corpus for corpus in config.corpora if corpus.id == "mxgpu")
+        self.assertTrue({"**/*.md", "**/*.rst", "**/*.pdf"}.issubset(set(mxgpu.include)))
         self.assertGreaterEqual(
             len([query for query in config.queries if query.corpus == "mxgpu"]),
             3,
@@ -67,6 +69,8 @@ class SemanticEdgeFeatureTests(unittest.TestCase):
         self.assertFalse(config.model.think)
         self.assertGreaterEqual(config.model.timeout_seconds, 900)
         self.assertEqual({corpus.id for corpus in config.corpora}, {"mxgpu", "linux-amdgpu"})
+        mxgpu = next(corpus for corpus in config.corpora if corpus.id == "mxgpu")
+        self.assertTrue({"**/*.md", "**/*.rst", "**/*.pdf"}.issubset(set(mxgpu.include)))
         self.assertGreaterEqual(len(config.queries), 6)
 
     def test_committed_openai_compatible_example_config_uses_chat_completions(self):

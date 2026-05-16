@@ -1,0 +1,41 @@
+# MVP Acceptance Query Matrix
+
+Date: 2026-05-16
+Status: Blocking support matrix for G10
+
+This matrix expands the nine MVP-1 acceptance queries from `docs/specs/2026-05-16-asip-mvp1-design.md` and `docs/brainstorming/2026-05-16-asip-decisions.md`.
+
+It is not a substitute for G01-G17. It is the query-level checklist that prevents partial query smoke tests from being mistaken for full acceptance.
+
+Current runner status: `packages/core/src/asip/acceptance.py` and `asip.cli acceptance` can execute this matrix against a supplied SQLite database and emit JSON/Markdown artifacts. `asip.cli acceptance --query-id ... --full` can also execute selected AQ IDs and print the full runner payload for product surfaces. First clean CLI run artifacts are `docs/qa/2026-05-17-acceptance-clean-qwen35.json` and `docs/qa/2026-05-17-acceptance-clean-qwen35.md`: 9 total, 0 pass, 8 partial, 1 fail. AQ09 fails there even when lexical doc rows exist because provider settings are required. A focused AQ09 provider smoke artifact, `docs/qa/2026-05-17-aq09-provider-smoke-ollama.json`, proves CLI-level embedding provenance and semantic-edge provider checks against local Ollama. Web BFF now also verifies AQ09 provider provenance from an isolated SQLite DB with independently configured edge and embedding settings, Settings UI wiring can trigger AQ09 through the same Web BFF acceptance endpoint, and Settings can run AQ09 against a user-supplied DB path through the real BFF/core runner. Web BFF, FastAPI, MCP, and the `/acceptance` page can list/display acceptance artifacts, including `partial` counts. Web BFF `POST /api/workbench/acceptance/run`, FastAPI `POST /acceptance/run`, and MCP `run_acceptance()` can execute a selected AQ through the same runner.
+
+Historical clean provider rerun: `docs/qa/2026-05-17-acceptance-clean-qwen35-provider-rerun.json` and `.md` were generated from `/tmp/asip-acceptance-clean-2026-05-17.db` after saving Ollama provider settings, running real qwen3.5 semantic-edge generation, and writing provider-sourced `nomic-embed-text` embedding provenance. It used the older acceptance gate and reported 9 total, 9 pass, 0 partial, 0 failed across CLI/API/Web/MCP surface labels. Provider checks passed with `ollama/nomic-embed-text:latest` embeddings (`embedding_count=9058`, `fallback_count=382`) and `ollama/qwen3.5:4b` semantic-edge smoke (`edge_count=1`). Treat this as provider/provenance evidence only, not current acceptance closure.
+
+Current source-gated rerun: `docs/qa/2026-05-17-acceptance-clean-qwen35-source-gated-current.json` and `.md` were generated with the current acceptance gate against the same DB. Summary: 9 total, 0 pass, 0 partial, 9 failed. The DB health gate fails because `mxgpu` is still `indexing` and index job 3 failed after the interrupted provider reindex; AQ05 additionally fails with `required source types missing: pdf`.
+
+Fixture source-diverse run: `docs/qa/2026-05-17-acceptance-multisource-fixture.json` and `.md` were generated from `/tmp/asip-multisource-clean-2026-05-17.db`. Summary: 2 total, 2 pass, 0 partial, 0 failed. AQ05 returns 24 rows with `code`, `doc`, `pdf`, and `register`; AQ06 returns 16 rows with `code` and `register`; DB health passes. Treat this as source-diversity fixture evidence only, not real AMD final acceptance.
+
+Current clean AMD run: `docs/qa/2026-05-17-acceptance-clean-amd-qwen35-provider-current.json` and `.md` were generated from `/tmp/asip-clean-amd-qwen35-provider-2026-05-17.db`. Summary: 9 total, 9 pass, 0 partial, 0 failed. DB health passes. Source counts are recorded in G01/G10. AQ05 passes with `code`, `doc`, and `pdf`; AQ06 passes with `code` and `register`; AQ09 provider checks pass with `ollama/nomic-embed-text:latest` embeddings and `ollama/qwen3.5:4b` semantic-edge smoke. This is the current query-level acceptance artifact, while browser screenshots, full-suite reruns, and design review remain G10/G11 blockers.
+
+Known limitation in the historical clean provider rerun: every AQ01-AQ09 row reported `source_types: ["code"]`. AQ05 asked for documentation-to-driver evidence but still returned code-only rows. That artifact is superseded by the current clean AMD run above.
+
+| ID | Acceptance query | Gap IDs | Required surfaces | Current status | Final artifact required |
+| --- | --- | --- | --- | --- | --- |
+| AQ01 | Who reads or writes `regGCVM_L2_CNTL`? | G01, G02, G03, G10 | CLI, API, Web, MCP | Current clean AMD run: pass; source types `code/register`; NetworkX graph runtime. | Link final G10/G11 review and browser evidence. |
+| AQ02 | Which fields of `GCVM_L2_CNTL` are set in MxGPU `gfx_v11_0.c`? | G01, G02, G05, G10 | CLI, API, Web | Current clean AMD run: pass; source types `code/doc/pdf/register`. | Link final G10/G11 review and browser evidence. |
+| AQ03 | Where is `IH_RB_CNTL` configured, and which fields are modified? | G01, G02, G03, G10 | CLI, API, Web | Current clean AMD run: pass; source types `code/doc/pdf/register`. | Link final G10/G11 review and browser evidence. |
+| AQ04 | Which code paths reference `SDMA0_QUEUE0_RB_CNTL` or `SDMA1_QUEUE0_RB_CNTL`? | G01, G02, G03, G10 | CLI, API, Web | Current clean AMD run: pass; source types `code/doc/pdf/register`. | Link final G10/G11 review and browser evidence. |
+| AQ05 | Show evidence connecting amdgpu documentation to the amdgpu driver source tree. | G01, G02, G08, G10 | CLI, API, Web | Current clean AMD run: pass; source types `code/doc/pdf/register`; reduced AMD PDF evidence included. | Browser/API citation proof remains required. |
+| AQ06 | Given `WREG32_SOC15(GC, 0, regGCVM_L2_CNTL, tmp)`, explain the resolved register entity and macro expansion chain. | G02, G05, G07, G10 | CLI, API, Web, MCP | Current clean AMD run: pass; source types `code/doc/register`. | Link final G10/G11 review and browser evidence. |
+| AQ07 | Change resolver profile to add or rename one C/C++ register access wrapper, then verify the same resolver engine resolves it without code changes. | G05, G07, G10, G14 | CLI, API, Web | Current clean AMD run: pass; source types `pdf/register`. | Resolver-profile workflow/browser proof remains G05/G10 evidence. |
+| AQ08 | Add a toy Python resolver profile extracting a configured function-call or string-symbol reference, proving profiles are not macro-only. | G05, G07, G10, G13 | CLI, API, Web | Current clean AMD run: pass; source types `doc/pdf/register`. | Python profile workflow/browser proof remains G05/G13 evidence. |
+| AQ09 | Run embedding and optional semantic-edge extraction through a configured Ollama provider, then switch to an OpenAI-compatible provider without changing retrieval or resolver code. | G06, G09, G10, G17 | CLI, API, Web, MCP | Current clean AMD run: pass for local Ollama qwen3.5/nomic provider checks. Credentialed OpenAI-compatible live endpoint remains an explicit boundary unless the user supplies credentials or accepts local-compatible evidence. | OpenAI-compatible credential path remains G06/G13 boundary; browser/settings proof remains G10/G11. |
+
+## Matrix Closure Rules
+
+- Every acceptance query must be run against a clean, explicitly named SQLite database.
+- Each result must record input corpus roots, provider settings, command/API route, elapsed time, row count, evidence ids, source paths, graph node/edge counts, and UI route checked.
+- Each result must record `database_health`, corpus/job health, source-type counts, PDF page metadata when PDF is required, provider checks/provenance when AQ09 is involved, and graph runtime.
+- Each result must state which surfaces passed: CLI, API, Web, and MCP. Missing surfaces are failures unless explicitly deferred in G07/G13.
+- Empty or failed results are acceptable only if documented as failures, not as passes.
+- Historical QA artifacts can support comparison, but final acceptance must use current code and current configured corpora.

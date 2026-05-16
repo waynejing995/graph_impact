@@ -1,9 +1,14 @@
 # ASIP Web Visual Anchors
 
 Date: 2026-05-16
-Status: canonical repo reference
+Status: canonical repo reference; not a final QA pass
 
 This directory stores the visual reference set for the ASIP web UI. Every page has its own imagegen prompt, raw generated reference, and canonical normalized anchor image. Do not replace this with a combined multi-panel board.
+
+These files are design references. They do not prove that the current app
+matches the design. Final visual QA must capture the live app after the final
+functional change and compare each route to its own anchor in light and dark
+themes.
 
 The canonical anchors target 2K desktop review, 2048 x 1280, with a unified ASIP workbench style:
 

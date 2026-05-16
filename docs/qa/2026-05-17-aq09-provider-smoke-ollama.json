@@ -1,0 +1,110 @@
+{
+  "source": "asip.acceptance",
+  "generated_at": "2026-05-16T17:51:35+00:00",
+  "db_path": "/tmp/asip-aq09-provider.db",
+  "provider_settings": {
+    "embedding": {
+      "provider": "ollama",
+      "base_url": "http://localhost:11434",
+      "api_path": "/api/embeddings",
+      "model": "nomic-embed-text:latest",
+      "timeout_seconds": 60
+    },
+    "edge": {
+      "provider": "ollama",
+      "base_url": "http://localhost:11434",
+      "api_path": "/api/chat",
+      "model": "gemma4:e4b",
+      "think": false,
+      "timeout_seconds": 90,
+      "num_ctx": 2048,
+      "num_predict": 128,
+      "temperature": 0,
+      "keep_alive": "0s"
+    }
+  },
+  "provider_checks": {
+    "embedding": {
+      "status": "pass",
+      "provider": "ollama",
+      "model": "nomic-embed-text:latest",
+      "embedding_count": 1,
+      "fallback_count": 0
+    },
+    "semantic_edge": {
+      "status": "pass",
+      "provider": "ollama",
+      "model": "gemma4:e4b",
+      "edge_count": 1
+    }
+  },
+  "surfaces_checked": [
+    "CLI"
+  ],
+  "summary": {
+    "total": 1,
+    "passed": 0,
+    "partial": 1,
+    "failed": 0
+  },
+  "queries": [
+    {
+      "id": "AQ09",
+      "query": "Run embedding and optional semantic-edge extraction through a configured Ollama provider, then switch to an OpenAI-compatible provider without changing retrieval or resolver code.",
+      "gap_ids": [
+        "G06",
+        "G09",
+        "G10",
+        "G17"
+      ],
+      "required_surfaces": [
+        "CLI",
+        "API",
+        "Web"
+      ],
+      "surfaces_checked": [
+        "CLI"
+      ],
+      "missing_surfaces": [
+        "API",
+        "Web"
+      ],
+      "failure_reasons": [],
+      "provider_checks": {
+        "embedding": {
+          "status": "pass",
+          "provider": "ollama",
+          "model": "nomic-embed-text:latest",
+          "embedding_count": 1,
+          "fallback_count": 0
+        },
+        "semantic_edge": {
+          "status": "pass",
+          "provider": "ollama",
+          "model": "gemma4:e4b",
+          "edge_count": 1
+        }
+      },
+      "status": "partial",
+      "row_count": 2,
+      "evidence_ids": [
+        1,
+        2
+      ],
+      "source_paths": [
+        "provider-note.md"
+      ],
+      "source_types": [
+        "doc"
+      ],
+      "retrieval_sources": [
+        "fts5",
+        "lexical"
+      ],
+      "graph_node_count": 1,
+      "graph_edge_count": 0,
+      "graph_runtime": "networkx",
+      "empty_state": ""
+    }
+  ]
+}

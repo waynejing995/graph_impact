@@ -1,0 +1,86 @@
+%PDF-1.3
+%“Œ‹ž ReportLab Generated PDF document (opensource)
+1 0 obj
+<<
+/F1 2 0 R
+>>
+endobj
+2 0 obj
+<<
+/BaseFont /Helvetica /Encoding /WinAnsiEncoding /Name /F1 /Subtype /Type1 /Type /Font
+>>
+endobj
+3 0 obj
+<<
+/Contents 7 0 R /MediaBox [ 0 0 612 792 ] /Parent 6 0 R /Resources <<
+/Font 1 0 R /ProcSet [ /PDF /Text /ImageB /ImageC /ImageI ]
+>> /Rotate 0 /Trans <<
+
+>> 
+  /Type /Page
+>>
+endobj
+4 0 obj
+<<
+/PageMode /UseNone /Pages 6 0 R /Type /Catalog
+>>
+endobj
+5 0 obj
+<<
+/Author (anonymous) /CreationDate (D:20260517063243+08'00') /Creator (anonymous) /Keywords () /ModDate (D:20260517063243+08'00') /Producer (ReportLab PDF Library - \(opensource\)) 
+  /Subject (unspecified) /Title (Reduced AMD amdgpu Documentation Fixture) /Trapped /False
+>>
+endobj
+6 0 obj
+<<
+/Count 1 /Kids [ 3 0 R ] /Type /Pages
+>>
+endobj
+7 0 obj
+<<
+/Length 1351
+>>
+stream
+1 0 0 1 0 0 cm  BT /F1 12 Tf 14.4 TL ET
+BT /F1 10 Tf 12 TL ET
+BT 1 0 0 1 72 720 Tm (Reduced AMD amdgpu Documentation Fixture) Tj T* ET
+BT 1 0 0 1 72 706 Tm  T* ET
+BT 1 0 0 1 72 692 Tm (Source: https://instinct.docs.amd.com/projects/amdgpu-docs/en/latest/) Tj T* ET
+BT 1 0 0 1 72 678 Tm  T* ET
+BT 1 0 0 1 72 664 Tm (This reduced fixture paraphrases the public AMD GPU Driver \(amdgpu\) documentation for) Tj T* ET
+BT 1 0 0 1 72 650 Tm (ASIP ingestion QA. The official AMD documentation describes amdgpu as the AMD GPU driver) Tj T* ET
+BT 1 0 0 1 72 636 Tm (used with ROCm, virtualization, and data center GPU software stacks.) Tj T* ET
+BT 1 0 0 1 72 622 Tm  T* ET
+BT 1 0 0 1 72 608 Tm (For ASIP evidence linking, the corresponding Linux kernel driver source tree is) Tj T* ET
+BT 1 0 0 1 72 594 Tm (represented by drivers/gpu/drm/amd/amdgpu. This document intentionally includes the) Tj T* ET
+BT 1 0 0 1 72 580 Tm (terms amdgpu documentation, AMD GPU driver, and driver source tree so the clean) Tj T* ET
+BT 1 0 0 1 72 566 Tm (acceptance query can retrieve doc evidence alongside code and PDF evidence.) Tj T* ET
+BT 1 0 0 1 72 552 Tm  T* ET
+BT 1 0 0 1 72 538 Tm (Key ASIP QA terms: amdgpu documentation, AMD GPU driver, driver source tree, Linux) Tj T* ET
+BT 1 0 0 1 72 524 Tm (source tree, drivers/gpu/drm/amd/amdgpu, ROCm, virtualization.) Tj T* ET
+ 
+endstream
+endobj
+xref
+0 8
+0000000000 65535 f 
+0000000061 00000 n 
+0000000092 00000 n 
+0000000199 00000 n 
+0000000392 00000 n 
+0000000460 00000 n 
+0000000753 00000 n 
+0000000812 00000 n 
+trailer
+<<
+/ID 
+[<194c1ebc11a50420c73303c1b15cdbdd><194c1ebc11a50420c73303c1b15cdbdd>]
+% ReportLab generated PDF document -- digest (opensource)
+
+/Info 5 0 R
+/Root 4 0 R
+/Size 8
+>>
+startxref
+2214
+%%EOF

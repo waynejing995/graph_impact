@@ -1,0 +1,6 @@
+id: toy-python
+language: python
+context_vars: []
+symbol_prefixes: []
+python_extractors: [gpu_register, register_ref]
+wrappers: {}

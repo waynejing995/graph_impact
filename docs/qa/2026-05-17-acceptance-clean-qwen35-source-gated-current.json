@@ -1,0 +1,814 @@
+{
+  "source": "asip.acceptance",
+  "generated_at": "2026-05-16T21:10:32+00:00",
+  "db_path": "/tmp/asip-acceptance-clean-2026-05-17.db",
+  "database_health": {
+    "status": "fail",
+    "failure_reasons": [
+      "corpus mxgpu status is indexing",
+      "index job 3 failed: Interrupted after long serial provider embedding reindex; 9440 embeddings written before stop"
+    ]
+  },
+  "provider_settings": {
+    "edge": {
+      "provider": "ollama",
+      "base_url": "http://localhost:11434",
+      "api_path": "/api/chat",
+      "model": "qwen3.5:4b",
+      "fallback_model": "",
+      "think": false,
+      "timeout_seconds": 900,
+      "num_ctx": 2048,
+      "num_predict": 1024,
+      "temperature": 0
+    },
+    "embedding": {
+      "provider": "ollama",
+      "base_url": "http://localhost:11434",
+      "api_path": "/api/embeddings",
+      "model": "nomic-embed-text:latest",
+      "timeout_seconds": 120
+    }
+  },
+  "provider_checks": {
+    "embedding": {
+      "status": "pass",
+      "provider": "ollama",
+      "model": "nomic-embed-text:latest",
+      "embedding_count": 9058,
+      "fallback_count": 382
+    },
+    "semantic_edge": {
+      "status": "pass",
+      "provider": "ollama",
+      "model": "qwen3.5:4b",
+      "edge_count": 1
+    }
+  },
+  "surfaces_checked": [
+    "CLI",
+    "API",
+    "Web",
+    "MCP"
+  ],
+  "summary": {
+    "total": 9,
+    "passed": 0,
+    "partial": 0,
+    "failed": 9
+  },
+  "queries": [
+    {
+      "id": "AQ01",
+      "query": "Who reads or writes regGCVM_L2_CNTL?",
+      "gap_ids": [
+        "G01",
+        "G02",
+        "G03",
+        "G10"
+      ],
+      "required_surfaces": [
+        "CLI",
+        "API",
+        "Web",
+        "MCP"
+      ],
+      "required_source_types": [],
+      "surfaces_checked": [
+        "CLI",
+        "API",
+        "Web",
+        "MCP"
+      ],
+      "missing_surfaces": [],
+      "failure_reasons": [
+        "corpus mxgpu status is indexing",
+        "index job 3 failed: Interrupted after long serial provider embedding reindex; 9440 embeddings written before stop"
+      ],
+      "provider_checks": {},
+      "status": "fail",
+      "row_count": 24,
+      "evidence_ids": [
+        130365,
+        130836,
+        131300,
+        131470,
+        133963,
+        134429,
+        130366,
+        130837,
+        131301,
+        133964,
+        134430,
+        131471,
+        130367,
+        133965,
+        134431,
+        146163,
+        146233,
+        146500,
+        146813,
+        146164,
+        146234,
+        146501,
+        146814,
+        146165
+      ],
+      "source_paths": [
+        "drivers/gpu/drm/amd/amdgpu/gfxhub_v11_5_0.c",
+        "drivers/gpu/drm/amd/amdgpu/gfxhub_v12_0.c",
+        "drivers/gpu/drm/amd/amdgpu/gfxhub_v12_1.c",
+        "drivers/gpu/drm/amd/amdgpu/gfxhub_v3_0.c",
+        "drivers/gpu/drm/amd/amdgpu/gfxhub_v3_0_3.c",
+        "drivers/gpu/drm/amd/amdgpu/imu_v11_0.c",
+        "drivers/gpu/drm/amd/amdgpu/imu_v11_0_3.c",
+        "drivers/gpu/drm/amd/amdgpu/imu_v12_0.c"
+      ],
+      "source_types": [
+        "code"
+      ],
+      "retrieval_sources": [
+        "fts5",
+        "lexical"
+      ],
+      "graph_node_count": 2,
+      "graph_edge_count": 2,
+      "graph_runtime": "networkx",
+      "empty_state": ""
+    },
+    {
+      "id": "AQ02",
+      "query": "Which fields of GCVM_L2_CNTL are set in MxGPU gfx_v11_0.c?",
+      "gap_ids": [
+        "G01",
+        "G02",
+        "G05",
+        "G10"
+      ],
+      "required_surfaces": [
+        "CLI",
+        "API",
+        "Web"
+      ],
+      "required_source_types": [],
+      "surfaces_checked": [
+        "CLI",
+        "API",
+        "Web",
+        "MCP"
+      ],
+      "missing_surfaces": [],
+      "failure_reasons": [
+        "corpus mxgpu status is indexing",
+        "index job 3 failed: Interrupted after long serial provider embedding reindex; 9440 embeddings written before stop"
+      ],
+      "provider_checks": {},
+      "status": "fail",
+      "row_count": 24,
+      "evidence_ids": [
+        103784,
+        220299,
+        228773,
+        102975,
+        102463,
+        102572,
+        102115,
+        102145,
+        102342,
+        102344,
+        103734,
+        102297,
+        103814,
+        103815,
+        101315,
+        103674,
+        103616,
+        103703,
+        103783,
+        103816,
+        101262,
+        102930,
+        217528,
+        278378
+      ],
+      "source_paths": [
+        "README.md",
+        "drivers/gpu/drm/amd/amdgpu/gfx_v11_0.c",
+        "drivers/gpu/drm/amd/amdgpu/uvd_v3_1.c",
+        "drivers/gpu/drm/amd/amdgpu/uvd_v7_0.c",
+        "drivers/gpu/drm/amd/amdgpu/vcn_v3_0.c"
+      ],
+      "source_types": [
+        "code",
+        "doc"
+      ],
+      "retrieval_sources": [
+        "fts5",
+        "lexical"
+      ],
+      "graph_node_count": 1,
+      "graph_edge_count": 0,
+      "graph_runtime": "networkx",
+      "empty_state": ""
+    },
+    {
+      "id": "AQ03",
+      "query": "Where is IH_RB_CNTL configured, and which fields are modified?",
+      "gap_ids": [
+        "G01",
+        "G02",
+        "G03",
+        "G10"
+      ],
+      "required_surfaces": [
+        "CLI",
+        "API",
+        "Web"
+      ],
+      "required_source_types": [],
+      "surfaces_checked": [
+        "CLI",
+        "API",
+        "Web",
+        "MCP"
+      ],
+      "missing_surfaces": [],
+      "failure_reasons": [
+        "corpus mxgpu status is indexing",
+        "index job 3 failed: Interrupted after long serial provider embedding reindex; 9440 embeddings written before stop"
+      ],
+      "provider_checks": {},
+      "status": "fail",
+      "row_count": 24,
+      "evidence_ids": [
+        239545,
+        212380,
+        87762,
+        87818,
+        87867,
+        142372,
+        142428,
+        142477,
+        144471,
+        144510,
+        144550,
+        144641,
+        145000,
+        145040,
+        145079,
+        145166,
+        145524,
+        145564,
+        145601,
+        145745,
+        169751,
+        169795,
+        169868,
+        205049
+      ],
+      "source_paths": [
+        "drivers/gpu/drm/amd/amdgpu/cz_ih.c",
+        "drivers/gpu/drm/amd/amdgpu/iceland_ih.c",
+        "drivers/gpu/drm/amd/amdgpu/ih_v6_0.c",
+        "drivers/gpu/drm/amd/amdgpu/ih_v6_1.c",
+        "drivers/gpu/drm/amd/amdgpu/ih_v7_0.c",
+        "drivers/gpu/drm/amd/amdgpu/navi10_ih.c",
+        "drivers/gpu/drm/amd/amdgpu/si_ih.c",
+        "drivers/gpu/drm/amd/amdgpu/tonga_ih.c",
+        "drivers/gpu/drm/amd/amdgpu/vega20_ih.c"
+      ],
+      "source_types": [
+        "code"
+      ],
+      "retrieval_sources": [
+        "fts5",
+        "lexical"
+      ],
+      "graph_node_count": 2,
+      "graph_edge_count": 1,
+      "graph_runtime": "networkx",
+      "empty_state": ""
+    },
+    {
+      "id": "AQ04",
+      "query": "Which code paths reference SDMA0_QUEUE0_RB_CNTL or SDMA1_QUEUE0_RB_CNTL?",
+      "gap_ids": [
+        "G01",
+        "G02",
+        "G03",
+        "G10"
+      ],
+      "required_surfaces": [
+        "CLI",
+        "API",
+        "Web"
+      ],
+      "required_source_types": [],
+      "surfaces_checked": [
+        "CLI",
+        "API",
+        "Web",
+        "MCP"
+      ],
+      "missing_surfaces": [],
+      "failure_reasons": [
+        "corpus mxgpu status is indexing",
+        "index job 3 failed: Interrupted after long serial provider embedding reindex; 9440 embeddings written before stop"
+      ],
+      "provider_checks": {},
+      "status": "fail",
+      "row_count": 24,
+      "evidence_ids": [
+        90752,
+        92770,
+        161902,
+        188185,
+        188186,
+        7188,
+        8808,
+        191003,
+        191036,
+        191092,
+        196579,
+        196613,
+        196666,
+        196816,
+        8748,
+        8909,
+        196817,
+        196818,
+        196819,
+        88780,
+        88781,
+        88782,
+        88784,
+        88793
+      ],
+      "source_paths": [
+        "drivers/gpu/drm/amd/amdgpu/amdgpu_amdkfd_gfx_v10.c",
+        "drivers/gpu/drm/amd/amdgpu/amdgpu_amdkfd_gfx_v11.c",
+        "drivers/gpu/drm/amd/amdgpu/dce_v10_0.c",
+        "drivers/gpu/drm/amd/amdgpu/dce_v6_0.c",
+        "drivers/gpu/drm/amd/amdgpu/dce_v8_0.c",
+        "drivers/gpu/drm/amd/amdgpu/mmhub_v1_8.c",
+        "drivers/gpu/drm/amd/amdgpu/sdma_v4_4_2.c",
+        "drivers/gpu/drm/amd/amdgpu/sdma_v6_0.c",
+        "drivers/gpu/drm/amd/amdgpu/sdma_v7_0.c"
+      ],
+      "source_types": [
+        "code"
+      ],
+      "retrieval_sources": [
+        "fts5",
+        "lexical"
+      ],
+      "graph_node_count": 2,
+      "graph_edge_count": 1,
+      "graph_runtime": "networkx",
+      "empty_state": ""
+    },
+    {
+      "id": "AQ05",
+      "query": "Show evidence connecting amdgpu documentation to the amdgpu driver source tree.",
+      "gap_ids": [
+        "G01",
+        "G02",
+        "G08",
+        "G10"
+      ],
+      "required_surfaces": [
+        "CLI",
+        "API",
+        "Web"
+      ],
+      "required_source_types": [
+        "code",
+        "doc",
+        "pdf"
+      ],
+      "surfaces_checked": [
+        "CLI",
+        "API",
+        "Web",
+        "MCP"
+      ],
+      "missing_surfaces": [],
+      "failure_reasons": [
+        "corpus mxgpu status is indexing",
+        "index job 3 failed: Interrupted after long serial provider embedding reindex; 9440 embeddings written before stop",
+        "required source types missing: pdf"
+      ],
+      "provider_checks": {},
+      "status": "fail",
+      "row_count": 24,
+      "evidence_ids": [
+        1881,
+        33147,
+        99186,
+        103711,
+        35743,
+        35744,
+        35745,
+        136850,
+        35746,
+        35747,
+        35748,
+        134771,
+        135470,
+        136136,
+        140220,
+        35749,
+        134772,
+        135471,
+        136137,
+        140221,
+        80390,
+        80885,
+        89860,
+        278379
+      ],
+      "source_paths": [
+        "README.md",
+        "drivers/gpu/drm/amd/amdgpu/amdgpu.h",
+        "drivers/gpu/drm/amd/amdgpu/amdgpu_gfx.c",
+        "drivers/gpu/drm/amd/amdgpu/amdgpu_gmc.h",
+        "drivers/gpu/drm/amd/amdgpu/atombios_encoders.c",
+        "drivers/gpu/drm/amd/amdgpu/atombios_encoders.h",
+        "drivers/gpu/drm/amd/amdgpu/dce_v10_0.c",
+        "drivers/gpu/drm/amd/amdgpu/gfx_v10_0.c",
+        "drivers/gpu/drm/amd/amdgpu/gfx_v11_0.c",
+        "drivers/gpu/drm/amd/amdgpu/gmc_v10_0.c",
+        "drivers/gpu/drm/amd/amdgpu/gmc_v11_0.c",
+        "drivers/gpu/drm/amd/amdgpu/gmc_v12_0.c",
+        "drivers/gpu/drm/amd/amdgpu/gmc_v12_1.c",
+        "drivers/gpu/drm/amd/amdgpu/gmc_v9_0.c"
+      ],
+      "source_types": [
+        "code",
+        "doc"
+      ],
+      "retrieval_sources": [
+        "fts5",
+        "lexical"
+      ],
+      "graph_node_count": 1,
+      "graph_edge_count": 0,
+      "graph_runtime": "networkx",
+      "empty_state": ""
+    },
+    {
+      "id": "AQ06",
+      "query": "Given WREG32_SOC15(GC, 0, regGCVM_L2_CNTL, tmp), explain the resolved register entity and macro expansion chain.",
+      "gap_ids": [
+        "G02",
+        "G05",
+        "G07",
+        "G10"
+      ],
+      "required_surfaces": [
+        "CLI",
+        "API",
+        "Web",
+        "MCP"
+      ],
+      "required_source_types": [],
+      "surfaces_checked": [
+        "CLI",
+        "API",
+        "Web",
+        "MCP"
+      ],
+      "missing_surfaces": [],
+      "failure_reasons": [
+        "corpus mxgpu status is indexing",
+        "index job 3 failed: Interrupted after long serial provider embedding reindex; 9440 embeddings written before stop"
+      ],
+      "provider_checks": {},
+      "status": "fail",
+      "row_count": 24,
+      "evidence_ids": [
+        130313,
+        130784,
+        133912,
+        134376,
+        130326,
+        130796,
+        131279,
+        133925,
+        134389,
+        131825,
+        132381,
+        132886,
+        133319,
+        159868,
+        160503,
+        162183,
+        162671,
+        163216,
+        163735,
+        164213,
+        164752,
+        165235,
+        131832,
+        132390
+      ],
+      "source_paths": [
+        "drivers/gpu/drm/amd/amdgpu/gfxhub_v11_5_0.c",
+        "drivers/gpu/drm/amd/amdgpu/gfxhub_v12_0.c",
+        "drivers/gpu/drm/amd/amdgpu/gfxhub_v12_1.c",
+        "drivers/gpu/drm/amd/amdgpu/gfxhub_v1_0.c",
+        "drivers/gpu/drm/amd/amdgpu/gfxhub_v1_2.c",
+        "drivers/gpu/drm/amd/amdgpu/gfxhub_v2_0.c",
+        "drivers/gpu/drm/amd/amdgpu/gfxhub_v2_1.c",
+        "drivers/gpu/drm/amd/amdgpu/gfxhub_v3_0.c",
+        "drivers/gpu/drm/amd/amdgpu/gfxhub_v3_0_3.c",
+        "drivers/gpu/drm/amd/amdgpu/mmhub_v1_0.c",
+        "drivers/gpu/drm/amd/amdgpu/mmhub_v1_7.c",
+        "drivers/gpu/drm/amd/amdgpu/mmhub_v2_0.c",
+        "drivers/gpu/drm/amd/amdgpu/mmhub_v2_3.c",
+        "drivers/gpu/drm/amd/amdgpu/mmhub_v3_0.c",
+        "drivers/gpu/drm/amd/amdgpu/mmhub_v3_0_1.c",
+        "drivers/gpu/drm/amd/amdgpu/mmhub_v3_0_2.c",
+        "drivers/gpu/drm/amd/amdgpu/mmhub_v3_3.c",
+        "drivers/gpu/drm/amd/amdgpu/mmhub_v4_1_0.c"
+      ],
+      "source_types": [
+        "code"
+      ],
+      "retrieval_sources": [
+        "fts5",
+        "lexical"
+      ],
+      "graph_node_count": 2,
+      "graph_edge_count": 1,
+      "graph_runtime": "networkx",
+      "empty_state": ""
+    },
+    {
+      "id": "AQ07",
+      "query": "Change resolver profile to add or rename one C/C++ register access wrapper, then verify the same resolver engine resolves it without code changes.",
+      "gap_ids": [
+        "G05",
+        "G07",
+        "G10",
+        "G14"
+      ],
+      "required_surfaces": [
+        "CLI",
+        "API",
+        "Web"
+      ],
+      "required_source_types": [],
+      "surfaces_checked": [
+        "CLI",
+        "API",
+        "Web",
+        "MCP"
+      ],
+      "missing_surfaces": [],
+      "failure_reasons": [
+        "corpus mxgpu status is indexing",
+        "index job 3 failed: Interrupted after long serial provider embedding reindex; 9440 embeddings written before stop"
+      ],
+      "provider_checks": {},
+      "status": "fail",
+      "row_count": 24,
+      "evidence_ids": [
+        109302,
+        157670,
+        185900,
+        189998,
+        101525,
+        101526,
+        187317,
+        94369,
+        211273,
+        157679,
+        195543,
+        202233,
+        195544,
+        202234,
+        195545,
+        202235,
+        195546,
+        202236,
+        159942,
+        159886,
+        159943,
+        159944,
+        159945,
+        159946
+      ],
+      "source_paths": [
+        "drivers/gpu/drm/amd/amdgpu/df_v3_6.c",
+        "drivers/gpu/drm/amd/amdgpu/gfx_v11_0.c",
+        "drivers/gpu/drm/amd/amdgpu/gfx_v12_1.c",
+        "drivers/gpu/drm/amd/amdgpu/mes_v12_0.c",
+        "drivers/gpu/drm/amd/amdgpu/mmhub_v1_0.c",
+        "drivers/gpu/drm/amd/amdgpu/sdma_v4_0.c",
+        "drivers/gpu/drm/amd/amdgpu/sdma_v4_4_2.c",
+        "drivers/gpu/drm/amd/amdgpu/sdma_v5_2.c",
+        "drivers/gpu/drm/amd/amdgpu/sdma_v6_0_0_pkt_open.h",
+        "drivers/gpu/drm/amd/amdgpu/sdma_v7_1_0_pkt_open.h",
+        "drivers/gpu/drm/amd/amdgpu/soc_v1_0.c"
+      ],
+      "source_types": [
+        "code"
+      ],
+      "retrieval_sources": [
+        "fts5",
+        "lexical",
+        "vector"
+      ],
+      "graph_node_count": 1,
+      "graph_edge_count": 0,
+      "graph_runtime": "networkx",
+      "empty_state": ""
+    },
+    {
+      "id": "AQ08",
+      "query": "Add a toy Python resolver profile extracting a configured function-call or string-symbol reference, proving profiles are not macro-only.",
+      "gap_ids": [
+        "G05",
+        "G07",
+        "G10",
+        "G13"
+      ],
+      "required_surfaces": [
+        "CLI",
+        "API",
+        "Web"
+      ],
+      "required_source_types": [],
+      "surfaces_checked": [
+        "CLI",
+        "API",
+        "Web",
+        "MCP"
+      ],
+      "missing_surfaces": [],
+      "failure_reasons": [
+        "corpus mxgpu status is indexing",
+        "index job 3 failed: Interrupted after long serial provider embedding reindex; 9440 embeddings written before stop"
+      ],
+      "provider_checks": {},
+      "status": "fail",
+      "row_count": 24,
+      "evidence_ids": [
+        179122,
+        209638,
+        267390,
+        273759,
+        111343,
+        113084,
+        116990,
+        113085,
+        116991,
+        4358,
+        240697,
+        15261,
+        268203,
+        179117,
+        209633,
+        179118,
+        209634,
+        179119,
+        209635,
+        267344,
+        289147,
+        289186,
+        14813,
+        278378
+      ],
+      "source_paths": [
+        "README.md",
+        "drivers/gpu/drm/amd/amdgpu/amdgpu_acpi.c",
+        "drivers/gpu/drm/amd/amdgpu/amdgpu_atomfirmware.c",
+        "drivers/gpu/drm/amd/amdgpu/amdgpu_atpx_handler.c",
+        "drivers/gpu/drm/amd/amdgpu/gfx_v6_0.c",
+        "drivers/gpu/drm/amd/amdgpu/gfx_v7_0.c",
+        "drivers/gpu/drm/amd/amdgpu/gfx_v8_0.c",
+        "drivers/gpu/drm/amd/amdgpu/nvd.h",
+        "drivers/gpu/drm/amd/amdgpu/soc15d.h",
+        "drivers/gpu/drm/amd/amdgpu/vi.c",
+        "drivers/gpu/drm/drm_mm.c",
+        "drivers/gpu/drm/drm_mode_object.c",
+        "drivers/gpu/drm/drm_privacy_screen.c",
+        "gim/gim_shim/sysfs/gim_monitor.c"
+      ],
+      "source_types": [
+        "code",
+        "doc"
+      ],
+      "retrieval_sources": [
+        "fts5",
+        "lexical"
+      ],
+      "graph_node_count": 1,
+      "graph_edge_count": 0,
+      "graph_runtime": "networkx",
+      "empty_state": ""
+    },
+    {
+      "id": "AQ09",
+      "query": "Run embedding and optional semantic-edge extraction through a configured Ollama provider, then switch to an OpenAI-compatible provider without changing retrieval or resolver code.",
+      "gap_ids": [
+        "G06",
+        "G09",
+        "G10",
+        "G17"
+      ],
+      "required_surfaces": [
+        "CLI",
+        "API",
+        "Web"
+      ],
+      "required_source_types": [],
+      "surfaces_checked": [
+        "CLI",
+        "API",
+        "Web",
+        "MCP"
+      ],
+      "missing_surfaces": [],
+      "failure_reasons": [
+        "corpus mxgpu status is indexing",
+        "index job 3 failed: Interrupted after long serial provider embedding reindex; 9440 embeddings written before stop"
+      ],
+      "provider_checks": {
+        "embedding": {
+          "status": "pass",
+          "provider": "ollama",
+          "model": "nomic-embed-text:latest",
+          "embedding_count": 9058,
+          "fallback_count": 382
+        },
+        "semantic_edge": {
+          "status": "pass",
+          "provider": "ollama",
+          "model": "qwen3.5:4b",
+          "edge_count": 1
+        }
+      },
+      "status": "fail",
+      "row_count": 24,
+      "evidence_ids": [
+        29669,
+        29713,
+        22248,
+        39034,
+        47838,
+        62212,
+        115892,
+        115927,
+        115994,
+        334214,
+        334259,
+        22189,
+        250467,
+        273665,
+        48483,
+        317735,
+        317806,
+        309283,
+        321978,
+        323963,
+        324251,
+        325378,
+        326212,
+        278379
+      ],
+      "source_paths": [
+        "README.md",
+        "drivers/gpu/drm/amd/amdgpu/amdgpu_device.c",
+        "drivers/gpu/drm/amd/amdgpu/amdgpu_drv.c",
+        "drivers/gpu/drm/amd/amdgpu/amdgpu_isp.c",
+        "drivers/gpu/drm/amd/amdgpu/amdgpu_psp.c",
+        "drivers/gpu/drm/amd/amdgpu/amdgpu_psp.h",
+        "drivers/gpu/drm/amd/amdgpu/amdgpu_ucode.h",
+        "drivers/gpu/drm/amd/amdgpu/gfx_v8_0.c",
+        "drivers/gpu/drm/drm_connector.c",
+        "drivers/gpu/drm/drm_privacy_screen.c",
+        "libgv/core/amdgv_live_info.h",
+        "libgv/core/amdgv_psp.h",
+        "libgv/core/amdgv_sched.h",
+        "libgv/core/amdgv_sched_event.c",
+        "libgv/core/amdgv_sched_reset.c",
+        "libgv/core/amdgv_sched_switch.c",
+        "libgv/core/atombios/atom.c"
+      ],
+      "source_types": [
+        "code",
+        "doc"
+      ],
+      "retrieval_sources": [
+        "fts5",
+        "lexical"
+      ],
+      "graph_node_count": 1,
+      "graph_edge_count": 0,
+      "graph_runtime": "networkx",
+      "empty_state": ""
+    }
+  ]
+}

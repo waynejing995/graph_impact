@@ -3,7 +3,11 @@ import "./globals.css";
 
 export const metadata: Metadata = {
   title: "ASIP Evidence Workbench",
-  description: "Hybrid evidence retrieval workbench for AMD GPU engineering corpora"
+  description: "Hybrid evidence retrieval workbench for AMD GPU engineering corpora",
+  icons: {
+    icon: "/brand/asip-logo.png",
+    apple: "/brand/asip-logo.png"
+  }
 };
 
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {

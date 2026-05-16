@@ -1,0 +1,195 @@
+{
+  "generated_at": "2026-05-16T23:09:18.473Z",
+  "viewport": {
+    "width": 2048,
+    "height": 1280
+  },
+  "base_url": "http://127.0.0.1:3100",
+  "pages": [
+    {
+      "route": "/",
+      "id": "evidence-workbench",
+      "anchor": "/Volumes/data/User/wayne/Code/graph_impact/docs/visual-anchors/images/evidence-workbench.png",
+      "dark_screenshot": "/Volumes/data/User/wayne/Code/graph_impact/docs/qa/visual-qa-2026-05-17/evidence-workbench-dark.png",
+      "light_screenshot": "/Volumes/data/User/wayne/Code/graph_impact/docs/qa/visual-qa-2026-05-17/evidence-workbench-light.png",
+      "dark": {
+        "theme": "dark",
+        "pageId": "evidence-workbench",
+        "navCurrent": "Evidence Search",
+        "tableVisible": true,
+        "relationshipVisible": true,
+        "graphNodes": 2,
+        "graphEdges": 1,
+        "edgeLabels": [
+          "writes / 0.90"
+        ]
+      },
+      "light": {
+        "theme": "light",
+        "pageId": "evidence-workbench",
+        "navCurrent": "Evidence Search",
+        "tableVisible": true,
+        "relationshipVisible": true,
+        "graphNodes": 2,
+        "graphEdges": 1,
+        "edgeLabels": [
+          "writes / 0.90"
+        ]
+      },
+      "pass": true
+    },
+    {
+      "route": "/graph",
+      "id": "graph-explorer",
+      "anchor": "/Volumes/data/User/wayne/Code/graph_impact/docs/visual-anchors/images/graph-explorer.png",
+      "dark_screenshot": "/Volumes/data/User/wayne/Code/graph_impact/docs/qa/visual-qa-2026-05-17/graph-explorer-dark.png",
+      "light_screenshot": "/Volumes/data/User/wayne/Code/graph_impact/docs/qa/visual-qa-2026-05-17/graph-explorer-light.png",
+      "dark": {
+        "theme": "dark",
+        "pageId": "graph-explorer",
+        "navCurrent": "Graph Explorer",
+        "tableVisible": true,
+        "relationshipVisible": true,
+        "graphNodes": 12,
+        "graphEdges": 4,
+        "edgeLabels": [
+          "sets_field / 0.90",
+          "sets_field / 0.90",
+          "sets_field / 0.90"
+        ]
+      },
+      "light": {
+        "theme": "light",
+        "pageId": "graph-explorer",
+        "navCurrent": "Graph Explorer",
+        "tableVisible": true,
+        "relationshipVisible": true,
+        "graphNodes": 12,
+        "graphEdges": 4,
+        "edgeLabels": [
+          "sets_field / 0.90",
+          "sets_field / 0.90",
+          "sets_field / 0.90"
+        ]
+      },
+      "pass": true
+    },
+    {
+      "route": "/corpus",
+      "id": "corpus",
+      "anchor": "/Volumes/data/User/wayne/Code/graph_impact/docs/visual-anchors/images/corpus.png",
+      "dark_screenshot": "/Volumes/data/User/wayne/Code/graph_impact/docs/qa/visual-qa-2026-05-17/corpus-dark.png",
+      "light_screenshot": "/Volumes/data/User/wayne/Code/graph_impact/docs/qa/visual-qa-2026-05-17/corpus-light.png",
+      "dark": {
+        "theme": "dark",
+        "pageId": "corpus",
+        "navCurrent": "Corpus",
+        "tableVisible": true,
+        "relationshipVisible": true,
+        "graphNodes": 0,
+        "graphEdges": 0,
+        "edgeLabels": []
+      },
+      "light": {
+        "theme": "light",
+        "pageId": "corpus",
+        "navCurrent": "Corpus",
+        "tableVisible": true,
+        "relationshipVisible": true,
+        "graphNodes": 0,
+        "graphEdges": 0,
+        "edgeLabels": []
+      },
+      "pass": true
+    },
+    {
+      "route": "/resolver-profiles",
+      "id": "resolver-profiles",
+      "anchor": "/Volumes/data/User/wayne/Code/graph_impact/docs/visual-anchors/images/resolver-profiles.png",
+      "dark_screenshot": "/Volumes/data/User/wayne/Code/graph_impact/docs/qa/visual-qa-2026-05-17/resolver-profiles-dark.png",
+      "light_screenshot": "/Volumes/data/User/wayne/Code/graph_impact/docs/qa/visual-qa-2026-05-17/resolver-profiles-light.png",
+      "dark": {
+        "theme": "dark",
+        "pageId": "resolver-profiles",
+        "navCurrent": "Resolver Profiles",
+        "tableVisible": true,
+        "relationshipVisible": true,
+        "graphNodes": 0,
+        "graphEdges": 0,
+        "edgeLabels": []
+      },
+      "light": {
+        "theme": "light",
+        "pageId": "resolver-profiles",
+        "navCurrent": "Resolver Profiles",
+        "tableVisible": true,
+        "relationshipVisible": true,
+        "graphNodes": 0,
+        "graphEdges": 0,
+        "edgeLabels": []
+      },
+      "pass": true
+    },
+    {
+      "route": "/acceptance",
+      "id": "acceptance-tests",
+      "anchor": "/Volumes/data/User/wayne/Code/graph_impact/docs/visual-anchors/images/acceptance-tests.png",
+      "dark_screenshot": "/Volumes/data/User/wayne/Code/graph_impact/docs/qa/visual-qa-2026-05-17/acceptance-tests-dark.png",
+      "light_screenshot": "/Volumes/data/User/wayne/Code/graph_impact/docs/qa/visual-qa-2026-05-17/acceptance-tests-light.png",
+      "dark": {
+        "theme": "dark",
+        "pageId": "acceptance-tests",
+        "navCurrent": "Acceptance Tests",
+        "tableVisible": true,
+        "relationshipVisible": true,
+        "graphNodes": 0,
+        "graphEdges": 0,
+        "edgeLabels": []
+      },
+      "light": {
+        "theme": "light",
+        "pageId": "acceptance-tests",
+        "navCurrent": "Acceptance Tests",
+        "tableVisible": true,
+        "relationshipVisible": true,
+        "graphNodes": 0,
+        "graphEdges": 0,
+        "edgeLabels": []
+      },
+      "pass": true
+    },
+    {
+      "route": "/settings",
+      "id": "settings",
+      "anchor": "/Volumes/data/User/wayne/Code/graph_impact/docs/visual-anchors/images/settings.png",
+      "dark_screenshot": "/Volumes/data/User/wayne/Code/graph_impact/docs/qa/visual-qa-2026-05-17/settings-dark.png",
+      "light_screenshot": "/Volumes/data/User/wayne/Code/graph_impact/docs/qa/visual-qa-2026-05-17/settings-light.png",
+      "dark": {
+        "theme": "dark",
+        "pageId": "settings",
+        "navCurrent": "Settings",
+        "tableVisible": true,
+        "relationshipVisible": true,
+        "graphNodes": 0,
+        "graphEdges": 0,
+        "edgeLabels": []
+      },
+      "light": {
+        "theme": "light",
+        "pageId": "settings",
+        "navCurrent": "Settings",
+        "tableVisible": true,
+        "relationshipVisible": true,
+        "graphNodes": 0,
+        "graphEdges": 0,
+        "edgeLabels": []
+      },
+      "pass": true
+    }
+  ],
+  "summary": {
+    "total": 6,
+    "passed": 6,
+    "failed": 0
+  }
+}

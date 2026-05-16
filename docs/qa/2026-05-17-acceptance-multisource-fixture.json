@@ -1,0 +1,168 @@
+{
+  "source": "asip.acceptance",
+  "generated_at": "2026-05-16T21:20:13+00:00",
+  "db_path": "/tmp/asip-multisource-clean-2026-05-17.db",
+  "database_health": {
+    "status": "pass",
+    "failure_reasons": []
+  },
+  "provider_settings": {},
+  "provider_checks": {},
+  "surfaces_checked": [
+    "CLI",
+    "API",
+    "Web",
+    "MCP"
+  ],
+  "summary": {
+    "total": 2,
+    "passed": 2,
+    "partial": 0,
+    "failed": 0
+  },
+  "queries": [
+    {
+      "id": "AQ05",
+      "query": "Show evidence connecting amdgpu documentation to the amdgpu driver source tree.",
+      "gap_ids": [
+        "G01",
+        "G02",
+        "G08",
+        "G10"
+      ],
+      "required_surfaces": [
+        "CLI",
+        "API",
+        "Web"
+      ],
+      "required_source_types": [
+        "code",
+        "doc",
+        "pdf"
+      ],
+      "surfaces_checked": [
+        "CLI",
+        "API",
+        "Web",
+        "MCP"
+      ],
+      "missing_surfaces": [],
+      "failure_reasons": [],
+      "provider_checks": {},
+      "status": "pass",
+      "row_count": 24,
+      "evidence_ids": [
+        8,
+        7,
+        24,
+        27,
+        9,
+        10,
+        13,
+        14,
+        1,
+        2,
+        3,
+        4,
+        5,
+        12,
+        11,
+        25,
+        28,
+        26,
+        29,
+        30,
+        6,
+        31,
+        33,
+        34
+      ],
+      "source_paths": [
+        "docs/amdgpu-driver-overview.md",
+        "docs/amdgpu-driver-overview.pdf",
+        "drivers/gpu/drm/amd/amdgpu/gfx_v11_0.c",
+        "include/asic_reg/gc_11_0_0_offset.h",
+        "include/asic_reg/gc_11_0_0_sh_mask.h"
+      ],
+      "source_types": [
+        "code",
+        "doc",
+        "pdf",
+        "register"
+      ],
+      "retrieval_sources": [
+        "fts5",
+        "lexical"
+      ],
+      "graph_node_count": 2,
+      "graph_edge_count": 1,
+      "graph_runtime": "networkx",
+      "empty_state": ""
+    },
+    {
+      "id": "AQ06",
+      "query": "Given WREG32_SOC15(GC, 0, regGCVM_L2_CNTL, tmp), explain the resolved register entity and macro expansion chain.",
+      "gap_ids": [
+        "G02",
+        "G05",
+        "G07",
+        "G10"
+      ],
+      "required_surfaces": [
+        "CLI",
+        "API",
+        "Web",
+        "MCP"
+      ],
+      "required_source_types": [
+        "code",
+        "register"
+      ],
+      "surfaces_checked": [
+        "CLI",
+        "API",
+        "Web",
+        "MCP"
+      ],
+      "missing_surfaces": [],
+      "failure_reasons": [],
+      "provider_checks": {},
+      "status": "pass",
+      "row_count": 16,
+      "evidence_ids": [
+        6,
+        12,
+        1,
+        4,
+        5,
+        2,
+        3,
+        32,
+        7,
+        8,
+        9,
+        10,
+        11,
+        13,
+        14,
+        31
+      ],
+      "source_paths": [
+        "drivers/gpu/drm/amd/amdgpu/gfx_v11_0.c",
+        "include/asic_reg/gc_11_0_0_offset.h"
+      ],
+      "source_types": [
+        "code",
+        "register"
+      ],
+      "retrieval_sources": [
+        "fts5",
+        "lexical"
+      ],
+      "graph_node_count": 2,
+      "graph_edge_count": 1,
+      "graph_runtime": "networkx",
+      "empty_state": ""
+    }
+  ]
+}

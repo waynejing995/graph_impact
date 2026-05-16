@@ -4,6 +4,7 @@
   "packageManager": "pnpm@9.15.4",
   "scripts": {
     "dev": "pnpm --filter web dev",
+    "dev:api": "PYTHONPATH=packages/core/src:. python3 -m uvicorn apps.api.main:app --host 127.0.0.1 --port ${PORT:-8000} --ws none",
     "build": "pnpm --filter web build",
     "lint": "pnpm --filter web lint",
     "test:ui": "pnpm --filter web test:ui"

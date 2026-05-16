@@ -1,0 +1,23 @@
+id: amd-mxgpu
+language: cpp
+context_vars: [adapt]
+symbol_prefixes: [reg, mm]
+wrappers:
+  WREG32:
+    symbol_arg: 0
+    access: write
+  RREG32:
+    symbol_arg: 0
+    access: read
+  WREG32_SOC15:
+    symbol_arg: 2
+    access: write
+  RREG32_SOC15:
+    symbol_arg: 2
+    access: read
+  REG_SET_FIELD:
+    symbol_arg: 1
+    access: field_set
+  REG_GET_FIELD:
+    symbol_arg: 1
+    access: field_get

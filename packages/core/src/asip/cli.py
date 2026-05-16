@@ -7,7 +7,26 @@ import json
 from pathlib import Path
 from typing import Dict, List, Optional
 
+from .acceptance import DEFAULT_ACCEPTANCE_QUERIES, run_acceptance_queries
 from .semantic_edges import run_full_corpus_generation, run_generation
+from .workbench import (
+    add_corpus,
+    add_resolver_profile,
+    backfill_provider_embeddings,
+    expand_query_graph,
+    explain_entity,
+    generate_semantic_edges_for_query,
+    get_evidence_detail,
+    global_graph,
+    index_configured_corpora,
+    index_registered_corpora,
+    list_indexed_corpora,
+    list_resolver_profiles,
+    load_provider_settings,
+    query_evidence,
+    save_provider_settings,
+    validate_resolver_profile,
+)
 
 
 def parse_source_roots(items: Optional[List[str]]) -> Dict[str, Path]:
@@ -20,6 +39,17 @@ def parse_source_roots(items: Optional[List[str]]) -> Dict[str, Path]:
             raise ValueError(f"source root must use corpus_id=path: {item}")
         roots[corpus_id] = Path(path)
     return roots
+
+
+def select_acceptance_queries(query_ids: Optional[List[str]]) -> Optional[List[Dict[str, object]]]:
+    if not query_ids:
+        return None
+    wanted = [item.strip().upper() for item in query_ids if item.strip()]
+    query_by_id = {str(query["id"]).upper(): query for query in DEFAULT_ACCEPTANCE_QUERIES}
+    missing = [query_id for query_id in wanted if query_id not in query_by_id]
+    if missing:
+        raise ValueError(f"unknown acceptance query id(s): {', '.join(missing)}")
+    return [query_by_id[query_id] for query_id in wanted]
 
 
 def main(argv: Optional[List[str]] = None) -> int:
@@ -46,6 +76,94 @@ def main(argv: Optional[List[str]] = None) -> int:
     edges_full.add_argument("--min-pass", type=int, default=6)
     edges_full.add_argument("--batch-size", type=int, default=3)
 
+    index = subcommands.add_parser("index", help="Index configured raw corpora into the ASIP SQLite store")
+    index.add_argument("--config", required=True)
+    index.add_argument("--db", required=True)
+    index.add_argument("--corpus-id", action="append", default=[])
+    index.add_argument(
+        "--source-root",
+        action="append",
+        default=[],
+        help="Override configured corpus source root as corpus_id=/path/to/repo. May be passed more than once.",
+    )
+
+    query = subcommands.add_parser("query", help="Query the ASIP SQLite evidence store")
+    query.add_argument("--db", required=True)
+    query.add_argument("--q", required=True)
+    query.add_argument("--ip-block", default="")
+    query.add_argument("--asic", default="")
+
+    semantic_edges = subcommands.add_parser("semantic-edges", help="Generate semantic edges from indexed evidence")
+    semantic_edges.add_argument("--db", required=True)
+    semantic_edges.add_argument("--q", required=True)
+    semantic_edges.add_argument("--limit", type=int, default=8)
+
+    evidence_detail = subcommands.add_parser("evidence-detail", help="Read a single evidence row by id")
+    evidence_detail.add_argument("--db", required=True)
+    evidence_detail.add_argument("--id", type=int, required=True)
+
+    entity_explain = subcommands.add_parser("entity-explain", help="Explain an entity with evidence and graph context")
+    entity_explain.add_argument("--db", required=True)
+    entity_explain.add_argument("--symbol", required=True)
+
+    graph = subcommands.add_parser("graph", help="Expand a weighted relation graph from the ASIP SQLite store")
+    graph.add_argument("--db", required=True)
+    graph.add_argument("--seed")
+    graph.add_argument("--hops", type=int, default=1)
+    graph.add_argument("--limit", type=int, default=100)
+
+    acceptance = subcommands.add_parser("acceptance", help="Run ASIP MVP acceptance queries against a SQLite store")
+    acceptance.add_argument("--db", required=True)
+    acceptance.add_argument("--output-json")
+    acceptance.add_argument("--output-md")
+    acceptance.add_argument("--surface", action="append", default=["CLI"])
+    acceptance.add_argument("--query-id", action="append", default=[])
+    acceptance.add_argument("--full", action="store_true", help="Print the full acceptance payload instead of only summary")
+
+    corpora = subcommands.add_parser("corpora", help="List indexed corpora from the ASIP SQLite store")
+    corpora.add_argument("--db", required=True)
+    corpora.add_argument("--config")
+
+    corpus_add = subcommands.add_parser("corpus-add", help="Add a corpus entry to the ASIP SQLite store")
+    corpus_add.add_argument("--db", required=True)
+    corpus_add.add_argument("--id", required=True)
+    corpus_add.add_argument("--repo", default="local")
+    corpus_add.add_argument("--source-root", required=True)
+    corpus_add.add_argument("--include", action="append", default=[])
+    corpus_add.add_argument("--type", default="code")
+
+    provider_save = subcommands.add_parser("provider-save", help="Persist provider settings JSON")
+    provider_save.add_argument("--db", required=True)
+    provider_save.add_argument("--settings-json", required=True)
+
+    provider_show = subcommands.add_parser("provider-show", help="Show persisted provider settings JSON")
+    provider_show.add_argument("--db", required=True)
+
+    provider_embeddings = subcommands.add_parser(
+        "provider-embeddings",
+        help="Backfill provider embeddings for existing indexed chunks using current settings",
+    )
+    provider_embeddings.add_argument("--db", required=True)
+    provider_embeddings.add_argument("--limit", type=int, default=0)
+    provider_embeddings.add_argument("--batch-size", type=int, default=64)
+
+    resolver_list = subcommands.add_parser("resolver-list", help="List resolver profiles from backend state")
+    resolver_list.add_argument("--db", required=True)
+
+    resolver_add = subcommands.add_parser("resolver-add", help="Add a resolver profile to backend state")
+    resolver_add.add_argument("--db", required=True)
+    resolver_add.add_argument("--id", required=True)
+    resolver_add.add_argument("--language", required=True)
+    resolver_add.add_argument("--wrapper", action="append", default=[])
+    resolver_add.add_argument("--strategy", default="macro")
+    resolver_add.add_argument("--path", default="")
+    resolver_add.add_argument("--disabled", action="store_true")
+
+    resolver_validate = subcommands.add_parser("resolver-validate", help="Validate a resolver profile against source text")
+    resolver_validate.add_argument("--db", required=True)
+    resolver_validate.add_argument("--id", required=True)
+    resolver_validate.add_argument("--source", required=True)
+
     args = parser.parse_args(argv)
     if args.command == "edges":
         result = run_generation(
@@ -67,6 +185,117 @@ def main(argv: Optional[List[str]] = None) -> int:
             batch_size=args.batch_size,
         )
         print(json.dumps(result["summary"], indent=2))
+        return 0
+    if args.command == "index":
+        if args.corpus_id:
+            print(json.dumps(index_registered_corpora(Path(args.db), corpus_ids=args.corpus_id), indent=2))
+        else:
+            print(
+                json.dumps(
+                    index_configured_corpora(
+                        Path(args.config),
+                        Path(args.db),
+                        source_roots=parse_source_roots(args.source_root),
+                    ),
+                    indent=2,
+                )
+            )
+        return 0
+    if args.command == "query":
+        print(
+            json.dumps(
+                query_evidence(Path(args.db), args.q, ip_block=args.ip_block, asic_or_generation=args.asic),
+                indent=2,
+            )
+        )
+        return 0
+    if args.command == "semantic-edges":
+        print(json.dumps(generate_semantic_edges_for_query(Path(args.db), args.q, limit=args.limit), indent=2))
+        return 0
+    if args.command == "evidence-detail":
+        print(json.dumps(get_evidence_detail(Path(args.db), args.id), indent=2))
+        return 0
+    if args.command == "entity-explain":
+        print(json.dumps(explain_entity(Path(args.db), args.symbol), indent=2))
+        return 0
+    if args.command == "graph":
+        if args.seed:
+            print(json.dumps(expand_query_graph(Path(args.db), args.seed, hops=args.hops), indent=2))
+        else:
+            print(json.dumps(global_graph(Path(args.db), limit=args.limit), indent=2))
+        return 0
+    if args.command == "acceptance":
+        try:
+            selected_queries = select_acceptance_queries(args.query_id)
+        except ValueError as exc:
+            parser.error(str(exc))
+        result = run_acceptance_queries(
+            Path(args.db),
+            output_json=Path(args.output_json) if args.output_json else None,
+            output_md=Path(args.output_md) if args.output_md else None,
+            queries=selected_queries,
+            surfaces_checked=args.surface,
+        )
+        print(json.dumps(result if args.full else result["summary"], indent=2))
+        return 0
+    if args.command == "corpora":
+        print(
+            json.dumps(
+                {"corpora": list_indexed_corpora(Path(args.db), Path(args.config) if args.config else None)},
+                indent=2,
+            )
+        )
+        return 0
+    if args.command == "corpus-add":
+        print(
+            json.dumps(
+                add_corpus(
+                    Path(args.db),
+                    corpus_id=args.id,
+                    repo=args.repo,
+                    source_root=args.source_root,
+                    include=args.include or ["**/*"],
+                    corpus_type=args.type,
+                ),
+                indent=2,
+            )
+        )
+        return 0
+    if args.command == "provider-save":
+        print(json.dumps(save_provider_settings(Path(args.db), json.loads(args.settings_json)), indent=2))
+        return 0
+    if args.command == "provider-show":
+        print(json.dumps(load_provider_settings(Path(args.db)), indent=2))
+        return 0
+    if args.command == "provider-embeddings":
+        print(
+            json.dumps(
+                backfill_provider_embeddings(Path(args.db), limit=args.limit, batch_size=args.batch_size),
+                indent=2,
+            )
+        )
+        return 0
+    if args.command == "resolver-list":
+        print(json.dumps({"profiles": list_resolver_profiles(Path(args.db))}, indent=2))
+        return 0
+    if args.command == "resolver-add":
+        print(
+            json.dumps(
+                add_resolver_profile(
+                    Path(args.db),
+                    profile_id=args.id,
+                    language=args.language,
+                    wrappers=args.wrapper,
+                    strategy=args.strategy,
+                    path=args.path or f"configs/resolvers/{args.id}.yaml",
+                    enabled=not args.disabled,
+                ),
+                indent=2,
+            )
+        )
+        return 0
+    if args.command == "resolver-validate":
+        print(json.dumps(validate_resolver_profile(Path(args.db), args.id, args.source), indent=2))
         return 0
     return 2
 
