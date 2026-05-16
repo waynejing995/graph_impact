@@ -37,6 +37,14 @@ test("settings page persists configurable provider model api and headers", async
   await expect(page.getByTestId("runtime-config-preview")).toContainText('"provider": "openai-compatible"');
   await expect(page.getByTestId("runtime-config-preview")).toContainText('"api_path": "/v1/chat/completions"');
   await expect(page.getByTestId("runtime-config-preview")).toContainText('"num_ctx": 4096');
+  await expect(page.getByLabel("Page metrics")).toContainText("edge model: qwen3.6");
+  const resultsTable = page.getByRole("table", { name: "Evidence results" });
+  await expect(resultsTable).toContainText("qwen3.6");
+  await expect(resultsTable).toContainText("semantic_edges");
+  await expect(resultsTable).toContainText("openai-compatible");
+  await expect(resultsTable).toContainText("https://llm.example.test/v1/chat/completions");
+  await expect(resultsTable).not.toContainText("qwen3.5:4b");
+  await expect(resultsTable).not.toContainText("http://localhost:11434");
 
   const saved = await page.evaluate(() => window.localStorage.getItem("asip-provider-settings"));
   expect(saved).not.toBeNull();

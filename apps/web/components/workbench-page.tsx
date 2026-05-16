@@ -8,7 +8,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
-import { navItems, pageConfigs, type PageId } from "@/lib/page-data";
+import { navItems, pageConfigs, type EvidenceRow, type Metric, type PageId } from "@/lib/page-data";
 
 type WorkbenchPageProps = {
   pageId: PageId;
@@ -129,6 +129,14 @@ export function WorkbenchPage({ pageId }: WorkbenchPageProps) {
 
   const providerLabel = providerSettings.provider === "ollama" ? "Ollama" : "OpenAI-compatible";
   const runtimeConfig = useMemo(() => buildRuntimeEdgeModelConfig(providerSettings), [providerSettings]);
+  const pageMetrics = useMemo(
+    () => (config.id === "settings" ? buildSettingsMetrics(providerSettings) : config.metrics),
+    [config.id, config.metrics, providerSettings]
+  );
+  const evidenceRows = useMemo(
+    () => (config.id === "settings" ? buildSettingsEvidenceRows(providerSettings) : config.rows),
+    [config.id, config.rows, providerSettings]
+  );
 
   function saveProviderSettings() {
     try {
@@ -214,7 +222,7 @@ export function WorkbenchPage({ pageId }: WorkbenchPageProps) {
           </div>
 
           <div className="metric-row" aria-label="Page metrics">
-            {config.metrics.map((metric) => (
+            {pageMetrics.map((metric) => (
               <Badge key={metric.label} tone={metric.tone ?? "neutral"}>
                 {metric.label}: {metric.value}
               </Badge>
@@ -244,7 +252,7 @@ export function WorkbenchPage({ pageId }: WorkbenchPageProps) {
           {config.id === "graph-explorer" ? <GlobalNetworkGraph /> : null}
 
           <div className="results-table" role="table" aria-label="Evidence results">
-            {config.rows.map((item) => (
+            {evidenceRows.map((item) => (
               <div className="evidence-row" key={`${item.source}-${item.symbol}`} role="row">
                 <span className={`source-dot source-dot--${item.tone}`} />
                 <code>{item.symbol}</code>
@@ -350,6 +358,49 @@ function buildRuntimeEdgeModelConfig(settings: ProviderSettings): RuntimeEdgeMod
     think: settings.think,
     timeout_seconds: numberFromDraft(settings.timeoutSeconds, defaultProviderSettings.timeoutSeconds)
   };
+}
+
+function buildSettingsMetrics(settings: ProviderSettings): Metric[] {
+  return [
+    { label: "edge model", value: settings.edgeModel || "unset", tone: "success" },
+    { label: "think", value: settings.think ? "on" : "off", tone: settings.think ? "doc" : "success" },
+    { label: "timeout", value: `${settings.timeoutSeconds || defaultProviderSettings.timeoutSeconds}s` }
+  ];
+}
+
+function buildSettingsEvidenceRows(settings: ProviderSettings): EvidenceRow[] {
+  return [
+    {
+      source: "provider",
+      tone: "success",
+      symbol: settings.edgeModel || "unset",
+      relation: "semantic_edges",
+      score: settings.provider,
+      path: providerRequestEndpoint(settings)
+    },
+    {
+      source: "provider",
+      tone: "register",
+      symbol: settings.embeddingModel || "unset",
+      relation: "embedding",
+      score: settings.provider,
+      path: settings.apiBaseUrl || defaultProviderSettings.apiBaseUrl
+    },
+    {
+      source: "storage",
+      tone: "code",
+      symbol: "SQLite FTS5 + sqlite-vec",
+      relation: "index",
+      score: "local",
+      path: "data/asip.db"
+    }
+  ];
+}
+
+function providerRequestEndpoint(settings: ProviderSettings): string {
+  const baseUrl = (settings.apiBaseUrl || defaultProviderSettings.apiBaseUrl).replace(/\/+$/, "");
+  const path = settings.apiPath || defaultProviderSettings.apiPath;
+  return `${baseUrl}${path.startsWith("/") ? path : `/${path}`}`;
 }
 
 function numberFromDraft(value: string, fallback: string): number {
