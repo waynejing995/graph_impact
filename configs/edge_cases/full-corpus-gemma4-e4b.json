@@ -1,12 +1,12 @@
 {
-  "name": "full-corpus-qwen35",
+  "name": "full-corpus-gemma4-e4b",
   "model": {
     "provider": "ollama",
     "api_base_url": "http://localhost:11434",
     "api_path": "/api/chat",
     "extra_headers": {},
-    "preferred": "qwen3.5:4b",
-    "fallback": "qwen3.6",
+    "preferred": "gemma4:e4b",
+    "fallback": "",
     "format": "json",
     "num_ctx": 2048,
     "num_predict": 1024,

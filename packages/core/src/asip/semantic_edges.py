@@ -6,8 +6,8 @@ import json
 import subprocess
 import time
 import urllib.request
-from dataclasses import dataclass
-from pathlib import Path
+from dataclasses import dataclass, field
+from pathlib import Path, PurePosixPath
 from typing import Any, Dict, Iterable, List, Mapping, Optional, Protocol, Tuple
 
 
@@ -15,6 +15,10 @@ from typing import Any, Dict, Iterable, List, Mapping, Optional, Protocol, Tuple
 class EdgeModelConfig:
     preferred: str
     fallback: str
+    provider: str = "ollama"
+    api_base_url: str = "http://localhost:11434"
+    api_path: str = ""
+    extra_headers: Dict[str, str] = field(default_factory=dict)
     format: str = "json"
     num_ctx: int = 8192
     num_predict: int = 512
@@ -99,8 +103,10 @@ class FakeEdgeProvider:
                     cases.append(_fake_case(current_id, terms))
                 current_id = line.split(" ", 1)[1].strip()
                 terms = []
-            elif ":" in line:
-                terms.extend(_extract_identifiers(line))
+            elif line.startswith("TERMS:"):
+                terms.extend(_extract_identifiers(line.split(":", 1)[1]))
+            elif _looks_like_source_line(line):
+                terms.extend(_extract_identifiers(line.split(":", 1)[1]))
         if current_id:
             cases.append(_fake_case(current_id, terms))
         return {"cases": cases}
@@ -111,10 +117,30 @@ class OllamaEdgeProvider:
 
     def __init__(self, base_url: str = "http://localhost:11434") -> None:
         self.base_url = base_url.rstrip("/")
+        self.attempted_models: List[str] = []
 
     def generate(self, prompt: str, model: EdgeModelConfig) -> Dict[str, Any]:
+        model_names = [model.preferred]
+        if model.fallback and model.fallback not in model_names:
+            model_names.append(model.fallback)
+        errors: List[str] = []
+        for model_name in model_names:
+            try:
+                if model_name not in self.attempted_models:
+                    self.attempted_models.append(model_name)
+                return self._generate_with_model(prompt, model, model_name)
+            except Exception as exc:  # pragma: no cover - exercised by tests through fallback
+                errors.append(f"{model_name}: {exc}")
+                if model_name == model_names[-1]:
+                    raise RuntimeError("Ollama edge generation failed: " + "; ".join(errors)) from exc
+        return {"cases": []}
+
+    def cleanup_model_names(self, model: EdgeModelConfig) -> List[str]:
+        return self.attempted_models or [model.preferred]
+
+    def _generate_with_model(self, prompt: str, model: EdgeModelConfig, model_name: str) -> Dict[str, Any]:
         body = {
-            "model": model.preferred,
+            "model": model_name,
             "stream": False,
             "format": model.format,
             "think": model.think,
@@ -124,29 +150,12 @@ class OllamaEdgeProvider:
                 "num_predict": model.num_predict,
                 "temperature": model.temperature,
             },
-            "messages": [
-                {
-                    "role": "system",
-                    "content": (
-                        "/no_think "
-                        "Return only valid JSON. Preserve exact C identifiers. "
-                        "For every case, include edges that mention every supplied TERMS identifier when the snippets support it. "
-                        "Emit at most four edges per case. Keep evidence under 12 words and include line numbers when available. "
-                        "Do not use markdown fences. "
-                        "Use relation names from: reads, writes, sets_field, checks_mask, "
-                        "maps_base, assigns_doorbell, waits_for. "
-                        "Schema: {\"cases\":[{\"id\":string,\"edges\":[{\"src\":string,"
-                        "\"relation\":string,\"dst\":string,\"confidence\":number,"
-                        "\"evidence\":string}]}]}"
-                    ),
-                },
-                {"role": "user", "content": f"/no_think\n{prompt}"},
-            ],
+            "messages": _edge_messages(prompt),
         }
         request = urllib.request.Request(
-            f"{self.base_url}/api/chat",
+            _request_url(model, self.base_url, "/api/chat"),
             data=json.dumps(body).encode("utf-8"),
-            headers={"Content-Type": "application/json"},
+            headers=_request_headers(model),
             method="POST",
         )
         with urllib.request.urlopen(request, timeout=model.timeout_seconds) as response:
@@ -154,9 +163,97 @@ class OllamaEdgeProvider:
         return parse_ollama_json_message(data)
 
 
+class OpenAICompatibleEdgeProvider:
+    """OpenAI-compatible chat completions provider for semantic edge generation."""
+
+    def __init__(self, base_url: str = "http://localhost:11434") -> None:
+        self.base_url = base_url.rstrip("/")
+
+    def generate(self, prompt: str, model: EdgeModelConfig) -> Dict[str, Any]:
+        model_names = [model.preferred]
+        if model.fallback and model.fallback not in model_names:
+            model_names.append(model.fallback)
+        errors: List[str] = []
+        for model_name in model_names:
+            try:
+                return self._generate_with_model(prompt, model, model_name)
+            except Exception as exc:  # pragma: no cover - exercised by tests through fallback
+                errors.append(f"{model_name}: {exc}")
+                if model_name == model_names[-1]:
+                    raise RuntimeError("OpenAI-compatible edge generation failed: " + "; ".join(errors)) from exc
+        return {"cases": []}
+
+    def _generate_with_model(self, prompt: str, model: EdgeModelConfig, model_name: str) -> Dict[str, Any]:
+        body: Dict[str, Any] = {
+            "model": model_name,
+            "stream": False,
+            "temperature": model.temperature,
+            "max_tokens": model.num_predict,
+            "messages": _edge_messages(prompt),
+        }
+        if model.format == "json":
+            body["response_format"] = {"type": "json_object"}
+        request = urllib.request.Request(
+            _request_url(model, self.base_url, "/v1/chat/completions"),
+            data=json.dumps(body).encode("utf-8"),
+            headers=_request_headers(model),
+            method="POST",
+        )
+        with urllib.request.urlopen(request, timeout=model.timeout_seconds) as response:
+            data = json.loads(response.read().decode("utf-8"))
+        return parse_openai_compatible_json_message(data)
+
+
+def create_edge_provider(model: EdgeModelConfig) -> EdgeProvider:
+    provider = _normalize_provider_id(model.provider)
+    if provider == "ollama":
+        return OllamaEdgeProvider()
+    if provider in {"openai", "openai-compatible"}:
+        return OpenAICompatibleEdgeProvider()
+    raise ValueError(f"Unsupported edge provider: {model.provider}")
+
+
+def _normalize_provider_id(provider: Any) -> str:
+    return str(provider or "ollama").strip().lower().replace("_", "-")
+
+
+def _edge_messages(prompt: str) -> List[Dict[str, str]]:
+    return [
+        {
+            "role": "system",
+            "content": (
+                "/no_think "
+                "Return only valid JSON. Preserve exact C identifiers. "
+                "For every case, include edges that mention every supplied TERMS identifier when the snippets support it. "
+                "Use only code, register, field, or function identifiers as src and dst. Do not use file paths as src or dst. "
+                "Each supplied TERMS identifier must appear in src or dst of at least one edge when the snippet supports it. "
+                "Emit at most six edges per case. Keep evidence under 12 words and include line numbers when available. "
+                "Do not use markdown fences. "
+                "Use relation names from: reads, writes, sets_field, checks_mask, "
+                "maps_base, assigns_doorbell, waits_for. "
+                "Schema: {\"cases\":[{\"id\":string,\"edges\":[{\"src\":string,"
+                "\"relation\":string,\"dst\":string,\"confidence\":number,"
+                "\"evidence\":string}]}]}"
+            ),
+        },
+        {"role": "user", "content": f"/no_think\n{prompt}"},
+    ]
+
+
+def _request_headers(model: EdgeModelConfig) -> Dict[str, str]:
+    return {"Content-Type": "application/json", **model.extra_headers}
+
+
+def _request_url(model: EdgeModelConfig, default_base_url: str, default_path: str) -> str:
+    base_url = (model.api_base_url or default_base_url).rstrip("/")
+    api_path = model.api_path or default_path
+    if not api_path.startswith("/"):
+        api_path = f"/{api_path}"
+    return f"{base_url}{api_path}"
+
+
 def load_edge_case_config(path: Path) -> EdgeCaseConfig:
     data = json.loads(path.read_text(encoding="utf-8"))
-    model_data = data.get("model", {})
     repo_data = data.get("repo", {})
     return EdgeCaseConfig(
         name=data["name"],
@@ -164,17 +261,7 @@ def load_edge_case_config(path: Path) -> EdgeCaseConfig:
             url=repo_data["url"],
             default_source_root=repo_data["default_source_root"],
         ),
-        model=EdgeModelConfig(
-            preferred=model_data["preferred"],
-            fallback=model_data.get("fallback", ""),
-            format=model_data.get("format", "json"),
-            num_ctx=int(model_data.get("num_ctx", 8192)),
-            num_predict=int(model_data.get("num_predict", 512)),
-            temperature=float(model_data.get("temperature", 0)),
-            keep_alive=model_data.get("keep_alive", "0s"),
-            think=bool(model_data.get("think", False)),
-            timeout_seconds=int(model_data.get("timeout_seconds", 600)),
-        ),
+        model=_load_model_config(data.get("model", {})),
         cases=[
             EdgeCase(
                 id=item["id"],
@@ -189,22 +276,34 @@ def load_edge_case_config(path: Path) -> EdgeCaseConfig:
     )
 
 
+def _load_model_config(model_data: Mapping[str, Any]) -> EdgeModelConfig:
+    extra_headers = model_data.get("extra_headers", {})
+    if not isinstance(extra_headers, dict):
+        raise ValueError("model.extra_headers must be an object")
+    provider = _normalize_provider_id(model_data.get("provider", "ollama"))
+    default_api_path = "/v1/chat/completions" if provider in {"openai", "openai-compatible"} else "/api/chat"
+    return EdgeModelConfig(
+        preferred=model_data["preferred"],
+        fallback=model_data.get("fallback", ""),
+        provider=provider,
+        api_base_url=model_data.get("api_base_url", model_data.get("base_url", "http://localhost:11434")),
+        api_path=model_data.get("api_path", default_api_path),
+        extra_headers={str(key): str(value) for key, value in extra_headers.items()},
+        format=model_data.get("format", "json"),
+        num_ctx=int(model_data.get("num_ctx", 8192)),
+        num_predict=int(model_data.get("num_predict", 512)),
+        temperature=float(model_data.get("temperature", 0)),
+        keep_alive=model_data.get("keep_alive", "0s"),
+        think=bool(model_data.get("think", False)),
+        timeout_seconds=int(model_data.get("timeout_seconds", 600)),
+    )
+
+
 def load_full_corpus_edge_config(path: Path) -> FullCorpusEdgeConfig:
     data = json.loads(path.read_text(encoding="utf-8"))
-    model_data = data.get("model", {})
     return FullCorpusEdgeConfig(
         name=data["name"],
-        model=EdgeModelConfig(
-            preferred=model_data["preferred"],
-            fallback=model_data.get("fallback", ""),
-            format=model_data.get("format", "json"),
-            num_ctx=int(model_data.get("num_ctx", 8192)),
-            num_predict=int(model_data.get("num_predict", 512)),
-            temperature=float(model_data.get("temperature", 0)),
-            keep_alive=model_data.get("keep_alive", "0s"),
-            think=bool(model_data.get("think", False)),
-            timeout_seconds=int(model_data.get("timeout_seconds", 600)),
-        ),
+        model=_load_model_config(data.get("model", {})),
         corpora=[
             FullCorpus(
                 id=item["id"],
@@ -342,6 +441,8 @@ def build_full_corpus_prompt(scan: Dict[str, Any]) -> str:
         "Extract semantic graph edges from real source snippets discovered by scanning full repositories.",
         "Every edge must be grounded in the provided SOURCE and preserve exact C identifiers.",
         "If a case has multiple snippets, emit only edges supported by at least one snippet.",
+        "Use code/register/field/function identifiers as src and dst. Do not use file paths as src or dst.",
+        "Every supplied TERMS identifier that appears in the snippet must appear in src or dst of at least one edge.",
         "",
         "SCAN SUMMARY:",
     ]
@@ -381,17 +482,23 @@ def verify_full_corpus_queries(
     results: List[Dict[str, Any]] = []
     for query in config.queries:
         generated_case = by_case.get(query.id, {"edges": []})
-        haystack = json.dumps(generated_case.get("edges", []), sort_keys=True)
+        edges = list(generated_case.get("edges", []))
+        haystack = json.dumps(edges, sort_keys=True)
         missing = [term for term in query.expected_terms if term not in haystack]
         source_hits = scan_by_query[query.id]["snippets"]
+        source_haystack = "\n".join(str(snippet.get("text", "")) for snippet in source_hits)
+        missing_in_sources = [term for term in query.expected_terms if term not in source_haystack]
+        ungrounded_edges = _ungrounded_edge_labels(edges, source_haystack)
         results.append(
             {
                 "id": f"query_{query.id}",
                 "case": query.id,
                 "corpus": query.corpus,
-                "passed": bool(source_hits) and not missing,
+                "passed": bool(source_hits) and bool(edges) and not missing and not missing_in_sources and not ungrounded_edges,
                 "missing": missing,
-                "edge_count": len(generated_case.get("edges", [])),
+                "missing_in_sources": missing_in_sources,
+                "ungrounded_edges": ungrounded_edges,
+                "edge_count": len(edges),
                 "source_hit_count": len(source_hits),
                 "sources": [
                     f"{snippet['path']}:{snippet['line_start']}-{snippet['line_end']}"
@@ -412,12 +519,11 @@ def run_generation(
 ) -> Dict[str, Any]:
     config = load_edge_case_config(config_path)
     actual_source_root = source_root or Path(config.repo.default_source_root)
-    edge_provider = provider or OllamaEdgeProvider()
+    edge_provider = provider or create_edge_provider(config.model)
     started = time.time()
     prompt = build_prompt(config, actual_source_root)
     generated = edge_provider.generate(prompt, config.model)
-    stop_ollama_model(config.model.preferred)
-    ollama_ps = ollama_ps_output()
+    ollama_ps = provider_status_after_run(edge_provider, config.model)
     query_results = verify_queries(config, generated)
     passed = sum(1 for item in query_results if item["passed"])
     payload: Dict[str, Any] = {
@@ -461,12 +567,11 @@ def run_full_corpus_generation(
 ) -> Dict[str, Any]:
     config = load_full_corpus_edge_config(config_path)
     actual_source_roots = source_roots or {}
-    edge_provider = provider or OllamaEdgeProvider()
+    edge_provider = provider or create_edge_provider(config.model)
     started = time.time()
     scan = scan_full_corpus_queries(config, actual_source_roots)
     generated = generate_full_corpus_batches(scan, edge_provider, config.model, batch_size=batch_size)
-    stop_ollama_model(config.model.preferred)
-    ollama_ps = ollama_ps_output()
+    ollama_ps = provider_status_after_run(edge_provider, config.model)
     query_results = verify_full_corpus_queries(config, scan, generated)
     passed = sum(1 for item in query_results if item["passed"])
     payload: Dict[str, Any] = {
@@ -511,14 +616,25 @@ def generate_full_corpus_batches(
     if batch_size <= 0:
         raise ValueError("batch_size must be positive")
     all_cases: List[Dict[str, Any]] = []
+    errors: List[Dict[str, Any]] = []
     queries = scan["queries"]
     for start in range(0, len(queries), batch_size):
         batch_scan = dict(scan)
         batch_scan["queries"] = queries[start : start + batch_size]
         prompt = build_full_corpus_prompt(batch_scan)
-        batch_generated = normalize_generated_cases(provider.generate(prompt, model))
+        try:
+            batch_generated = normalize_generated_cases(provider.generate(prompt, model))
+        except Exception as exc:
+            batch_queries = [query["id"] for query in batch_scan["queries"]]
+            errors.append({"queries": batch_queries, "error": str(exc)})
+            batch_generated = {
+                "cases": [
+                    {"id": query_id, "edges": [], "error": str(exc)}
+                    for query_id in batch_queries
+                ]
+            }
         all_cases.extend(batch_generated.get("cases", []))
-    return {"cases": all_cases}
+    return {"cases": all_cases, "errors": errors}
 
 
 def normalize_generated_cases(generated: Any) -> Dict[str, Any]:
@@ -591,11 +707,14 @@ def render_full_corpus_markdown(payload: Dict[str, Any]) -> str:
     for item in payload["query_results"]:
         status = "PASS" if item["passed"] else "FAIL"
         missing = ", ".join(item["missing"])
+        missing_in_sources = ", ".join(item.get("missing_in_sources", []))
+        ungrounded = ", ".join(item.get("ungrounded_edges", []))
         sources = "; ".join(item["sources"])
         lines.append(
             f"- `{status}` `{item['id']}` corpus=`{item['corpus']}` "
             f"edges=`{item['edge_count']}` sources=`{item['source_hit_count']}` "
-            f"missing=`{missing}` source_refs=`{sources}`"
+            f"missing=`{missing}` missing_in_sources=`{missing_in_sources}` "
+            f"ungrounded_edges=`{ungrounded}` source_refs=`{sources}`"
         )
     lines.append("")
     return "\n".join(lines)
@@ -614,6 +733,14 @@ def ollama_ps_output() -> str:
     except FileNotFoundError:
         return "ollama not found"
     return result.stdout
+
+
+def provider_status_after_run(provider: EdgeProvider, model: EdgeModelConfig) -> str:
+    if not isinstance(provider, OllamaEdgeProvider):
+        return f"{provider.__class__.__name__} cleanup not applicable"
+    for model_name in provider.cleanup_model_names(model):
+        stop_ollama_model(model_name)
+    return ollama_ps_output()
 
 
 def git_short_commit(path: Path) -> str:
@@ -636,6 +763,18 @@ def parse_ollama_json_message(data: Dict[str, Any]) -> Dict[str, Any]:
     raise ValueError(f"Ollama returned no parseable JSON content: {preview}")
 
 
+def parse_openai_compatible_json_message(data: Dict[str, Any]) -> Dict[str, Any]:
+    choices = data.get("choices") or []
+    if choices:
+        message = choices[0].get("message", {})
+        content = message.get("content") or ""
+        parsed = _parse_json_text(content)
+        if parsed is not None:
+            return parsed
+    preview = json.dumps(data)[:240].replace("\n", "\\n")
+    raise ValueError(f"OpenAI-compatible provider returned no parseable JSON content: {preview}")
+
+
 def _parse_json_text(text: str) -> Optional[Dict[str, Any]]:
     try:
         return json.loads(text)
@@ -651,10 +790,31 @@ def _parse_json_text(text: str) -> Optional[Dict[str, Any]]:
 
 def _extract_json_object(text: str) -> str:
     start = text.find("{")
-    end = text.rfind("}")
-    if start == -1 or end == -1 or end <= start:
+    if start == -1:
         return ""
-    return text[start : end + 1]
+    depth = 0
+    in_string = False
+    escaped = False
+    for index in range(start, len(text)):
+        char = text[index]
+        if escaped:
+            escaped = False
+            continue
+        if char == "\\":
+            escaped = True
+            continue
+        if char == '"':
+            in_string = not in_string
+            continue
+        if in_string:
+            continue
+        if char == "{":
+            depth += 1
+        elif char == "}":
+            depth -= 1
+            if depth == 0:
+                return text[start : index + 1]
+    return ""
 
 
 def _strip_json_fence(text: str) -> str:
@@ -672,25 +832,27 @@ def _strip_json_fence(text: str) -> str:
 def _iter_source_files(root: Path, include: Iterable[str]) -> Iterable[Path]:
     if not root.exists():
         return []
-    suffixes = _suffixes_for_include(include)
+    patterns = tuple(include) or ("**/*.c", "**/*.h")
     files: List[Path] = []
     for path in root.rglob("*"):
         if not path.is_file():
             continue
         if ".git" in path.parts:
             continue
-        if path.suffix.lower() in suffixes:
+        if _matches_include(path.relative_to(root).as_posix(), patterns):
             files.append(path)
     return sorted(files)
 
 
-def _suffixes_for_include(include: Iterable[str]) -> Tuple[str, ...]:
-    suffixes: List[str] = []
+def _matches_include(relative_path: str, include: Iterable[str]) -> bool:
+    path = PurePosixPath(relative_path)
     for pattern in include:
-        suffix = Path(pattern).suffix
-        if suffix:
-            suffixes.append(suffix.lower())
-    return tuple(dict.fromkeys(suffixes)) or (".c", ".h")
+        normalized = pattern.replace("\\", "/")
+        if path.match(normalized):
+            return True
+        if normalized.startswith("**/") and path.match(normalized[3:]):
+            return True
+    return False
 
 
 def _resolve_query_snippets(
@@ -782,6 +944,26 @@ def _extract_identifiers(text: str) -> List[str]:
 
 def _looks_like_identifier(token: str) -> bool:
     return len(token) > 2 and any(char == "_" or char.isupper() for char in token)
+
+
+def _looks_like_source_line(line: str) -> bool:
+    prefix = line.split(":", 1)[0].strip()
+    return bool(prefix) and prefix.isdigit()
+
+
+def _ungrounded_edge_labels(edges: Iterable[Mapping[str, Any]], source_text: str) -> List[str]:
+    ungrounded: List[str] = []
+    for edge in edges:
+        src = str(edge.get("src", ""))
+        dst = str(edge.get("dst", ""))
+        missing = [
+            endpoint
+            for endpoint in (src, dst)
+            if _looks_like_identifier(endpoint) and endpoint not in source_text
+        ]
+        if missing:
+            ungrounded.append(f"{src}->{dst}")
+    return ungrounded
 
 
 def _fake_case(case_id: str, terms: List[str]) -> Dict[str, Any]:

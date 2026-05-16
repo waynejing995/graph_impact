@@ -7,10 +7,63 @@ import { useEffect, useMemo, useState } from "react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
 import { navItems, pageConfigs, type PageId } from "@/lib/page-data";
 
 type WorkbenchPageProps = {
   pageId: PageId;
+};
+
+const providerSettingsStorageKey = "asip-provider-settings";
+
+type ProviderSettings = {
+  provider: "ollama" | "openai-compatible";
+  apiBaseUrl: string;
+  apiPath: string;
+  edgeModel: string;
+  fallbackModel: string;
+  embeddingModel: string;
+  timeoutSeconds: string;
+  numCtx: string;
+  numPredict: string;
+  temperature: string;
+  think: boolean;
+  extraHeaders: Record<string, string>;
+};
+
+type ProviderSettingsDraft = Omit<ProviderSettings, "extraHeaders"> & {
+  extraHeadersJson: string;
+};
+
+type RuntimeEdgeModelConfig = {
+  provider: ProviderSettings["provider"];
+  api_base_url: string;
+  api_path: string;
+  preferred: string;
+  fallback: string;
+  embedding_model: string;
+  extra_headers: Record<string, string>;
+  format: "json";
+  num_ctx: number;
+  num_predict: number;
+  temperature: number;
+  think: boolean;
+  timeout_seconds: number;
+};
+
+const defaultProviderSettings: ProviderSettings = {
+  provider: "ollama",
+  apiBaseUrl: "http://localhost:11434",
+  apiPath: "/api/chat",
+  edgeModel: "qwen3.5:4b",
+  fallbackModel: "qwen3.6",
+  embeddingModel: "nomic-embed-text:latest",
+  timeoutSeconds: "900",
+  numCtx: "2048",
+  numPredict: "1024",
+  temperature: "0",
+  think: false,
+  extraHeaders: {}
 };
 
 export function WorkbenchPage({ pageId }: WorkbenchPageProps) {
@@ -18,10 +71,37 @@ export function WorkbenchPage({ pageId }: WorkbenchPageProps) {
   const [query, setQuery] = useState(config.query);
   const [runCount, setRunCount] = useState(1);
   const [theme, setTheme] = useState<"dark" | "light">("dark");
+  const [providerSettings, setProviderSettings] = useState<ProviderSettings>(defaultProviderSettings);
+  const [settingsDraft, setSettingsDraft] = useState<ProviderSettingsDraft>(
+    settingsToDraft(defaultProviderSettings)
+  );
+  const [settingsMessage, setSettingsMessage] = useState("");
+  const [settingsError, setSettingsError] = useState("");
+  const [actionMessage, setActionMessage] = useState("");
 
   useEffect(() => {
     document.documentElement.dataset.theme = theme;
   }, [theme]);
+
+  useEffect(() => {
+    setActionMessage("");
+  }, [config.actionLabel]);
+
+  useEffect(() => {
+    const stored = window.localStorage.getItem(providerSettingsStorageKey);
+    if (!stored) {
+      return;
+    }
+
+    try {
+      const parsed = JSON.parse(stored) as Partial<ProviderSettings>;
+      const next = normalizeProviderSettings(parsed);
+      setProviderSettings(next);
+      setSettingsDraft(settingsToDraft(next));
+    } catch {
+      setSettingsError("Stored provider settings are invalid JSON.");
+    }
+  }, []);
 
   const inspectorTitle = useMemo(() => {
     if (query.toLowerCase().includes("enable")) {
@@ -30,6 +110,37 @@ export function WorkbenchPage({ pageId }: WorkbenchPageProps) {
 
     return config.inspectorTitle;
   }, [config.inspectorTitle, query]);
+
+  const providerLabel = providerSettings.provider === "ollama" ? "Ollama" : "OpenAI-compatible";
+  const runtimeConfig = useMemo(() => buildRuntimeEdgeModelConfig(providerSettings), [providerSettings]);
+
+  function saveProviderSettings() {
+    try {
+      const parsedHeaders = parseExtraHeaders(settingsDraft.extraHeadersJson);
+      const next: ProviderSettings = {
+        provider: settingsDraft.provider,
+        apiBaseUrl: settingsDraft.apiBaseUrl.trim(),
+        apiPath: settingsDraft.apiPath.trim() || "/api/chat",
+        edgeModel: settingsDraft.edgeModel.trim(),
+        fallbackModel: settingsDraft.fallbackModel.trim(),
+        embeddingModel: settingsDraft.embeddingModel.trim(),
+        timeoutSeconds: settingsDraft.timeoutSeconds.trim(),
+        numCtx: settingsDraft.numCtx.trim(),
+        numPredict: settingsDraft.numPredict.trim(),
+        temperature: settingsDraft.temperature.trim(),
+        think: settingsDraft.think,
+        extraHeaders: parsedHeaders
+      };
+      window.localStorage.setItem(providerSettingsStorageKey, JSON.stringify(next));
+      setProviderSettings(next);
+      setSettingsDraft(settingsToDraft(next));
+      setSettingsError("");
+      setSettingsMessage("Provider settings saved");
+    } catch (error) {
+      setSettingsMessage("");
+      setSettingsError(error instanceof Error ? error.message : "Provider settings are invalid.");
+    }
+  }
 
   return (
     <div className="workbench-shell" data-page-id={config.id} data-testid="asip-workbench">
@@ -45,7 +156,7 @@ export function WorkbenchPage({ pageId }: WorkbenchPageProps) {
         <div className="status-row" aria-label="Workbench status">
           <Badge tone="success">
             <span className="status-dot" />
-            Ollama: qwen3.5
+            {providerLabel}: {providerSettings.edgeModel}
           </Badge>
           <Badge>Index: ready</Badge>
         </div>
@@ -103,6 +214,17 @@ export function WorkbenchPage({ pageId }: WorkbenchPageProps) {
             ))}
           </div>
 
+          {config.id === "settings" ? (
+            <ProviderSettingsPanel
+              draft={settingsDraft}
+              error={settingsError}
+              message={settingsMessage}
+              onChange={setSettingsDraft}
+              onSave={saveProviderSettings}
+              runtimeConfig={runtimeConfig}
+            />
+          ) : null}
+
           {config.id === "graph-explorer" ? <GlobalNetworkGraph /> : null}
 
           <div className="results-table" role="table" aria-label="Evidence results">
@@ -149,12 +271,229 @@ export function WorkbenchPage({ pageId }: WorkbenchPageProps) {
               </p>
             ))}
           </div>
-          <Button className="settings-button" type="button" variant="secondary">
+          <Button
+            className="settings-button"
+            onClick={() => setActionMessage(`${config.actionLabel} queued`)}
+            type="button"
+            variant="secondary"
+          >
             {config.actionLabel}
           </Button>
+          {actionMessage ? (
+            <p className="action-feedback" data-testid="action-feedback">
+              {actionMessage}
+            </p>
+          ) : null}
         </aside>
       </main>
     </div>
+  );
+}
+
+function settingsToDraft(settings: ProviderSettings): ProviderSettingsDraft {
+  return {
+    ...settings,
+    extraHeadersJson: JSON.stringify(settings.extraHeaders, null, 2)
+  };
+}
+
+function normalizeProviderSettings(settings: Partial<ProviderSettings>): ProviderSettings {
+  return {
+    ...defaultProviderSettings,
+    ...settings,
+    extraHeaders: settings.extraHeaders ?? {}
+  };
+}
+
+function parseExtraHeaders(value: string): Record<string, string> {
+  if (!value.trim()) {
+    return {};
+  }
+  const parsed = JSON.parse(value) as unknown;
+  if (!parsed || Array.isArray(parsed) || typeof parsed !== "object") {
+    throw new Error("Extra headers JSON must be an object.");
+  }
+  return Object.fromEntries(
+    Object.entries(parsed).map(([key, headerValue]) => [key, String(headerValue)])
+  );
+}
+
+function buildRuntimeEdgeModelConfig(settings: ProviderSettings): RuntimeEdgeModelConfig {
+  return {
+    provider: settings.provider,
+    api_base_url: settings.apiBaseUrl,
+    api_path: settings.apiPath,
+    preferred: settings.edgeModel,
+    fallback: settings.fallbackModel,
+    embedding_model: settings.embeddingModel,
+    extra_headers: settings.extraHeaders,
+    format: "json",
+    num_ctx: numberFromDraft(settings.numCtx, defaultProviderSettings.numCtx),
+    num_predict: numberFromDraft(settings.numPredict, defaultProviderSettings.numPredict),
+    temperature: numberFromDraft(settings.temperature, defaultProviderSettings.temperature),
+    think: settings.think,
+    timeout_seconds: numberFromDraft(settings.timeoutSeconds, defaultProviderSettings.timeoutSeconds)
+  };
+}
+
+function numberFromDraft(value: string, fallback: string): number {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : Number(fallback);
+}
+
+function ProviderSettingsPanel({
+  draft,
+  error,
+  message,
+  onChange,
+  onSave,
+  runtimeConfig
+}: {
+  draft: ProviderSettingsDraft;
+  error: string;
+  message: string;
+  onChange: (draft: ProviderSettingsDraft) => void;
+  onSave: () => void;
+  runtimeConfig: RuntimeEdgeModelConfig;
+}) {
+  const update = <Key extends keyof ProviderSettingsDraft>(key: Key, value: ProviderSettingsDraft[Key]) => {
+    onChange({ ...draft, [key]: value });
+  };
+
+  return (
+    <section className="provider-settings-panel" aria-label="Provider settings">
+      <div className="provider-settings-header">
+        <div>
+          <h2>Provider Runtime</h2>
+          <p>Model, API endpoint, and extra headers are saved locally for the workbench.</p>
+        </div>
+        <Badge tone="success">{draft.provider}</Badge>
+      </div>
+      <div className="provider-settings-grid">
+        <label className="provider-settings-field">
+          <span>Provider</span>
+          <select
+            aria-label="Provider"
+            className="ui-select"
+            onChange={(event) => update("provider", event.target.value as ProviderSettings["provider"])}
+            value={draft.provider}
+          >
+            <option value="ollama">Ollama</option>
+            <option value="openai-compatible">OpenAI compatible</option>
+          </select>
+        </label>
+        <label className="provider-settings-field">
+          <span>Chat API base URL</span>
+          <Input
+            aria-label="Chat API base URL"
+            onChange={(event) => update("apiBaseUrl", event.target.value)}
+            value={draft.apiBaseUrl}
+          />
+        </label>
+        <label className="provider-settings-field">
+          <span>Chat API path</span>
+          <Input
+            aria-label="Chat API path"
+            onChange={(event) => update("apiPath", event.target.value)}
+            value={draft.apiPath}
+          />
+        </label>
+        <label className="provider-settings-field">
+          <span>Edge model</span>
+          <Input
+            aria-label="Edge model"
+            onChange={(event) => update("edgeModel", event.target.value)}
+            value={draft.edgeModel}
+          />
+        </label>
+        <label className="provider-settings-field">
+          <span>Fallback model</span>
+          <Input
+            aria-label="Fallback model"
+            onChange={(event) => update("fallbackModel", event.target.value)}
+            value={draft.fallbackModel}
+          />
+        </label>
+        <label className="provider-settings-field">
+          <span>Embedding model</span>
+          <Input
+            aria-label="Embedding model"
+            onChange={(event) => update("embeddingModel", event.target.value)}
+            value={draft.embeddingModel}
+          />
+        </label>
+        <label className="provider-settings-field">
+          <span>Timeout seconds</span>
+          <Input
+            aria-label="Timeout seconds"
+            inputMode="numeric"
+            onChange={(event) => update("timeoutSeconds", event.target.value)}
+            value={draft.timeoutSeconds}
+          />
+        </label>
+        <label className="provider-settings-field">
+          <span>Context tokens</span>
+          <Input
+            aria-label="Context tokens"
+            inputMode="numeric"
+            onChange={(event) => update("numCtx", event.target.value)}
+            value={draft.numCtx}
+          />
+        </label>
+        <label className="provider-settings-field">
+          <span>Prediction tokens</span>
+          <Input
+            aria-label="Prediction tokens"
+            inputMode="numeric"
+            onChange={(event) => update("numPredict", event.target.value)}
+            value={draft.numPredict}
+          />
+        </label>
+        <label className="provider-settings-field">
+          <span>Temperature</span>
+          <Input
+            aria-label="Temperature"
+            inputMode="decimal"
+            onChange={(event) => update("temperature", event.target.value)}
+            value={draft.temperature}
+          />
+        </label>
+        <label className="provider-settings-field provider-settings-field--toggle">
+          <input
+            aria-label="Enable model thinking"
+            checked={draft.think}
+            onChange={(event) => update("think", event.target.checked)}
+            type="checkbox"
+          />
+          <span>Enable model thinking</span>
+        </label>
+        <label className="provider-settings-field provider-settings-field--wide">
+          <span>Extra headers JSON</span>
+          <Textarea
+            aria-label="Extra headers JSON"
+            onChange={(event) => update("extraHeadersJson", event.target.value)}
+            rows={4}
+            value={draft.extraHeadersJson}
+          />
+        </label>
+      </div>
+      <div className="provider-settings-actions">
+        <Button onClick={onSave} type="button">
+          Save provider settings
+        </Button>
+        {message ? <span className="settings-feedback">{message}</span> : null}
+        {error ? <span className="settings-feedback settings-feedback--error">{error}</span> : null}
+      </div>
+      <div className="runtime-config">
+        <div className="runtime-config__header">
+          <span>Edge runner config</span>
+          <Badge tone="code">JSON</Badge>
+        </div>
+        <pre aria-label="Runtime config JSON" data-testid="runtime-config-preview">
+          {JSON.stringify(runtimeConfig, null, 2)}
+        </pre>
+      </div>
+    </section>
   );
 }
 

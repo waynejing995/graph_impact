@@ -1,0 +1,591 @@
+{
+  "config": "full-corpus-qwen35",
+  "model": "qwen3.5:4b",
+  "duration_seconds": 106.27,
+  "corpora": {
+    "mxgpu": {
+      "repo": "https://github.com/amd/MxGPU-Virtualization",
+      "source_root": "/tmp/asip-mxgpu",
+      "scan_root": "/tmp/asip-mxgpu",
+      "relative_root": "",
+      "file_count": 703,
+      "commit": "f603f87"
+    },
+    "linux-amdgpu": {
+      "repo": "https://github.com/torvalds/linux",
+      "source_root": "/tmp/asip-linux-amdgpu",
+      "scan_root": "/tmp/asip-linux-amdgpu/drivers/gpu/drm/amd/amdgpu",
+      "relative_root": "drivers/gpu/drm/amd/amdgpu",
+      "file_count": 625,
+      "commit": "6916d57"
+    }
+  },
+  "scan": {
+    "queries": [
+      {
+        "id": "mxgpu_gcvm_l2_cntl_fields",
+        "corpus": "mxgpu",
+        "repo": "https://github.com/amd/MxGPU-Virtualization",
+        "question": "Which GCVM_L2_CNTL field enables L2 cache and which register is written?",
+        "terms": [
+          "regGCVM_L2_CNTL",
+          "GCVM_L2_CNTL",
+          "ENABLE_L2_CACHE"
+        ],
+        "expected_terms": [
+          "regGCVM_L2_CNTL",
+          "GCVM_L2_CNTL",
+          "ENABLE_L2_CACHE"
+        ],
+        "snippets": [
+          {
+            "path": "libgv/core/hw/navi3/gfx_v11_0.c",
+            "line_start": 322,
+            "line_end": 330,
+            "text": "322: \ttmp = RREG32(SOC15_REG_OFFSET(GC, 0, regGCVM_L2_CNTL));\n323: \ttmp = REG_SET_FIELD(tmp, GCVM_L2_CNTL, ENABLE_L2_CACHE, 1);\n324: \ttmp = REG_SET_FIELD(tmp, GCVM_L2_CNTL, ENABLE_L2_FRAGMENT_PROCESSING, 0);\n325: \ttmp = REG_SET_FIELD(tmp, GCVM_L2_CNTL, ENABLE_DEFAULT_PAGE_OUT_TO_SYSTEM_MEMORY, 1);\n326: \ttmp = REG_SET_FIELD(tmp, GCVM_L2_CNTL, L2_PDE0_CACHE_TAG_GENERATION_MODE, 0);\n327: \ttmp = REG_SET_FIELD(tmp, GCVM_L2_CNTL, PDE_FAULT_CLASSIFICATION, 0);\n328: \ttmp = REG_SET_FIELD(tmp, GCVM_L2_CNTL, CONTEXT1_IDENTITY_ACCESS_MODE, 1);\n329: \ttmp = REG_SET_FIELD(tmp, GCVM_L2_CNTL, IDENTITY_MODE_FRAGMENT_SIZE, 0);\n330: \tWREG32_SOC15(GC, 0, regGCVM_L2_CNTL, tmp);"
+          }
+        ],
+        "resolved": true
+      },
+      {
+        "id": "mxgpu_rlc_fed_pending",
+        "corpus": "mxgpu",
+        "repo": "https://github.com/amd/MxGPU-Virtualization",
+        "question": "Which RLC_FED_DRVR_STATUS field is set and waited on?",
+        "terms": [
+          "RLC_FED_DRVR_STATUS",
+          "PENDING"
+        ],
+        "expected_terms": [
+          "RLC_FED_DRVR_STATUS",
+          "PENDING"
+        ],
+        "snippets": [
+          {
+            "path": "libgv/core/hw/navi3/navi32_reset.c",
+            "line_start": 1322,
+            "line_end": 1330,
+            "text": "1322: \t\tAMDGV_WARN(\"gl2c error detacted.\\n\");\n1323: \t\treg_data = RREG32_SOC15(GC, 0, regRLC_FED_DRVR_STATUS);\n1324: \t\treg_data = REG_SET_FIELD(reg_data, RLC_FED_DRVR_STATUS, PENDING, 0x2);\n1325: \t\tWREG32_SOC15(GC, 0, regRLC_FED_DRVR_STATUS, reg_data);\n1326: \t\tret = amdgv_wait_for_register(adapt, SOC15_REG_OFFSET(GC, 0, regRLC_FED_DRVR_STATUS),\n1327: \t\t\t\tREG_FIELD_MASK(RLC_FED_DRVR_STATUS, PENDING), 0x1,\n1328: \t\t\t\tAMDGV_TIMEOUT(TIMEOUT_STATUS_REG), AMDGV_WAIT_CHECK_EQ, 0);\n1329: \t\tif (ret) {\n1330: \t\t\tadapt->sched.rlc_safe_mode(adapt, false);"
+          }
+        ],
+        "resolved": true
+      },
+      {
+        "id": "mxgpu_reg_offset_gc_base",
+        "corpus": "mxgpu",
+        "repo": "https://github.com/amd/MxGPU-Virtualization",
+        "question": "Which register offset table maps GC_HWIP to GC_BASE?",
+        "terms": [
+          "adapt->reg_offset",
+          "GC_HWIP",
+          "GC_BASE"
+        ],
+        "expected_terms": [
+          "adapt->reg_offset",
+          "GC_HWIP",
+          "GC_BASE"
+        ],
+        "snippets": [
+          {
+            "path": "libgv/core/hw/AI/mi200/mi200_reg_init.c",
+            "line_start": 37,
+            "line_end": 45,
+            "text": "37: \t\tadapt->reg_offset[GC_HWIP][i] = (uint32_t *)(&(GC_BASE.instance[i]));\n38: \t\tadapt->reg_offset[HDP_HWIP][i] = (uint32_t *)(&(HDP_BASE.instance[i]));\n39: \t\tadapt->reg_offset[MMHUB_HWIP][i] = (uint32_t *)(&(MMHUB_BASE.instance[i]));\n40: \t\tadapt->reg_offset[ATHUB_HWIP][i] = (uint32_t *)(&(ATHUB_BASE.instance[i]));\n41: \t\tadapt->reg_offset[NBIO_HWIP][i] = (uint32_t *)(&(NBIO_BASE.instance[i]));\n42: \t\tadapt->reg_offset[NBIF_HWIP][i] = (uint32_t *)(&(NBIO_BASE.instance[i]));\n43: \t\tadapt->reg_offset[MP0_HWIP][i] = (uint32_t *)(&(MP0_BASE.instance[i]));\n44: \t\tadapt->reg_offset[MP1_HWIP][i] = (uint32_t *)(&(MP1_BASE.instance[i]));\n45: \t\tadapt->reg_offset[DF_HWIP][i] = (uint32_t *)(&(DF_BASE.instance[i]));"
+          }
+        ],
+        "resolved": true
+      },
+      {
+        "id": "mxgpu_doorbell_interrupt_disable",
+        "corpus": "mxgpu",
+        "repo": "https://github.com/amd/MxGPU-Virtualization",
+        "question": "Which BIF doorbell field disables doorbell interrupt before reset?",
+        "terms": [
+          "BIF_DOORBELL_INT_CNTL",
+          "DOORBELL_INTERRUPT_DISABLE"
+        ],
+        "expected_terms": [
+          "BIF_DOORBELL_INT_CNTL",
+          "DOORBELL_INTERRUPT_DISABLE"
+        ],
+        "snippets": [
+          {
+            "path": "libgv/core/hw/AI/mi200/nbio_v7_4.c",
+            "line_start": 90,
+            "line_end": 98,
+            "text": "90: #define mmBIF_DOORBELL_INT_CNTL_ALDE \t\t\t0x00fe\n91: #define mmBIF_DOORBELL_INT_CNTL_ALDE_BASE_IDX \t\t2\n92: #define BIF_DOORBELL_INT_CNTL_ALDE__DOORBELL_INTERRUPT_DISABLE__SHIFT\t0x18\n93: #define BIF_DOORBELL_INT_CNTL_ALDE__DOORBELL_INTERRUPT_DISABLE_MASK\t0x01000000L\n94: \n95: #define mmBIF_INTR_CNTL_ALDE \t\t\t\t0x0101\n96: #define mmBIF_INTR_CNTL_ALDE_BASE_IDX \t\t\t2\n97: \n98: static const uint32_t this_block = AMDGV_MEMORY_BLOCK;"
+          }
+        ],
+        "resolved": true
+      },
+      {
+        "id": "linux_gds_vmid_writes",
+        "corpus": "linux-amdgpu",
+        "repo": "https://github.com/torvalds/linux",
+        "question": "Which GDS VMID registers are written through SOC15 wrappers?",
+        "terms": [
+          "mmGDS_VMID0_BASE",
+          "mmGDS_VMID0_SIZE",
+          "mmGDS_GWS_VMID0"
+        ],
+        "expected_terms": [
+          "mmGDS_VMID0_BASE",
+          "mmGDS_VMID0_SIZE",
+          "mmGDS_GWS_VMID0"
+        ],
+        "snippets": [
+          {
+            "path": "drivers/gpu/drm/amd/amdgpu/gfx_v10_0.c",
+            "line_start": 5225,
+            "line_end": 5233,
+            "text": "5225: \tfor (i = adev->vm_manager.first_kfd_vmid; i < AMDGPU_NUM_VMID; i++) {\n5226: \t\tWREG32_SOC15_OFFSET(GC, 0, mmGDS_VMID0_BASE, 2 * i, 0);\n5227: \t\tWREG32_SOC15_OFFSET(GC, 0, mmGDS_VMID0_SIZE, 2 * i, 0);\n5228: \t\tWREG32_SOC15_OFFSET(GC, 0, mmGDS_GWS_VMID0, i, 0);\n5229: \t\tWREG32_SOC15_OFFSET(GC, 0, mmGDS_OA_VMID0, i, 0);\n5230: \t}\n5231: \n5232: \tgfx_v10_0_debug_trap_config_init(adev, adev->vm_manager.first_kfd_vmid,\n5233: \t\t\t\t\tAMDGPU_NUM_VMID);"
+          }
+        ],
+        "resolved": true
+      },
+      {
+        "id": "linux_grbm_soft_reset_rlc",
+        "corpus": "linux-amdgpu",
+        "repo": "https://github.com/torvalds/linux",
+        "question": "Which GRBM_SOFT_RESET field is written when resetting RLC?",
+        "terms": [
+          "WREG32_FIELD15",
+          "GRBM_SOFT_RESET",
+          "SOFT_RESET_RLC"
+        ],
+        "expected_terms": [
+          "WREG32_FIELD15",
+          "GRBM_SOFT_RESET",
+          "SOFT_RESET_RLC"
+        ],
+        "snippets": [
+          {
+            "path": "drivers/gpu/drm/amd/amdgpu/gfx_v10_0.c",
+            "line_start": 5478,
+            "line_end": 5486,
+            "text": "5478: {\n5479: \tWREG32_FIELD15(GC, 0, GRBM_SOFT_RESET, SOFT_RESET_RLC, 1);\n5480: \tudelay(50);\n5481: \tWREG32_FIELD15(GC, 0, GRBM_SOFT_RESET, SOFT_RESET_RLC, 0);\n5482: \tudelay(50);\n5483: }\n5484: \n5485: static void gfx_v10_0_rlc_smu_handshake_cntl(struct amdgpu_device *adev,\n5486: \t\t\t\t\t     bool enable)"
+          }
+        ],
+        "resolved": true
+      },
+      {
+        "id": "linux_cp_vmid_reset_queues",
+        "corpus": "linux-amdgpu",
+        "repo": "https://github.com/torvalds/linux",
+        "question": "Which CP_VMID_RESET fields request queue reset?",
+        "terms": [
+          "CP_VMID_RESET",
+          "RESET_REQUEST",
+          "PIPE0_QUEUES",
+          "PIPE1_QUEUES"
+        ],
+        "expected_terms": [
+          "CP_VMID_RESET",
+          "RESET_REQUEST",
+          "PIPE0_QUEUES",
+          "PIPE1_QUEUES"
+        ],
+        "snippets": [
+          {
+            "path": "drivers/gpu/drm/amd/amdgpu/gfx_v10_0.c",
+            "line_start": 3845,
+            "line_end": 3853,
+            "text": "3845: \t} else if (queue_type == AMDGPU_RING_TYPE_GFX) {\n3846: \t\tWREG32_SOC15(GC, 0, mmGRBM_GFX_INDEX,\n3847: \t\t\t     (uint32_t)(0x1 << GRBM_GFX_INDEX__SE_BROADCAST_WRITES__SHIFT));\n3848: \t\ttmp = REG_SET_FIELD(0, CP_VMID_RESET, RESET_REQUEST, 1 << vmid);\n3849: \t\tif (pipe_id == 0)\n3850: \t\t\ttmp = REG_SET_FIELD(tmp, CP_VMID_RESET, PIPE0_QUEUES, 1 << queue_id);\n3851: \t\telse\n3852: \t\t\ttmp = REG_SET_FIELD(tmp, CP_VMID_RESET, PIPE1_QUEUES, 1 << queue_id);\n3853: \t\tWREG32_SOC15(GC, 0, mmCP_VMID_RESET, tmp);"
+          }
+        ],
+        "resolved": true
+      },
+      {
+        "id": "linux_cp_int_cntl_ring0_fields",
+        "corpus": "linux-amdgpu",
+        "repo": "https://github.com/torvalds/linux",
+        "question": "Which CP_INT_CNTL_RING0 interrupt enable fields are set?",
+        "terms": [
+          "CP_INT_CNTL_RING0",
+          "CNTX_BUSY_INT_ENABLE",
+          "CNTX_EMPTY_INT_ENABLE",
+          "CMP_BUSY_INT_ENABLE"
+        ],
+        "expected_terms": [
+          "CP_INT_CNTL_RING0",
+          "CNTX_BUSY_INT_ENABLE",
+          "CNTX_EMPTY_INT_ENABLE",
+          "CMP_BUSY_INT_ENABLE"
+        ],
+        "snippets": [
+          {
+            "path": "drivers/gpu/drm/amd/amdgpu/gfx_v10_0.c",
+            "line_start": 5433,
+            "line_end": 5441,
+            "text": "5433: \t\t\t\ttmp = RREG32_SOC15_IP(GC, cp_int_cntl_reg);\n5434: \t\t\t\ttmp = REG_SET_FIELD(tmp, CP_INT_CNTL_RING0, CNTX_BUSY_INT_ENABLE,\n5435: \t\t\t\t\t\t    enable ? 1 : 0);\n5436: \t\t\t\ttmp = REG_SET_FIELD(tmp, CP_INT_CNTL_RING0, CNTX_EMPTY_INT_ENABLE,\n5437: \t\t\t\t\t\t    enable ? 1 : 0);\n5438: \t\t\t\ttmp = REG_SET_FIELD(tmp, CP_INT_CNTL_RING0, CMP_BUSY_INT_ENABLE,\n5439: \t\t\t\t\t\t    enable ? 1 : 0);\n5440: \t\t\t\ttmp = REG_SET_FIELD(tmp, CP_INT_CNTL_RING0, GFX_IDLE_INT_ENABLE,\n5441: \t\t\t\t\t\t    enable ? 1 : 0);"
+          }
+        ],
+        "resolved": true
+      },
+      {
+        "id": "linux_cp_me_ic_invalidate",
+        "corpus": "linux-amdgpu",
+        "repo": "https://github.com/torvalds/linux",
+        "question": "Which CP_ME_IC_OP_CNTL field invalidates instruction cache?",
+        "terms": [
+          "CP_ME_IC_OP_CNTL",
+          "INVALIDATE_CACHE"
+        ],
+        "expected_terms": [
+          "CP_ME_IC_OP_CNTL",
+          "INVALIDATE_CACHE"
+        ],
+        "snippets": [
+          {
+            "path": "drivers/gpu/drm/amd/amdgpu/gfx_v10_0.c",
+            "line_start": 5889,
+            "line_end": 5897,
+            "text": "5889: \t/* Trigger an invalidation of the L1 instruction caches */\n5890: \ttmp = RREG32_SOC15(GC, 0, mmCP_ME_IC_OP_CNTL);\n5891: \ttmp = REG_SET_FIELD(tmp, CP_ME_IC_OP_CNTL, INVALIDATE_CACHE, 1);\n5892: \tWREG32_SOC15(GC, 0, mmCP_ME_IC_OP_CNTL, tmp);\n5893: \n5894: \t/* Wait for invalidation complete */\n5895: \tfor (i = 0; i < usec_timeout; i++) {\n5896: \t\ttmp = RREG32_SOC15(GC, 0, mmCP_ME_IC_OP_CNTL);\n5897: \t\tif (1 == REG_GET_FIELD(tmp, CP_ME_IC_OP_CNTL,"
+          }
+        ],
+        "resolved": true
+      }
+    ],
+    "summary": {
+      "query_count": 9,
+      "resolved_query_count": 9,
+      "total_files_scanned": 1328,
+      "corpora": {
+        "mxgpu": {
+          "repo": "https://github.com/amd/MxGPU-Virtualization",
+          "source_root": "/tmp/asip-mxgpu",
+          "scan_root": "/tmp/asip-mxgpu",
+          "relative_root": "",
+          "file_count": 703,
+          "commit": "f603f87"
+        },
+        "linux-amdgpu": {
+          "repo": "https://github.com/torvalds/linux",
+          "source_root": "/tmp/asip-linux-amdgpu",
+          "scan_root": "/tmp/asip-linux-amdgpu/drivers/gpu/drm/amd/amdgpu",
+          "relative_root": "drivers/gpu/drm/amd/amdgpu",
+          "file_count": 625,
+          "commit": "6916d57"
+        }
+      }
+    }
+  },
+  "generated": {
+    "cases": [
+      {
+        "id": "mxgpu_gcvm_l2_cntl_fields",
+        "edges": [
+          {
+            "src": "libgv/core/hw/navi3/gfx_v11_0.c",
+            "relation": "reads",
+            "dst": "regGCVM_L2_CNTL",
+            "confidence": 0.95,
+            "evidence": "322: tmp = RREG32(SOC15_REG_OFFSET(GC, 0, regGCVM_L2_CNTL));"
+          },
+          {
+            "src": "libgv/core/hw/navi3/gfx_v11_0.c",
+            "relation": "writes",
+            "dst": "GCVM_L2_CNTL",
+            "confidence": 0.95,
+            "evidence": "323: tmp = REG_SET_FIELD(tmp, GCVM_L2_CNTL, ENABLE_L2_CACHE, 1);"
+          },
+          {
+            "src": "libgv/core/hw/navi3/gfx_v11_0.c",
+            "relation": "sets_field",
+            "dst": "ENABLE_L2_CACHE",
+            "confidence": 0.95,
+            "evidence": "323: tmp = REG_SET_FIELD(tmp, GCVM_L2_CNTL, ENABLE_L2_CACHE, 1);"
+          }
+        ]
+      },
+      {
+        "id": "mxgpu_rlc_fed_pending",
+        "edges": [
+          {
+            "src": "libgv/core/hw/navi3/navi32_reset.c",
+            "relation": "reads",
+            "dst": "regRLC_FED_DRVR_STATUS",
+            "confidence": 0.95,
+            "evidence": "1323: reg_data = RREG32_SOC15(GC, 0, regRLC_FED_DRVR_STATUS);"
+          },
+          {
+            "src": "libgv/core/hw/navi3/navi32_reset.c",
+            "relation": "writes",
+            "dst": "RLC_FED_DRVR_STATUS",
+            "confidence": 0.95,
+            "evidence": "1324: reg_data = REG_SET_FIELD(reg_data, RLC_FED_DRVR_STATUS, PENDING, 0x2);"
+          },
+          {
+            "src": "libgv/core/hw/navi3/navi32_reset.c",
+            "relation": "waits_for",
+            "dst": "PENDING",
+            "confidence": 0.95,
+            "evidence": "1327: REG_FIELD_MASK(RLC_FED_DRVR_STATUS, PENDING), 0x1,"
+          }
+        ]
+      },
+      {
+        "id": "mxgpu_doorbell_interrupt_disable",
+        "edges": [
+          {
+            "src": "BIF_DOORBELL_INT_CNTL_ALDE",
+            "relation": "sets_field",
+            "dst": "DOORBELL_INTERRUPT_DISABLE",
+            "confidence": 0.95,
+            "evidence": "line 92-93 defines shift and mask"
+          }
+        ]
+      },
+      {
+        "id": "linux_gds_vmid_writes",
+        "edges": [
+          {
+            "src": "mmGDS_VMID0_BASE",
+            "relation": "writes",
+            "dst": "mmGDS_GWS_VMID0",
+            "confidence": 0.9,
+            "evidence": "line 5226-5228 writes VMID registers"
+          }
+        ]
+      },
+      {
+        "id": "linux_grbm_soft_reset_rlc",
+        "edges": [
+          {
+            "src": "WREG32_FIELD15",
+            "relation": "checks_mask",
+            "dst": "GRBM_SOFT_RESET",
+            "confidence": 0.9,
+            "evidence": "line 5479 writes SOFT_RESET_RLC field"
+          }
+        ]
+      },
+      {
+        "id": "linux_cp_vmid_reset_queues",
+        "edges": [
+          {
+            "src": "gfx_v10_0.c",
+            "relation": "sets_field",
+            "dst": "CP_VMID_RESET",
+            "confidence": 0.95,
+            "evidence": "3848: tmp = REG_SET_FIELD(0, CP_VMID_RESET, RESET_REQUEST, 1 << vmid);"
+          },
+          {
+            "src": "gfx_v10_0.c",
+            "relation": "sets_field",
+            "dst": "CP_VMID_RESET",
+            "confidence": 0.95,
+            "evidence": "3850: tmp = REG_SET_FIELD(tmp, CP_VMID_RESET, PIPE0_QUEUES, 1 << queue_id);"
+          },
+          {
+            "src": "gfx_v10_0.c",
+            "relation": "sets_field",
+            "dst": "CP_VMID_RESET",
+            "confidence": 0.95,
+            "evidence": "3852: tmp = REG_SET_FIELD(tmp, CP_VMID_RESET, PIPE1_QUEUES, 1 << queue_id);"
+          }
+        ]
+      },
+      {
+        "id": "linux_cp_int_cntl_ring0_fields",
+        "edges": [
+          {
+            "src": "gfx_v10_0.c",
+            "relation": "sets_field",
+            "dst": "CP_INT_CNTL_RING0",
+            "confidence": 0.95,
+            "evidence": "5434: tmp = REG_SET_FIELD(tmp, CP_INT_CNTL_RING0, CNTX_BUSY_INT_ENABLE, enable ? 1 : 0);"
+          },
+          {
+            "src": "gfx_v10_0.c",
+            "relation": "sets_field",
+            "dst": "CP_INT_CNTL_RING0",
+            "confidence": 0.95,
+            "evidence": "5436: tmp = REG_SET_FIELD(tmp, CP_INT_CNTL_RING0, CNTX_EMPTY_INT_ENABLE, enable ? 1 : 0);"
+          },
+          {
+            "src": "gfx_v10_0.c",
+            "relation": "sets_field",
+            "dst": "CP_INT_CNTL_RING0",
+            "confidence": 0.95,
+            "evidence": "5438: tmp = REG_SET_FIELD(tmp, CP_INT_CNTL_RING0, CMP_BUSY_INT_ENABLE, enable ? 1 : 0);"
+          }
+        ]
+      },
+      {
+        "id": "linux_cp_me_ic_invalidate",
+        "edges": [
+          {
+            "src": "gfx_v10_0.c",
+            "relation": "sets_field",
+            "dst": "CP_ME_IC_OP_CNTL",
+            "confidence": 0.95,
+            "evidence": "5891: tmp = REG_SET_FIELD(tmp, CP_ME_IC_OP_CNTL, INVALIDATE_CACHE, 1);"
+          }
+        ]
+      }
+    ]
+  },
+  "query_results": [
+    {
+      "id": "query_mxgpu_gcvm_l2_cntl_fields",
+      "case": "mxgpu_gcvm_l2_cntl_fields",
+      "corpus": "mxgpu",
+      "passed": false,
+      "missing": [],
+      "missing_in_sources": [],
+      "ungrounded_edges": [
+        "libgv/core/hw/navi3/gfx_v11_0.c->regGCVM_L2_CNTL",
+        "libgv/core/hw/navi3/gfx_v11_0.c->GCVM_L2_CNTL",
+        "libgv/core/hw/navi3/gfx_v11_0.c->ENABLE_L2_CACHE"
+      ],
+      "edge_count": 3,
+      "source_hit_count": 1,
+      "sources": [
+        "libgv/core/hw/navi3/gfx_v11_0.c:322-330"
+      ]
+    },
+    {
+      "id": "query_mxgpu_rlc_fed_pending",
+      "case": "mxgpu_rlc_fed_pending",
+      "corpus": "mxgpu",
+      "passed": false,
+      "missing": [],
+      "missing_in_sources": [],
+      "ungrounded_edges": [
+        "libgv/core/hw/navi3/navi32_reset.c->regRLC_FED_DRVR_STATUS",
+        "libgv/core/hw/navi3/navi32_reset.c->RLC_FED_DRVR_STATUS",
+        "libgv/core/hw/navi3/navi32_reset.c->PENDING"
+      ],
+      "edge_count": 3,
+      "source_hit_count": 1,
+      "sources": [
+        "libgv/core/hw/navi3/navi32_reset.c:1322-1330"
+      ]
+    },
+    {
+      "id": "query_mxgpu_reg_offset_gc_base",
+      "case": "mxgpu_reg_offset_gc_base",
+      "corpus": "mxgpu",
+      "passed": false,
+      "missing": [
+        "adapt->reg_offset",
+        "GC_HWIP",
+        "GC_BASE"
+      ],
+      "missing_in_sources": [],
+      "ungrounded_edges": [],
+      "edge_count": 0,
+      "source_hit_count": 1,
+      "sources": [
+        "libgv/core/hw/AI/mi200/mi200_reg_init.c:37-45"
+      ]
+    },
+    {
+      "id": "query_mxgpu_doorbell_interrupt_disable",
+      "case": "mxgpu_doorbell_interrupt_disable",
+      "corpus": "mxgpu",
+      "passed": true,
+      "missing": [],
+      "missing_in_sources": [],
+      "ungrounded_edges": [],
+      "edge_count": 1,
+      "source_hit_count": 1,
+      "sources": [
+        "libgv/core/hw/AI/mi200/nbio_v7_4.c:90-98"
+      ]
+    },
+    {
+      "id": "query_linux_gds_vmid_writes",
+      "case": "linux_gds_vmid_writes",
+      "corpus": "linux-amdgpu",
+      "passed": false,
+      "missing": [
+        "mmGDS_VMID0_SIZE"
+      ],
+      "missing_in_sources": [],
+      "ungrounded_edges": [],
+      "edge_count": 1,
+      "source_hit_count": 1,
+      "sources": [
+        "drivers/gpu/drm/amd/amdgpu/gfx_v10_0.c:5225-5233"
+      ]
+    },
+    {
+      "id": "query_linux_grbm_soft_reset_rlc",
+      "case": "linux_grbm_soft_reset_rlc",
+      "corpus": "linux-amdgpu",
+      "passed": true,
+      "missing": [],
+      "missing_in_sources": [],
+      "ungrounded_edges": [],
+      "edge_count": 1,
+      "source_hit_count": 1,
+      "sources": [
+        "drivers/gpu/drm/amd/amdgpu/gfx_v10_0.c:5478-5486"
+      ]
+    },
+    {
+      "id": "query_linux_cp_vmid_reset_queues",
+      "case": "linux_cp_vmid_reset_queues",
+      "corpus": "linux-amdgpu",
+      "passed": false,
+      "missing": [],
+      "missing_in_sources": [],
+      "ungrounded_edges": [
+        "gfx_v10_0.c->CP_VMID_RESET",
+        "gfx_v10_0.c->CP_VMID_RESET",
+        "gfx_v10_0.c->CP_VMID_RESET"
+      ],
+      "edge_count": 3,
+      "source_hit_count": 1,
+      "sources": [
+        "drivers/gpu/drm/amd/amdgpu/gfx_v10_0.c:3845-3853"
+      ]
+    },
+    {
+      "id": "query_linux_cp_int_cntl_ring0_fields",
+      "case": "linux_cp_int_cntl_ring0_fields",
+      "corpus": "linux-amdgpu",
+      "passed": false,
+      "missing": [],
+      "missing_in_sources": [],
+      "ungrounded_edges": [
+        "gfx_v10_0.c->CP_INT_CNTL_RING0",
+        "gfx_v10_0.c->CP_INT_CNTL_RING0",
+        "gfx_v10_0.c->CP_INT_CNTL_RING0"
+      ],
+      "edge_count": 3,
+      "source_hit_count": 1,
+      "sources": [
+        "drivers/gpu/drm/amd/amdgpu/gfx_v10_0.c:5433-5441"
+      ]
+    },
+    {
+      "id": "query_linux_cp_me_ic_invalidate",
+      "case": "linux_cp_me_ic_invalidate",
+      "corpus": "linux-amdgpu",
+      "passed": false,
+      "missing": [],
+      "missing_in_sources": [],
+      "ungrounded_edges": [
+        "gfx_v10_0.c->CP_ME_IC_OP_CNTL"
+      ],
+      "edge_count": 1,
+      "source_hit_count": 1,
+      "sources": [
+        "drivers/gpu/drm/amd/amdgpu/gfx_v10_0.c:5889-5897"
+      ]
+    }
+  ],
+  "summary": {
+    "query_count": 9,
+    "passed": 2,
+    "failed": 7,
+    "min_pass": 0,
+    "batch_size": 3,
+    "resolved_query_count": 9,
+    "total_files_scanned": 1328,
+    "ollama_ps_after": "NAME          ID              SIZE      PROCESSOR    CONTEXT    UNTIL       \nqwen3.5:4b    2a654d98e6fb    5.7 GB    100% GPU     2048       Stopping..."
+  }
+}

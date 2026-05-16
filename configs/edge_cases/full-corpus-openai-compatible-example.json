@@ -1,17 +1,18 @@
 {
-  "name": "full-corpus-qwen35",
+  "name": "full-corpus-openai-compatible-example",
   "model": {
-    "provider": "ollama",
-    "api_base_url": "http://localhost:11434",
-    "api_path": "/api/chat",
-    "extra_headers": {},
-    "preferred": "qwen3.5:4b",
-    "fallback": "qwen3.6",
+    "provider": "openai-compatible",
+    "api_base_url": "https://api.openai.com",
+    "api_path": "/v1/chat/completions",
+    "extra_headers": {
+      "Authorization": "Bearer ${OPENAI_API_KEY}"
+    },
+    "preferred": "gpt-4.1-mini",
+    "fallback": "",
     "format": "json",
     "num_ctx": 2048,
     "num_predict": 1024,
     "temperature": 0,
-    "keep_alive": "5m",
     "think": false,
     "timeout_seconds": 900
   },
@@ -56,14 +57,6 @@
       "max_snippets": 1
     },
     {
-      "id": "mxgpu_doorbell_interrupt_disable",
-      "corpus": "mxgpu",
-      "question": "Which BIF doorbell field disables doorbell interrupt before reset?",
-      "terms": ["BIF_DOORBELL_INT_CNTL", "DOORBELL_INTERRUPT_DISABLE"],
-      "expected_terms": ["BIF_DOORBELL_INT_CNTL", "DOORBELL_INTERRUPT_DISABLE"],
-      "max_snippets": 1
-    },
-    {
       "id": "linux_gds_vmid_writes",
       "corpus": "linux-amdgpu",
       "question": "Which GDS VMID registers are written through SOC15 wrappers?",
@@ -80,27 +73,11 @@
       "max_snippets": 1
     },
     {
-      "id": "linux_cp_vmid_reset_queues",
-      "corpus": "linux-amdgpu",
-      "question": "Which CP_VMID_RESET fields request queue reset?",
-      "terms": ["CP_VMID_RESET", "RESET_REQUEST", "PIPE0_QUEUES", "PIPE1_QUEUES"],
-      "expected_terms": ["CP_VMID_RESET", "RESET_REQUEST", "PIPE0_QUEUES", "PIPE1_QUEUES"],
-      "max_snippets": 1
-    },
-    {
       "id": "linux_cp_int_cntl_ring0_fields",
       "corpus": "linux-amdgpu",
       "question": "Which CP_INT_CNTL_RING0 interrupt enable fields are set?",
       "terms": ["CP_INT_CNTL_RING0", "CNTX_BUSY_INT_ENABLE", "CNTX_EMPTY_INT_ENABLE", "CMP_BUSY_INT_ENABLE"],
       "expected_terms": ["CP_INT_CNTL_RING0", "CNTX_BUSY_INT_ENABLE", "CNTX_EMPTY_INT_ENABLE", "CMP_BUSY_INT_ENABLE"],
-      "max_snippets": 1
-    },
-    {
-      "id": "linux_cp_me_ic_invalidate",
-      "corpus": "linux-amdgpu",
-      "question": "Which CP_ME_IC_OP_CNTL field invalidates instruction cache?",
-      "terms": ["CP_ME_IC_OP_CNTL", "INVALIDATE_CACHE"],
-      "expected_terms": ["CP_ME_IC_OP_CNTL", "INVALIDATE_CACHE"],
       "max_snippets": 1
     }
   ]
