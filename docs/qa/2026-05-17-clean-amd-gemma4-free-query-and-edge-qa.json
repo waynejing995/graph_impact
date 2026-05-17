@@ -1,0 +1,442 @@
+{
+  "generated_at": "2026-05-17T14:12:01+00:00",
+  "db_path": "/tmp/asip-clean-amd-gemma4-provider-2026-05-17-final.db",
+  "counts": {
+    "documents": 124,
+    "chunks": 21884,
+    "evidence": 860516,
+    "edges": 10019,
+    "embeddings": 32
+  },
+  "document_source_counts": {
+    "code": 7,
+    "doc": 20,
+    "pdf": 1,
+    "register": 96
+  },
+  "evidence_source_counts": {
+    "code": 126,
+    "doc": 5664,
+    "pdf": 5,
+    "register": 854721
+  },
+  "jobs": [
+    {
+      "id": 1,
+      "kind": "index",
+      "status": "indexed",
+      "message": "Indexed 124 documents"
+    },
+    {
+      "id": 2,
+      "kind": "embedding_backfill",
+      "status": "embedded",
+      "message": "Embedded 32 chunks"
+    }
+  ],
+  "provider_settings": {
+    "edge": {
+      "provider": "ollama",
+      "base_url": "http://localhost:11434",
+      "api_path": "/api/chat",
+      "model": "gemma4:e4b",
+      "fallback_model": "",
+      "extra_headers": {},
+      "think": false,
+      "timeout_seconds": 900,
+      "num_ctx": 2048,
+      "num_predict": 1024,
+      "temperature": 0
+    },
+    "embedding": {
+      "provider": "ollama",
+      "base_url": "http://localhost:11434",
+      "api_path": "/api/embeddings",
+      "model": "nomic-embed-text:latest",
+      "extra_headers": {},
+      "timeout_seconds": 900
+    }
+  },
+  "provider_checks": {
+    "embedding": {
+      "status": "pass",
+      "provider": "ollama",
+      "model": "nomic-embed-text:latest",
+      "embedding_count": 32,
+      "fallback_count": 0
+    },
+    "semantic_edge": {
+      "status": "pass",
+      "provider": "ollama",
+      "model": "gemma4:e4b",
+      "edge_count": 1
+    }
+  },
+  "queries": [
+    {
+      "query": "Who reads or writes regGCVM_L2_CNTL?",
+      "elapsed_ms": 1306.3,
+      "row_count": 24,
+      "source_types": [
+        "code",
+        "register"
+      ],
+      "retrieval_sources": [
+        "fts5",
+        "lexical"
+      ],
+      "graph": {
+        "nodes": 30,
+        "edges": 58,
+        "runtime": "networkx"
+      },
+      "top_evidence": [
+        {
+          "id": 10,
+          "symbol": "regGCVM_L2_CNTL",
+          "source_type": "code",
+          "path": "libgv/core/hw/navi3/gfx_v11_0.c",
+          "score": "0.95"
+        },
+        {
+          "id": 673786,
+          "symbol": "regGCVM_L2_CNTL",
+          "source_type": "register",
+          "path": "libgv/core/hw/navi3/asic_reg/navi3/GC/gc_11_0_3_offset.h",
+          "score": "0.95"
+        },
+        {
+          "id": 673795,
+          "symbol": "regGCVM_L2_CNTL2",
+          "source_type": "register",
+          "path": "libgv/core/hw/navi3/asic_reg/navi3/GC/gc_11_0_3_offset.h",
+          "score": "0.95"
+        },
+        {
+          "id": 673796,
+          "symbol": "regGCVM_L2_CNTL2_BASE_IDX",
+          "source_type": "register",
+          "path": "libgv/core/hw/navi3/asic_reg/navi3/GC/gc_11_0_3_offset.h",
+          "score": "0.95"
+        },
+        {
+          "id": 666234,
+          "symbol": "regGCVM_L2_CNTL2_DEFAULT",
+          "source_type": "register",
+          "path": "libgv/core/hw/navi3/asic_reg/navi3/GC/gc_11_0_0_default.h",
+          "score": "0.95"
+        }
+      ]
+    },
+    {
+      "query": "Which fields of GCVM_L2_CNTL enable L2 cache?",
+      "elapsed_ms": 567.7,
+      "row_count": 24,
+      "source_types": [
+        "code",
+        "doc",
+        "register"
+      ],
+      "retrieval_sources": [
+        "fts5",
+        "lexical"
+      ],
+      "graph": {
+        "nodes": 22,
+        "edges": 34,
+        "runtime": "networkx"
+      },
+      "top_evidence": [
+        {
+          "id": 3,
+          "symbol": "ENABLE_L2_CACHE",
+          "source_type": "code",
+          "path": "libgv/core/hw/navi3/gfx_v11_0.c",
+          "score": "0.95"
+        },
+        {
+          "id": 20576,
+          "symbol": "ATC_L2_CNTL2__ENABLE_L2_CACHE_LRU_UPDATE_BY_WRITE_MASK",
+          "source_type": "register",
+          "path": "libgv/core/hw/AI/asic_reg/mi200/GC/gc_9_0_sh_mask.h",
+          "score": "0.95"
+        },
+        {
+          "id": 20525,
+          "symbol": "ATC_L2_CNTL2__ENABLE_L2_CACHE_LRU_UPDATE_BY_WRITE__SHIFT",
+          "source_type": "register",
+          "path": "libgv/core/hw/AI/asic_reg/mi200/GC/gc_9_0_sh_mask.h",
+          "score": "0.95"
+        },
+        {
+          "id": 2,
+          "symbol": "ENABLE_DEFAULT_PAGE_OUT_TO_SYSTEM_MEMORY",
+          "source_type": "code",
+          "path": "libgv/core/hw/navi3/gfx_v11_0.c",
+          "score": "0.95"
+        },
+        {
+          "id": 4,
+          "symbol": "ENABLE_L2_FRAGMENT_PROCESSING",
+          "source_type": "code",
+          "path": "libgv/core/hw/navi3/gfx_v11_0.c",
+          "score": "0.95"
+        }
+      ]
+    },
+    {
+      "query": "Where is IH_RB_CNTL configured and which fields are modified?",
+      "elapsed_ms": 4394.0,
+      "row_count": 24,
+      "source_types": [
+        "code",
+        "doc",
+        "register"
+      ],
+      "retrieval_sources": [
+        "fts5",
+        "lexical"
+      ],
+      "graph": {
+        "nodes": 43,
+        "edges": 82,
+        "runtime": "networkx"
+      },
+      "top_evidence": [
+        {
+          "id": 50,
+          "symbol": "IH_RB_CNTL",
+          "source_type": "code",
+          "path": "libgv/core/hw/AI/mi200/mi200_irqmgr.c",
+          "score": "0.95"
+        },
+        {
+          "id": 58,
+          "symbol": "ih_rb_cntl",
+          "source_type": "code",
+          "path": "libgv/core/hw/AI/mi200/mi200_irqmgr.c",
+          "score": "0.95"
+        },
+        {
+          "id": 65,
+          "symbol": "ih_rb_cntl",
+          "source_type": "code",
+          "path": "libgv/core/hw/AI/mi200/mi200_irqmgr.c",
+          "score": "0.95"
+        },
+        {
+          "id": 59,
+          "symbol": "mmIH_RB_CNTL",
+          "source_type": "code",
+          "path": "libgv/core/hw/AI/mi200/mi200_irqmgr.c",
+          "score": "0.95"
+        },
+        {
+          "id": 66,
+          "symbol": "mmIH_RB_CNTL",
+          "source_type": "code",
+          "path": "libgv/core/hw/AI/mi200/mi200_irqmgr.c",
+          "score": "0.95"
+        }
+      ]
+    },
+    {
+      "query": "Which code paths reference SDMA0_QUEUE0_RB_CNTL or SDMA1_QUEUE0_RB_CNTL?",
+      "elapsed_ms": 276.6,
+      "row_count": 24,
+      "source_types": [
+        "code",
+        "doc",
+        "pdf",
+        "register"
+      ],
+      "retrieval_sources": [
+        "fts5",
+        "lexical"
+      ],
+      "graph": {
+        "nodes": 14,
+        "edges": 17,
+        "runtime": "networkx"
+      },
+      "top_evidence": [
+        {
+          "id": 71,
+          "symbol": "SDMA0_QUEUE0_RB_CNTL",
+          "source_type": "code",
+          "path": "libgv/core/hw/navi3/navi32_sdma.c",
+          "score": "0.95"
+        },
+        {
+          "id": 79,
+          "symbol": "SDMA1_QUEUE0_RB_CNTL",
+          "source_type": "code",
+          "path": "libgv/core/hw/navi3/navi32_sdma.c",
+          "score": "0.95"
+        },
+        {
+          "id": 860512,
+          "symbol": "AMD",
+          "source_type": "pdf",
+          "path": "amdgpu-driver-source-tree.pdf",
+          "score": "0.95"
+        },
+        {
+          "id": 854961,
+          "symbol": "BDF",
+          "source_type": "doc",
+          "path": "smi-lib/cli/cpp/docs/external/README.md",
+          "score": "0.95"
+        },
+        {
+          "id": 477576,
+          "symbol": "AFMT0_AFMT_60958_0__AFMT_60958_CS_CATEGORY_CODE_MASK",
+          "source_type": "register",
+          "path": "libgv/core/hw/navi3/asic_reg/navi3/DCN/dcn_3_2_0_sh_mask.h",
+          "score": "0.95"
+        }
+      ]
+    },
+    {
+      "query": "Show evidence connecting amdgpu documentation to the amdgpu driver source tree.",
+      "elapsed_ms": 1124.9,
+      "row_count": 24,
+      "source_types": [
+        "code",
+        "doc",
+        "pdf",
+        "register"
+      ],
+      "retrieval_sources": [
+        "fts5",
+        "lexical"
+      ],
+      "graph": {
+        "nodes": 1,
+        "edges": 0,
+        "runtime": "networkx"
+      },
+      "top_evidence": [
+        {
+          "id": 83,
+          "symbol": "AMDGPU_NUM_VMID",
+          "source_type": "code",
+          "path": "drivers/gpu/drm/amd/amdgpu/gfx_v10_0.c",
+          "score": "0.95"
+        },
+        {
+          "id": 101,
+          "symbol": "AMDGPU_RING_TYPE_GFX",
+          "source_type": "code",
+          "path": "drivers/gpu/drm/amd/amdgpu/gfx_v10_0.c",
+          "score": "0.95"
+        },
+        {
+          "id": 128,
+          "symbol": "DOCUMENTATION",
+          "source_type": "doc",
+          "path": "README.md",
+          "score": "0.95"
+        },
+        {
+          "id": 860512,
+          "symbol": "AMD",
+          "source_type": "pdf",
+          "path": "amdgpu-driver-source-tree.pdf",
+          "score": "0.95"
+        },
+        {
+          "id": 359108,
+          "symbol": "BIF_BX0_DRIVER_SCRATCH_0",
+          "source_type": "register",
+          "path": "libgv/core/hw/AI/asic_reg/mi300/NBIO/nbio_7_9_0_sh_mask.h",
+          "score": "0.95"
+        }
+      ]
+    },
+    {
+      "query": "Explain WREG32_SOC15 regGCVM_L2_CNTL macro expansion chain.",
+      "elapsed_ms": 1047.4,
+      "row_count": 24,
+      "source_types": [
+        "doc",
+        "register"
+      ],
+      "retrieval_sources": [
+        "fts5",
+        "lexical"
+      ],
+      "graph": {
+        "nodes": 0,
+        "edges": 0,
+        "runtime": "networkx"
+      },
+      "top_evidence": [
+        {
+          "id": 858348,
+          "symbol": "AFID",
+          "source_type": "doc",
+          "path": "smi-lib/docs/reference/amdsmi_py_api.md",
+          "score": "0.95"
+        },
+        {
+          "id": 377935,
+          "symbol": "BIFC_A2S_CNTL_SW0__SDP_DYNAMIC_VC_WR_CHAIN_DIS_MASK",
+          "source_type": "register",
+          "path": "libgv/core/hw/AI/asic_reg/mi300/NBIO/nbio_7_9_0_sh_mask.h",
+          "score": "0.95"
+        },
+        {
+          "id": 377898,
+          "symbol": "BIFC_A2S_CNTL_SW0__SDP_DYNAMIC_VC_WR_CHAIN_DIS__SHIFT",
+          "source_type": "register",
+          "path": "libgv/core/hw/AI/asic_reg/mi300/NBIO/nbio_7_9_0_sh_mask.h",
+          "score": "0.95"
+        },
+        {
+          "id": 377936,
+          "symbol": "BIFC_A2S_CNTL_SW0__SDP_WR_CHAIN_DIS_MASK",
+          "source_type": "register",
+          "path": "libgv/core/hw/AI/asic_reg/mi300/NBIO/nbio_7_9_0_sh_mask.h",
+          "score": "0.95"
+        },
+        {
+          "id": 377899,
+          "symbol": "BIFC_A2S_CNTL_SW0__SDP_WR_CHAIN_DIS__SHIFT",
+          "source_type": "register",
+          "path": "libgv/core/hw/AI/asic_reg/mi300/NBIO/nbio_7_9_0_sh_mask.h",
+          "score": "0.95"
+        }
+      ]
+    }
+  ],
+  "summary": {
+    "query_count": 6,
+    "non_empty_queries": 6,
+    "source_types_seen": [
+      "code",
+      "doc",
+      "pdf",
+      "register"
+    ],
+    "global_graph": {
+      "nodes": 2822,
+      "edges": 4725,
+      "runtime": "networkx",
+      "elapsed_ms": 686.7,
+      "node_kinds": {
+        "register": 1609,
+        "function": 1213
+      },
+      "relations": {
+        "reads": 1260,
+        "sets_field": 749,
+        "maps_base": 679,
+        "writes": 2037
+      },
+      "stages": {
+        "deterministic": 4725
+      }
+    }
+  }
+}

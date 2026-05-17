@@ -166,7 +166,8 @@ def index_configured_corpora(
         resolver_profiles = _resolver_profiles_from_store(store)
         for corpus in config.corpora:
             source_root = actual_source_roots[corpus.id]
-            for file_path in _iter_source_files(source_root, corpus.include):
+            scan_root = source_root / corpus.relative_root if corpus.relative_root else source_root
+            for file_path in _iter_source_files(scan_root, corpus.include):
                 display_path = _display_source_path(file_path, source_root, source_root)
                 key = (corpus.id, display_path)
                 source_type = _source_type_for_path(file_path)

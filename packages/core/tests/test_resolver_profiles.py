@@ -126,6 +126,19 @@ class ResolverProfileTests(unittest.TestCase):
         self.assertEqual(field_set.field_symbol, "ENABLE_L2_CACHE")
         self.assertIn(("WREG32_SOC15", "GCVM_L2_CNTL", "write"), symbols)
 
+    def test_field_shift_macro_keeps_field_as_metadata_not_symbol_endpoint(self):
+        profiles = load_resolver_profiles(REPO_ROOT / "configs/resolvers")
+
+        resolved = resolve_cpp_register_calls(
+            "value = REG_FIELD_SHIFT(GCVM_L2_CNTL, ENABLE_L2_CACHE);",
+            profiles["linux-amdgpu"],
+        )
+
+        self.assertEqual(len(resolved), 1)
+        self.assertEqual(resolved[0].symbol, "GCVM_L2_CNTL")
+        self.assertEqual(resolved[0].field_symbol, "ENABLE_L2_CACHE")
+        self.assertEqual(resolved[0].access, "field_shift")
+
     def test_resolves_nested_address_macro_as_outer_write_symbol(self):
         profiles = load_resolver_profiles(REPO_ROOT / "configs/resolvers")
 
@@ -137,6 +150,28 @@ class ResolverProfileTests(unittest.TestCase):
         symbols = {(item.wrapper, item.symbol, item.access) for item in resolved}
         self.assertIn(("WREG32", "GCVM_L2_CNTL", "write"), symbols)
         self.assertIn(("SOC15_REG_OFFSET", "GCVM_L2_CNTL", "address"), symbols)
+
+    def test_resolves_prefixed_register_inside_offset_expression_not_helper_variable(self):
+        profiles = load_resolver_profiles(REPO_ROOT / "configs/resolvers")
+
+        resolved = resolve_cpp_register_calls(
+            "RREG32(sdma_rlc_reg_offset + mmSDMA0_RLC0_RB_CNTL);",
+            profiles["linux-amdgpu"],
+        )
+
+        symbols = {(item.wrapper, item.symbol, item.access) for item in resolved}
+        self.assertIn(("RREG32", "SDMA0_RLC0_RB_CNTL", "read"), symbols)
+        self.assertNotIn(("RREG32", "sdma_rlc_reg_offset", "read"), symbols)
+
+    def test_ignores_dynamic_helper_call_without_register_symbol(self):
+        profiles = load_resolver_profiles(REPO_ROOT / "configs/resolvers")
+
+        resolved = resolve_cpp_register_calls(
+            "RREG32(sdma_rlc_reg_offset(adev, queue_id));",
+            profiles["linux-amdgpu"],
+        )
+
+        self.assertEqual(resolved, [])
 
     def test_wrapper_addition_works_without_code_change(self):
         with tempfile.TemporaryDirectory() as tmpdir:

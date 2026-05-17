@@ -241,6 +241,64 @@ class WorkbenchQuerySchemaTests(unittest.TestCase):
             self.assertIn("doc", {row["source_type"] for row in result["rows"]})
             self.assertLessEqual(len(result["rows"]), 5)
 
+    def test_documentation_queries_preserve_matching_pdf_rows_before_candidate_cap(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            db_path = Path(tmpdir) / "asip.db"
+            store = AsipStore.connect(str(db_path))
+            store.migrate()
+            register_document_id = store.add_document("fixture", "register", "registers.h")
+            register_chunk_id = store.add_chunk(
+                register_document_id,
+                "amdgpu documentation driver source tree register references",
+                1,
+                1,
+            )
+            for index in range(2100):
+                store.add_evidence(
+                    register_chunk_id,
+                    "fixture",
+                    "register",
+                    "local",
+                    "registers.h",
+                    f"AMDGPU_DRIVER_SOURCE_TREE_{index}",
+                    "register",
+                    "mention",
+                    0.95,
+                    "amdgpu documentation driver source tree register references",
+                    f"register -> AMDGPU_DRIVER_SOURCE_TREE_{index}",
+                    line_start=1,
+                    line_end=1,
+                )
+            pdf_document_id = store.add_document("fixture", "pdf", "amdgpu-driver-source-tree.pdf")
+            pdf_chunk_id = store.add_chunk(
+                pdf_document_id,
+                "amdgpu documentation connects the AMD GPU driver source tree to Linux amdgpu.",
+                1,
+                1,
+                page=1,
+            )
+            store.add_evidence(
+                pdf_chunk_id,
+                "fixture",
+                "pdf",
+                "local",
+                "amdgpu-driver-source-tree.pdf",
+                "amdgpu-driver-source-tree.pdf#page-1",
+                "pdf_section",
+                "mention",
+                0.8,
+                "amdgpu documentation connects the AMD GPU driver source tree to Linux amdgpu.",
+                "pdf chunk -> amdgpu-driver-source-tree.pdf#page-1",
+                line_start=1,
+                line_end=1,
+                page=1,
+            )
+
+            result = query_evidence(db_path, "amdgpu documentation driver source tree", limit=5)
+
+            self.assertIn("pdf", {row["source_type"] for row in result["rows"]})
+            self.assertLessEqual(len(result["rows"]), 5)
+
     def test_register_queries_preserve_matching_register_header_rows_when_code_scores_dominate(self):
         with tempfile.TemporaryDirectory() as tmpdir:
             db_path = Path(tmpdir) / "asip.db"

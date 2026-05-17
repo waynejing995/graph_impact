@@ -736,6 +736,78 @@ class WorkbenchLiveTests(unittest.TestCase):
             self.assertEqual(macro_edge["line_start"], 3)
             self.assertIn('"wrapper": "WREG32"', macro_edge["provenance_json"])
 
+    def test_index_configured_corpus_limits_stage1_rebuild_to_relative_root(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            source_root = root / "linux"
+            amdgpu_root = source_root / "drivers/gpu/drm/amd/amdgpu"
+            outside_root = source_root / "drivers/gpu/drm/amd/display"
+            amdgpu_root.mkdir(parents=True)
+            outside_root.mkdir(parents=True)
+            (amdgpu_root / "gfx.c").write_text(
+                "\n".join(
+                    [
+                        "static void program_amdgpu(void) {",
+                        "  WREG32(regGCVM_L2_CNTL, 1);",
+                        "}",
+                    ]
+                ),
+                encoding="utf-8",
+            )
+            (outside_root / "display.c").write_text(
+                "\n".join(
+                    [
+                        "static void program_display(void) {",
+                        "  WREG32(regOUTSIDE_DISPLAY_CNTL, 1);",
+                        "}",
+                    ]
+                ),
+                encoding="utf-8",
+            )
+            config_path = root / "config.json"
+            config_path.write_text(
+                json.dumps(
+                    {
+                        "name": "relative-root-fixture",
+                        "model": {"preferred": "gemma4:e4b", "fallback": ""},
+                        "corpora": [
+                            {
+                                "id": "linux-amdgpu",
+                                "repo": "local",
+                                "default_source_root": str(source_root),
+                                "relative_root": "drivers/gpu/drm/amd/amdgpu",
+                                "include": ["**/*.c"],
+                            }
+                        ],
+                        "queries": [
+                            {
+                                "id": "local_gcvm",
+                                "corpus": "linux-amdgpu",
+                                "question": "Which local register is written?",
+                                "terms": ["GCVM_L2_CNTL"],
+                                "expected_terms": ["GCVM_L2_CNTL"],
+                                "max_snippets": 1,
+                            }
+                        ],
+                    }
+                ),
+                encoding="utf-8",
+            )
+            db_path = root / "asip.db"
+
+            summary = index_configured_corpora(config_path, db_path)
+            rows = [
+                dict(row)
+                for row in AsipStore.connect(str(db_path)).con.execute(
+                    "select src, relation, dst, path from edges order by id"
+                )
+            ]
+            edge_triples = {(row["src"], row["relation"], row["dst"]) for row in rows}
+
+            self.assertGreater(summary["edges"], 0)
+            self.assertIn(("program_amdgpu", "writes", "GCVM_L2_CNTL"), edge_triples)
+            self.assertNotIn(("program_display", "writes", "OUTSIDE_DISPLAY_CNTL"), edge_triples)
+
     def test_rebuild_deterministic_graph_restores_stage1_edges_for_indexed_corpus(self):
         with tempfile.TemporaryDirectory() as tmpdir:
             root = Path(tmpdir)

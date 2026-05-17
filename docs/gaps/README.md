@@ -57,7 +57,7 @@ Supporting acceptance matrix:
 | G07 | [API And MCP Product Surfaces](2026-05-16-g07-api-mcp.md) | Partial; blocking | Query/graph, selected acceptance execution, corpus/resolver/provider control-plane slices, evidence/entity detail slices, semantic-edge FastAPI/MCP parity, key read-route no-mutation coverage, FastAPI live HTTP smoke including `pnpm dev:api`, MCP server tool-matrix registration, and Web/MCP query/evidence/entity agreement exist; richer resolved-chain UX and optional real MCP runtime smoke remain open. |
 | G08 | [PDF And Document Ingestion](2026-05-16-g08-pdf-document-ingestion.md) | Partial; narrowed residual | PDF conversion/page evidence and Markdown/doc section graph nodes are proven; a separate browser proof for a real PDF-derived `pdf_section` node remains narrower residual evidence. |
 | G09 | [SQLite FTS5 Vector And NetworkX Runtime](2026-05-16-g09-storage-vector-graph-runtime.md) | Partial; blocking | FTS5, fallback vector retrieval, provider embeddings, and NetworkX graph work; native sqlite-vec runtime remains skipped. |
-| G10 | [Testing Acceptance And Visual QA](2026-05-16-g10-testing-acceptance-visual-qa.md) | Current pass verified; final gate | Full current regression: core 90 OK, API/MCP 41 OK, Web API 21 passed, Web smoke 39 passed, visual routes 14 passed, lint/build/tsc/diff passed. |
+| G10 | [Testing Acceptance And Visual QA](2026-05-16-g10-testing-acceptance-visual-qa.md) | Current pass verified; final gate | Full current regression: core 150 OK, API/MCP 41 OK, Web API/smoke 69 passed, visual routes 15 passed, lint/tsc/diff passed. |
 | G11 | [Completion Gate And Documentation Review](2026-05-16-g11-completion-gate.md) | Final gate open | Current blocker pass is verified; completion still requires generated artifact cleanup, final diff review, commit, push, and explicit residual deferral acceptance. |
 | G12 | [ASIC And IP Metadata Filtering](2026-05-16-g12-asic-ip-metadata-filtering.md) | Partial; blocking | Core/API/UI filters now affect query behavior; final acceptance and visual QA still need closure. |
 | G13 | [MVP Boundary And Full-Spec Deferrals](2026-05-16-g13-mvp-boundary-deferrals.md) | Blocking | Long-range full-spec items must be explicitly deferred so they do not masquerade as silent failures. |
@@ -104,14 +104,14 @@ per-page visual-anchor QA.
 - `/api/workbench/query`, FastAPI query, and MCP search now call the SQLite-backed `asip.workbench` live service instead of fixed QA artifact query wrappers.
 - `/api/workbench/index` now builds `data/asip.db` from configured raw corpora through `asip.cli index`; selected user-added corpora can be indexed through `--corpus-id`.
 - Corpus additions, selected corpus indexing, resolver additions, resolver validation, provider settings, evidence detail, entity explain, and selected acceptance execution now have backend/API/MCP paths backed by SQLite.
-- Provider settings are saved, recorded on index jobs, can drive embedding provider calls in the indexing path, can be checked through isolated AQ09 Web API/UI plumbing, and can drive a workbench semantic-edge generation job. A clean local Ollama run proves qwen3.5 semantic-edge generation and `nomic-embed-text` embeddings with explicit fallback metadata; query reranking still is not a normal product path.
+- Provider settings are saved, recorded on index jobs, can drive embedding provider calls in the indexing path, can be checked through isolated AQ09 Web API/UI plumbing, and can drive a workbench semantic-edge generation job. The current clean local Ollama artifact proves `gemma4:e4b` semantic-edge provider smoke and `nomic-embed-text` embeddings with explicit fallback metadata; query reranking still is not a normal product path.
 - PDF conversion exists, fixture PDF evidence can enter the query path, and a real AMD MI300 PDF was extracted into page chunks in a converter smoke; indexed UI page-citation QA remains open.
 - Configured raw-corpus indexing now supplements query-focused code/register snippets with full-file doc/PDF ingestion from include globs, so non-query Markdown/PDF files can become queryable evidence.
 - The React global graph now requests no-seed global API graph data on `/graph` load, while selected-seed graph expansion remains available for query/inspector paths.
 - The active branch now treats the Obsidian-style global weighted graph as required because the user explicitly requested it after the original MVP design deferred a full graph canvas.
 - The core graph API now uses NetworkX-derived hop-bounded subgraph extraction and exposes `graph_runtime: networkx`.
 - Resolver profiles can influence indexed evidence for a simple configured wrapper path, but the UI/profile lifecycle is not yet feature-complete.
-- Provider settings hydrate from backend state in a fresh browser session, edge and embedding API path/header settings are independently configurable, indexing can call a configured embedding provider transport, Settings can trigger AQ09 provider acceptance through Web BFF including a user-supplied DB path, Graph can trigger semantic-edge generation, and UI status now remains `unverified` until smoke/AQ09 passes. Local Ollama live model QA is proven for qwen3.5/nomic on the clean DB; credentialed OpenAI-compatible QA and safe secret/header handling remain open.
+- Provider settings hydrate from backend state in a fresh browser session, edge and embedding API path/header settings are independently configurable, indexing can call a configured embedding provider transport, Settings can trigger AQ09 provider acceptance through Web BFF including a user-supplied DB path, Graph can trigger semantic-edge generation, and UI status now remains `unverified` until smoke/AQ09 passes. Local Ollama live model QA is proven for `gemma4:e4b`/`nomic-embed-text:latest` on the clean DB; credentialed OpenAI-compatible QA and safe secret/header handling remain open.
 - Query ranking now merges vector adapter matches with lexical/FTS evidence rows and marks vector-backed results with `vector_score` / `retrieval_sources`.
 - Query filters for `ip_block` and `asic_or_generation` are wired through core, Web API, and UI query controls.
 - Default full-corpus config now includes real IH_RB_CNTL and SDMA queue acceptance-oriented MxGPU queries; a temp SQLite verification found non-empty rows for both against `/tmp/asip-mxgpu`.
@@ -212,6 +212,12 @@ per-page visual-anchor QA.
   - Database health fails because `mxgpu` is still `indexing` and index job 3 failed after the interrupted provider reindex.
   - AQ05 also fails with `required source types missing: pdf`.
   - This is the current authoritative acceptance result for `/tmp/asip-acceptance-clean-2026-05-17.db`.
+- Current clean AMD gemma provider acceptance:
+  - Artifact files: `docs/qa/2026-05-17-acceptance-clean-amd-gemma4-provider-current.json` and `docs/qa/2026-05-17-acceptance-clean-amd-gemma4-provider-current.md`.
+  - DB path: `/tmp/asip-clean-amd-gemma4-provider-2026-05-17-final.db`.
+  - AQ summary: 9 total, 9 pass, 0 partial, 0 failed.
+  - Counts: documents 124, chunks 21884, evidence 860516, edges 10019, provider embeddings 32.
+  - Provider checks: `ollama/nomic-embed-text:latest` embeddings with zero fallback rows and `ollama/gemma4:e4b` semantic-edge smoke.
 - Synthetic multi-source fixture acceptance proof:
   - Artifact files: `docs/qa/2026-05-17-acceptance-multisource-fixture.json` and `docs/qa/2026-05-17-acceptance-multisource-fixture.md`.
   - DB path: `/tmp/asip-multisource-clean-2026-05-17.db`.

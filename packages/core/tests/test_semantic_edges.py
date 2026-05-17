@@ -73,6 +73,19 @@ class SemanticEdgeFeatureTests(unittest.TestCase):
         self.assertTrue({"**/*.md", "**/*.rst", "**/*.pdf"}.issubset(set(mxgpu.include)))
         self.assertGreaterEqual(len(config.queries), 6)
 
+    def test_committed_clean_amd_gemma_config_keeps_docs_pdf_fixture(self):
+        config = load_full_corpus_edge_config(Path("configs/edge_cases/clean-amd-gemma4-e4b.json"))
+
+        self.assertEqual(config.name, "clean-amd-gemma4-e4b")
+        self.assertEqual(config.model.preferred, "gemma4:e4b")
+        self.assertEqual(config.model.fallback, "")
+        self.assertFalse(config.model.think)
+        self.assertGreaterEqual(config.model.timeout_seconds, 900)
+        self.assertEqual({corpus.id for corpus in config.corpora}, {"mxgpu", "linux-amdgpu", "amd-amdgpu-docs"})
+        docs = next(corpus for corpus in config.corpora if corpus.id == "amd-amdgpu-docs")
+        self.assertTrue({"**/*.md", "**/*.pdf"}.issubset(set(docs.include)))
+        self.assertGreaterEqual(len(config.queries), 9)
+
     def test_committed_openai_compatible_example_config_uses_chat_completions(self):
         config = load_full_corpus_edge_config(Path("configs/edge_cases/full-corpus-openai-compatible-example.json"))
 

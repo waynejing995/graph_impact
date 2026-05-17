@@ -116,6 +116,36 @@ class DeterministicCodeGraphTests(unittest.TestCase):
             self.assertEqual(macro_edge.provenance.get("wrapper"), "WREG32")
             self.assertEqual(macro_edge.provenance.get("analysis_mode"), "clang_preprocess")
 
+    def test_field_shift_macro_links_function_to_register_with_field_provenance(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            source = root / "gfx.c"
+            source.write_text(
+                "\n".join(
+                    [
+                        "static unsigned int read_l2_cache_shift(void) {",
+                        "  return REG_FIELD_SHIFT(GCVM_L2_CNTL, ENABLE_L2_CACHE);",
+                        "}",
+                    ]
+                ),
+                encoding="utf-8",
+            )
+            profile = ResolverProfile(
+                id="test-field-shift",
+                language="cpp",
+                symbol_prefixes=["reg", "mm", "smn"],
+                wrappers={"REG_FIELD_SHIFT": WrapperRule(symbol_args=(0, 1), access="field_shift")},
+            )
+
+            graph = build_deterministic_code_graph(source, source_root=root, resolver_profiles=[profile])
+
+            edge_triples = {(edge.src, edge.relation, edge.dst) for edge in graph.edges}
+            graph_node_ids = {edge.src for edge in graph.edges} | {edge.dst for edge in graph.edges}
+            self.assertIn(("read_l2_cache_shift", "reads", "GCVM_L2_CNTL"), edge_triples)
+            self.assertNotIn("ENABLE_L2_CACHE", graph_node_ids)
+            field_edge = next(edge for edge in graph.edges if edge.dst == "GCVM_L2_CNTL")
+            self.assertEqual(field_edge.provenance.get("field"), "ENABLE_L2_CACHE")
+
 
 if __name__ == "__main__":
     unittest.main()

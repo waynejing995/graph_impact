@@ -1,0 +1,230 @@
+{
+  "name": "clean-amd-gemma4-e4b",
+  "model": {
+    "provider": "ollama",
+    "api_base_url": "http://localhost:11434",
+    "api_path": "/api/chat",
+    "extra_headers": {},
+    "preferred": "gemma4:e4b",
+    "fallback": "",
+    "format": "json",
+    "num_ctx": 2048,
+    "num_predict": 1024,
+    "temperature": 0,
+    "keep_alive": "5m",
+    "think": false,
+    "timeout_seconds": 900
+  },
+  "corpora": [
+    {
+      "id": "mxgpu",
+      "repo": "https://github.com/amd/MxGPU-Virtualization",
+      "default_source_root": "data/corpora/MxGPU-Virtualization",
+      "include": [
+        "**/*.c",
+        "**/*.h",
+        "**/*.md",
+        "**/*.rst",
+        "**/*.pdf"
+      ]
+    },
+    {
+      "id": "linux-amdgpu",
+      "repo": "https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git",
+      "default_source_root": "data/corpora/linux",
+      "relative_root": "drivers/gpu/drm/amd/amdgpu",
+      "include": [
+        "**/*.c",
+        "**/*.h",
+        "**/*.md",
+        "**/*.rst",
+        "**/*.pdf"
+      ]
+    },
+    {
+      "id": "amd-amdgpu-docs",
+      "repo": "https://instinct.docs.amd.com/projects/amdgpu-docs/en/latest/",
+      "default_source_root": "docs/fixtures/amd-amdgpu-docs",
+      "include": [
+        "**/*.md",
+        "**/*.pdf"
+      ]
+    }
+  ],
+  "queries": [
+    {
+      "id": "mxgpu_gcvm_l2_cntl_fields",
+      "corpus": "mxgpu",
+      "question": "Which GCVM_L2_CNTL field enables L2 cache and which register is written?",
+      "terms": [
+        "regGCVM_L2_CNTL",
+        "GCVM_L2_CNTL",
+        "ENABLE_L2_CACHE"
+      ],
+      "expected_terms": [
+        "regGCVM_L2_CNTL",
+        "GCVM_L2_CNTL",
+        "ENABLE_L2_CACHE"
+      ],
+      "max_snippets": 1
+    },
+    {
+      "id": "mxgpu_rlc_fed_pending",
+      "corpus": "mxgpu",
+      "question": "Which RLC_FED_DRVR_STATUS field is set and waited on?",
+      "terms": [
+        "RLC_FED_DRVR_STATUS",
+        "PENDING"
+      ],
+      "expected_terms": [
+        "RLC_FED_DRVR_STATUS",
+        "PENDING"
+      ],
+      "max_snippets": 1
+    },
+    {
+      "id": "mxgpu_reg_offset_gc_base",
+      "corpus": "mxgpu",
+      "question": "Which register offset table maps GC_HWIP to GC_BASE?",
+      "terms": [
+        "adapt->reg_offset",
+        "GC_HWIP",
+        "GC_BASE"
+      ],
+      "expected_terms": [
+        "adapt->reg_offset",
+        "GC_HWIP",
+        "GC_BASE"
+      ],
+      "max_snippets": 1
+    },
+    {
+      "id": "mxgpu_doorbell_interrupt_disable",
+      "corpus": "mxgpu",
+      "question": "Which BIF doorbell field disables doorbell interrupt before reset?",
+      "terms": [
+        "BIF_DOORBELL_INT_CNTL",
+        "DOORBELL_INTERRUPT_DISABLE"
+      ],
+      "expected_terms": [
+        "BIF_DOORBELL_INT_CNTL",
+        "DOORBELL_INTERRUPT_DISABLE"
+      ],
+      "max_snippets": 1
+    },
+    {
+      "id": "mxgpu_ih_rb_cntl_fields",
+      "corpus": "mxgpu",
+      "question": "Where is IH_RB_CNTL configured, and which fields are modified?",
+      "terms": [
+        "IH_RB_CNTL",
+        "RB_ENABLE",
+        "ENABLE_INTR"
+      ],
+      "expected_terms": [
+        "IH_RB_CNTL",
+        "RB_ENABLE",
+        "ENABLE_INTR"
+      ],
+      "max_snippets": 2
+    },
+    {
+      "id": "mxgpu_sdma_queue_rb_cntl",
+      "corpus": "mxgpu",
+      "question": "Which code paths reference SDMA0_QUEUE0_RB_CNTL or SDMA1_QUEUE0_RB_CNTL?",
+      "terms": [
+        "SDMA0_QUEUE0_RB_CNTL",
+        "SDMA1_QUEUE0_RB_CNTL",
+        "RB_ENABLE"
+      ],
+      "expected_terms": [
+        "SDMA0_QUEUE0_RB_CNTL",
+        "SDMA1_QUEUE0_RB_CNTL",
+        "RB_ENABLE"
+      ],
+      "max_snippets": 2
+    },
+    {
+      "id": "linux_gds_vmid_writes",
+      "corpus": "linux-amdgpu",
+      "question": "Which GDS VMID registers are written through SOC15 wrappers?",
+      "terms": [
+        "mmGDS_VMID0_BASE",
+        "mmGDS_VMID0_SIZE",
+        "mmGDS_GWS_VMID0"
+      ],
+      "expected_terms": [
+        "mmGDS_VMID0_BASE",
+        "mmGDS_VMID0_SIZE",
+        "mmGDS_GWS_VMID0"
+      ],
+      "max_snippets": 1
+    },
+    {
+      "id": "linux_grbm_soft_reset_rlc",
+      "corpus": "linux-amdgpu",
+      "question": "Which GRBM_SOFT_RESET field is written when resetting RLC?",
+      "terms": [
+        "WREG32_FIELD15",
+        "GRBM_SOFT_RESET",
+        "SOFT_RESET_RLC"
+      ],
+      "expected_terms": [
+        "WREG32_FIELD15",
+        "GRBM_SOFT_RESET",
+        "SOFT_RESET_RLC"
+      ],
+      "max_snippets": 1
+    },
+    {
+      "id": "linux_cp_vmid_reset_queues",
+      "corpus": "linux-amdgpu",
+      "question": "Which CP_VMID_RESET fields request queue reset?",
+      "terms": [
+        "CP_VMID_RESET",
+        "RESET_REQUEST",
+        "PIPE0_QUEUES",
+        "PIPE1_QUEUES"
+      ],
+      "expected_terms": [
+        "CP_VMID_RESET",
+        "RESET_REQUEST",
+        "PIPE0_QUEUES",
+        "PIPE1_QUEUES"
+      ],
+      "max_snippets": 1
+    },
+    {
+      "id": "linux_cp_int_cntl_ring0_fields",
+      "corpus": "linux-amdgpu",
+      "question": "Which CP_INT_CNTL_RING0 interrupt enable fields are set?",
+      "terms": [
+        "CP_INT_CNTL_RING0",
+        "CNTX_BUSY_INT_ENABLE",
+        "CNTX_EMPTY_INT_ENABLE",
+        "CMP_BUSY_INT_ENABLE"
+      ],
+      "expected_terms": [
+        "CP_INT_CNTL_RING0",
+        "CNTX_BUSY_INT_ENABLE",
+        "CNTX_EMPTY_INT_ENABLE",
+        "CMP_BUSY_INT_ENABLE"
+      ],
+      "max_snippets": 1
+    },
+    {
+      "id": "linux_cp_me_ic_invalidate",
+      "corpus": "linux-amdgpu",
+      "question": "Which CP_ME_IC_OP_CNTL field invalidates instruction cache?",
+      "terms": [
+        "CP_ME_IC_OP_CNTL",
+        "INVALIDATE_CACHE"
+      ],
+      "expected_terms": [
+        "CP_ME_IC_OP_CNTL",
+        "INVALIDATE_CACHE"
+      ],
+      "max_snippets": 1
+    }
+  ]
+}

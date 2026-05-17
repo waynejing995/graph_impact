@@ -61,9 +61,10 @@ The following artifacts are useful but not final closure:
 
 The current final-candidate package is `docs/qa/2026-05-17-final-clean-evidence-package.md`.
 It links the clean AMD DB, source roots, counts, AQ01-AQ09 9/9 artifact,
-six free-form queries, qwen3.5 semantic-edge jobs, visual QA screenshots,
-automated verification, and architecture review. Commit and push evidence are
-still pending until the git gate runs.
+six free-form queries, `gemma4:e4b` clean provider smoke and live semantic-edge jobs, visual QA screenshots,
+automated verification, architecture review, and a final git gate. Commit and
+push evidence is recorded by the repository history for the change that includes
+the package.
 
 ## Closure Rule
 

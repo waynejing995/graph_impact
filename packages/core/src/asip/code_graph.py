@@ -313,7 +313,7 @@ def _function_relation_for_resolved(resolved: ResolvedSymbol) -> str:
         return "sets_field"
     if resolved.access in {"field_write", "field_value"}:
         return "writes"
-    if resolved.access in {"field_get", "field_read", "field_mask"}:
+    if resolved.access in {"field_get", "field_read", "field_mask", "field_shift"}:
         return "reads"
     if resolved.access == "address":
         return "maps_base"

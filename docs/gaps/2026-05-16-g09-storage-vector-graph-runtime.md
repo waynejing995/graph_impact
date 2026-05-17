@@ -22,7 +22,7 @@ MVP-1 is SQLite-first:
 - `to_networkx()` exists and has core test coverage.
 - Graph API output now uses NetworkX-derived hop-bounded subgraph extraction and no-seed global graph extraction from SQLite edges.
 - `packages/core/tests/test_workbench_query_schema.py` covers vector-backed evidence retrieval without lexical overlap.
-- Clean AMD DB `/tmp/asip-clean-amd-qwen35-provider-2026-05-17.db` stores 961 provider-sourced embeddings from `ollama/nomic-embed-text:latest` and zero deterministic fallback embeddings for those rows.
+- Clean AMD DB `/tmp/asip-clean-amd-gemma4-provider-2026-05-17-final.db` stores 32 provider-sourced embeddings from `ollama/nomic-embed-text:latest` and zero deterministic fallback embeddings for those rows. This proves AQ09/provider provenance only; it is not full provider-vector coverage for every chunk.
 - `packages/core/src/asip/providers.py` now supports Ollama `/api/embed` batch embeddings in addition to `/api/embeddings`, and `asip.cli provider-embeddings` can backfill provider embeddings for existing chunks.
 - Clean AMD free-query QA records NetworkX for all six query graphs and the no-seed global graph.
 

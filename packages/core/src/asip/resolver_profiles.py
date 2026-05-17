@@ -160,6 +160,7 @@ def _is_field_access(access: str) -> bool:
         "field_mask",
         "field_read",
         "field_set",
+        "field_shift",
         "field_value",
         "field_write",
     }
@@ -227,7 +228,9 @@ def _symbols_from_arg(arg: str, profile: ResolverProfile) -> List[str]:
 
 
 def _symbols_for_argument(arg: str, profile: ResolverProfile) -> List[str]:
-    symbols = _symbols_from_arg(arg, profile) or [_canonical_symbol(arg, profile.symbol_prefixes)]
+    symbols = _symbols_from_arg(arg, profile) or _prefixed_symbols_in_expression(arg, profile) or [
+        _fallback_symbol_for_argument(arg, profile)
+    ]
     return [symbol for symbol in symbols if symbol]
 
 
@@ -272,6 +275,35 @@ def _canonical_symbol(raw: str, prefixes: Iterable[str]) -> str:
         if symbol.startswith(prefix) and len(symbol) > len(prefix) and symbol[len(prefix)].isupper():
             symbol = symbol[len(prefix) :]
             break
+    return symbol
+
+
+def _prefixed_symbols_in_expression(raw: str, profile: ResolverProfile) -> List[str]:
+    prefixes = [prefix for prefix in profile.symbol_prefixes if prefix]
+    if not prefixes:
+        return []
+    pattern = re.compile(
+        r"\b("
+        + "|".join(re.escape(prefix) for prefix in sorted(prefixes, key=len, reverse=True))
+        + r")([A-Z][A-Za-z0-9_]*)\b"
+    )
+    symbols: List[str] = []
+    for match in pattern.finditer(raw):
+        symbol = match.group(2)
+        if symbol and symbol not in symbols:
+            symbols.append(symbol)
+    return symbols
+
+
+def _fallback_symbol_for_argument(raw: str, profile: ResolverProfile) -> str:
+    candidate = raw.strip().strip("&*")
+    if not re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]*", candidate):
+        return ""
+    symbol = _canonical_symbol(candidate, profile.symbol_prefixes)
+    if symbol != candidate:
+        return symbol
+    if symbol.islower():
+        return ""
     return symbol
 
 

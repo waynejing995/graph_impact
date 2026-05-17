@@ -328,6 +328,65 @@ class StorageGraphTests(unittest.TestCase):
         self.assertEqual(edge["relation"], "sets_field")
         self.assertIn("RANGE_PROTECTION_FAULT_ENABLE_DEFAULT", edge["attr"]["fields"])
 
+    def test_global_graph_keeps_smn_prefixed_registers_without_keyword_hints(self):
+        store = AsipStore.connect(":memory:")
+        store.migrate()
+        store.add_edge(
+            "program_mp1_flags",
+            "smnMP1_FIRMWARE_FLAGS",
+            "writes",
+            0.97,
+            stage="deterministic",
+            source="clang_ast",
+            path="drivers/gpu/drm/amd/pm/swsmu/smu.c",
+            line_start=41,
+            line_end=41,
+            provenance={
+                "extractor": "code_graph",
+                "function": "program_mp1_flags",
+                "wrapper": "WREG32",
+                "corpus_id": "linux-amdgpu",
+            },
+        )
+
+        graph = store.global_graph_networkx(limit=20)
+
+        node_by_id = {node["id"]: node for node in graph["nodes"]}
+        self.assertIn("register:unknown:unknown:linux-amdgpu:MP1_FIRMWARE_FLAGS", node_by_id)
+        register_node = node_by_id["register:unknown:unknown:linux-amdgpu:MP1_FIRMWARE_FLAGS"]
+        self.assertEqual(register_node["kind"], "register")
+        self.assertEqual(register_node["label"], "MP1_FIRMWARE_FLAGS")
+        self.assertIn(
+            ("function:linux-amdgpu:drivers/gpu/drm/amd/pm/swsmu/smu.c:program_mp1_flags", "writes", register_node["id"]),
+            {(edge["src"], edge["relation"], edge["dst"]) for edge in graph["edges"]},
+        )
+
+    def test_global_graph_does_not_promote_generic_reg_words_to_register_nodes(self):
+        store = AsipStore.connect(":memory:")
+        store.migrate()
+        store.add_edge("REG_SET", "register", "writes", 0.92, stage="semantic", source="ollama")
+        store.add_edge(
+            "program_queue",
+            "registers",
+            "writes",
+            0.91,
+            stage="semantic",
+            source="ollama",
+            path="drivers/gpu/drm/amd/amdgpu/gfx.c",
+            provenance={"function": "program_queue", "corpus_id": "linux-amdgpu"},
+        )
+        store.add_edge("program_cache", "regGCVM_L2_CNTL", "writes", 0.97, stage="deterministic")
+
+        graph = store.global_graph_networkx(limit=20)
+
+        node_labels = {node["label"] for node in graph["nodes"]}
+        edge_labels = {(edge["src"], edge["relation"], edge["dst"]) for edge in graph["edges"]}
+        self.assertNotIn("REG_SET", node_labels)
+        self.assertNotIn("register", node_labels)
+        self.assertNotIn("registers", node_labels)
+        self.assertIn("GCVM_L2_CNTL", node_labels)
+        self.assertTrue(any("GCVM_L2_CNTL" in dst for _src, _relation, dst in edge_labels))
+
     def test_global_graph_normalizes_edge_relation_enum(self):
         store = AsipStore.connect(":memory:")
         store.migrate()

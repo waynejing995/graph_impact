@@ -450,7 +450,42 @@ class AsipStore:
             """,
             (*ids, max(1, int(limit))),
         )
-        return [dict(row) for row in rows]
+        return self._append_missing_source_rows_for_chunks([dict(row) for row in rows], ids)
+
+    def _append_missing_source_rows_for_chunks(
+        self,
+        rows: List[Dict[str, object]],
+        chunk_ids: Iterable[int],
+    ) -> List[Dict[str, object]]:
+        ids = list(dict.fromkeys(int(chunk_id) for chunk_id in chunk_ids))
+        if not ids:
+            return rows
+        selected_ids = {int(row["id"]) for row in rows if row.get("id") not in (None, "")}
+        selected_sources = {str(row.get("source_type") or "") for row in rows}
+        placeholders = ",".join("?" for _ in ids)
+        for source_type in ("code", "doc", "pdf", "register"):
+            if source_type in selected_sources:
+                continue
+            row = self.con.execute(
+                f"""
+                select
+                  id, chunk_id, corpus_id, source_type, repo, path, line_start, line_end, page,
+                  symbol, entity_type, ip_block, asic_or_generation, access_type,
+                  confidence, snippet, resolved_chain, query_id
+                from evidence
+                where chunk_id in ({placeholders})
+                  and source_type = ?
+                order by confidence desc, id asc
+                limit 1
+                """,
+                (*ids, source_type),
+            ).fetchone()
+            if row is None or int(row["id"]) in selected_ids:
+                continue
+            rows.append(dict(row))
+            selected_ids.add(int(row["id"]))
+            selected_sources.add(source_type)
+        return rows
 
     def _find_evidence_candidates_by_like(
         self,
@@ -1703,7 +1738,7 @@ def _is_meaningful_graph_symbol(symbol: str, entity_type: str) -> bool:
         return False
     if "->" in symbol or "_" in symbol or re.search(r"\d", symbol):
         return True
-    if symbol.startswith(("reg", "mm", "RREG", "WREG", "REG_")):
+    if _has_register_prefix_alias(symbol):
         return True
     return entity_type in {"register", "field", "macro", "context"} and len(symbol) > 3
 
@@ -1731,7 +1766,7 @@ def _normalize_graph_kind(kind: str) -> str:
 
 def _normalize_graph_relation(relation: str) -> str:
     normalized = re.sub(r"[^a-z0-9]+", "_", relation.lower()).strip("_")
-    if normalized in {"read", "reads", "field_get", "field_read", "field_mask"}:
+    if normalized in {"read", "reads", "field_get", "field_read", "field_mask", "field_shift"}:
         return "reads"
     if normalized in {"write", "writes", "field_write", "field_value"}:
         return "writes"
@@ -1779,12 +1814,19 @@ def _kind_for_graph_symbol(symbol: str) -> str:
         return "pdf"
     if re.search(r"ENABLE|DISABLE|PENDING|MASK|SHIFT|RESET_REQUEST|INVALIDATE|FIELD", symbol):
         return "field"
-    if symbol.startswith(("reg", "mm", "RREG", "WREG", "REG_")) or re.search(
+    if _has_register_prefix_alias(symbol) or re.search(
         r"CNTL|STATUS|RESET|BASE|SIZE|VMID|DOORBELL|QUEUE|REGISTER",
         symbol,
     ):
         return "register"
     return "code"
+
+
+def _has_register_prefix_alias(symbol: str) -> bool:
+    return any(
+        symbol.startswith(prefix) and len(symbol) > len(prefix) and symbol[len(prefix)].isupper()
+        for prefix in ("reg", "mm", "smn")
+    )
 
 
 def _is_graph_wrapper_hub(symbol: str) -> bool:

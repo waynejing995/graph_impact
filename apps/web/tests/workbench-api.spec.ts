@@ -260,7 +260,7 @@ test("acceptance API lists real qwen and gemma QA runs", async ({ request }) => 
       artifactPath: expect.stringMatching(/^docs\/qa\/2026-05-17-acceptance/)
     })
   );
-  const providerRun = body.runs.find((run) => run.id === "acceptance-clean-amd-qwen35-provider-current");
+  const providerRun = body.runs.find((run) => run.id === "acceptance-clean-amd-gemma4-provider-current");
   const aq09 = providerRun?.details?.find((detail) => detail.id === "AQ09");
   expect(aq09?.providerChecks?.embedding).toMatchObject({
     status: "pass",
@@ -270,7 +270,7 @@ test("acceptance API lists real qwen and gemma QA runs", async ({ request }) => 
   expect(aq09?.providerChecks?.semanticEdge).toMatchObject({
     status: "pass",
     provider: "ollama",
-    model: "qwen3.5:4b"
+    model: "gemma4:e4b"
   });
 });
 
