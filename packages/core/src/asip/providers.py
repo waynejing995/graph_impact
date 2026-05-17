@@ -7,6 +7,8 @@ import urllib.request
 from dataclasses import dataclass, field
 from typing import Any, Dict, List, Mapping, Optional, Protocol, Sequence
 
+from .config_values import expand_extra_headers
+
 
 Vector = List[float]
 
@@ -120,7 +122,7 @@ def _normalize_provider_id(provider: Any) -> str:
 
 
 def _request_headers(config: EmbeddingProviderConfig) -> Dict[str, str]:
-    return {"Content-Type": "application/json", **config.extra_headers}
+    return {"Content-Type": "application/json", **expand_extra_headers(config.extra_headers)}
 
 
 def _request_url(config: EmbeddingProviderConfig, default_path: str) -> str:

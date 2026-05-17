@@ -1954,8 +1954,7 @@ def _metadata_from_networkx_edge_data(data: Mapping[str, object], endpoint: str)
         value = provenance.get(key)
         if value not in ("", None, 0):
             metadata[key] = value
-    if endpoint == str(provenance.get("function") or ""):
-        metadata["function_name"] = endpoint
+    _apply_endpoint_function_metadata(metadata, provenance, endpoint)
     metadata.setdefault("symbol", endpoint)
     return metadata
 
@@ -1991,8 +1990,7 @@ def _metadata_from_edge_provenance(row: sqlite3.Row, endpoint: str) -> Dict[str,
         value = provenance.get(key)
         if value not in ("", None, 0):
             metadata[key] = value
-    if endpoint == str(provenance.get("function") or ""):
-        metadata["function_name"] = endpoint
+    _apply_endpoint_function_metadata(metadata, provenance, endpoint)
     metadata.setdefault("symbol", endpoint)
     if str(provenance.get("extractor") or "") == "doc_nodes" and str(provenance.get("box_node_id") or "") == endpoint:
         box_name = str(provenance.get("box_name") or "").strip()
@@ -2010,6 +2008,26 @@ def _metadata_from_edge_provenance(row: sqlite3.Row, endpoint: str) -> Dict[str,
                 metadata[key] = value
         metadata["source_type"] = "pdf" if str(metadata.get("path") or "").lower().endswith(".pdf") else "doc"
     return metadata
+
+
+def _apply_endpoint_function_metadata(
+    metadata: Dict[str, object],
+    provenance: Mapping[str, object],
+    endpoint: str,
+) -> None:
+    if endpoint == str(provenance.get("function") or ""):
+        metadata["function_name"] = endpoint
+        return
+    if endpoint != str(provenance.get("callee") or ""):
+        return
+    metadata["function_name"] = endpoint
+    callback_path = str(provenance.get("callee_path") or provenance.get("callback_path") or "").strip()
+    if callback_path:
+        metadata["path"] = callback_path
+    callback_line = provenance.get("callee_line") or provenance.get("callback_line")
+    if callback_line not in ("", None, 0):
+        metadata["line_start"] = callback_line
+        metadata["line_end"] = callback_line
 
 
 def _metadata_for_graph_evidence_row(row: sqlite3.Row, endpoint: str) -> Dict[str, object]:

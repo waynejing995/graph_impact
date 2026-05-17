@@ -661,6 +661,144 @@ class WorkbenchLiveTests(unittest.TestCase):
             self.assertTrue(any(row["source"] == "clang_ast" for row in rows))
             self.assertTrue(any("code_graph" in row["provenance_json"] for row in rows))
 
+    def test_index_registered_corpus_links_cross_file_vtable_callbacks_to_registers(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            source_root = root / "corpus"
+            source_root.mkdir()
+            (source_root / "gfx_v11.c").write_text(
+                "\n".join(
+                    [
+                        "static int gfx_v11_0_hw_init(void *adev) {",
+                        "  WREG32(mmGCVM_L2_CNTL, 1);",
+                        "  return 0;",
+                        "}",
+                        "static const struct amd_ip_funcs gfx_v11_0_ip_funcs = {",
+                        "  .hw_init = gfx_v11_0_hw_init,",
+                        "};",
+                    ]
+                ),
+                encoding="utf-8",
+            )
+            (source_root / "amdgpu_device.c").write_text(
+                "\n".join(
+                    [
+                        "int amdgpu_device_init(struct amd_ip_block *block) {",
+                        "  return block->version->funcs->hw_init(block);",
+                        "}",
+                    ]
+                ),
+                encoding="utf-8",
+            )
+            db_path = root / "asip.db"
+            store = AsipStore.connect(str(db_path))
+            store.migrate()
+            store.upsert_corpus("linux-amdgpu", "https://github.com/torvalds/linux", str(source_root), ["**/*.c"])
+            store.upsert_resolver_profile(
+                "test-amd-callbacks",
+                "cpp",
+                ["WREG32"],
+                "reference",
+                "test.yaml",
+                config={
+                    "id": "test-amd-callbacks",
+                    "language": "cpp",
+                    "symbol_prefixes": ["reg", "mm"],
+                    "wrappers": {"WREG32": {"symbol_arg": 0, "access": "write"}},
+                },
+            )
+
+            workbench.index_registered_corpora(db_path, corpus_ids=["linux-amdgpu"])
+            graph = workbench.global_graph(db_path, limit=40, all_edges=True)
+
+            edges = {(edge["src"], edge["relation"], edge["dst"]) for edge in graph["edges"]}
+            callback_id = "function:linux-amdgpu:gfx_v11.c:gfx_v11_0_hw_init"
+            common_id = "function:linux-amdgpu:amdgpu_device.c:amdgpu_device_init"
+            register_id = "register:GC:unknown:linux-amdgpu:GCVM_L2_CNTL"
+            self.assertIn((common_id, "calls", callback_id), edges)
+            self.assertIn((callback_id, "writes", register_id), edges)
+            call_row = AsipStore.connect(str(db_path)).con.execute(
+                "select provenance_json from edges where src = ? and dst = ? and relation = 'calls'",
+                ("amdgpu_device_init", "gfx_v11_0_hw_init"),
+            ).fetchone()
+            self.assertIsNotNone(call_row)
+            call_provenance = json.loads(str(call_row["provenance_json"]))
+            self.assertEqual(call_provenance["callee_path"], "gfx_v11.c")
+            self.assertEqual(call_provenance["callee_line"], 1)
+            self.assertEqual(call_provenance["callback_line"], 6)
+
+    def test_stage1_specific_vtable_call_does_not_connect_every_same_named_slot(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            source_root = root / "corpus"
+            source_root.mkdir()
+            (source_root / "gfx.c").write_text(
+                "\n".join(
+                    [
+                        "static int gfx_v11_0_hw_init(void *adev) {",
+                        "  WREG32(mmGCVM_L2_CNTL, 1);",
+                        "  return 0;",
+                        "}",
+                        "static const struct amd_ip_funcs gfx_v11_0_ip_funcs = {",
+                        "  .hw_init = gfx_v11_0_hw_init,",
+                        "};",
+                    ]
+                ),
+                encoding="utf-8",
+            )
+            (source_root / "sdma.c").write_text(
+                "\n".join(
+                    [
+                        "static int sdma_v5_0_hw_init(void *adev) {",
+                        "  WREG32(mmSDMA0_RLC0_RB_CNTL, 1);",
+                        "  return 0;",
+                        "}",
+                        "static const struct amd_ip_funcs sdma_v5_0_ip_funcs = {",
+                        "  .hw_init = sdma_v5_0_hw_init,",
+                        "};",
+                    ]
+                ),
+                encoding="utf-8",
+            )
+            (source_root / "amdgpu_device.c").write_text(
+                "\n".join(
+                    [
+                        "int direct_gfx_init(void) {",
+                        "  return gfx_v11_0_ip_funcs.hw_init(0);",
+                        "}",
+                    ]
+                ),
+                encoding="utf-8",
+            )
+            db_path = root / "asip.db"
+            store = AsipStore.connect(str(db_path))
+            store.migrate()
+            store.upsert_corpus("linux-amdgpu", "https://github.com/torvalds/linux", str(source_root), ["**/*.c"])
+            store.upsert_resolver_profile(
+                "test-amd-callbacks",
+                "cpp",
+                ["WREG32"],
+                "reference",
+                "test.yaml",
+                config={
+                    "id": "test-amd-callbacks",
+                    "language": "cpp",
+                    "symbol_prefixes": ["reg", "mm"],
+                    "wrappers": {"WREG32": {"symbol_arg": 0, "access": "write"}},
+                },
+            )
+
+            workbench.index_registered_corpora(db_path, corpus_ids=["linux-amdgpu"])
+
+            rows = [
+                (row["src"], row["relation"], row["dst"])
+                for row in AsipStore.connect(str(db_path)).con.execute(
+                    "select src, relation, dst from edges where src = 'direct_gfx_init' order by dst"
+                )
+            ]
+            self.assertIn(("direct_gfx_init", "calls", "gfx_v11_0_hw_init"), rows)
+            self.assertNotIn(("direct_gfx_init", "calls", "sdma_v5_0_hw_init"), rows)
+
     def test_index_registered_corpus_uses_compile_commands_for_project_macro_expansion(self):
         with tempfile.TemporaryDirectory() as tmpdir:
             root = Path(tmpdir)

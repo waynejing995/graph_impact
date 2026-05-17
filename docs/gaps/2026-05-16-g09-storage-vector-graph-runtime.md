@@ -1,6 +1,6 @@
 # G09 SQLite FTS5 Vector And NetworkX Runtime
 
-Status: Partial; SQLite, FTS5, fallback vector retrieval, and NetworkX graph are live; native sqlite-vec remains blocking/deferred
+Status: Partial; SQLite, FTS5, fallback vector retrieval, NetworkX graph, and sqlite-vec extension smoke are live; native retrieval adapter remains a boundary
 
 ## Requirement
 
@@ -18,26 +18,27 @@ MVP-1 is SQLite-first:
 - `search_vector()` stores vectors as JSON and computes cosine similarity in Python.
 - `query_evidence()` now calls the vector adapter with a deterministic fallback query embedding and merges high-similarity chunk evidence into ranked results with `vector_score` and `retrieval_sources`.
 - Indexing can call a configured embedding provider transport and store returned vectors; failed live calls use deterministic fallback embeddings with explicit metadata.
-- `sqlite-vec` appears in requirements and an optional runtime smoke test, but the test can skip when native extension loading is unavailable.
+- `sqlite-vec` appears in requirements and an optional runtime smoke test. System Python 3.9 lacks `sqlite3.Connection.enable_load_extension`, so that runtime still skips the extension smoke, while the bundled Codex Python 3.12 runtime loads and executes the native sqlite-vec smoke successfully.
 - `to_networkx()` exists and has core test coverage.
 - Graph API output now uses NetworkX-derived hop-bounded subgraph extraction and no-seed global graph extraction from SQLite edges.
 - `packages/core/tests/test_workbench_query_schema.py` covers vector-backed evidence retrieval without lexical overlap.
 - Clean AMD DB `/tmp/asip-clean-amd-gemma4-provider-2026-05-17-final.db` stores 32 provider-sourced embeddings from `ollama/nomic-embed-text:latest` and zero deterministic fallback embeddings for those rows. This proves AQ09/provider provenance only; it is not full provider-vector coverage for every chunk.
 - `packages/core/src/asip/providers.py` now supports Ollama `/api/embed` batch embeddings in addition to `/api/embeddings`, and `asip.cli provider-embeddings` can backfill provider embeddings for existing chunks.
 - Clean AMD free-query QA records NetworkX for all six query graphs and the no-seed global graph.
+- Native sqlite-vec extension proof: `/Users/chenjingwen/.cache/codex-runtimes/codex-primary-runtime/dependencies/python/bin/python3` reports Python 3.12.13, SQLite 3.50.4, `enable_load_extension=True`, `sqlite_vec` installed, and passes `packages.core.tests.test_storage_graph.StorageGraphTests.test_sqlite_vec_extension_can_run_when_runtime_supports_extensions`.
 
 ## Remaining Gap
 
 Storage pieces exist, graph expansion now uses NetworkX, and the product retrieval path now combines vector adapter matches into ranking.
 
-The deterministic fallback and provider embedding paths prove schema/provenance wiring and retrieval integration. The current clean AMD DB has partial provider embeddings, not full provider-vector coverage or semantic rerank quality proof. Native sqlite-vec availability remains skipped/deferred in this runtime.
+The deterministic fallback and provider embedding paths prove schema/provenance wiring and retrieval integration. The current clean AMD DB has partial provider embeddings, not full provider-vector coverage or semantic rerank quality proof. The bundled Python runtime proves the native sqlite-vec extension can load, but the product query path still uses JSON vectors plus Python cosine scoring; native sqlite-vec retrieval adapter/acceleration is not yet wired.
 
 ## Acceptance Criteria
 
 - FTS5 search is used by query retrieval.
-- Vector adapter supports native sqlite-vec when available and has a documented fallback.
+- Vector adapter has a documented fallback; native sqlite-vec retrieval acceleration remains a future adapter implementation, even though the extension smoke passes in the bundled Python runtime.
 - Embeddings are generated or loaded for indexed chunks with provider/model provenance.
-- Query retrieval combines FTS and vector results through the adapter; native sqlite-vec acceleration remains unavailable in this runtime unless the extension load succeeds.
+- Query retrieval combines FTS and vector results through the fallback adapter; native sqlite-vec acceleration must not be claimed until product retrieval actually uses the native adapter.
 - NetworkX graph extraction is used by graph API or documented as a post-MVP deferral accepted by the user.
 - DB schema includes enough state for jobs, provider config, evidence, entities, resolver profiles, and graph edges.
 

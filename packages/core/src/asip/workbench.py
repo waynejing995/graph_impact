@@ -167,19 +167,13 @@ def index_configured_corpora(
         for corpus in config.corpora:
             source_root = actual_source_roots[corpus.id]
             scan_root = source_root / corpus.relative_root if corpus.relative_root else source_root
+            code_files: List[Path] = []
             for file_path in _iter_source_files(scan_root, corpus.include):
                 display_path = _display_source_path(file_path, source_root, source_root)
                 key = (corpus.id, display_path)
                 source_type = _source_type_for_path(file_path)
                 if source_type == "code":
-                    edge_count += _index_deterministic_code_graph_edges(
-                        store,
-                        file_path,
-                        source_root,
-                        resolver_profiles,
-                        corpus_id=corpus.id,
-                        repo=corpus.repo,
-                    )
+                    code_files.append(file_path)
                     continue
                 if key in indexed_paths:
                     continue
@@ -213,6 +207,14 @@ def index_configured_corpora(
                     _index_chunk_embedding(store, indexed, provider_settings, embedding_transport=embedding_transport)
                     evidence_count += _index_chunk_evidence(store, indexed, [], resolver_profiles)
                     edge_count += _index_chunk_edges(store, indexed, [])
+            edge_count += _index_deterministic_code_graph_files(
+                store,
+                code_files,
+                source_root,
+                resolver_profiles,
+                corpus_id=corpus.id,
+                repo=corpus.repo,
+            )
 
         for corpus in config.corpora:
             source_root = actual_source_roots[corpus.id]
@@ -637,6 +639,7 @@ def index_registered_corpora(
                 raise FileNotFoundError(error_message)
             files = list(_iter_source_files(source_root, include))
             file_count += len(files)
+            code_files: List[Path] = []
             store.upsert_corpus(
                 corpus_id=corpus_id,
                 repo=str(corpus["repo"]),
@@ -677,14 +680,15 @@ def index_registered_corpora(
                     evidence_count += _index_chunk_evidence(store, indexed, [], resolver_profiles)
                     edge_count += _index_chunk_edges(store, indexed, [])
                 if source_type == "code":
-                    edge_count += _index_deterministic_code_graph_edges(
-                        store,
-                        file_path,
-                        source_root,
-                        resolver_profiles,
-                        corpus_id=corpus_id,
-                        repo=str(corpus["repo"]),
-                    )
+                    code_files.append(file_path)
+            edge_count += _index_deterministic_code_graph_files(
+                store,
+                code_files,
+                source_root,
+                resolver_profiles,
+                corpus_id=corpus_id,
+                repo=str(corpus["repo"]),
+            )
             store.upsert_corpus(
                 corpus_id=corpus_id,
                 repo=str(corpus["repo"]),
@@ -776,18 +780,20 @@ def rebuild_deterministic_graph(
             include = [str(item) for item in corpus["include"]]
             if not source_root.exists():
                 raise FileNotFoundError(f"source root not found: {source_root}")
+            code_files: List[Path] = []
             for file_path in _iter_source_files(source_root, include):
                 if _source_type_for_path(file_path) != "code":
                     continue
                 file_count += 1
-                edge_count += _index_deterministic_code_graph_edges(
-                    store,
-                    file_path,
-                    source_root,
-                    resolver_profiles,
-                    corpus_id=corpus_id,
-                    repo=str(corpus["repo"]),
-                )
+                code_files.append(file_path)
+            edge_count += _index_deterministic_code_graph_files(
+                store,
+                code_files,
+                source_root,
+                resolver_profiles,
+                corpus_id=corpus_id,
+                repo=str(corpus["repo"]),
+            )
         store.finish_job(job_id, "rebuilt", f"Rebuilt {edge_count} deterministic graph edges from {file_count} files")
     except Exception as exc:
         store.finish_job(job_id, "failed", str(exc))
@@ -1761,36 +1767,149 @@ def _index_deterministic_code_graph_edges(
     corpus_id: str = "",
     repo: str = "",
 ) -> int:
+    return _index_deterministic_code_graph_files(
+        store,
+        [file_path],
+        source_root,
+        resolver_profiles,
+        corpus_id=corpus_id,
+        repo=repo,
+    )
+
+
+def _index_deterministic_code_graph_files(
+    store: AsipStore,
+    file_paths: Iterable[Path],
+    source_root: Path,
+    resolver_profiles: Iterable[ResolverProfile],
+    corpus_id: str = "",
+    repo: str = "",
+) -> int:
     profiles = [profile for profile in resolver_profiles if profile.language in {"c", "cpp", "c++"}]
     if not profiles:
         return 0
-    try:
-        graph = build_deterministic_code_graph(file_path, source_root=source_root, resolver_profiles=profiles)
-    except Exception:
-        return 0
+    graphs = []
     count = 0
-    for edge in graph.edges:
-        store.add_edge(
-            src=edge.src,
-            dst=edge.dst,
-            relation=edge.relation,
-            confidence=edge.confidence,
-            stage=edge.stage,
-            source=edge.source,
-            path=edge.path,
-            line_start=edge.line_start,
-            line_end=edge.line_end,
-            provenance={
-                **dict(edge.provenance),
-                **({"corpus_id": corpus_id} if corpus_id else {}),
-                **({"repo": repo} if repo else {}),
-            },
-            commit=False,
-        )
-        count += 1
+    seen: set[tuple[str, str, str, str, int, int]] = set()
+    for file_path in file_paths:
+        try:
+            graph = build_deterministic_code_graph(file_path, source_root=source_root, resolver_profiles=profiles)
+        except Exception:
+            continue
+        graphs.append(graph)
+        for edge in graph.edges:
+            count += _persist_code_graph_edge(store, edge, seen, corpus_id=corpus_id, repo=repo)
+
+    callbacks_by_slot: Dict[str, List[Any]] = {}
+    for graph in graphs:
+        for callback in graph.callback_slots:
+            callbacks_by_slot.setdefault(str(callback.slot), []).append(callback)
+    for graph in graphs:
+        for slot_call in graph.slot_calls:
+            for callback in _callbacks_for_code_graph_slot_call(slot_call, callbacks_by_slot):
+                if str(callback.function) == str(slot_call.caller):
+                    continue
+                count += _persist_code_graph_edge(
+                    store,
+                    _CodeGraphEdgeRecord(
+                        src=str(slot_call.caller),
+                        dst=str(callback.function),
+                        relation="calls",
+                        confidence=0.82,
+                        stage="deterministic",
+                        source="clang_callback",
+                        path=str(slot_call.path),
+                        line_start=slot_call.line_start,
+                        line_end=slot_call.line_start,
+                        provenance={
+                            "extractor": "code_graph",
+                            "function": str(slot_call.caller),
+                            "callee": str(callback.function),
+                            "call_kind": "vtable_callback",
+                            "slot": str(slot_call.slot),
+                            "receiver": str(getattr(slot_call, "receiver", "") or ""),
+                            "callback_table": str(callback.table),
+                            "callee_path": str(callback.path),
+                            "callback_path": str(callback.path),
+                            "callee_line": getattr(callback, "function_line_start", None),
+                            "callback_line": getattr(callback, "assignment_line_start", None) or callback.line_start,
+                        },
+                    ),
+                    seen,
+                    corpus_id=corpus_id,
+                    repo=repo,
+                )
     if count:
         store.con.commit()
     return count
+
+
+def _callbacks_for_code_graph_slot_call(
+    slot_call: Any,
+    callbacks_by_slot: Mapping[str, List[Any]],
+) -> List[Any]:
+    callbacks = callbacks_by_slot.get(str(slot_call.slot), [])
+    receiver = str(getattr(slot_call, "receiver", "") or "").strip()
+    if not receiver:
+        return callbacks
+    exact = [callback for callback in callbacks if str(callback.table) == receiver]
+    if exact:
+        return exact
+    if receiver in {"funcs", "ops", "callbacks"}:
+        return callbacks if len(callbacks) == 1 else []
+    return []
+
+
+@dataclass(frozen=True)
+class _CodeGraphEdgeRecord:
+    src: str
+    dst: str
+    relation: str
+    confidence: float
+    stage: str
+    source: str
+    path: str
+    line_start: Optional[int]
+    line_end: Optional[int]
+    provenance: Mapping[str, object]
+
+
+def _persist_code_graph_edge(
+    store: AsipStore,
+    edge: Any,
+    seen: set[tuple[str, str, str, str, int, int]],
+    corpus_id: str = "",
+    repo: str = "",
+) -> int:
+    key = (
+        str(edge.src),
+        str(edge.relation),
+        str(edge.dst),
+        str(edge.path),
+        int(edge.line_start or 0),
+        int(edge.line_end or 0),
+    )
+    if key in seen:
+        return 0
+    seen.add(key)
+    store.add_edge(
+        src=edge.src,
+        dst=edge.dst,
+        relation=edge.relation,
+        confidence=edge.confidence,
+        stage=edge.stage,
+        source=edge.source,
+        path=edge.path,
+        line_start=edge.line_start,
+        line_end=edge.line_end,
+        provenance={
+            **dict(edge.provenance),
+            **({"corpus_id": corpus_id} if corpus_id else {}),
+            **({"repo": repo} if repo else {}),
+        },
+        commit=False,
+    )
+    return 1
 
 
 def _index_chunk_edges(store: AsipStore, chunk: IndexedChunk, queries: Iterable[Any]) -> int:

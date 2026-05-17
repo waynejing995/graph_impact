@@ -10,6 +10,7 @@ from dataclasses import dataclass, field
 from pathlib import Path, PurePosixPath
 from typing import Any, Dict, Iterable, List, Mapping, Optional, Protocol, Tuple
 
+from .config_values import expand_extra_headers
 from .limits import load_workbench_limits
 
 
@@ -243,7 +244,7 @@ def _edge_messages(prompt: str) -> List[Dict[str, str]]:
 
 
 def _request_headers(model: EdgeModelConfig) -> Dict[str, str]:
-    return {"Content-Type": "application/json", **model.extra_headers}
+    return {"Content-Type": "application/json", **expand_extra_headers(model.extra_headers)}
 
 
 def _request_url(model: EdgeModelConfig, default_base_url: str, default_path: str) -> str:

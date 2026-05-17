@@ -42,6 +42,8 @@ Semantic-edge generation must support both query-scoped generation and batch cor
 - Historical live qwen3.5 semantic-edge generation required increasing edge `num_predict` from 256 to 1024 for real query prompts; current clean provider settings keep that larger response budget for `gemma4:e4b`.
 - `docs/qa/2026-05-17-clean-amd-gemma4-free-query-and-edge-qa.json` records six real free-form queries against the clean gemma DB. Persisted Stage 2 graph proof remains the live `data/asip.db` `gemma4:e4b` semantic/doc-node jobs, while one clean-DB query-scoped and one batch gemma attempt are documented as robustness failures because they produced no persistable edges or truncated JSON.
 - 2026-05-17 targeted batch QA `docs/qa/2026-05-17-graph-function-section-batch-qa.md` records a real `asip.cli semantic-edges-batch --db data/asip.db --limit 2 --batch-size 1` run using `ollama/gemma4:e4b`: `candidate_count=2`, `edge_count=11`, `job_id=10`.
+- Provider extra headers now support late-bound secret expansion for both embedding and semantic-edge providers: `env:VAR` for whole-header values and `${ENV:VAR}` inside strings such as `Bearer ${ENV:OPENAI_API_KEY}`. Expansion happens only when the request is built, leaves the saved provider settings unchanged, and raises a clear `unset environment variable` error before transport if the variable is missing.
+- Targeted regression coverage: `packages.core.tests.test_providers.EmbeddingProviderTests.test_extra_headers_expand_environment_placeholders_without_persisting_secret`, `packages.core.tests.test_providers.EmbeddingProviderTests.test_extra_header_env_placeholder_requires_existing_variable`, `packages.core.tests.test_providers.EmbeddingProviderTests.test_extra_headers_expand_direct_environment_reference`, `packages.core.tests.test_semantic_edges.SemanticEdgeFeatureTests.test_edge_provider_extra_headers_expand_environment_placeholders`, and `packages.core.tests.test_semantic_edges.SemanticEdgeFeatureTests.test_edge_provider_extra_header_missing_environment_stops_before_transport`.
 
 ## Remaining Gap
 
@@ -53,7 +55,7 @@ The batch semantic-edge product path is now implemented and tested for indexed c
 
 The current clean AMD DB has partial provider embeddings, not full provider-vector coverage for all chunks. Provider status must not imply that `qwen`, `gemma`, `nomic`, or any OpenAI-compatible model generated every current index vector unless job metadata proves it.
 
-OpenAI-compatible smoke currently validates request shape but does not perform a credentialed live check. Extra headers do not yet support a documented safe secret/env expansion path.
+OpenAI-compatible smoke currently validates request shape and safe secret/env header expansion, but does not perform a credentialed live OpenAI-compatible endpoint check because no live credentialed endpoint has been supplied.
 
 ## Acceptance Criteria
 

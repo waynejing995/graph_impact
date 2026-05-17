@@ -4,6 +4,7 @@ import json
 import tempfile
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 from asip import cli
 from asip.cli import parse_source_roots
@@ -285,6 +286,79 @@ class SemanticEdgeFeatureTests(unittest.TestCase):
         self.assertEqual(headers["x-asip-workspace"], "amd-mvp1")
         self.assertEqual(headers["content-type"], "application/json")
         self.assertEqual(captured["timeout"], 17)
+
+    def test_edge_provider_extra_headers_expand_environment_placeholders(self):
+        captured = {}
+
+        class FakeResponse:
+            def __enter__(self):
+                return self
+
+            def __exit__(self, *_args):
+                return False
+
+            def read(self):
+                return b'{"choices":[{"message":{"content":"{\\"cases\\":[{\\"id\\":\\"ok\\",\\"edges\\":[]}]}"}}]}'
+
+        def fake_urlopen(request, timeout):
+            captured["headers"] = dict(request.header_items())
+            captured["timeout"] = timeout
+            return FakeResponse()
+
+        import urllib.request
+
+        original_urlopen = urllib.request.urlopen
+        urllib.request.urlopen = fake_urlopen
+        try:
+            provider = OpenAICompatibleEdgeProvider()
+            with patch.dict("os.environ", {"ASIP_TEST_EDGE_KEY": "edge-secret"}, clear=False):
+                provider.generate(
+                    "CASE ok\nSNIPPET:\n1: REG_A",
+                    EdgeModelConfig(
+                        preferred="edge-model",
+                        fallback="",
+                        provider="openai-compatible",
+                        api_base_url="https://edge.example.test",
+                        extra_headers={"Authorization": "Bearer ${ENV:ASIP_TEST_EDGE_KEY}"},
+                        timeout_seconds=19,
+                    ),
+                )
+        finally:
+            urllib.request.urlopen = original_urlopen
+
+        headers = {key.lower(): value for key, value in captured["headers"].items()}
+        self.assertEqual(headers["authorization"], "Bearer edge-secret")
+        self.assertEqual(captured["timeout"], 19)
+
+    def test_edge_provider_extra_header_missing_environment_stops_before_transport(self):
+        calls = []
+
+        def fake_urlopen(_request, _timeout):
+            calls.append("called")
+            raise AssertionError("transport should not be called when header env is missing")
+
+        import urllib.request
+
+        original_urlopen = urllib.request.urlopen
+        urllib.request.urlopen = fake_urlopen
+        try:
+            provider = OpenAICompatibleEdgeProvider()
+            with patch.dict("os.environ", {}, clear=True):
+                with self.assertRaisesRegex(RuntimeError, "ASIP_MISSING_EDGE_KEY"):
+                    provider.generate(
+                        "CASE ok\nSNIPPET:\n1: REG_A",
+                        EdgeModelConfig(
+                            preferred="edge-model",
+                            fallback="",
+                            provider="openai-compatible",
+                            api_base_url="https://edge.example.test",
+                            extra_headers={"Authorization": "Bearer ${ENV:ASIP_MISSING_EDGE_KEY}"},
+                        ),
+                    )
+        finally:
+            urllib.request.urlopen = original_urlopen
+
+        self.assertEqual(calls, [])
 
     def test_ollama_provider_does_not_retry_when_fallback_is_empty(self):
         calls = []

@@ -37,12 +37,34 @@ class CodeGraphEdge:
 
 
 @dataclass(frozen=True)
+class CodeGraphCallbackSlot:
+    slot: str
+    function: str
+    table: str
+    path: str = ""
+    line_start: Optional[int] = None
+    assignment_line_start: Optional[int] = None
+    function_line_start: Optional[int] = None
+
+
+@dataclass(frozen=True)
+class CodeGraphSlotCall:
+    caller: str
+    slot: str
+    receiver: str = ""
+    path: str = ""
+    line_start: Optional[int] = None
+
+
+@dataclass(frozen=True)
 class DeterministicCodeGraph:
     stage: str
     analysis_mode: str
     path: str
     edges: List[CodeGraphEdge]
     diagnostics: List[str] = field(default_factory=list)
+    callback_slots: List[CodeGraphCallbackSlot] = field(default_factory=list)
+    slot_calls: List[CodeGraphSlotCall] = field(default_factory=list)
 
 
 @dataclass(frozen=True)
@@ -52,6 +74,15 @@ class _FunctionSpan:
     offset_end: int
     line_start: int
     line_end: int
+
+
+_CONTROL_KEYWORD_NAMES = {
+    "if",
+    "for",
+    "while",
+    "switch",
+    "catch",
+}
 
 
 def build_deterministic_code_graph(
@@ -79,9 +110,47 @@ def build_deterministic_code_graph(
     profiles = [profile for profile in resolver_profiles if profile.language in {"c", "cpp", "c++"}]
     edges: List[CodeGraphEdge] = []
     seen: set[tuple[str, str, str, int, int]] = set()
+    function_names = {span.name for span in spans}
+    function_lines = {span.name: span.line_start for span in spans}
+    callback_slots = _callback_slots_from_text(source_text, function_names, function_lines, display_path)
+    slot_calls: List[CodeGraphSlotCall] = []
     for span in spans:
         function_text = source_text[span.offset_start : span.offset_end + 1]
         function_line_start = max(1, span.line_start)
+        for callee, call_offset in _direct_function_calls(function_text, function_names, span.name):
+            line_number = _line_number_for_offset(source_text, span.offset_start + call_offset)
+            _append_edge(
+                edges,
+                seen,
+                CodeGraphEdge(
+                    src=span.name,
+                    dst=callee,
+                    relation="calls",
+                    confidence=0.9,
+                    source=analysis_mode,
+                    path=display_path,
+                    line_start=line_number,
+                    line_end=line_number,
+                    provenance={
+                        "extractor": "code_graph",
+                        "function": span.name,
+                        "callee": callee,
+                        "call_kind": "direct",
+                        "analysis_mode": analysis_mode,
+                    },
+                ),
+            )
+        for receiver, slot, slot_offset in _slot_calls_for_function(function_text):
+            line_number = _line_number_for_offset(source_text, span.offset_start + slot_offset)
+            slot_calls.append(
+                CodeGraphSlotCall(
+                    caller=span.name,
+                    slot=slot,
+                    receiver=receiver,
+                    path=display_path,
+                    line_start=line_number,
+                )
+            )
         analysis_inputs = [(function_text, analysis_mode)]
         preprocessed_span = preprocessed_spans.get(span.name)
         if preprocessed_span is not None:
@@ -120,12 +189,48 @@ def build_deterministic_code_graph(
                             },
                         ),
                     )
+    callbacks_by_slot: dict[str, list[CodeGraphCallbackSlot]] = {}
+    for callback in callback_slots:
+        callbacks_by_slot.setdefault(callback.slot, []).append(callback)
+    for slot_call in slot_calls:
+        for callback in _callbacks_for_slot_call(slot_call, callbacks_by_slot):
+            if callback.function == slot_call.caller:
+                continue
+            _append_edge(
+                edges,
+                seen,
+                CodeGraphEdge(
+                    src=slot_call.caller,
+                    dst=callback.function,
+                    relation="calls",
+                    confidence=0.84,
+                    source="clang_callback",
+                    path=slot_call.path,
+                    line_start=slot_call.line_start,
+                    line_end=slot_call.line_start,
+                    provenance={
+                        "extractor": "code_graph",
+                        "function": slot_call.caller,
+                        "callee": callback.function,
+                        "call_kind": "vtable_callback",
+                        "slot": slot_call.slot,
+                        "receiver": slot_call.receiver,
+                        "callback_table": callback.table,
+                        "callback_path": callback.path,
+                        "callee_line": callback.function_line_start,
+                        "callback_line": callback.assignment_line_start or callback.line_start,
+                        "analysis_mode": analysis_mode,
+                    },
+                ),
+            )
     return DeterministicCodeGraph(
         stage="deterministic",
         analysis_mode=analysis_mode,
         path=display_path,
         edges=edges,
         diagnostics=diagnostics,
+        callback_slots=callback_slots,
+        slot_calls=slot_calls,
     )
 
 
@@ -277,6 +382,8 @@ def _function_spans_from_text(source_text: str) -> List[_FunctionSpan]:
     )
     spans: List[_FunctionSpan] = []
     for match in pattern.finditer(source_text):
+        if match.group("name") in _CONTROL_KEYWORD_NAMES:
+            continue
         close = _matching_brace(source_text, match.end() - 1)
         if close == -1:
             continue
@@ -290,6 +397,88 @@ def _function_spans_from_text(source_text: str) -> List[_FunctionSpan]:
             )
         )
     return spans
+
+
+def _callback_slots_from_text(
+    source_text: str,
+    function_names: set[str],
+    function_lines: Mapping[str, int],
+    display_path: str,
+) -> List[CodeGraphCallbackSlot]:
+    assignment = re.compile(
+        r"\.(?P<slot>[A-Za-z_]\w*)\s*=\s*&?\s*(?P<callback>[A-Za-z_]\w*)\b"
+    )
+    table_name = ""
+    callbacks: List[CodeGraphCallbackSlot] = []
+    for line_number, line in enumerate(source_text.splitlines(), start=1):
+        table_match = re.search(r"\b(?:struct\s+[A-Za-z_]\w*\s+)?(?P<table>[A-Za-z_]\w*(?:funcs|ops|callbacks))\s*=", line)
+        if table_match:
+            table_name = table_match.group("table")
+        for match in assignment.finditer(line):
+            callback = match.group("callback")
+            if callback not in function_names:
+                continue
+            callbacks.append(
+                CodeGraphCallbackSlot(
+                    slot=match.group("slot"),
+                    function=callback,
+                    table=table_name,
+                    path=display_path,
+                    line_start=line_number,
+                    assignment_line_start=line_number,
+                    function_line_start=function_lines.get(callback),
+                )
+            )
+    return callbacks
+
+
+def _direct_function_calls(
+    function_text: str,
+    function_names: set[str],
+    caller: str,
+) -> List[tuple[str, int]]:
+    calls: List[tuple[str, int]] = []
+    seen: set[str] = set()
+    for match in re.finditer(r"\b(?P<callee>[A-Za-z_]\w*)\s*\(", function_text):
+        callee = match.group("callee")
+        if callee == caller or callee not in function_names:
+            continue
+        if callee not in seen:
+            seen.add(callee)
+            calls.append((callee, match.start("callee")))
+    return calls
+
+
+def _slot_calls_for_function(function_text: str) -> List[tuple[str, str, int]]:
+    slots: List[tuple[str, str, int]] = []
+    seen: set[tuple[str, str]] = set()
+    for match in re.finditer(
+        r"\b(?P<receiver>[A-Za-z_]\w*)\s*(?:->|\.)\s*(?P<slot>[A-Za-z_]\w*)\s*\(",
+        function_text,
+    ):
+        receiver = match.group("receiver")
+        slot = match.group("slot")
+        item = (receiver, slot)
+        if item not in seen:
+            seen.add(item)
+            slots.append((receiver, slot, match.start("slot")))
+    return slots
+
+
+def _callbacks_for_slot_call(
+    slot_call: CodeGraphSlotCall,
+    callbacks_by_slot: Mapping[str, List[CodeGraphCallbackSlot]],
+) -> List[CodeGraphCallbackSlot]:
+    callbacks = callbacks_by_slot.get(slot_call.slot, [])
+    receiver = slot_call.receiver.strip()
+    if not receiver:
+        return callbacks
+    exact = [callback for callback in callbacks if callback.table == receiver]
+    if exact:
+        return exact
+    if receiver in {"funcs", "ops", "callbacks"}:
+        return callbacks if len(callbacks) == 1 else []
+    return []
 
 
 def _matching_brace(source_text: str, open_index: int) -> int:

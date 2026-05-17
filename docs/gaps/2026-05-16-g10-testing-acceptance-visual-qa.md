@@ -47,7 +47,7 @@ After the 2026-05-17 user review, visual/functional QA must also prove:
 - 2026-05-17 QA infrastructure correction: `apps/web/playwright.config.ts` now supports `PLAYWRIGHT_BASE_URL` and `PLAYWRIGHT_SKIP_WEB_SERVER=1`, so e2e tests can target a known-good dev server instead of hanging on a stale port. Ports `3100` and `3101` were observed accepting connections but returning zero bytes during this pass; browser QA used a fresh `3102` server.
 - 2026-05-17 backend/API/MCP re-verification: core unittest discovery is now 129 OK with 1 sqlite-vec skip; FastAPI/MCP regression is 41 OK with 1 optional MCP runtime skip; `pnpm --filter web exec tsc --noEmit` passes after the Acceptance runner and Playwright config changes.
 - 2026-05-17 final verification rerun, superseding the older permission-policy blocker:
-  - Core: `PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=packages/core/src:packages/core/tests:. python3 -m unittest discover -s packages/core/tests -p 'test_*.py' -v` ran 150 tests, OK, 1 sqlite-vec skip.
+  - Core: `PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=packages/core/src:packages/core/tests:. python3 -m unittest discover -s packages/core/tests -p 'test_*.py' -v` ran 162 tests, OK, 1 sqlite-vec skip.
   - API/MCP: `PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=packages/core/src:. python3 -m unittest apps.api.tests.test_app apps.api.tests.test_runtime apps.mcp.tests.test_tools apps.mcp.tests.test_server -v` ran 41 tests, OK, 1 optional MCP runtime skip.
   - TypeScript: `pnpm --filter web exec tsc --noEmit` passed.
   - Lint: `pnpm --filter web run lint` passed.

@@ -56,10 +56,11 @@ Provider embeddings are partial by design for this QA pass: `ollama/nomic-embed-
 - Themes: dark and light screenshots captured for every route
 - Historical `/graph` screenshot in that artifact: 12 nodes and 4 weighted edges visible in both themes before the later dense graph QA
 - Fresh in-app browser QA at `http://127.0.0.1:3100/graph` after this pass: top bar shows `Edge: Ollama / gemma4:e4b`; `/graph` loads the live global graph with 3,000 graph edges, 1,000 visible nodes, 1,829 visible edges, layer provenance `deterministic: 2987 semantic: 13`, and visible `function`, `register`, `doc_box`, and `doc_section` node classes. `/corpus`, `/settings`, and `/acceptance` also hydrate from live backend state and show the current gemma provider artifact.
+- Fresh in-app browser snapshot after the callback-overlink fix still shows the live `/graph` page with `Loaded edge budget 3000 / 20000`, `Visible nodes 1000 / 2120`, `Visible edges 3000 / 3000`, and the accessibility summary lists `nodes 1000`, `edges 1829`, `function 561`, `register 437`, `doc_box 1`, and `doc_section 1`; the underlying full product graph sample below records `control-keyword function nodes named "if": 0`.
 
 ## Automated Verification
 
-- `PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=packages/core/src:packages/core/tests:. python3 -m unittest discover -s packages/core/tests -p 'test_*.py' -v`: 150 tests OK, 1 sqlite-vec skip
+- `PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=packages/core/src:packages/core/tests:. python3 -m unittest discover -s packages/core/tests -p 'test_*.py' -v`: 162 tests OK, 1 sqlite-vec skip
 - `PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=packages/core/src:. python3 -m unittest apps.api.tests.test_app apps.api.tests.test_runtime apps.mcp.tests.test_tools apps.mcp.tests.test_server -v`: 41 tests OK, 1 optional MCP runtime skip
 - `pnpm --filter web exec tsc --noEmit`: passed
 - `pnpm --filter web exec playwright test tests/workbench-api.spec.ts --reporter=list`: 18 passed
@@ -82,7 +83,7 @@ extra headers: {}
 Current graph jobs in `data/asip.db`:
 
 ```text
-graph_rebuild job 50: 9997 deterministic edges from 1225 files
+graph_rebuild job 56: 14674 deterministic edges from 1225 files
 semantic_edges job 43: gemma4:e4b, 6 raw semantic edges
 semantic_edges job 44: gemma4:e4b, 5 raw semantic edges
 doc_nodes_batch job 45: gemma4:e4b, 6 doc boxes and 11 doc semantic edges
@@ -92,10 +93,11 @@ Current product graph sample:
 
 ```text
 global_graph(all_edges=true)
-nodes=2832
-edges=4738
-node kinds: function=1214, register=1611, doc_box=6, doc_section=1
+nodes=6920
+edges=9287
+node kinds: function=5302, register=1611, doc_box=6, doc_section=1
 visible semantic edges=13
+control-keyword function nodes named "if": 0
 ```
 
 Query performance regression evidence:
@@ -113,7 +115,7 @@ Fresh automated verification:
 
 ```text
 PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=packages/core/src:packages/core/tests:. python3 -m unittest discover -s packages/core/tests -p 'test_*.py' -v
-Ran 150 tests in 2.852s
+Ran 162 tests in 7.511s
 OK (skipped=1)
 
 PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=packages/core/src:. python3 -m unittest \
@@ -132,6 +134,21 @@ pnpm --filter web exec playwright test tests/workbench-api.spec.ts tests/workben
 
 pnpm --filter web exec playwright test tests/visual-anchor-routes.spec.ts --reporter=list
 15 passed
+
+PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=packages/core/src:packages/core/tests:. python3 -m unittest \
+  packages.core.tests.test_providers.EmbeddingProviderTests.test_extra_headers_expand_environment_placeholders_without_persisting_secret \
+  packages.core.tests.test_providers.EmbeddingProviderTests.test_extra_header_env_placeholder_requires_existing_variable \
+  packages.core.tests.test_providers.EmbeddingProviderTests.test_extra_headers_expand_direct_environment_reference \
+  packages.core.tests.test_semantic_edges.SemanticEdgeFeatureTests.test_edge_provider_extra_headers_expand_environment_placeholders \
+  packages.core.tests.test_semantic_edges.SemanticEdgeFeatureTests.test_edge_provider_extra_header_missing_environment_stops_before_transport -v
+Ran 5 tests in 0.003s
+OK
+
+PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=packages/core/src:packages/core/tests:. \
+  /Users/chenjingwen/.cache/codex-runtimes/codex-primary-runtime/dependencies/python/bin/python3 \
+  -m unittest packages.core.tests.test_storage_graph.StorageGraphTests.test_sqlite_vec_extension_can_run_when_runtime_supports_extensions -v
+Ran 1 test in 0.001s
+OK
 
 git diff --check
 passed
@@ -156,8 +173,9 @@ Clean AQ01-AQ09 provider acceptance is now represented by the `gemma4:e4b` artif
 | Document/PDF conversion | core | `asip.documents`, PDF tests, clean DB PDF counts | OCR/scanned PDF remains non-goal |
 | Resolver profiles | core plus UI/BFF/API/MCP | resolver profile tests and UI/API smoke | Rich edit-in-place/per-job profile selection remains future work |
 | Retrieval/evidence schema | core, thin app surfaces | clean AQ 9/9, six free queries, API/MCP/Web agreement tests | Provider-vector rerank remains boundary |
-| SQLite/FTS/vector | core storage | FTS/vector tests, provider embedding provenance | Native sqlite-vec skipped in this runtime |
+| SQLite/FTS/vector | core storage | FTS/vector tests, provider embedding provenance, native sqlite-vec extension smoke in bundled Python runtime | Product retrieval still uses JSON vectors plus Python cosine until native sqlite-vec retrieval acceleration is wired |
 | NetworkX graph | core storage/workbench | graph tests, free-query/global graph QA, visual `/graph` QA | Browser design polish still reviewed in G16 |
+| Deterministic C graph/callgraph | core code graph plus storage/workbench | function-register operation tests, compile_commands macro test, direct helper call test, cross-file ops/vtable callback test, same-slot overlink regression | Conservative source/span parser, not full clangd/libclang callback coverage |
 | Semantic-edge generation | core plus CLI/Web/API/MCP | `gemma4:e4b` clean provider acceptance plus current live `gemma4:e4b` semantic/doc-node jobs and semantic-edge parity tests | Large prompts still need adequate `num_predict` and JSON robustness |
 | Provider settings | core plus Settings UI/BFF/API/MCP | AQ09, provider tests, settings UI tests | Credentialed OpenAI-compatible live QA requires credentials or accepted local-compatible boundary |
 | FastAPI | `apps/api` thin over core | API tests and live Uvicorn smoke | Optional deployment packaging not in MVP |
@@ -166,8 +184,9 @@ Clean AQ01-AQ09 provider acceptance is now represented by the `gemma4:e4b` artif
 
 ## Residual Boundaries
 
-- Native sqlite-vec extension loading is skipped in this Python runtime; fallback vector adapter is the MVP boundary.
-- Credentialed OpenAI-compatible live provider QA is not performed without credentials; request shape and local-compatible paths are tested.
+- Native sqlite-vec extension loading is skipped in system Python 3.9, and the bundled Python 3.12 runtime passes the native sqlite-vec extension smoke; product retrieval still uses the fallback JSON-vector/Python-cosine adapter until native sqlite-vec retrieval acceleration is wired.
+- Credentialed OpenAI-compatible live provider QA is not performed without credentials; request shape, safe env-based extra-header expansion, and local-compatible paths are tested.
+- Stage 1 now connects direct helper calls and conservative C ops/vtable callbacks, but it is not a full clangd/libclang callgraph implementation. Generic `funcs/ops/callbacks` receivers connect only when the same slot has a single known callback candidate; otherwise the extractor leaves the deterministic callback edge absent instead of overlinking every same-slot callback.
 - Provider embeddings are partial for the final clean DB; they prove provider provenance and AQ09, not full semantic reranking.
 - The optional live MCP runtime package is not installed, so runtime smoke is skipped while tool registration and tool functions are tested.
-- Commit and push evidence is recorded by the repository git history for the change that includes this package.
+- Git commit/push evidence is reported in the final assistant response after the G11 gate runs, because the commit hash is only known after this document is staged.

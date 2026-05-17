@@ -1,4 +1,5 @@
 import unittest
+from unittest.mock import patch
 
 from asip.providers import (
     EmbeddingProviderConfig,
@@ -123,6 +124,57 @@ class EmbeddingProviderTests(unittest.TestCase):
         self.assertEqual(transport.requests[0]["headers"]["Authorization"], "Bearer test-token")
         self.assertEqual(transport.requests[0]["headers"]["Content-Type"], "application/json")
         self.assertEqual(transport.requests[0]["timeout"], 23)
+
+    def test_extra_headers_expand_environment_placeholders_without_persisting_secret(self):
+        transport = FakeTransport([{"data": [{"embedding": [0.1, 0.2]}]}])
+        provider = OpenAICompatibleEmbeddingProvider(transport=transport)
+        config = EmbeddingProviderConfig(
+            provider="openai-compatible",
+            model="text-embedding-3-small",
+            api_base_url="https://embeddings.example.test",
+            extra_headers={"Authorization": "Bearer ${ENV:ASIP_TEST_API_KEY}"},
+        )
+
+        with patch.dict("os.environ", {"ASIP_TEST_API_KEY": "secret-from-env"}, clear=False):
+            provider.embed(["REG_A"], config)
+
+        self.assertEqual(transport.requests[0]["headers"]["Authorization"], "Bearer secret-from-env")
+        self.assertEqual(config.extra_headers["Authorization"], "Bearer ${ENV:ASIP_TEST_API_KEY}")
+
+    def test_extra_header_env_placeholder_requires_existing_variable(self):
+        transport = FakeTransport([{"data": [{"embedding": [0.1, 0.2]}]}])
+        provider = OpenAICompatibleEmbeddingProvider(transport=transport)
+
+        with patch.dict("os.environ", {}, clear=True):
+            with self.assertRaisesRegex(ValueError, "ASIP_MISSING_API_KEY"):
+                provider.embed(
+                    ["REG_A"],
+                    EmbeddingProviderConfig(
+                        provider="openai-compatible",
+                        model="text-embedding-3-small",
+                        api_base_url="https://embeddings.example.test",
+                        extra_headers={"Authorization": "Bearer ${ENV:ASIP_MISSING_API_KEY}"},
+                    ),
+                )
+
+        self.assertEqual(transport.requests, [])
+
+    def test_extra_headers_expand_direct_environment_reference(self):
+        transport = FakeTransport([{"data": [{"embedding": [0.1, 0.2]}]}])
+        provider = OpenAICompatibleEmbeddingProvider(transport=transport)
+
+        with patch.dict("os.environ", {"ASIP_DIRECT_API_KEY": "direct-secret"}, clear=False):
+            provider.embed(
+                ["REG_A"],
+                EmbeddingProviderConfig(
+                    provider="openai-compatible",
+                    model="text-embedding-3-small",
+                    api_base_url="https://embeddings.example.test",
+                    extra_headers={"Authorization": "env:ASIP_DIRECT_API_KEY"},
+                ),
+            )
+
+        self.assertEqual(transport.requests[0]["headers"]["Authorization"], "direct-secret")
 
     def test_configured_api_path_overrides_provider_default(self):
         transport = FakeTransport([{"data": [{"embedding": [1.0]}]}])

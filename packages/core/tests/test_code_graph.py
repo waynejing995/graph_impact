@@ -3,7 +3,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from asip.code_graph import build_deterministic_code_graph
+from asip.code_graph import _function_spans_from_text, build_deterministic_code_graph
 from asip.resolver_profiles import ResolverProfile, WrapperRule
 
 
@@ -145,6 +145,167 @@ class DeterministicCodeGraphTests(unittest.TestCase):
             self.assertNotIn("ENABLE_L2_CACHE", graph_node_ids)
             field_edge = next(edge for edge in graph.edges if edge.dst == "GCVM_L2_CNTL")
             self.assertEqual(field_edge.provenance.get("field"), "ENABLE_L2_CACHE")
+
+    def test_stage1_links_vtable_slot_calls_to_callbacks_and_common_helpers(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            source = root / "gfx.c"
+            source.write_text(
+                "\n".join(
+                    [
+                        "static void program_gcvm_l2(void) {",
+                        "  WREG32(mmGCVM_L2_CNTL, 1);",
+                        "}",
+                        "static int gfx_v11_0_hw_init(void *adev) {",
+                        "  program_gcvm_l2();",
+                        "  return 0;",
+                        "}",
+                        "static const struct amd_ip_funcs gfx_v11_0_ip_funcs = {",
+                        "  .hw_init = gfx_v11_0_hw_init,",
+                        "};",
+                        "int amdgpu_common_hw_init(struct amd_ip_block *block) {",
+                        "  return block->version->funcs->hw_init(block);",
+                        "}",
+                    ]
+                ),
+                encoding="utf-8",
+            )
+            profile = ResolverProfile(
+                id="test-amd-callbacks",
+                language="cpp",
+                symbol_prefixes=["mm", "reg"],
+                wrappers={"WREG32": WrapperRule(symbol_arg=0, access="write")},
+            )
+
+            graph = build_deterministic_code_graph(source, source_root=root, resolver_profiles=[profile])
+
+            edge_triples = {(edge.src, edge.relation, edge.dst) for edge in graph.edges}
+            self.assertIn(("program_gcvm_l2", "writes", "GCVM_L2_CNTL"), edge_triples)
+            self.assertIn(("gfx_v11_0_hw_init", "calls", "program_gcvm_l2"), edge_triples)
+            self.assertIn(("amdgpu_common_hw_init", "calls", "gfx_v11_0_hw_init"), edge_triples)
+            callback_edge = next(
+                edge
+                for edge in graph.edges
+                if (edge.src, edge.relation, edge.dst) == ("amdgpu_common_hw_init", "calls", "gfx_v11_0_hw_init")
+            )
+            self.assertEqual(callback_edge.provenance.get("call_kind"), "vtable_callback")
+            self.assertEqual(callback_edge.provenance.get("slot"), "hw_init")
+            self.assertEqual(callback_edge.provenance.get("callee_line"), 4)
+            self.assertEqual(callback_edge.provenance.get("callback_line"), 9)
+            graph_node_ids = {edge.src for edge in graph.edges} | {edge.dst for edge in graph.edges}
+            self.assertNotIn("hw_init", graph_node_ids)
+            self.assertNotIn("gfx_v11_0_ip_funcs", graph_node_ids)
+
+    def test_text_fallback_does_not_promote_control_keywords_to_functions(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            source = root / "fallback.c"
+            source.write_text(
+                "\n".join(
+                    [
+                        "static void helper(void) {",
+                        "}",
+                        "static void outer(int value) {",
+                        "  if (value == 1) {",
+                        "    helper();",
+                        "  } else",
+                        "  if (value == 2) {",
+                        "    helper();",
+                        "  }",
+                        "}",
+                    ]
+                ),
+                encoding="utf-8",
+            )
+
+            graph = build_deterministic_code_graph(source)
+
+            edge_triples = {(edge.src, edge.relation, edge.dst) for edge in graph.edges}
+            self.assertIn(("outer", "calls", "helper"), edge_triples)
+            self.assertNotIn(("if", "calls", "helper"), edge_triples)
+            graph_node_ids = {edge.src for edge in graph.edges} | {edge.dst for edge in graph.edges}
+            self.assertNotIn("if", graph_node_ids)
+
+    def test_text_span_parser_does_not_promote_control_keywords_to_functions(self):
+        source_text = "\n".join(
+            [
+                "static void outer(int value) {",
+                "  if (value == 1) {",
+                "    helper();",
+                "  }",
+                "  else if (value == 2) {",
+                "    helper();",
+                "  }",
+                "}",
+            ]
+        )
+
+        spans = _function_spans_from_text(source_text)
+
+        self.assertNotIn("if", {span.name for span in spans})
+
+    def test_stage1_generic_slot_call_does_not_connect_unbounded_callbacks(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            source = root / "gfx.c"
+            source.write_text(
+                "\n".join(
+                    [
+                        "static int gfx_v11_0_hw_init(void *adev) {",
+                        "  return 0;",
+                        "}",
+                        "static int sdma_v5_0_hw_init(void *adev) {",
+                        "  return 0;",
+                        "}",
+                        "static const struct amd_ip_funcs gfx_v11_0_ip_funcs = {",
+                        "  .hw_init = gfx_v11_0_hw_init,",
+                        "};",
+                        "static const struct amd_ip_funcs sdma_v5_0_ip_funcs = {",
+                        "  .hw_init = sdma_v5_0_hw_init,",
+                        "};",
+                        "int amdgpu_common_hw_init(struct amd_ip_funcs *funcs) {",
+                        "  return funcs->hw_init(0);",
+                        "}",
+                    ]
+                ),
+                encoding="utf-8",
+            )
+
+            graph = build_deterministic_code_graph(source)
+
+            edge_triples = {(edge.src, edge.relation, edge.dst) for edge in graph.edges}
+            self.assertNotIn(("amdgpu_common_hw_init", "calls", "gfx_v11_0_hw_init"), edge_triples)
+            self.assertNotIn(("amdgpu_common_hw_init", "calls", "sdma_v5_0_hw_init"), edge_triples)
+
+    def test_stage1_slot_call_line_uses_call_site_not_function_name(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            source = root / "gfx.c"
+            source.write_text(
+                "\n".join(
+                    [
+                        "static int gfx_v11_0_hw_init(void *adev) {",
+                        "  return 0;",
+                        "}",
+                        "static const struct amd_ip_funcs gfx_v11_0_ip_funcs = {",
+                        "  .hw_init = gfx_v11_0_hw_init,",
+                        "};",
+                        "int common_hw_init(void) {",
+                        "  return gfx_v11_0_ip_funcs.hw_init(0);",
+                        "}",
+                    ]
+                ),
+                encoding="utf-8",
+            )
+
+            graph = build_deterministic_code_graph(source)
+
+            callback_edge = next(
+                edge
+                for edge in graph.edges
+                if (edge.src, edge.relation, edge.dst) == ("common_hw_init", "calls", "gfx_v11_0_hw_init")
+            )
+            self.assertEqual(callback_edge.line_start, 8)
 
 
 if __name__ == "__main__":
