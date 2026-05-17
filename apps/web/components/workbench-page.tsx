@@ -3,12 +3,52 @@
 import Image from "next/image";
 import Link from "next/link";
 import { Activity, Moon, Search, Sun } from "lucide-react";
-import { useEffect, useMemo, useRef, useState } from "react";
+import {
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+  type ComponentProps,
+  type FormEvent
+} from "react";
+import { WeightedForceGraph, type WeightedGraphPayload } from "@/components/weighted-force-graph";
+import {
+  Accordion,
+  AccordionContent,
+  AccordionItem,
+  AccordionTrigger
+} from "@/components/ui/accordion";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Checkbox } from "@/components/ui/checkbox";
+import {
+  Field,
+  FieldContent,
+  FieldDescription,
+  FieldGroup,
+  FieldLabel
+} from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue
+} from "@/components/ui/select";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow
+} from "@/components/ui/table";
 import { Textarea } from "@/components/ui/textarea";
 import { navItems, pageConfigs, type EvidenceRow, type Metric, type PageId, type SourceTone } from "@/lib/page-data";
+import { cn } from "@/lib/utils";
 
 type WorkbenchPageProps = {
   pageId: PageId;
@@ -116,8 +156,8 @@ const defaultProviderSettings: ProviderSettings = {
   provider: "ollama",
   apiBaseUrl: "http://localhost:11434",
   apiPath: "/api/chat",
-  edgeModel: "qwen3.5:4b",
-  fallbackModel: "qwen3.6",
+  edgeModel: "gemma4:e4b",
+  fallbackModel: "",
   embeddingProvider: "ollama",
   embeddingApiBaseUrl: "http://localhost:11434",
   embeddingApiPath: "/api/embeddings",
@@ -175,157 +215,27 @@ type AcceptanceRun = {
   failed: number;
   queryCount: number;
   artifactPath: string;
+  details?: AcceptanceDetail[];
+  databaseHealth?: AcceptanceDetail[];
 };
 
-type GraphNode = {
+type AcceptanceDetail = {
   id: string;
-  kind?: string;
-  weight?: number;
+  status: string;
+  query?: string;
+  failureReasons: string[];
+  missing: string[];
+  missingSurfaces: string[];
+  sourcePaths: string[];
+  sourceTypes: string[];
+  rowCount?: number;
+  graphEdgeCount?: number;
+  edgeCount?: number;
+  sourceHitCount?: number;
+  retrievalSources?: string[];
 };
 
-type GraphEdge = {
-  src: string;
-  dst: string;
-  relation: string;
-  confidence?: number;
-  weight?: number;
-};
-
-type GraphPayload = {
-  nodes: GraphNode[];
-  edges: GraphEdge[];
-};
-
-const defaultCorpora: CorpusEntry[] = [
-  {
-    id: "mxgpu",
-    repo: "https://github.com/amd/MxGPU-Virtualization",
-    sourceRoot: "/tmp/asip-mxgpu",
-    include: "**/*.c, **/*.h, **/*.md",
-    fileCount: "703"
-  },
-  {
-    id: "linux-amdgpu",
-    repo: "https://github.com/torvalds/linux",
-    sourceRoot: "drivers/gpu/drm/amd/amdgpu",
-    include: "**/*.c, **/*.h, Documentation/gpu/amdgpu.rst",
-    fileCount: "625"
-  },
-  {
-    id: "amd-pdf-mi300",
-    repo: "AMD Instinct MI300/CDNA3 ISA PDF",
-    sourceRoot: "amd-instinct-mi300-cdna3.pdf",
-    include: "**/*.pdf",
-    fileCount: "text"
-  }
-];
-
-const defaultResolverProfiles: ResolverProfile[] = [
-  {
-    id: "linux-amdgpu",
-    wrapper: "WREG32_SOC15",
-    strategy: "macro",
-    path: "configs/resolvers/linux-amdgpu.yaml",
-    enabled: true
-  },
-  {
-    id: "amd-mxgpu",
-    wrapper: "adapt->reg_offset",
-    strategy: "base_expr",
-    path: "configs/resolvers/amd-mxgpu.yaml",
-    enabled: true
-  },
-  {
-    id: "toy-python",
-    wrapper: "decorator",
-    strategy: "python-call",
-    path: "configs/resolvers/toy-python.yaml",
-    enabled: false
-  }
-];
-
-const evidenceIndex: EvidenceRow[] = [
-  {
-    source: "code",
-    tone: "code",
-    symbol: "gmc_v11_0_init_golden_registers",
-    relation: "writes",
-    score: "0.94",
-    path: "drivers/gpu/drm/amd/amdgpu/gmc_v11_0.c:122 GCVM_L2_CNTL"
-  },
-  {
-    source: "register",
-    tone: "register",
-    symbol: "GCVM_L2_CNTL",
-    relation: "has_field",
-    score: "0.91",
-    path: "gc_11_0_0_sh_mask.h:44 ENABLE_L2_CACHE"
-  },
-  {
-    source: "field",
-    tone: "success",
-    symbol: "ENABLE_L2_CACHE",
-    relation: "field_set",
-    score: "0.89",
-    path: "tmp = REG_SET_FIELD(tmp, GCVM_L2_CNTL, ENABLE_L2_CACHE, 1)"
-  },
-  {
-    source: "code",
-    tone: "code",
-    symbol: "BIF_DOORBELL_INT_CNTL",
-    relation: "sets_field",
-    score: "0.86",
-    path: "libgv/core/hw/AI/mi200/nbio_v7_4.c DOORBELL_INTERRUPT_DISABLE"
-  },
-  {
-    source: "field",
-    tone: "register",
-    symbol: "DOORBELL_INTERRUPT_DISABLE",
-    relation: "disables",
-    score: "0.84",
-    path: "BIF doorbell interrupt disable before reset"
-  },
-  {
-    source: "code",
-    tone: "code",
-    symbol: "WREG32_SOC15_OFFSET",
-    relation: "writes",
-    score: "0.82",
-    path: "gfx_v10_0.c mmGDS_VMID0_BASE mmGDS_VMID0_SIZE mmGDS_GWS_VMID0"
-  },
-  {
-    source: "register",
-    tone: "register",
-    symbol: "GRBM_SOFT_RESET",
-    relation: "sets_field",
-    score: "0.8",
-    path: "WREG32_FIELD15 GRBM_SOFT_RESET SOFT_RESET_RLC"
-  },
-  {
-    source: "register",
-    tone: "register",
-    symbol: "CP_INT_CNTL_RING0",
-    relation: "sets_field",
-    score: "0.78",
-    path: "CNTX_BUSY_INT_ENABLE CNTX_EMPTY_INT_ENABLE CMP_BUSY_INT_ENABLE"
-  },
-  {
-    source: "doc",
-    tone: "doc",
-    symbol: "GC IP",
-    relation: "documents",
-    score: "0.72",
-    path: "Documentation/gpu/amdgpu.rst"
-  },
-  {
-    source: "pdf",
-    tone: "pdf",
-    symbol: "MI300 CDNA3 ISA",
-    relation: "maps_base",
-    score: "0.68",
-    path: "amd-instinct-mi300-cdna3.pdf#page=1"
-  }
-];
+type GraphPayload = WeightedGraphPayload;
 
 type ApiQueryResponse = {
   rows?: EvidenceRow[];
@@ -337,15 +247,16 @@ type ApiQueryResponse = {
 export function WorkbenchPage({ pageId }: WorkbenchPageProps) {
   const config = pageConfigs[pageId];
   const [query, setQuery] = useState(config.query);
+  const queryValueRef = useRef(config.query);
   const [ipFilter, setIpFilter] = useState("");
   const [asicFilter, setAsicFilter] = useState("");
-  const [activeQuery, setActiveQuery] = useState(config.query);
   const [runCount, setRunCount] = useState(1);
   const [theme, setTheme] = useState<Theme>(defaultTheme);
   const [themeReady, setThemeReady] = useState(false);
   const [providerSettings, setProviderSettings] = useState<ProviderSettings>(defaultProviderSettings);
   const [providerVerification, setProviderVerification] = useState<ProviderVerificationState>("unverified");
   const providerSettingsDirtyRef = useRef(false);
+  const queryInputRef = useRef<HTMLInputElement | null>(null);
   const queryRequestSeqRef = useRef(0);
   const [settingsDraft, setSettingsDraft] = useState<ProviderSettingsDraft>(
     settingsToDraft(defaultProviderSettings)
@@ -353,8 +264,8 @@ export function WorkbenchPage({ pageId }: WorkbenchPageProps) {
   const [settingsMessage, setSettingsMessage] = useState("");
   const [settingsError, setSettingsError] = useState("");
   const [acceptanceDbPath, setAcceptanceDbPath] = useState("");
-  const [corpora, setCorpora] = useState<CorpusEntry[]>(defaultCorpora);
-  const [selectedCorpusIds, setSelectedCorpusIds] = useState<string[]>(defaultCorpora.map((corpus) => corpus.id));
+  const [corpora, setCorpora] = useState<CorpusEntry[]>([]);
+  const [selectedCorpusIds, setSelectedCorpusIds] = useState<string[]>([]);
   const [corpusDraft, setCorpusDraft] = useState<CorpusEntry>({
     id: "",
     repo: "",
@@ -363,15 +274,15 @@ export function WorkbenchPage({ pageId }: WorkbenchPageProps) {
     fileCount: "user"
   });
   const [corpusMessage, setCorpusMessage] = useState("");
-  const [resolverProfiles, setResolverProfiles] = useState<ResolverProfile[]>(defaultResolverProfiles);
+  const [resolverProfiles, setResolverProfiles] = useState<ResolverProfile[]>([]);
   const [resolverDraft, setResolverDraft] = useState<ResolverProfile>({
-    id: "",
-    wrapper: "",
+    id: "initial",
+    wrapper: "RREG32",
     strategy: "macro",
-    path: "configs/resolvers/user.yaml",
+    path: "configs/resolvers/initial.yaml",
     enabled: true
   });
-  const [resolverValidateSource, setResolverValidateSource] = useState('@gpu_register("CP_INT_CNTL_RING0")');
+  const [resolverValidateSource, setResolverValidateSource] = useState("RREG32(mmASIP_INITIAL_STATUS);");
   const [resolverMessage, setResolverMessage] = useState("");
   const [actionMessage, setActionMessage] = useState("");
   const [selectedEvidenceKey, setSelectedEvidenceKey] = useState("");
@@ -383,7 +294,7 @@ export function WorkbenchPage({ pageId }: WorkbenchPageProps) {
   );
   const [graphEmptyMessage, setGraphEmptyMessage] = useState("");
   const [queryEmptyMessage, setQueryEmptyMessage] = useState(
-    config.id === "evidence-workbench" ? `Loading live evidence for: ${config.query}` : ""
+    config.id === "evidence-workbench" ? "Enter a query to search live evidence." : ""
   );
   const [acceptanceRuns, setAcceptanceRuns] = useState<AcceptanceRun[]>([]);
 
@@ -406,16 +317,22 @@ export function WorkbenchPage({ pageId }: WorkbenchPageProps) {
     setActionMessage("");
   }, [config.actionLabel]);
 
-  useEffect(() => {
-    setQuery(config.query);
-    setActiveQuery(config.query);
-  }, [config.query]);
+  useLayoutEffect(() => {
+    if (config.id === "evidence-workbench" && queryValueRef.current.trim()) {
+      setQueryEmptyMessage("");
+      return;
+    }
+    updateQuery(config.query);
+    setQueryEmptyMessage(config.id === "evidence-workbench" ? "Enter a query to search live evidence." : "");
+  }, [config.id, config.query]);
 
   useEffect(() => {
     if (config.id !== "evidence-workbench") {
       return;
     }
-    void executeQuery(config.query, { announce: false, incrementRun: false });
+    if (config.query.trim()) {
+      void executeQuery(config.query, { announce: false, incrementRun: false });
+    }
   }, [config.id, config.query]);
 
   useEffect(() => {
@@ -436,9 +353,7 @@ export function WorkbenchPage({ pageId }: WorkbenchPageProps) {
       .then((payload) => {
         if (!cancelled) {
           setApiGraph(payload);
-          setGraphEmptyMessage(
-            payload.nodes.length || payload.edges.length ? "" : `No graph data returned for ${config.globalSymbol}`
-          );
+          setGraphEmptyMessage(payload.nodes.length || payload.edges.length ? "" : "No graph data returned.");
         }
       })
       .catch((error) => {
@@ -451,7 +366,7 @@ export function WorkbenchPage({ pageId }: WorkbenchPageProps) {
     return () => {
       cancelled = true;
     };
-  }, [config.globalSymbol, config.id]);
+  }, [config.id]);
 
   useEffect(() => {
     let cancelled = false;
@@ -463,15 +378,6 @@ export function WorkbenchPage({ pageId }: WorkbenchPageProps) {
       setSettingsDraft(settingsToDraft(next));
       setProviderVerification("unverified");
     };
-    const stored = window.localStorage.getItem(providerSettingsStorageKey);
-    if (stored) {
-      try {
-        const parsed = JSON.parse(stored) as Partial<ProviderSettings>;
-        applySettings(normalizeProviderSettings(parsed));
-      } catch {
-        setSettingsError("Stored provider settings are invalid JSON.");
-      }
-    }
 
     fetch("/api/workbench/providers/settings")
       .then((response) => {
@@ -489,7 +395,16 @@ export function WorkbenchPage({ pageId }: WorkbenchPageProps) {
         }
       })
       .catch(() => {
-        // Local settings remain usable when the backend settings store is empty or unavailable.
+        const stored = window.localStorage.getItem(providerSettingsStorageKey);
+        if (!stored || cancelled) {
+          return;
+        }
+        try {
+          const parsed = JSON.parse(stored) as Partial<ProviderSettings>;
+          applySettings(normalizeProviderSettings(parsed));
+        } catch {
+          setSettingsError("Stored provider settings are invalid JSON.");
+        }
       });
 
     return () => {
@@ -565,7 +480,7 @@ export function WorkbenchPage({ pageId }: WorkbenchPageProps) {
       })
       .then((payload) => {
         if (!cancelled) {
-          setAcceptanceRuns(payload.runs ?? []);
+          setAcceptanceRuns((payload.runs ?? []).map(normalizeAcceptanceRun));
         }
       })
       .catch(() => {
@@ -588,11 +503,8 @@ export function WorkbenchPage({ pageId }: WorkbenchPageProps) {
     if (graphRouteHasAuthoritativeEmptyGraph) {
       return [];
     }
-    if (config.id === "evidence-workbench" || config.id === "graph-explorer") {
-      return [];
-    }
-    return buildQueryEvidenceRows(activeQuery, corpora, resolverProfiles);
-  }, [activeQuery, apiQueryRows, config.id, corpora, graphRouteHasAuthoritativeEmptyGraph, resolverProfiles]);
+    return [];
+  }, [apiQueryRows, graphRouteHasAuthoritativeEmptyGraph]);
   const selectedEvidence = useMemo(() => {
     if (config.id !== "evidence-workbench" || !queryEvidenceRows.length) {
       return null;
@@ -603,19 +515,15 @@ export function WorkbenchPage({ pageId }: WorkbenchPageProps) {
     if (selectedEvidence) {
       return `Resolved Evidence: ${selectedEvidence.symbol}`;
     }
-    if (activeQuery.toLowerCase().includes("enable")) {
-      return `${config.inspectorTitle}: ENABLE_L2_CACHE`;
-    }
-
     return config.inspectorTitle;
-  }, [activeQuery, config.inspectorTitle, selectedEvidence]);
+  }, [config.inspectorTitle, selectedEvidence]);
   const inspectorChain = useMemo(
-    () => (selectedEvidence ? buildLiveInspectorChain(selectedEvidence) : config.chain),
-    [config.chain, selectedEvidence]
+    () => (selectedEvidence ? buildLiveInspectorChain(selectedEvidence) : []),
+    [selectedEvidence]
   );
   const inspectorDetailSections = useMemo(
-    () => (selectedEvidence ? buildLiveInspectorSections(selectedEvidence) : config.detailSections),
-    [config.detailSections, selectedEvidence]
+    () => (selectedEvidence ? buildLiveInspectorSections(selectedEvidence) : []),
+    [selectedEvidence]
   );
   const inspectorRelationshipLines = useMemo(
     () => {
@@ -625,13 +533,14 @@ export function WorkbenchPage({ pageId }: WorkbenchPageProps) {
       if (config.id === "graph-explorer" && apiGraph) {
         return buildGraphRelationshipLines(apiGraph, graphEmptyMessage);
       }
-      return config.relationshipLines;
+      return ["No relationship data returned from API."];
     },
-    [apiGraph, config.id, config.relationshipLines, graphEmptyMessage, selectedEvidence]
+    [apiGraph, config.id, graphEmptyMessage, selectedEvidence]
   );
 
   const providerLabel = providerSettings.provider === "ollama" ? "Ollama" : "OpenAI-compatible";
   const runtimeConfig = useMemo(() => buildRuntimeEdgeModelConfig(providerSettings), [providerSettings]);
+  const indexStatusLabel = useMemo(() => buildIndexStatusLabel(corpora), [corpora]);
   const pageMetrics = useMemo(
     () =>
       buildPageMetrics(
@@ -661,9 +570,31 @@ export function WorkbenchPage({ pageId }: WorkbenchPageProps) {
     [config.id, config.rows, providerSettings, corpora, resolverProfiles, queryEvidenceRows, acceptanceRuns]
   );
 
-  async function runQuery() {
-    const nextQuery = query.trim() || config.query;
+  async function runQuery(queryOverride?: string) {
+    const nextQuery = (queryOverride ?? queryInputRef.current?.value ?? query).trim() || config.query;
+    if (!nextQuery.trim()) {
+      setApiQueryRows([]);
+      setSelectedEvidenceKey("");
+      setApiGraph(config.id === "graph-explorer" ? apiGraph : { nodes: [], edges: [] });
+      setQueryEmptyMessage("Enter a query to search live evidence.");
+      if (config.id !== "graph-explorer") {
+        setGraphEmptyMessage("");
+      }
+      return;
+    }
+    updateQuery(nextQuery);
     await executeQuery(nextQuery, { announce: true, incrementRun: true });
+  }
+
+  function updateQuery(nextQuery: string) {
+    queryValueRef.current = nextQuery;
+    setQuery(nextQuery);
+  }
+
+  function handleQuerySubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const formData = new FormData(event.currentTarget);
+    void runQuery(String(formData.get("query") ?? ""));
   }
 
   async function executeQuery(
@@ -672,7 +603,6 @@ export function WorkbenchPage({ pageId }: WorkbenchPageProps) {
   ) {
     const requestSeq = queryRequestSeqRef.current + 1;
     queryRequestSeqRef.current = requestSeq;
-    setActiveQuery(nextQuery);
     if (options.incrementRun) {
       setRunCount((count) => count + 1);
     }
@@ -729,7 +659,7 @@ export function WorkbenchPage({ pageId }: WorkbenchPageProps) {
     }
   }
 
-  async function runPageAction() {
+  async function runPageAction(options: { semanticMode?: "query" | "batch" } = {}) {
     if (config.id === "corpus") {
       const selectedIds = selectedCorpusIds.filter((id) => corpora.some((corpus) => corpus.id === id));
       if (selectedIds.length === 0) {
@@ -793,7 +723,46 @@ export function WorkbenchPage({ pageId }: WorkbenchPageProps) {
 
     if (config.id !== "settings") {
       if (config.id === "graph-explorer") {
+        if (options.semanticMode === "batch") {
+          setActionMessage("Generating batch semantic edges...");
+          try {
+            const response = await fetch("/api/workbench/semantic-edges", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ mode: "batch", limit: 24, batchSize: 6 })
+            });
+            const payload = (await response.json()) as {
+              candidate_count?: number;
+              edge_count?: number;
+              graph?: GraphPayload;
+              error?: string;
+            };
+            if (!response.ok) {
+              throw new Error(payload.error ?? `Semantic edge API returned ${response.status}`);
+            }
+            if (payload.graph) {
+              setApiGraph(payload.graph);
+              setGraphEmptyMessage(
+                payload.graph.nodes.length || payload.graph.edges.length
+                  ? ""
+                  : "Batch semantic edge job returned no graph data"
+              );
+            }
+            setActionMessage(
+              `Batch semantic edges generated: ${payload.edge_count ?? 0} from ${
+                payload.candidate_count ?? 0
+              } candidates`
+            );
+          } catch (error) {
+            setActionMessage(error instanceof Error ? error.message : "batch semantic edge generation failed");
+          }
+          return;
+        }
         const semanticEdgeQuery = query.trim() || config.query;
+        if (!semanticEdgeQuery.trim()) {
+          setActionMessage("Enter a query before generating semantic edges.");
+          return;
+        }
         setActionMessage("Generating semantic edges...");
         try {
           const response = await fetch("/api/workbench/semantic-edges", {
@@ -997,7 +966,13 @@ export function WorkbenchPage({ pageId }: WorkbenchPageProps) {
       const persisted = normalizeApiResolverProfile(payload);
       const nextProfiles = [...resolverProfiles.filter((profile) => profile.id !== persisted.id), persisted];
       setResolverProfiles(nextProfiles);
-      setResolverDraft({ id: "", wrapper: "", strategy: "macro", path: "configs/resolvers/user.yaml", enabled: true });
+      setResolverDraft({
+        id: "initial",
+        wrapper: "RREG32",
+        strategy: "macro",
+        path: "configs/resolvers/initial.yaml",
+        enabled: true
+      });
       setResolverMessage(`Resolver profile ${persisted.id} added`);
     } catch (error) {
       setResolverMessage(error instanceof Error ? error.message : "Resolver profile add failed");
@@ -1056,15 +1031,15 @@ export function WorkbenchPage({ pageId }: WorkbenchPageProps) {
         </div>
         <label className="global-search">
           <Search aria-hidden="true" size={15} />
-          <Input aria-label="Global symbol search" defaultValue={config.globalSymbol} />
+          <Input aria-label="Global symbol search" placeholder="Search indexed symbols" />
         </label>
         <div className="status-row" aria-label="Workbench status">
-          <Badge tone={providerVerification === "verified" ? "success" : "neutral"}>
+          <ToneBadge tone={providerVerification === "verified" ? "success" : "neutral"}>
             <span className="status-dot" />
             Provider: {providerVerification}
-          </Badge>
+          </ToneBadge>
           <Badge>Edge: {providerLabel} / {providerSettings.edgeModel || "unset"}</Badge>
-          <Badge>Index: ready</Badge>
+          <Badge>Index: {indexStatusLabel}</Badge>
         </div>
         <Button
           aria-label={`Switch to ${theme === "dark" ? "light" : "dark"} theme`}
@@ -1075,7 +1050,6 @@ export function WorkbenchPage({ pageId }: WorkbenchPageProps) {
           {theme === "dark" ? <Sun aria-hidden="true" size={14} /> : <Moon aria-hidden="true" size={14} />}
           {theme === "dark" ? "Light" : "Dark"}
         </Button>
-        <Badge>amd-mvp1</Badge>
       </header>
 
       <main className="workbench-grid">
@@ -1093,10 +1067,17 @@ export function WorkbenchPage({ pageId }: WorkbenchPageProps) {
         </nav>
 
         <section className="center-pane" aria-label={config.workspaceLabel}>
-          <div className="composer">
+          <form className="composer" onSubmit={handleQuerySubmit}>
             <label className="query-input">
               <Search aria-hidden="true" size={16} />
-              <Input aria-label="Evidence query" onChange={(event) => setQuery(event.target.value)} value={query} />
+              <Input
+                aria-label="Evidence query"
+                name="query"
+                onChange={(event) => updateQuery(event.target.value)}
+                placeholder="Query live evidence"
+                ref={queryInputRef}
+                value={query}
+              />
             </label>
             <label className="metadata-filter-input">
               <Input
@@ -1114,25 +1095,25 @@ export function WorkbenchPage({ pageId }: WorkbenchPageProps) {
                 value={asicFilter}
               />
             </label>
-            <Button onClick={runQuery} type="button">
+            <Button type="submit">
               Run query
             </Button>
-          </div>
+          </form>
 
           <div className="metric-row" aria-label="Page metrics">
             {pageMetrics.map((metric) => (
-              <Badge key={metric.label} tone={metric.tone ?? "neutral"}>
+              <ToneBadge key={metric.label} tone={metric.tone ?? "neutral"}>
                 {metric.label}: {metric.value}
-              </Badge>
+              </ToneBadge>
             ))}
           </div>
 
           <div className="filter-row" aria-label="Evidence source filters">
             {config.filters.map(({ icon: Icon, label, tone }) => (
-              <Badge key={label} tone={tone}>
+              <ToneBadge key={label} tone={tone}>
                 <Icon aria-hidden="true" size={14} />
                 {label}
-              </Badge>
+              </ToneBadge>
             ))}
           </div>
 
@@ -1185,54 +1166,17 @@ export function WorkbenchPage({ pageId }: WorkbenchPageProps) {
             />
           ) : null}
 
-          <div className="results-table" role="table" aria-label="Evidence results">
-            {evidenceRows.length ? evidenceRows.map((item) => (
-              <div
-                className={`evidence-row${config.id === "corpus" ? " evidence-row--corpus" : ""}`}
-                key={evidenceRowKey(item)}
-                onClick={config.id === "evidence-workbench" ? () => setSelectedEvidenceKey(evidenceRowKey(item)) : undefined}
-                onKeyDown={
-                  config.id === "evidence-workbench"
-                    ? (event) => {
-                        if (event.key === "Enter" || event.key === " ") {
-                          event.preventDefault();
-                          setSelectedEvidenceKey(evidenceRowKey(item));
-                        }
-                      }
-                    : undefined
-                }
-                role="row"
-                tabIndex={config.id === "evidence-workbench" ? 0 : undefined}
-              >
-                <span className={`source-dot source-dot--${item.tone}`} />
-                {config.id === "corpus" ? (
-                  <input
-                    aria-label={`Index ${item.symbol}`}
-                    checked={selectedCorpusIds.includes(item.symbol)}
-                    className="corpus-index-checkbox"
-                    onChange={(event) => toggleCorpusSelection(item.symbol, event.currentTarget.checked)}
-                    type="checkbox"
-                  />
-                ) : null}
-                <code>{item.symbol}</code>
-                <Badge className="source-type-badge" tone={sourceToneForRow(item)}>
-                  {sourceLabelForRow(item)}
-                </Badge>
-                <Badge tone={item.tone}>{item.relation}</Badge>
-                <span className="score">{item.score}</span>
-                <span className="path">{formatEvidenceLocation(item)}</span>
-              </div>
-            )) : (
-              <div className="evidence-row evidence-row--empty" role="row">
-                <span className="source-dot source-dot--neutral" />
-                <code>{queryEmptyMessage || "No evidence matched this query."}</code>
-                <Badge>empty</Badge>
-                <Badge>empty</Badge>
-                <span className="score">0</span>
-                <span className="path">live SQLite query returned no rows</span>
-              </div>
-            )}
-          </div>
+          {config.id === "acceptance-tests" ? <AcceptanceRunsPanel runs={acceptanceRuns} /> : null}
+
+          <EvidenceResultsTable
+            emptyMessage={queryEmptyMessage || "No evidence matched this query."}
+            isCorpus={config.id === "corpus"}
+            isInteractive={config.id === "evidence-workbench"}
+            onSelectRow={(row) => setSelectedEvidenceKey(evidenceRowKey(row))}
+            onToggleCorpus={toggleCorpusSelection}
+            rows={evidenceRows}
+            selectedCorpusIds={selectedCorpusIds}
+          />
         </section>
 
         <aside className="details-pane">
@@ -1268,12 +1212,22 @@ export function WorkbenchPage({ pageId }: WorkbenchPageProps) {
           </div>
           <Button
             className="settings-button"
-            onClick={runPageAction}
+            onClick={() => void runPageAction()}
             type="button"
             variant="secondary"
           >
             {config.actionLabel}
           </Button>
+          {config.id === "graph-explorer" ? (
+            <Button
+              className="settings-button"
+              onClick={() => void runPageAction({ semanticMode: "batch" })}
+              type="button"
+              variant="secondary"
+            >
+              Generate batch semantic edges
+            </Button>
+          ) : null}
           {actionMessage ? (
             <p className="action-feedback" data-testid="action-feedback">
               {actionMessage}
@@ -1281,6 +1235,248 @@ export function WorkbenchPage({ pageId }: WorkbenchPageProps) {
           ) : null}
         </aside>
       </main>
+    </div>
+  );
+}
+
+type ToneBadgeProps = ComponentProps<typeof Badge> & {
+  tone?: SourceTone | "field";
+};
+
+function ToneBadge({ className, tone = "neutral", variant, ...props }: ToneBadgeProps) {
+  return (
+    <Badge
+      className={cn("tone-badge", `tone-badge--${tone}`, className)}
+      variant={variant ?? badgeVariantForTone(tone)}
+      {...props}
+    />
+  );
+}
+
+function badgeVariantForTone(tone: SourceTone | "field"): ComponentProps<typeof Badge>["variant"] {
+  if (tone === "pdf") {
+    return "destructive";
+  }
+  if (tone === "success") {
+    return "default";
+  }
+  if (tone === "neutral") {
+    return "secondary";
+  }
+  return "outline";
+}
+
+function EvidenceResultsTable({
+  emptyMessage,
+  isCorpus,
+  isInteractive,
+  onSelectRow,
+  onToggleCorpus,
+  rows,
+  selectedCorpusIds
+}: {
+  emptyMessage: string;
+  isCorpus: boolean;
+  isInteractive: boolean;
+  onSelectRow: (row: EvidenceRow) => void;
+  onToggleCorpus: (corpusId: string, selected: boolean) => void;
+  rows: EvidenceRow[];
+  selectedCorpusIds: string[];
+}) {
+  return (
+    <Card className="results-card">
+      <CardContent className="p-0">
+        <Table aria-label="Evidence results">
+          <TableHeader>
+            <TableRow>
+              <TableHead className="w-8">Type</TableHead>
+              {isCorpus ? <TableHead className="w-10">Index</TableHead> : null}
+              <TableHead>Symbol</TableHead>
+              <TableHead>Source</TableHead>
+              <TableHead>Relation</TableHead>
+              <TableHead>Score</TableHead>
+              <TableHead>Location</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {rows.length ? (
+              rows.map((item) => {
+                const rowKey = evidenceRowKey(item);
+                return (
+                  <TableRow
+                    className={cn(isInteractive && "cursor-pointer")}
+                    key={rowKey}
+                    onClick={isInteractive ? () => onSelectRow(item) : undefined}
+                    onKeyDown={
+                      isInteractive
+                        ? (event) => {
+                            if (event.key === "Enter" || event.key === " ") {
+                              event.preventDefault();
+                              onSelectRow(item);
+                            }
+                          }
+                        : undefined
+                    }
+                    tabIndex={isInteractive ? 0 : undefined}
+                  >
+                    <TableCell>
+                      <span className={`source-dot source-dot--${item.tone}`} />
+                    </TableCell>
+                    {isCorpus ? (
+                      <TableCell>
+                        <Checkbox
+                          aria-label={`Index ${item.symbol}`}
+                          checked={selectedCorpusIds.includes(item.symbol)}
+                          onCheckedChange={(checked) => onToggleCorpus(item.symbol, checked === true)}
+                        />
+                      </TableCell>
+                    ) : null}
+                    <TableCell>
+                      <code>{item.symbol}</code>
+                    </TableCell>
+                    <TableCell>
+                      <ToneBadge className="source-type-badge" tone={sourceToneForRow(item)}>
+                        {sourceLabelForRow(item)}
+                      </ToneBadge>
+                    </TableCell>
+                    <TableCell>
+                      <ToneBadge tone={item.tone}>{item.relation}</ToneBadge>
+                    </TableCell>
+                    <TableCell className="score">{item.score}</TableCell>
+                    <TableCell className="path">{formatEvidenceLocation(item)}</TableCell>
+                  </TableRow>
+                );
+              })
+            ) : (
+              <TableRow>
+                <TableCell>
+                  <span className="source-dot source-dot--neutral" />
+                </TableCell>
+                {isCorpus ? <TableCell /> : null}
+                <TableCell>
+                  <code>{emptyMessage}</code>
+                </TableCell>
+                <TableCell>
+                  <Badge variant="secondary">empty</Badge>
+                </TableCell>
+                <TableCell>
+                  <Badge variant="secondary">empty</Badge>
+                </TableCell>
+                <TableCell className="score">0</TableCell>
+                <TableCell className="path">live SQLite query returned no rows</TableCell>
+              </TableRow>
+            )}
+          </TableBody>
+        </Table>
+      </CardContent>
+    </Card>
+  );
+}
+
+function AcceptanceRunsPanel({ runs }: { runs: AcceptanceRun[] }) {
+  if (runs.length === 0) {
+    return null;
+  }
+  return (
+    <Card className="acceptance-runs-card">
+      <CardHeader>
+        <CardTitle>Acceptance run details</CardTitle>
+        <CardDescription>Expand a run to inspect query-level failures, missing surfaces, and source evidence.</CardDescription>
+      </CardHeader>
+      <CardContent>
+        <Accordion className="acceptance-accordion" collapsible type="single">
+          {runs.map((run) => {
+            const details = run.details ?? [];
+            return (
+              <AccordionItem key={run.id} value={run.id}>
+                <AccordionTrigger>
+                  <span className="acceptance-run-trigger">
+                    <code>{run.id}</code>
+                    <ToneBadge tone={run.failed ? "pdf" : "success"}>{run.passed}/{run.queryCount}</ToneBadge>
+                    <ToneBadge tone={run.partial ? "doc" : "neutral"}>partial {run.partial ?? 0}</ToneBadge>
+                    <ToneBadge tone={run.failed ? "pdf" : "success"}>failed {run.failed}</ToneBadge>
+                    <span>{run.model}</span>
+                  </span>
+                </AccordionTrigger>
+                <AccordionContent>
+                  <div className="acceptance-run-meta">
+                    <span>artifact</span>
+                    <code>{run.artifactPath}</code>
+                  </div>
+                  {details.length ? (
+                    <Table aria-label={`Acceptance details for ${run.id}`}>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead>Query</TableHead>
+                          <TableHead>Status</TableHead>
+                          <TableHead>Reason</TableHead>
+                          <TableHead>Sources</TableHead>
+                          <TableHead>Counts</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {details.map((detail) => (
+                          <TableRow key={`${run.id}-${detail.id}`}>
+                            <TableCell>
+                              <code>{detail.id}</code>
+                              {detail.query ? <p>{detail.query}</p> : null}
+                            </TableCell>
+                            <TableCell>
+                              <ToneBadge tone={detail.status === "pass" ? "success" : detail.status === "partial" ? "doc" : "pdf"}>
+                                {detail.status}
+                              </ToneBadge>
+                            </TableCell>
+                            <TableCell>
+                              <AcceptanceDetailText detail={detail} />
+                            </TableCell>
+                            <TableCell>
+                              <AcceptanceSourceText detail={detail} />
+                            </TableCell>
+                            <TableCell>
+                              rows {detail.rowCount ?? 0} / graph edges {detail.graphEdgeCount ?? detail.edgeCount ?? 0}
+                            </TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  ) : (
+                    <p>No query-level detail was returned for this run.</p>
+                  )}
+                </AccordionContent>
+              </AccordionItem>
+            );
+          })}
+        </Accordion>
+      </CardContent>
+    </Card>
+  );
+}
+
+function AcceptanceDetailText({ detail }: { detail: AcceptanceDetail }) {
+  const lines = [
+    ...detail.failureReasons,
+    detail.missingSurfaces.length ? `missing surfaces: ${detail.missingSurfaces.join(", ")}` : "",
+    detail.missing.length ? `missing terms: ${detail.missing.join(", ")}` : ""
+  ].filter(Boolean);
+  return lines.length ? (
+    <div className="acceptance-detail-stack">
+      {lines.map((line) => (
+        <span key={line}>{line}</span>
+      ))}
+    </div>
+  ) : (
+    <span>No failure reason recorded.</span>
+  );
+}
+
+function AcceptanceSourceText({ detail }: { detail: AcceptanceDetail }) {
+  const paths = detail.sourcePaths.slice(0, 3);
+  return (
+    <div className="acceptance-detail-stack">
+      <span>{detail.sourceTypes.length ? detail.sourceTypes.join(", ") : "no source type"}</span>
+      {paths.map((sourcePath) => (
+        <code key={sourcePath}>{sourcePath}</code>
+      ))}
     </div>
   );
 }
@@ -1467,6 +1663,22 @@ function providerSettingsToBackend(settings: ProviderSettings) {
   };
 }
 
+function buildIndexStatusLabel(corpora: CorpusEntry[]) {
+  if (!corpora.length) {
+    return "empty";
+  }
+  if (corpora.some((corpus) => corpus.status === "failed")) {
+    return "failed";
+  }
+  if (corpora.some((corpus) => corpus.status === "indexing" || corpus.status === "queued")) {
+    return "indexing";
+  }
+  if (corpora.some((corpus) => corpus.status === "indexed")) {
+    return "ready";
+  }
+  return "not indexed";
+}
+
 function buildPageMetrics(
   pageId: PageId,
   fallbackMetrics: Metric[],
@@ -1598,14 +1810,6 @@ function buildSettingsEvidenceRows(settings: ProviderSettings): EvidenceRow[] {
       relation: "embedding",
       score: settings.embeddingProvider,
       path: `${settings.embeddingApiBaseUrl || defaultProviderSettings.embeddingApiBaseUrl}${settings.embeddingApiPath || defaultProviderSettings.embeddingApiPath}`
-    },
-    {
-      source: "storage",
-      tone: "code",
-      symbol: "SQLite FTS5 + sqlite-vec",
-      relation: "index",
-      score: "local",
-      path: "data/asip.db"
     }
   ];
 }
@@ -1649,6 +1853,42 @@ function normalizeApiEvidenceRow(row: EvidenceRow): EvidenceRow {
     line_end: row.line_end,
     page: row.page
   };
+}
+
+function normalizeAcceptanceRun(run: AcceptanceRun): AcceptanceRun {
+  return {
+    ...run,
+    partial: run.partial ?? 0,
+    details: (run.details ?? []).map(normalizeAcceptanceDetail),
+    databaseHealth: (run.databaseHealth ?? []).map(normalizeAcceptanceDetail)
+  };
+}
+
+function normalizeAcceptanceDetail(detail: Partial<AcceptanceDetail> & Record<string, unknown>): AcceptanceDetail {
+  return {
+    id: String(detail.id ?? "unknown"),
+    status: String(detail.status ?? "unknown"),
+    query: typeof detail.query === "string" ? detail.query : undefined,
+    failureReasons: normalizeStringList(detail.failureReasons ?? detail.failure_reasons),
+    missing: normalizeStringList(detail.missing),
+    missingSurfaces: normalizeStringList(detail.missingSurfaces ?? detail.missing_surfaces),
+    sourcePaths: normalizeStringList(detail.sourcePaths ?? detail.source_paths),
+    sourceTypes: normalizeStringList(detail.sourceTypes ?? detail.source_types),
+    retrievalSources: normalizeStringList(detail.retrievalSources ?? detail.retrieval_sources),
+    rowCount: normalizeOptionalNumber(detail.rowCount ?? detail.row_count),
+    graphEdgeCount: normalizeOptionalNumber(detail.graphEdgeCount ?? detail.graph_edge_count),
+    edgeCount: normalizeOptionalNumber(detail.edgeCount ?? detail.edge_count),
+    sourceHitCount: normalizeOptionalNumber(detail.sourceHitCount ?? detail.source_hit_count)
+  };
+}
+
+function normalizeStringList(value: unknown): string[] {
+  return Array.isArray(value) ? value.map((item) => String(item)).filter(Boolean) : [];
+}
+
+function normalizeOptionalNumber(value: unknown): number | undefined {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : undefined;
 }
 
 function evidenceRowKey(row: EvidenceRow): string {
@@ -1719,52 +1959,6 @@ function buildGraphRelationshipLines(graph: GraphPayload, emptyMessage: string):
     return [emptyMessage || "No graph relationships returned."];
   }
   return graph.edges.slice(0, 12).map((edge) => `${edge.src} ${edge.relation} ${edge.dst}`);
-}
-
-function buildQueryEvidenceRows(
-  query: string,
-  corpora: CorpusEntry[],
-  resolverProfiles: ResolverProfile[]
-): EvidenceRow[] {
-  const tokens = tokenizeQuery(query);
-  const userCorpusRows = corpora
-    .filter((corpus) => !defaultCorpora.some((defaultCorpus) => defaultCorpus.id === corpus.id))
-    .map((corpus): EvidenceRow => ({
-      source: "corpus",
-      tone: corpus.include.includes("pdf") ? "pdf" : "doc",
-      symbol: corpus.id,
-      relation: "contains",
-      score: "user",
-      path: `${corpus.sourceRoot} ${corpus.include}`
-    }));
-  const resolverRows = resolverProfiles
-    .filter((profile) => !defaultResolverProfiles.some((defaultProfile) => defaultProfile.id === profile.id))
-    .map((profile): EvidenceRow => ({
-      source: "profile",
-      tone: profile.enabled ? "success" : "neutral",
-      symbol: profile.wrapper,
-      relation: profile.strategy,
-      score: profile.id,
-      path: profile.path
-    }));
-  const rows = [...evidenceIndex, ...userCorpusRows, ...resolverRows];
-  if (tokens.length === 0) {
-    return rows.slice(0, 7);
-  }
-  const matches = rows.filter((row) => {
-    const haystack = `${row.source} ${row.symbol} ${row.relation} ${row.score} ${row.path}`.toLowerCase();
-    return tokens.some((token) => haystack.includes(token));
-  });
-  return (matches.length ? matches : rows.slice(0, 7)).slice(0, 12);
-}
-
-function tokenizeQuery(query: string): string[] {
-  const stopWords = new Set(["who", "what", "which", "show", "expand", "by", "hop", "hops", "the", "and", "or"]);
-  return query
-    .toLowerCase()
-    .split(/[^a-z0-9_>.-]+/)
-    .map((token) => token.trim())
-    .filter((token) => token.length > 2 && !stopWords.has(token));
 }
 
 function sumFileCounts(corpora: CorpusEntry[]): string {
@@ -1857,169 +2051,178 @@ function ProviderSettingsPanel({
   };
 
   return (
-    <section className="provider-settings-panel" aria-label="Provider settings">
-      <div className="provider-settings-header">
+    <Card className="provider-settings-panel" aria-label="Provider settings">
+      <CardHeader className="provider-settings-header">
         <div>
-          <h2>Provider Runtime</h2>
-          <p>Model, API endpoint, and extra headers are saved locally for the workbench.</p>
+          <CardTitle>Provider Runtime</CardTitle>
+          <CardDescription>Model, API endpoint, and extra headers are saved to the workbench backend.</CardDescription>
         </div>
-        <Badge tone="success">{draft.provider}</Badge>
-      </div>
-      <div className="provider-settings-grid">
-        <label className="provider-settings-field">
-          <span>Edge provider</span>
-          <select
-            aria-label="Provider"
-            className="ui-select"
-            onChange={(event) => update("provider", event.target.value as ProviderSettings["provider"])}
+        <ToneBadge tone="success">{draft.provider}</ToneBadge>
+      </CardHeader>
+      <CardContent className="provider-settings-content">
+        <FieldGroup className="provider-settings-grid">
+        <Field>
+          <FieldLabel>Edge provider</FieldLabel>
+          <Select
+            onValueChange={(value) => update("provider", value as ProviderSettings["provider"])}
             value={draft.provider}
           >
-            <option value="ollama">Ollama</option>
-            <option value="openai-compatible">OpenAI compatible</option>
-          </select>
-        </label>
-        <label className="provider-settings-field">
-          <span>Edge API base URL</span>
+            <SelectTrigger aria-label="Provider">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="ollama">Ollama</SelectItem>
+              <SelectItem value="openai-compatible">OpenAI compatible</SelectItem>
+            </SelectContent>
+          </Select>
+        </Field>
+        <Field>
+          <FieldLabel>Edge API base URL</FieldLabel>
           <Input
             aria-label="Edge API base URL"
             onChange={(event) => update("apiBaseUrl", event.target.value)}
             value={draft.apiBaseUrl}
           />
-        </label>
-        <label className="provider-settings-field">
-          <span>Edge API path</span>
+        </Field>
+        <Field>
+          <FieldLabel>Edge API path</FieldLabel>
           <Input
             aria-label="Edge API path"
             onChange={(event) => update("apiPath", event.target.value)}
             value={draft.apiPath}
           />
-        </label>
-        <label className="provider-settings-field">
-          <span>Edge model</span>
+        </Field>
+        <Field>
+          <FieldLabel>Edge model</FieldLabel>
           <Input
             aria-label="Edge model"
             onChange={(event) => update("edgeModel", event.target.value)}
             value={draft.edgeModel}
           />
-        </label>
-        <label className="provider-settings-field">
-          <span>Fallback model</span>
+        </Field>
+        <Field>
+          <FieldLabel>Fallback model</FieldLabel>
           <Input
             aria-label="Fallback model"
             onChange={(event) => update("fallbackModel", event.target.value)}
             value={draft.fallbackModel}
           />
-        </label>
-        <label className="provider-settings-field">
-          <span>Embedding provider</span>
-          <select
-            aria-label="Embedding provider"
-            className="ui-select"
-            onChange={(event) =>
-              update("embeddingProvider", event.target.value as ProviderSettings["embeddingProvider"])
+        </Field>
+        <Field>
+          <FieldLabel>Embedding provider</FieldLabel>
+          <Select
+            onValueChange={(value) =>
+              update("embeddingProvider", value as ProviderSettings["embeddingProvider"])
             }
             value={draft.embeddingProvider}
           >
-            <option value="ollama">Ollama</option>
-            <option value="openai-compatible">OpenAI compatible</option>
-          </select>
-        </label>
-        <label className="provider-settings-field">
-          <span>Embedding API base URL</span>
+            <SelectTrigger aria-label="Embedding provider">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="ollama">Ollama</SelectItem>
+              <SelectItem value="openai-compatible">OpenAI compatible</SelectItem>
+            </SelectContent>
+          </Select>
+        </Field>
+        <Field>
+          <FieldLabel>Embedding API base URL</FieldLabel>
           <Input
             aria-label="Embedding API base URL"
             onChange={(event) => update("embeddingApiBaseUrl", event.target.value)}
             value={draft.embeddingApiBaseUrl}
           />
-        </label>
-        <label className="provider-settings-field">
-          <span>Embedding API path</span>
+        </Field>
+        <Field>
+          <FieldLabel>Embedding API path</FieldLabel>
           <Input
             aria-label="Embedding API path"
             onChange={(event) => update("embeddingApiPath", event.target.value)}
             value={draft.embeddingApiPath}
           />
-        </label>
-        <label className="provider-settings-field">
-          <span>Embedding model</span>
+        </Field>
+        <Field>
+          <FieldLabel>Embedding model</FieldLabel>
           <Input
             aria-label="Embedding model"
             onChange={(event) => update("embeddingModel", event.target.value)}
             value={draft.embeddingModel}
           />
-        </label>
-        <label className="provider-settings-field">
-          <span>Timeout seconds</span>
+        </Field>
+        <Field>
+          <FieldLabel>Timeout seconds</FieldLabel>
           <Input
             aria-label="Timeout seconds"
             inputMode="numeric"
             onChange={(event) => update("timeoutSeconds", event.target.value)}
             value={draft.timeoutSeconds}
           />
-        </label>
-        <label className="provider-settings-field">
-          <span>Context tokens</span>
+        </Field>
+        <Field>
+          <FieldLabel>Context tokens</FieldLabel>
           <Input
             aria-label="Context tokens"
             inputMode="numeric"
             onChange={(event) => update("numCtx", event.target.value)}
             value={draft.numCtx}
           />
-        </label>
-        <label className="provider-settings-field">
-          <span>Prediction tokens</span>
+        </Field>
+        <Field>
+          <FieldLabel>Prediction tokens</FieldLabel>
           <Input
             aria-label="Prediction tokens"
             inputMode="numeric"
             onChange={(event) => update("numPredict", event.target.value)}
             value={draft.numPredict}
           />
-        </label>
-        <label className="provider-settings-field">
-          <span>Temperature</span>
+        </Field>
+        <Field>
+          <FieldLabel>Temperature</FieldLabel>
           <Input
             aria-label="Temperature"
             inputMode="decimal"
             onChange={(event) => update("temperature", event.target.value)}
             value={draft.temperature}
           />
-        </label>
-        <label className="provider-settings-field provider-settings-field--toggle">
-          <input
+        </Field>
+        <Field className="provider-settings-field--toggle" orientation="horizontal">
+          <Checkbox
             aria-label="Enable model thinking"
             checked={draft.think}
-            onChange={(event) => update("think", event.target.checked)}
-            type="checkbox"
+            onCheckedChange={(checked) => update("think", checked === true)}
           />
-          <span>Enable model thinking</span>
-        </label>
-        <label className="provider-settings-field provider-settings-field--wide">
-          <span>Edge extra headers JSON</span>
+          <FieldContent>
+            <FieldLabel>Enable model thinking</FieldLabel>
+            <FieldDescription>Keep disabled for compact JSON edge generation unless a profile requires it.</FieldDescription>
+          </FieldContent>
+        </Field>
+        <Field className="provider-settings-field--wide">
+          <FieldLabel>Edge extra headers JSON</FieldLabel>
           <Textarea
             aria-label="Edge extra headers JSON"
             onChange={(event) => update("extraHeadersJson", event.target.value)}
             rows={4}
             value={draft.extraHeadersJson}
           />
-        </label>
-        <label className="provider-settings-field provider-settings-field--wide">
-          <span>Embedding extra headers JSON</span>
+        </Field>
+        <Field className="provider-settings-field--wide">
+          <FieldLabel>Embedding extra headers JSON</FieldLabel>
           <Textarea
             aria-label="Embedding extra headers JSON"
             onChange={(event) => update("embeddingExtraHeadersJson", event.target.value)}
             rows={4}
             value={draft.embeddingExtraHeadersJson}
           />
-        </label>
-        <label className="provider-settings-field provider-settings-field--wide">
-          <span>AQ09 acceptance DB path</span>
+        </Field>
+        <Field className="provider-settings-field--wide">
+          <FieldLabel>AQ09 acceptance DB path</FieldLabel>
           <Input
             aria-label="AQ09 acceptance DB path"
             onChange={(event) => onAcceptanceDbPathChange(event.target.value)}
             value={acceptanceDbPath}
           />
-        </label>
-      </div>
+        </Field>
+      </FieldGroup>
       <div className="provider-settings-actions">
         <Button onClick={onDetectOllama} type="button" variant="secondary">
           Detect Ollama models
@@ -2036,13 +2239,14 @@ function ProviderSettingsPanel({
       <div className="runtime-config">
         <div className="runtime-config__header">
           <span>Edge runner config</span>
-          <Badge tone="code">JSON</Badge>
+          <ToneBadge tone="code">JSON</ToneBadge>
         </div>
         <pre aria-label="Runtime config JSON" data-testid="runtime-config-preview">
           {JSON.stringify(runtimeConfig, null, 2)}
         </pre>
       </div>
-    </section>
+      </CardContent>
+    </Card>
   );
 }
 
@@ -2062,51 +2266,53 @@ function CorpusEditor({
   };
 
   return (
-    <section className="provider-settings-panel" aria-label="Corpus editor">
-      <div className="provider-settings-header">
+    <Card className="provider-settings-panel" aria-label="Corpus editor">
+      <CardHeader className="provider-settings-header">
         <div>
-          <h2>Corpus Registry</h2>
-          <p>Add local or remote corpora before indexing them into the evidence store.</p>
+          <CardTitle>Corpus Registry</CardTitle>
+          <CardDescription>Add local or remote corpora before indexing them into the evidence store.</CardDescription>
         </div>
-        <Badge tone="code">editable</Badge>
-      </div>
-      <div className="provider-settings-grid">
-        <label className="provider-settings-field">
-          <span>Corpus id</span>
+        <ToneBadge tone="code">editable</ToneBadge>
+      </CardHeader>
+      <CardContent className="provider-settings-content">
+      <FieldGroup className="provider-settings-grid">
+        <Field>
+          <FieldLabel>Corpus id</FieldLabel>
           <Input aria-label="Corpus id" onChange={(event) => update("id", event.target.value)} value={draft.id} />
-        </label>
-        <label className="provider-settings-field">
-          <span>Repository URL</span>
+        </Field>
+        <Field>
+          <FieldLabel>Repository URL</FieldLabel>
           <Input
             aria-label="Repository URL"
             onChange={(event) => update("repo", event.target.value)}
             value={draft.repo}
           />
-        </label>
-        <label className="provider-settings-field">
-          <span>Source root</span>
+        </Field>
+        <Field>
+          <FieldLabel>Source root</FieldLabel>
           <Input
             aria-label="Source root"
             onChange={(event) => update("sourceRoot", event.target.value)}
             value={draft.sourceRoot}
           />
-        </label>
-        <label className="provider-settings-field provider-settings-field--wide">
-          <span>Include globs</span>
+        </Field>
+        <Field className="provider-settings-field--wide">
+          <FieldLabel>Include globs</FieldLabel>
           <Input
             aria-label="Include globs"
             onChange={(event) => update("include", event.target.value)}
             value={draft.include}
           />
-        </label>
-      </div>
+        </Field>
+      </FieldGroup>
       <div className="provider-settings-actions">
         <Button onClick={onAdd} type="button">
           Add corpus
         </Button>
         {message ? <span className="settings-feedback">{message}</span> : null}
       </div>
-    </section>
+      </CardContent>
+    </Card>
   );
 }
 
@@ -2128,66 +2334,80 @@ function ResolverProfileEditor({
   validateSource: string;
 }) {
   const update = <Key extends keyof ResolverProfile>(key: Key, value: ResolverProfile[Key]) => {
-    onChange({ ...draft, [key]: value });
+    const next = { ...draft, [key]: value };
+    if (key === "id") {
+      const previousDefaultPath =
+        !draft.path ||
+        draft.path === "configs/resolvers/initial.yaml" ||
+        draft.path === `configs/resolvers/${draft.id}.yaml`;
+      const nextId = String(value).trim();
+      if (previousDefaultPath && nextId) {
+        next.path = `configs/resolvers/${nextId}.yaml`;
+      }
+    }
+    onChange(next);
   };
 
   return (
-    <section className="provider-settings-panel" aria-label="Resolver profile editor">
-      <div className="provider-settings-header">
+    <Card className="provider-settings-panel" aria-label="Resolver profile editor">
+      <CardHeader className="provider-settings-header">
         <div>
-          <h2>Resolver Profiles</h2>
-          <p>Configure wrapper names and language strategies without changing resolver code.</p>
+          <CardTitle>Resolver Profiles</CardTitle>
+          <CardDescription>Configure wrapper names and language strategies without changing resolver code.</CardDescription>
         </div>
-        <Badge tone="code">config driven</Badge>
-      </div>
-      <div className="provider-settings-grid">
-        <label className="provider-settings-field">
-          <span>Profile id</span>
+        <ToneBadge tone="code">config driven</ToneBadge>
+      </CardHeader>
+      <CardContent className="provider-settings-content">
+      <FieldGroup className="provider-settings-grid">
+        <Field>
+          <FieldLabel>Profile id</FieldLabel>
           <Input aria-label="Profile id" onChange={(event) => update("id", event.target.value)} value={draft.id} />
-        </label>
-        <label className="provider-settings-field">
-          <span>Wrapper symbol</span>
+        </Field>
+        <Field>
+          <FieldLabel>Wrapper symbol</FieldLabel>
           <Input
             aria-label="Wrapper symbol"
             onChange={(event) => update("wrapper", event.target.value)}
             value={draft.wrapper}
           />
-        </label>
-        <label className="provider-settings-field">
-          <span>Language strategy</span>
+        </Field>
+        <Field>
+          <FieldLabel>Language strategy</FieldLabel>
           <Input
             aria-label="Language strategy"
             onChange={(event) => update("strategy", event.target.value)}
             value={draft.strategy}
           />
-        </label>
-        <label className="provider-settings-field provider-settings-field--wide">
-          <span>Config path</span>
+        </Field>
+        <Field className="provider-settings-field--wide">
+          <FieldLabel>Config path</FieldLabel>
           <Input
             aria-label="Config path"
             onChange={(event) => update("path", event.target.value)}
             value={draft.path}
           />
-        </label>
-        <label className="provider-settings-field provider-settings-field--toggle">
-          <input
+        </Field>
+        <Field className="provider-settings-field--toggle" orientation="horizontal">
+          <Checkbox
             aria-label="Enable resolver profile"
             checked={draft.enabled}
-            onChange={(event) => update("enabled", event.target.checked)}
-            type="checkbox"
+            onCheckedChange={(checked) => update("enabled", checked === true)}
           />
-          <span>Enable resolver profile</span>
-        </label>
-        <label className="provider-settings-field provider-settings-field--wide">
-          <span>Validation source</span>
+          <FieldContent>
+            <FieldLabel>Enable resolver profile</FieldLabel>
+            <FieldDescription>Only enabled YAML-backed profiles participate in symbol resolution.</FieldDescription>
+          </FieldContent>
+        </Field>
+        <Field className="provider-settings-field--wide">
+          <FieldLabel>Validation source</FieldLabel>
           <Textarea
             aria-label="Validation source"
             onChange={(event) => onValidateSourceChange(event.target.value)}
             rows={3}
             value={validateSource}
           />
-        </label>
-      </div>
+        </Field>
+      </FieldGroup>
       <div className="provider-settings-actions">
         <Button onClick={onAdd} type="button">
           Add resolver profile
@@ -2197,7 +2417,8 @@ function ResolverProfileEditor({
         </Button>
         {message ? <span className="settings-feedback">{message}</span> : null}
       </div>
-    </section>
+      </CardContent>
+    </Card>
   );
 }
 
@@ -2213,87 +2434,20 @@ function GlobalNetworkGraph({
   testId: string;
 }) {
   const graphData = buildGraphData(graph, rows);
-  const layout = layoutGraph(graphData);
   const isEmpty = graphData.nodes.length === 0;
 
   return (
     <div className="network-preview network-preview--global" data-testid={testId}>
       <div className="network-preview__header">
         <span>Global Relation Graph</span>
-        <Badge tone="code">weighted connections</Badge>
+        <ToneBadge tone="code">weighted connections</ToneBadge>
       </div>
       {isEmpty ? (
         <div className="network-empty" role="status">
           <code>{emptyMessage || "No graph data returned."}</code>
         </div>
       ) : (
-      <svg aria-label="Global weighted network graph" role="img" viewBox="0 0 960 420">
-        <defs>
-          <marker id="arrow" markerHeight="8" markerWidth="8" orient="auto" refX="7" refY="4">
-            <path d="M0,0 L8,4 L0,8 Z" fill="var(--graph-edge)" />
-          </marker>
-        </defs>
-        {graphData.edges.map((edge, index) => {
-          const source = layout.positions.get(edge.src);
-          const target = layout.positions.get(edge.dst);
-          if (!source || !target) {
-            return null;
-          }
-          const edgeWeight = edge.weight ?? edge.confidence ?? 0.5;
-          const weight = Math.max(1, Math.min(5, Math.round(edgeWeight * 5)));
-          return (
-            <line
-              className={`graph-edge-line graph-edge-line--w${weight}`}
-              data-weight={edgeWeight.toFixed(2)}
-              key={`${edge.src}-${edge.dst}-${index}-edge`}
-              opacity={Math.max(0.38, Math.min(0.9, edgeWeight))}
-              strokeWidth={1.2 + edgeWeight * 4.4}
-              x1={source.x}
-              x2={target.x}
-              y1={source.y}
-              y2={target.y}
-            />
-          );
-        })}
-        <circle className="graph-halo" cx="470" cy="205" r="86" />
-        {graphData.nodes.map((node, index) => {
-          const position = layout.positions.get(node.id);
-          if (!position) {
-            return null;
-          }
-          const radius = Math.max(30, Math.min(58, 28 + Number(node.weight ?? 1) * 5 + (index === 0 ? 12 : 0)));
-          return (
-            <g
-              aria-label={`${node.id} ${node.kind ?? "node"} weight ${node.weight ?? 1}`}
-              className={`graph-bubble graph-bubble--${graphNodeTone(node)}`}
-              key={`${node.id}-${index}-node`}
-              transform={`translate(${position.x} ${position.y})`}
-            >
-              <circle r={radius} />
-              <title>{`${node.id} ${node.kind ?? "node"} weight ${node.weight ?? 1}`}</title>
-              <text y="-4">{shortGraphLabel(node.id)}</text>
-              <text y="16">{shortGraphLabel(`${node.kind ?? "node"} ${node.weight ?? 1}`)}</text>
-            </g>
-          );
-        })}
-        {graphData.edges.map((edge, index) => {
-          const source = layout.positions.get(edge.src);
-          const target = layout.positions.get(edge.dst);
-          if (!source || !target) {
-            return null;
-          }
-          return (
-            <text
-              className="graph-edge-label"
-              key={`${edge.src}-${edge.dst}-${index}-label`}
-              x={(source.x + target.x) / 2}
-              y={(source.y + target.y) / 2}
-            >
-              {edge.relation} / {(edge.weight ?? edge.confidence ?? 0).toFixed(2)}
-            </text>
-          );
-        })}
-      </svg>
+        <WeightedForceGraph graph={graphData} />
       )}
     </div>
   );
@@ -2302,8 +2456,8 @@ function GlobalNetworkGraph({
 function buildGraphData(graph: GraphPayload | null, rows: EvidenceRow[]): GraphPayload {
   if (graph) {
     return {
-      nodes: graph.nodes.slice(0, 12),
-      edges: graph.edges.filter((edge) => edge.src && edge.dst).slice(0, 16)
+      nodes: graph.nodes,
+      edges: graph.edges.filter((edge) => edge.src && edge.dst)
     };
   }
   if (rows.length === 0) {
@@ -2334,46 +2488,4 @@ function buildGraphData(graph: GraphPayload | null, rows: EvidenceRow[]): GraphP
     weight: Number(merged[index + 1]?.score) || Math.max(0.2, 0.9 - index * 0.08)
   }));
   return { nodes, edges };
-}
-
-function layoutGraph(graph: GraphPayload) {
-  const positions = new Map<string, { x: number; y: number }>();
-  const [center, ...satellites] = graph.nodes;
-  if (!center) {
-    return { positions };
-  }
-  positions.set(center.id, { x: 470, y: 205 });
-  const radiusX = 280;
-  const radiusY = 145;
-  satellites.forEach((node, index) => {
-    const angle = (-Math.PI / 2) + (index / Math.max(1, satellites.length)) * Math.PI * 2;
-    positions.set(node.id, {
-      x: Math.round(470 + Math.cos(angle) * radiusX),
-      y: Math.round(205 + Math.sin(angle) * radiusY)
-    });
-  });
-  return { positions };
-}
-
-function graphNodeTone(node: GraphNode): SourceTone | "field" {
-  if (node.kind === "field") {
-    return "field";
-  }
-  if (node.kind === "pdf") {
-    return "neutral";
-  }
-  if (node.kind === "register" || node.kind === "macro") {
-    return "register";
-  }
-  if (node.kind === "doc") {
-    return "doc";
-  }
-  return "code";
-}
-
-function shortGraphLabel(value: string): string {
-  if (value.length <= 18) {
-    return value;
-  }
-  return `${value.slice(0, 15)}...`;
 }

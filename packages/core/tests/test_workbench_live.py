@@ -9,6 +9,7 @@ from asip import workbench
 from asip.workbench import (
     add_corpus,
     expand_query_graph,
+    generate_semantic_edges_batch,
     generate_semantic_edges_for_query,
     index_configured_corpora,
     index_registered_corpora,
@@ -216,6 +217,235 @@ class WorkbenchLiveTests(unittest.TestCase):
             self.assertNotIn(
                 ("LOW_CONFIDENCE_REGISTER", "LOW_CONFIDENCE_FIELD"),
                 {(edge["src"], edge["dst"]) for edge in graph["edges"]},
+            )
+
+    def test_global_graph_derives_weighted_connections_from_indexed_evidence(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            db_path = Path(tmpdir) / "asip.db"
+            store = AsipStore.connect(str(db_path))
+            store.migrate()
+            document_id = store.add_document("docs", "doc", "docs/note.md")
+            chunk_id = store.add_chunk(
+                document_id,
+                "UI_GLOBAL_REGISTER sets UI_GLOBAL_FIELD while WITHOUT is license text.",
+                1,
+                1,
+            )
+            store.add_evidence(
+                chunk_id=chunk_id,
+                corpus_id="docs",
+                source_type="doc",
+                repo="local",
+                path="docs/note.md",
+                symbol="UI_GLOBAL_REGISTER",
+                entity_type="register",
+                access_type="mention",
+                confidence=0.95,
+                snippet="UI_GLOBAL_REGISTER sets UI_GLOBAL_FIELD",
+                resolved_chain="source mention -> UI_GLOBAL_REGISTER",
+            )
+            store.add_evidence(
+                chunk_id=chunk_id,
+                corpus_id="docs",
+                source_type="doc",
+                repo="local",
+                path="docs/note.md",
+                symbol="UI_GLOBAL_FIELD",
+                entity_type="field",
+                access_type="mention",
+                confidence=0.94,
+                snippet="UI_GLOBAL_REGISTER sets UI_GLOBAL_FIELD",
+                resolved_chain="source mention -> UI_GLOBAL_FIELD",
+            )
+            store.add_evidence(
+                chunk_id=chunk_id,
+                corpus_id="docs",
+                source_type="doc",
+                repo="local",
+                path="docs/note.md",
+                symbol="WITHOUT",
+                entity_type="function",
+                access_type="mention",
+                confidence=0.95,
+                snippet="WITHOUT warranty",
+                resolved_chain="source mention -> WITHOUT",
+            )
+
+            graph = workbench.global_graph(db_path, limit=20)
+
+            node_ids = {node["id"] for node in graph["nodes"]}
+            edge_pairs = {(edge["src"], edge["dst"], edge["relation"]) for edge in graph["edges"]}
+            self.assertIn("UI_GLOBAL_REGISTER", node_ids)
+            self.assertIn("UI_GLOBAL_FIELD", node_ids)
+            self.assertIn("docs/note.md", node_ids)
+            self.assertNotIn("WITHOUT", node_ids)
+            self.assertIn(("UI_GLOBAL_REGISTER", "UI_GLOBAL_FIELD", "co_occurs"), edge_pairs)
+            self.assertIn(("UI_GLOBAL_REGISTER", "docs/note.md", "appears_in_doc"), edge_pairs)
+            self.assertTrue(all(edge["weight"] > 0 for edge in graph["edges"]))
+
+    def test_global_graph_links_code_functions_to_register_operations(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            source_root = root / "corpus"
+            source_root.mkdir()
+            (source_root / "gfx.c").write_text(
+                "\n".join(
+                    [
+                        "void program_local_register(void) {",
+                        "  uint32_t tmp = RREG32(regLOCAL_TEST_CNTL);",
+                        "  tmp = REG_SET_FIELD(tmp, LOCAL_TEST_CNTL, ENABLE_LOCAL_FIELD, 1);",
+                        "  WREG32(regLOCAL_TEST_CNTL, tmp);",
+                        "}",
+                    ]
+                ),
+                encoding="utf-8",
+            )
+            db_path = root / "asip.db"
+            store = AsipStore.connect(str(db_path))
+            store.migrate()
+            store.upsert_corpus("code", "local", str(source_root), ["**/*.c"], status="indexed", file_count=1)
+            document_id = store.add_document("code", "code", "gfx.c")
+            chunk_id = store.add_chunk(
+                document_id,
+                "1: void program_local_register(void) {\n"
+                "2:   uint32_t tmp = RREG32(regLOCAL_TEST_CNTL);\n"
+                "3:   tmp = REG_SET_FIELD(tmp, LOCAL_TEST_CNTL, ENABLE_LOCAL_FIELD, 1);\n"
+                "4:   WREG32(regLOCAL_TEST_CNTL, tmp);\n"
+                "5: }",
+                1,
+                5,
+            )
+            store.add_evidence(
+                chunk_id=chunk_id,
+                corpus_id="code",
+                source_type="code",
+                repo="local",
+                path="gfx.c",
+                line_start=3,
+                line_end=3,
+                symbol="LOCAL_TEST_CNTL",
+                entity_type="register",
+                access_type="read_modify_write",
+                confidence=0.95,
+                snippet="tmp = REG_SET_FIELD(tmp, LOCAL_TEST_CNTL, ENABLE_LOCAL_FIELD, 1);",
+                resolved_chain="REG_SET_FIELD -> register LOCAL_TEST_CNTL",
+            )
+            store.add_evidence(
+                chunk_id=chunk_id,
+                corpus_id="code",
+                source_type="code",
+                repo="local",
+                path="gfx.c",
+                line_start=3,
+                line_end=3,
+                symbol="ENABLE_LOCAL_FIELD",
+                entity_type="field",
+                access_type="field_set",
+                confidence=0.95,
+                snippet="tmp = REG_SET_FIELD(tmp, LOCAL_TEST_CNTL, ENABLE_LOCAL_FIELD, 1);",
+                resolved_chain="REG_SET_FIELD -> field ENABLE_LOCAL_FIELD",
+            )
+
+            graph = workbench.global_graph(db_path, limit=40)
+
+            node_ids = {node["id"] for node in graph["nodes"]}
+            edges = {(edge["src"], edge["relation"], edge["dst"]) for edge in graph["edges"]}
+            self.assertIn("program_local_register", node_ids)
+            self.assertIn(("program_local_register", "read_modify_write", "LOCAL_TEST_CNTL"), edges)
+            self.assertIn(("program_local_register", "field_set", "ENABLE_LOCAL_FIELD"), edges)
+
+    def test_global_graph_creates_document_section_nodes_from_indexed_chunks(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            db_path = Path(tmpdir) / "asip.db"
+            store = AsipStore.connect(str(db_path))
+            store.migrate()
+            document_id = store.add_document("docs", "doc", "docs/guide.md")
+            chunk_id = store.add_chunk(
+                document_id,
+                "# Programming local registers\n"
+                "LOCAL_TEST_CNTL controls ENABLE_LOCAL_FIELD in this section.",
+                1,
+                2,
+            )
+            store.add_evidence(
+                chunk_id=chunk_id,
+                corpus_id="docs",
+                source_type="doc",
+                repo="local",
+                path="docs/guide.md",
+                line_start=2,
+                line_end=2,
+                symbol="LOCAL_TEST_CNTL",
+                entity_type="register",
+                access_type="mention",
+                confidence=0.95,
+                snippet="LOCAL_TEST_CNTL controls ENABLE_LOCAL_FIELD",
+                resolved_chain="doc section -> LOCAL_TEST_CNTL",
+            )
+
+            graph = workbench.global_graph(db_path, limit=20)
+
+            nodes = {node["id"]: node for node in graph["nodes"]}
+            edges = {(edge["src"], edge["relation"], edge["dst"]) for edge in graph["edges"]}
+            self.assertEqual(nodes["docs/guide.md#programming-local-registers"]["kind"], "doc_section")
+            self.assertIn(("docs/guide.md#programming-local-registers", "section_mentions", "LOCAL_TEST_CNTL"), edges)
+
+    def test_batch_semantic_edge_job_generates_edges_from_indexed_candidates(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            db_path = root / "asip.db"
+            store = AsipStore.connect(str(db_path))
+            store.migrate()
+            document_id = store.add_document("docs", "doc", "docs/guide.md")
+            chunk_id = store.add_chunk(
+                document_id,
+                "# Programming local registers\n"
+                "GCVM_L2_CNTL and ENABLE_L2_CACHE are connected by this documentation section.",
+                1,
+                2,
+            )
+            for symbol, entity_type in [("GCVM_L2_CNTL", "register"), ("ENABLE_L2_CACHE", "field")]:
+                store.add_evidence(
+                    chunk_id=chunk_id,
+                    corpus_id="docs",
+                    source_type="doc",
+                    repo="local",
+                    path="docs/guide.md",
+                    line_start=2,
+                    line_end=2,
+                    symbol=symbol,
+                    entity_type=entity_type,
+                    access_type="mention",
+                    confidence=0.95,
+                    snippet="GCVM_L2_CNTL and ENABLE_L2_CACHE are connected",
+                    resolved_chain=f"doc section -> {symbol}",
+                )
+            save_provider_settings(
+                db_path,
+                {
+                    "edge": {
+                        "provider": "ollama",
+                        "base_url": "http://edge.local",
+                        "api_path": "/api/chat",
+                        "model": "gemma4:e4b",
+                        "timeout_seconds": 2,
+                    }
+                },
+            )
+            provider = FakeSemanticEdgeProvider()
+
+            summary = generate_semantic_edges_batch(db_path, limit=4, batch_size=2, edge_provider=provider)
+            graph = workbench.global_graph(db_path, limit=40)
+
+            self.assertEqual(summary["source"], "semantic_edge_batch_job")
+            self.assertEqual(summary["provider"], "ollama")
+            self.assertEqual(summary["model"], "gemma4:e4b")
+            self.assertGreaterEqual(summary["candidate_count"], 1)
+            self.assertEqual(summary["edge_count"], 1)
+            self.assertIn("CASE docs/guide.md#programming-local-registers", provider.prompt)
+            self.assertIn(
+                ("GCVM_L2_CNTL", "sets_field", "ENABLE_L2_CACHE"),
+                {(edge["src"], edge["relation"], edge["dst"]) for edge in graph["edges"]},
             )
 
     def test_semantic_edge_job_generates_edges_from_indexed_evidence_and_provider_settings(self):

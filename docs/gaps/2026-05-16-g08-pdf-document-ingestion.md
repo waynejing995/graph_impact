@@ -1,12 +1,14 @@
 # G08 PDF And Document Ingestion
 
-Status: Partial; indexed reduced AMD PDF evidence exists, final UI/browser citation remains blocking
+Status: Markdown/doc section graph nodes verified; indexed PDF evidence exists; PDF-specific section browser proof remains a narrower residual
 
 ## Requirement
 
 MVP-1 supports text-based PDF ingestion. PDF conversion may use MarkItDown or a similar pipeline and must preserve page metadata.
 
 Converted PDF chunks must enter the same documentation/evidence path as Markdown, RST, and repo docs.
+
+After conversion to Markdown/text chunks, documents must also provide graph structure. Headings, page anchors, and extracted sections should become section nodes with source/page/heading provenance. LLM semantic-edge generation can then operate on those section nodes to connect documentation concepts to code functions, registers, fields, and other section concepts.
 
 ## Current Evidence
 
@@ -26,6 +28,7 @@ Converted PDF chunks must enter the same documentation/evidence path as Markdown
 - Reduced AMD amdgpu documentation fixture `docs/fixtures/amd-amdgpu-docs/amdgpu-driver-source-tree.md` and `.pdf` is included in `configs/edge_cases/clean-amd-qwen35.json`.
 - `packages/core/tests/test_documents.py` now verifies that the reduced AMD PDF fixture is extractable and that ReportLab `/ASCII85Decode` + `/FlateDecode` PDF streams can be decoded by the fallback extractor when `pypdf`/MarkItDown are unavailable.
 - Clean AMD DB `/tmp/asip-clean-amd-qwen35-provider-2026-05-17.db` contains `documents` source count `pdf=1` and `evidence` source count `pdf=5`; AQ05 passes with `code`, `doc`, and `pdf` in `docs/qa/2026-05-17-acceptance-clean-amd-qwen35-provider-current.json`.
+- 2026-05-17 targeted graph tests now prove Markdown/document chunks create `doc_section` graph nodes and `section_mentions` edges. The graph renderer preserves `doc_section`/`pdf_section` node kinds, and batch semantic-edge QA proves document candidates can feed the LLM edge job.
 
 ## Remaining Gap
 
@@ -35,6 +38,8 @@ MarkItDown remains optional; `pypdf` is the declared page-preserving converter f
 
 The Web inspector and E2E path still need to prove PDF page/source metadata is visible to users.
 
+Document graph extraction is implemented for converted document chunks and heading/line section ids. The residual G08 risk is narrower: browser proof for a real PDF-derived `pdf_section` node with page provenance is not yet separated from the existing indexed PDF evidence and Markdown section-node proof.
+
 ## Acceptance Criteria
 
 - MarkItDown or the chosen converter is declared and installable, or the fallback is explicitly accepted as the MVP implementation. Current chosen declared converter is `pypdf`.
@@ -42,6 +47,8 @@ The Web inspector and E2E path still need to prove PDF page/source metadata is v
 - PDF chunks enter SQLite documents/chunks/evidence.
 - Query results can return PDF evidence with page citation.
 - Web inspector displays PDF page/source metadata.
+- Converted Markdown/PDF sections create graph section nodes with stable ids, heading/page/source metadata, and section-to-symbol edges.
+- Batch semantic-edge generation can include document/PDF sections as candidates and persist section semantic edges with provider/model provenance.
 - The final QA doc records whether PDF evidence came from a real AMD PDF, a reduced fixture generated from one, or an explicitly accepted local fallback.
 
 ## Required Tests
@@ -49,6 +56,8 @@ The Web inspector and E2E path still need to prove PDF page/source metadata is v
 - Core test: indexing a PDF fixture creates PDF chunks with page metadata.
 - Core test: pypdf multi-page extraction preserves page numbers.
 - Integration test: PDF evidence appears in a query result.
+- Core graph test: Markdown/PDF headings or page sections become graph nodes with provenance and connect to mentioned symbols.
+- Semantic-edge test: a fake provider can generate an edge from a document section candidate and that edge appears in the global graph.
 - Real AMD PDF smoke: text extraction succeeds on a small known AMD PDF or documented reduced fixture.
 - UI/E2E test: PDF evidence row and page metadata are visible.
 

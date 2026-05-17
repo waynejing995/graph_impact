@@ -21,6 +21,7 @@ from apps.mcp.tools import (
     resolver_profiles_list,
     run_acceptance,
     search_evidence,
+    semantic_edges_generate_batch,
     semantic_edges_generate,
 )
 
@@ -121,6 +122,51 @@ class McpToolsTests(unittest.TestCase):
                 self.assertEqual(result["source"], "semantic_edge_job")
                 self.assertEqual(result["edge_count"], 1)
                 self.assertTrue(any(edge["dst"] == "ENABLE_L2_CACHE" for edge in result["graph"]["edges"]))
+        finally:
+            server.shutdown()
+            server.server_close()
+
+    def test_semantic_edges_batch_tool_generates_edges_from_indexed_candidates(self):
+        server = _start_fake_edge_server()
+        try:
+            with TemporaryDirectory() as tmpdir:
+                root = Path(tmpdir)
+                corpus_root = root / "corpus"
+                corpus_root.mkdir()
+                (corpus_root / "note.md").write_text(
+                    "# MCP semantic batch\n"
+                    "GCVM_L2_CNTL has field ENABLE_L2_CACHE for MCP batch semantic edge generation.",
+                    encoding="utf-8",
+                )
+                db_path = str(root / "asip.db")
+                provider_settings_save(
+                    {
+                        "edge": {
+                            "provider": "ollama",
+                            "base_url": server.base_url,
+                            "api_path": "/api/chat",
+                            "model": "gemma4:e4b",
+                            "timeout_seconds": 2,
+                        }
+                    },
+                    db_path=db_path,
+                )
+                corpus_add(
+                    db_path=db_path,
+                    corpus_id="mcp-edge-batch-docs",
+                    repo="local",
+                    source_root=str(corpus_root),
+                    include=["**/*.md"],
+                    corpus_type="doc",
+                )
+                corpora_index(db_path=db_path, corpus_ids=["mcp-edge-batch-docs"])
+
+                result = semantic_edges_generate_batch(db_path=db_path, limit=4, batch_size=2)
+
+                self.assertEqual(result["source"], "semantic_edge_batch_job")
+                self.assertEqual(result["edge_count"], 1)
+                self.assertGreaterEqual(result["candidate_count"], 1)
+                self.assertTrue(any(node["kind"] == "doc_section" for node in result["graph"]["nodes"]))
         finally:
             server.shutdown()
             server.server_close()
@@ -290,7 +336,22 @@ class McpToolsTests(unittest.TestCase):
 
     def test_resolver_profile_tools_add_list_and_validate_dynamic_profile(self):
         with TemporaryDirectory() as tmpdir:
-            db_path = str(Path(tmpdir) / "asip.db")
+            root = Path(tmpdir)
+            db_path = str(root / "asip.db")
+            resolver_config = root / "mcp-python.yaml"
+            resolver_config.write_text(
+                "\n".join(
+                    [
+                        "id: mcp-python",
+                        "language: python",
+                        "context_vars: []",
+                        "symbol_prefixes: []",
+                        "python_extractors: [gpu_register]",
+                        "wrappers: {}",
+                    ]
+                ),
+                encoding="utf-8",
+            )
 
             created = resolver_profile_add(
                 db_path=db_path,
@@ -298,7 +359,7 @@ class McpToolsTests(unittest.TestCase):
                 language="python",
                 wrappers=["gpu_register"],
                 strategy="python-call",
-                path="configs/resolvers/mcp-python.yaml",
+                path=str(resolver_config),
                 enabled=True,
             )
             listed = resolver_profiles_list(db_path=db_path)

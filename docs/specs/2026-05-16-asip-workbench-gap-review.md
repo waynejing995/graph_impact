@@ -108,6 +108,12 @@ Current status is tracked in `docs/gaps/README.md`: most of these items now have
 
 ## Static-Hardcode Inventory
 
+2026-05-17 update: this document is historical context and is superseded by
+`docs/gaps/README.md` plus `docs/gaps/2026-05-17-gap-document-register.md`.
+The current rule is stricter than the notes below: the primary Web graph must
+use a maintained React/npm graph visualization package. A hand-coded SVG graph
+is not acceptable as the final `/graph` implementation.
+
 These are the current high-risk static areas that must be removed or demoted to fallback/empty-state data:
 
 - `apps/web/lib/page-data.ts`: page queries, filters, metrics, rows, inspector chains, relationship lines, and action labels.
@@ -124,7 +130,7 @@ These are the current high-risk static areas that must be removed or demoted to 
 
 - Web app status: the current route shell is a high-fidelity static prototype. `apps/web/lib/page-data.ts` still owns the main page content, and `WorkbenchPage` mostly renders that data rather than loading live product state.
 - Query status: `Run query` must be considered unimplemented until at least five different free-form queries change ranked rows, selected evidence, and graph data in a reproducible E2E run.
-- Graph status: the global graph must be data-driven. A hand-coded SVG can remain only as an empty-state or fixture fallback, never as the primary graph implementation.
+- Graph status: superseded by G03/G16/G17. The global graph must be data-driven and package-backed; a hand-coded SVG graph is not acceptable as the primary `/graph` implementation.
 - Provider status: Python core can express chat model provider configuration, but Web Settings still needs split edge-vs-embedding configuration, Ollama model detection, smoke/status endpoints, and real application of saved settings to query/index workflows.
 - Anchor status: canonical anchors in `docs/visual-anchors/images/` are normalized to `2048 x 1280`; raw imagegen outputs in `docs/visual-anchors/imagegen-raw/images/` are preserved but must not be used for QA geometry. Every post-implementation visual QA report must compare live pages to the canonical per-route anchor and logo.
 - Subagent limit: the current collaboration thread has a full subagent pool. Future implementation should reuse/close completed agents before dispatching more review workers.

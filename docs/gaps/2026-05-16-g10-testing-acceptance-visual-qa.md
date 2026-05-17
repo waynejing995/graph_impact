@@ -1,12 +1,19 @@
 # G10 Testing Acceptance And Visual QA
 
-Status: Blocking
+Status: Current package-backed graph, acceptance detail, and visual QA pass recorded; final completion gate remains in G11
 
 ## Requirement
 
 Completion requires TDD, automated tests, all nine MVP acceptance queries, acceptance QA, and post-functional-change visual QA against individual anchors.
 
 Every page must support light and dark themes. Visual QA targets a 2K desktop baseline.
+
+After the 2026-05-17 user review, visual/functional QA must also prove:
+
+- `/graph` is rendered through a maintained React/npm graph package, not a hand-written SVG layout.
+- Acceptance failures and partial results can be expanded to show query-level details, including failure reasons, missing surfaces, source paths/types, row counts, graph counts, and provider checks when present.
+- Standard workbench UI uses shadcn-native components or documented package primitives for standard controls.
+- Global graph QA must verify the graph contains code function operation nodes/edges, document/PDF section nodes, and batch semantic edges when the indexed corpus contains those inputs.
 
 ## Current Evidence
 
@@ -29,24 +36,28 @@ Every page must support light and dark themes. Visual QA targets a 2K desktop ba
 - Current clean AMD acceptance artifact `docs/qa/2026-05-17-acceptance-clean-amd-qwen35-provider-current.json` and `.md` records AQ01-AQ09 against `/tmp/asip-clean-amd-qwen35-provider-2026-05-17.db`: 9 total, 9 passed, DB health pass, surfaces `CLI/API/Web/MCP`, provider-sourced embeddings `ollama/nomic-embed-text:latest` count 961, and semantic-edge smoke `ollama/qwen3.5:4b`.
 - Current free-query and semantic-edge QA artifact `docs/qa/2026-05-17-clean-amd-free-query-and-edge-qa.json` and `.md` records six non-empty free-form queries, source types `code/doc/pdf/register`, NetworkX graph runtime for all query graphs and global graph, and two generated qwen3.5 semantic-edge jobs.
 - RED/GREEN fixes from this pass: PDF fixture extraction failed at 0 chunks before regenerating the reduced AMD PDF and adding fallback compressed-stream coverage; `dev:api` and MCP tool matrix failed before product route/server registration fixes; AQ06 failed at 8/9 before diverse selection protected injected `register` rows; qwen3.5 semantic-edge generation failed with truncated JSON until edge `num_predict` was raised to 1024.
-- Current visual QA `docs/qa/visual-qa-2026-05-17/visual-qa.md` records 2K route screenshots for six routes in dark and light themes: 6 passed, 0 failed. `/graph` shows 12 nodes and 4 weighted edges in both themes.
-- Latest automated verification after these changes: core unittest 85 OK with 1 sqlite-vec skip; API/MCP unittest 39 OK with 1 optional MCP runtime skip; TypeScript `pnpm --filter web exec tsc --noEmit` passed; Web API 18 passed; Web smoke 35 passed; visual route tests 13 passed.
-- Existing visual QA documents that say `PASS` predate later functional changes. They are historical evidence only until fresh page-by-page browser QA is recorded.
+- Current visual QA `docs/qa/visual-qa-2026-05-17/visual-qa.md` records 2K route screenshots for six routes in dark and light themes: 6 passed, 0 failed. `/graph` shows 12 nodes and 4 weighted edges in both themes. This is now stale for `/graph` after the package-first renderer decision.
+- 2026-05-17 user review found the Acceptance page pass/fail rows unclear because failures could not be expanded to see details. This is a G10/G14 blocker even if the backend artifact has the details.
+- Latest automated verification after the package/shadcn/static-data pass: core unittest 90 OK with 1 sqlite-vec skip; API/MCP unittest 41 OK with 1 optional MCP runtime skip; Web API Playwright 21 passed; Web smoke Playwright 39 passed; visual route Playwright 14 passed; `pnpm --filter web run lint` passed; `pnpm --filter web run build` passed; `pnpm --filter web exec tsc --noEmit --incremental false --pretty false` passed; `git diff --check` passed.
+- 2026-05-17 graph semantic QA passed for core function edges, doc section nodes, batch semantic-edge core/API/MCP/Web paths, package-backed graph API behavior, batch UI action, shadcn styled-control regression, browser `/graph` rendering with `react-force-graph-2d`, and light/dark visual route checks. Evidence is recorded in `docs/qa/2026-05-17-graph-function-section-batch-qa.md`.
+- Existing visual QA documents that say `PASS` before `docs/qa/2026-05-17-graph-function-section-batch-qa.md` are historical evidence; the current fresh route-level visual pass is the 14-test Playwright route suite plus the 2K graph screenshot in that QA doc.
 - The [MVP Acceptance Query Matrix](2026-05-16-mvp-acceptance-query-matrix.md) now tracks all nine acceptance queries individually.
 
 ## Remaining Gap
 
-The test suite now proves important pieces, including API-backed graph rendering, backend Settings hydration, no-match UI behavior, minimal resolver-profile indexing influence, a repeatable core/CLI acceptance artifact runner, qwen3.5 semantic-edge generation, clean AMD AQ01-AQ09, six real free-form queries, and 2K visual route QA. It still needs final G11/G17 design/spec reconciliation before completion:
+The test suite now proves the user-review blockers for this pass: package-backed graph rendering, expandable acceptance details, shadcn/Radix styled-control regression, batch semantic-edge generation, function-operation graph edges, document section nodes, no static default graph/query rows, and real add-index-query UI flow. The remaining gate is G11/G17 reconciliation and final user/commit/push workflow, not another missing package-graph implementation.
 
 `add corpus -> index raw inputs in a clean DB -> query live index -> inspect evidence -> render weighted graph -> verify visual anchors`.
 
-Visual QA has been rerun after the latest functional changes; it must be rerun again if more UI-affecting changes land before commit.
+Visual QA has been rerun after the graph package replacement and shadcn-native UI pass. It must be rerun again if more UI-affecting changes land before commit.
 
-The final acceptance run must use a clean named SQLite database. The dirty local `data/asip.db` can be useful for development, but it must not be treated as final QA evidence if it contains local test corpora or provider settings.
+Graph QA must not pass only because a canvas or SVG is nonblank. The data assertions must prove that the graph is built from the indexed corpus and includes the required graph layers: evidence-derived relations, function-to-register/field operations, document section nodes, and semantic edges generated by the configured LLM provider.
+
+The final acceptance run must use a clean named SQLite database. The dirty local `data/asip.db` is used only for live browser/dev graph evidence because it contains local test corpora and provider settings from E2E runs.
 
 The old clean provider AQ01-AQ09 pass is superseded by the source-gated failure artifact. The current clean AMD artifact now provides the healthy source-diverse DB evidence, current screenshots/visual-anchor review, and current automated suite evidence. Final QA still needs design/spec reconciliation and git hygiene review.
 
-Final QA must follow [Final Clean Evidence Package Gate](2026-05-17-final-clean-evidence-package.md); a narrower test pass cannot close G10/G11.
+Final QA must follow [Final Clean Evidence Package Gate](2026-05-17-final-clean-evidence-package.md); this pass closes the package/shadcn/graph/acceptance-detail G10 slice, while G11 owns the final completion claim and git gate.
 
 ## Acceptance Criteria
 
@@ -55,6 +66,8 @@ Final QA must follow [Final Clean Evidence Package Gate](2026-05-17-final-clean-
 - All nine MVP acceptance queries from `docs/specs/2026-05-16-asip-mvp1-design.md` are run and recorded, with source diversity limitations called out instead of hidden.
 - No-match query, provider failure, invalid corpus, and resolver validation failure states are tested.
 - Acceptance page reads current artifacts or runs the acceptance runner.
+- Acceptance page exposes expandable run/query details for partial/fail states instead of only compressed summary rows.
+- `/graph` has package-backed rendering with nonblank visual evidence, visible weighted edges, and interaction smoke for pan/zoom/drag or the selected package's equivalent.
 - Visual QA compares every live route to its own canonical anchor, not a combined board.
 - QA covers `/`, `/graph`, `/corpus`, `/resolver-profiles`, `/acceptance`, `/settings`, logo, light theme, dark theme, and route navigation persistence.
 
@@ -73,10 +86,15 @@ Final QA must follow [Final Clean Evidence Package Gate](2026-05-17-final-clean-
 - Web UI test: provider status remains `unverified` after save/backend hydration and changes to `verified` only after mocked provider smoke or mocked AQ09 success. Implemented for UI state semantics; live provider QA remains open.
 - Web UI test: Settings can run AQ09 against a user-supplied DB path through the real Web BFF/core runner and a local fake edge HTTP endpoint. Implemented for isolated DB product wiring; final clean AMD corpus and credentialed live provider QA remain open.
 - Core/API/Web test: semantic-edge generation can read indexed evidence, call the configured edge provider, persist generated edges into SQLite, and refresh the `/graph` page. Implemented with an isolated DB and local fake Ollama-compatible HTTP endpoint.
+- Core/API/Web test: batch semantic-edge generation reads indexed candidates beyond a selected query, calls the configured provider, persists edges with job provenance, and refreshes the global graph.
+- Core/API/Web test: global graph includes function operation edges and document section nodes when fixture inputs contain C functions and Markdown/PDF sections.
 - FastAPI/MCP tests: semantic-edge generation calls the same workbench job from `POST /semantic-edges` and `semantic_edges_generate()`. Implemented with isolated DBs and a local fake Ollama-compatible HTTP endpoint.
 - Web/MCP agreement test: implemented for Web BFF query/evidence/entity and MCP search/detail/entity functions against the same SQLite DB.
 - FastAPI live HTTP smoke: implemented with direct Uvicorn startup, root `pnpm dev:api`, and a read-only provider settings request against an explicit missing DB.
 - MCP server tool matrix: implemented with a fake FastMCP runtime proving all implemented product tools are registered by `apps/mcp/server.py`.
+- Web E2E test: acceptance failures expand and show query-level failure reasons, missing surfaces, source paths/types, row/graph counts, and artifact path.
+- Web E2E/browser test: package-backed graph renderer is visible, nonblank, weight-aware, and no longer tested by private hand-written SVG class names.
+- Web E2E/browser test: graph detail/summary exposes node-kind counts or labels proving functions, registers/fields, document sections, and semantic edges are present in the default global graph.
 - Visual screenshot capture at 2048 x 1280 after final functional changes.
 - E2E test for the full loop: add corpus, index, query unique symbol, graph changes, inspector shows source/snippet/resolved chain.
 - Design-review checklist mapping ASIP MVP-1 G1-G6 and all nine acceptance queries to evidence.

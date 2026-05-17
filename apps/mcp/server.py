@@ -24,6 +24,7 @@ from .tools import (
     resolver_profiles_list,
     run_acceptance,
     search_evidence,
+    semantic_edges_generate_batch,
     semantic_edges_generate,
 )
 
@@ -32,6 +33,7 @@ MCP_PRODUCT_TOOLS = [
     search_evidence,
     graph_expand,
     semantic_edges_generate,
+    semantic_edges_generate_batch,
     evidence_detail,
     entity_explain,
     corpora_list,

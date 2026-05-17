@@ -1,7 +1,7 @@
 # ASIP Gap Documents Before More Code
 
 Date: 2026-05-16
-Status: Final-candidate gap ledger before git gate
+Status: Current user-review blocker pass verified; final G11/git gate remains
 
 ## Purpose
 
@@ -18,6 +18,24 @@ non-closing evidence unless they are linked from that package. The active goal
 is still not complete until the final git gate, commit, push, and any residual
 boundary acceptance are done.
 
+2026-05-17 update: the previous final-candidate UI evidence is not sufficient.
+The user rejected the hand-written graph renderer and custom-looking UI
+surfaces. Completion now additionally requires:
+
+- package-backed React graph rendering for `/graph`,
+- shadcn/native package primitives for standard UI surfaces where available,
+- expandable acceptance failure/partial details,
+- fresh 2K light/dark visual QA after those UI changes.
+
+2026-05-17 current pass: those user-review blockers now have implementation
+and verification evidence in
+`docs/qa/2026-05-17-graph-function-section-batch-qa.md`: package-backed
+`react-force-graph-2d`, shadcn/Radix standard controls, expandable
+acceptance details, no static default query/graph rows, function-operation graph
+edges, document section graph nodes, batch semantic-edge jobs, real add-index-query
+UI loop, and fresh light/dark route QA. G11 remains the final gate for artifact
+hygiene, commit, push, and explicit deferrals.
+
 Supporting acceptance matrix:
 
 - [Gap Document Register Before Code](2026-05-17-gap-document-register.md): complete G01-G17/AQ register, current truth, user-visible complaint mapping, and implementation order before more code.
@@ -32,21 +50,21 @@ Supporting acceptance matrix:
 | --- | --- | --- | --- |
 | G01 | [Real Ingestion And Indexing](2026-05-16-g01-real-ingestion-indexing.md) | Partial; blocking | Raw-corpus SQLite indexing covers more MVP queries and configs include doc/PDF globs, but one clean AMD corpus run across code/docs/register/PDF still needs final verification. |
 | G02 | [Live Retrieval And Evidence Schema](2026-05-16-g02-live-retrieval-evidence-schema.md) | Partial; blocking | SQLite evidence schema, FTS, vector fallback retrieval, no-match/failure states, live inspector linkage, and clean AQ runner mechanics exist; rerank, cross-source evidence, and final visual/design closure remain open. |
-| G03 | [Dynamic Weighted Graph](2026-05-16-g03-dynamic-weighted-graph.md) | Partial; blocking | Global/no-seed, seed weighted graph paths, query graph/table/inspector linkage, and semantic-edge graph generation now exist; final clean-corpus graph QA and visual review still need closure. |
+| G03 | [Dynamic Weighted Graph](2026-05-16-g03-dynamic-weighted-graph.md) | Current pass verified; final gate | `/graph` now uses `react-force-graph-2d` over live no-seed graph data, with function-operation edges, section nodes, batch semantic edges, and browser/Playwright graph QA recorded. |
 | G04 | [Corpus Management](2026-05-16-g04-corpus-management.md) | Partial; blocking | Backend/API/MCP corpus add/list/index, UI selected-corpus indexing, invalid-source failure, and a real Web add-index-query loop exist; clean-DB closure and durable job-state UX remain open. |
 | G05 | [Resolver Profiles](2026-05-16-g05-resolver-profiles.md) | Partial; blocking | Backend add/list/validate, UI validation, disabled status, and a minimal indexing integration exist; edit-in-place, per-job selection, and richer extraction remain open. |
-| G06 | [Provider Settings And Ollama Detection](2026-05-16-g06-provider-settings-ollama.md) | Partial; blocking | Settings persist/hydrate, embedding provider calls, isolated AQ09 Web API provenance, Settings AQ09 UI/BFF wiring, semantic-edge product jobs, and clean DB local Ollama qwen3.5/nomic provider QA are tested; OpenAI-compatible credential/secret handling and query reranking remain open. |
+| G06 | [Provider Settings And Ollama Detection](2026-05-16-g06-provider-settings-ollama.md) | Current local/batch pass verified; explicit deferrals | Settings persist/hydrate, embedding provider calls, isolated AQ09 Web API provenance, Settings AQ09 UI/BFF wiring, query-scoped and batch semantic-edge jobs, and local Ollama `gemma4:e4b`/`qwen3.5`/`nomic` QA are tested; credentialed OpenAI-compatible secret handling and query reranking remain open boundaries. |
 | G07 | [API And MCP Product Surfaces](2026-05-16-g07-api-mcp.md) | Partial; blocking | Query/graph, selected acceptance execution, corpus/resolver/provider control-plane slices, evidence/entity detail slices, semantic-edge FastAPI/MCP parity, key read-route no-mutation coverage, FastAPI live HTTP smoke including `pnpm dev:api`, MCP server tool-matrix registration, and Web/MCP query/evidence/entity agreement exist; richer resolved-chain UX and optional real MCP runtime smoke remain open. |
-| G08 | [PDF And Document Ingestion](2026-05-16-g08-pdf-document-ingestion.md) | Partial; blocking | PDF conversion now has page-preserving pypdf coverage and one real AMD PDF extraction smoke, but indexed UI page citation QA remains open. |
+| G08 | [PDF And Document Ingestion](2026-05-16-g08-pdf-document-ingestion.md) | Partial; narrowed residual | PDF conversion/page evidence and Markdown/doc section graph nodes are proven; a separate browser proof for a real PDF-derived `pdf_section` node remains narrower residual evidence. |
 | G09 | [SQLite FTS5 Vector And NetworkX Runtime](2026-05-16-g09-storage-vector-graph-runtime.md) | Partial; blocking | FTS5, fallback vector retrieval, provider embeddings, and NetworkX graph work; native sqlite-vec runtime remains skipped. |
-| G10 | [Testing Acceptance And Visual QA](2026-05-16-g10-testing-acceptance-visual-qa.md) | Blocking | Broader unit/integration/E2E and clean provider AQ01-AQ09 runner evidence exist, but the final full-suite rerun and post-change visual QA are still required. |
-| G11 | [Completion Gate And Documentation Review](2026-05-16-g11-completion-gate.md) | Blocking | Final completion requires design-doc review, clean worktree hygiene, commit/push only after verified closure. |
+| G10 | [Testing Acceptance And Visual QA](2026-05-16-g10-testing-acceptance-visual-qa.md) | Current pass verified; final gate | Full current regression: core 90 OK, API/MCP 41 OK, Web API 21 passed, Web smoke 39 passed, visual routes 14 passed, lint/build/tsc/diff passed. |
+| G11 | [Completion Gate And Documentation Review](2026-05-16-g11-completion-gate.md) | Final gate open | Current blocker pass is verified; completion still requires generated artifact cleanup, final diff review, commit, push, and explicit residual deferral acceptance. |
 | G12 | [ASIC And IP Metadata Filtering](2026-05-16-g12-asic-ip-metadata-filtering.md) | Partial; blocking | Core/API/UI filters now affect query behavior; final acceptance and visual QA still need closure. |
 | G13 | [MVP Boundary And Full-Spec Deferrals](2026-05-16-g13-mvp-boundary-deferrals.md) | Blocking | Long-range full-spec items must be explicitly deferred so they do not masquerade as silent failures. |
-| G14 | [Static Data And Truthful Empty States](2026-05-16-g14-static-data-and-truthful-empty-states.md) | Partial; blocking | Query/graph empty and HTTP 500 states, live inspector linkage, acceptance failure, empty corpus/resolver responses, graph relationship-panel data, provider hydration race, Web BFF query/graph no-mutation, MCP/FastAPI no-auto-index read behavior, and status/list no-migration behavior are covered; live server smoke and remaining route-specific demo/fallback states remain. |
+| G14 | [Static Data And Truthful Empty States](2026-05-16-g14-static-data-and-truthful-empty-states.md) | Current pass verified; audit residual | Static default query/graph rows are removed from product paths, unused static artifact query/graph helpers were deleted, and empty/error states have E2E/API coverage; broader route audit remains tracked for final review. |
 | G15 | [Performance Smoke And Deterministic Rebuild](2026-05-16-g15-performance-smoke-deterministic-rebuild.md) | Blocking | MVP-1 needs fixture timing, deterministic rebuild evidence, and first real-corpus timing rather than only correctness tests. |
-| G16 | [Workbench IA Theme And Visual Fidelity](2026-05-16-g16-workbench-ia-theme-visual-fidelity.md) | Blocking | The Web UI must match the chosen evidence-workbench IA, anchors, source colors, and light/dark behavior after functional changes. |
-| G17 | [Architecture Ownership And Process Shape](2026-05-16-g17-architecture-ownership-process-shape.md) | Blocking | Core/API/MCP/Web ownership, vector adapter boundaries, NetworkX runtime shape, and TDD process must be reviewed before completion. |
+| G16 | [Workbench IA Theme And Visual Fidelity](2026-05-16-g16-workbench-ia-theme-visual-fidelity.md) | Current pass verified; final review | shadcn/Radix standard control pass, package graph renderer, light/dark persistence, and route visual tests are verified. |
+| G17 | [Architecture Ownership And Process Shape](2026-05-16-g17-architecture-ownership-process-shape.md) | Current pass recorded; final review | Core owns graph enrichment/batch semantic edges; API/MCP/Web are thin triggers; Web owns package adapter/shadcn UI composition; subagent review recorded residuals and fixes. |
 
 ## Final Evidence Package Gate
 
@@ -73,9 +91,10 @@ maps every gap to:
 - the required implementation order.
 
 The user-visible complaints currently mapped there are: free query not feeling
-real, incomplete global graph, hardcoded/static data, corpus control-plane gaps,
-resolver profile configurability gaps, split provider/Ollama detection gaps,
-acceptance execution gaps, and final per-page visual-anchor QA.
+real, incomplete global graph, hand-rolled graph/UI components, hardcoded/static
+data, corpus control-plane gaps, resolver profile configurability gaps, split
+provider/Ollama detection gaps, acceptance execution/detail gaps, and final
+per-page visual-anchor QA.
 
 ## Current Truth Snapshot
 

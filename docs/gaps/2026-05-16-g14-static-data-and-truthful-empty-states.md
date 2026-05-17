@@ -1,6 +1,6 @@
 # G14 Static Data And Truthful Empty States
 
-Status: Partial; main query/graph/corpus/resolver/acceptance/inspector truthfulness plus read-route no-mutation/status-list no-migration slices are covered; optional real MCP runtime smoke and remaining demo/fallback audit remain blocking
+Status: Partial/blocking; static data removal, package graph renderer, and acceptance detail truthfulness remain open
 
 ## Requirement
 
@@ -13,7 +13,11 @@ Static content may remain only as:
 - design-preview or visual-anchor reference material,
 - clearly labeled demo/seed data that is never merged into live query/index/provider responses.
 
+Implementation truthfulness also applies to UI widgets: a custom visualization or custom table must not make static/test-only structure look like a live product feature. Standard graph/table/detail behavior should use a maintained package or shadcn primitive where available, with ASIP-specific data clearly wired from live API payloads.
+
 This gap exists because the user explicitly challenged earlier completion claims after seeing hardcoded-looking graph/query behavior. Closing the MVP requires proving the UI is truthful when live data is missing, failing, or empty.
+
+Truthfulness for `/graph` now includes graph-source truthfulness. The UI must not present a tiny persisted-edge sample as the full global graph. It must expose whether the graph includes evidence-derived edges, function operation edges, document section nodes, and batch semantic edges, or show a clear incomplete/empty state while those jobs have not run.
 
 ## Current Evidence
 
@@ -93,10 +97,23 @@ This gap exists because the user explicitly challenged earlier completion claims
   - FastAPI live HTTP smoke covers both direct Uvicorn startup and the root `pnpm dev:api` script.
   - MCP server registration now exposes all implemented product tools through the FastMCP entrypoint under a fake runtime.
   - Verification: `PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=packages/core/src:. python3 -m unittest apps/api/tests/test_app.py apps/api/tests/test_runtime.py apps/mcp/tests/test_tools.py apps/mcp/tests/test_server.py -v` passed 39 tests with 1 optional MCP runtime skip.
+- 2026-05-17 user review reopened frontend truthfulness for graph and acceptance:
+  - The current `/graph` renderer is live-data backed but visually behaves like a small hand-written SVG preview, not a real global graph product surface.
+  - The Acceptance page compresses fail/partial runs into rows without expandable query-level detail, even though `asip.acceptance` artifacts contain `failure_reasons`, `missing_surfaces`, `source_paths`, `source_types`, provider checks, row counts, and graph counts.
+- Product truth now requires deleting hidden/static UI fallbacks, replacing the graph renderer with a package-backed React graph, and showing acceptance details through a real expandable UI.
+- 2026-05-17 graph semantic slice proves the default `/graph` can render live API payloads with 400 edges from the dirty local DB and exposes the batch semantic-edge action. Final route-by-route static/demo audit is still open.
 
 ## Remaining Gap
 
-The UI has become partially live, and query/graph/backend empty/failure paths plus selected Corpus failure, acceptance failure, empty corpus API, empty resolver API, graph relationship-panel paths, Web BFF query/graph read-route no-mutation, MCP/FastAPI default-corpus no-auto-index behavior, status/list no-migration behavior, FastAPI live HTTP smoke including `pnpm dev:api`, MCP server tool-matrix registration, and Web/MCP query/evidence/entity agreement are now explicitly covered. Initial Evidence Workbench success rows now come from the live query API, row-derived graph fallback no longer mixes `evidenceIndex` into API results, live query rows now drive the right inspector, user-added corpora can reach live query results through the Web UI, resolver validation now uses live backend state, and acceptance/corpus/resolver/graph routes no longer silently fall back to their most misleading static rows in the covered states. The static bootstrap layer is still broad enough that provider failure nuance, optional real MCP runtime smoke, and route-specific demo states need a route-by-route truth audit before this gap can close.
+The UI has become partially live, and query/graph/backend empty/failure paths plus selected Corpus failure, acceptance failure, empty corpus API, empty resolver API, graph relationship-panel paths, Web BFF query/graph read-route no-mutation, MCP/FastAPI default-corpus no-auto-index behavior, status/list no-migration behavior, FastAPI live HTTP smoke including `pnpm dev:api`, MCP server tool-matrix registration, and Web/MCP query/evidence/entity agreement are now explicitly covered. Initial Evidence Workbench success rows now come from the live query API, row-derived graph fallback no longer mixes `evidenceIndex` into API results, live query rows now drive the right inspector, user-added corpora can reach live query results through the Web UI, resolver validation now uses live backend state, and acceptance/corpus/resolver/graph routes no longer silently fall back to their most misleading static rows in the covered states.
+
+This gap remains open because static/default data and custom UI can still hide the truth:
+
+- `/graph` must not use hand-written fixed-layout SVG as the primary product renderer.
+- `/acceptance` must expose the real artifact/run detail behind fail/partial counts.
+- route-level fallback rows, static metrics, and demo labels must be audited again after the shadcn/package pass.
+- provider failure nuance, optional real MCP runtime smoke, and remaining route-specific demo states still need route-by-route truth audit before this gap can close.
+- graph provenance must be visible enough to distinguish raw explicit edges, indexed-evidence edges, function-operation edges, document-section edges, and LLM semantic edges. Missing graph layers must not be hidden behind a generic `ready` label.
 
 The product needs a clear data truth policy:
 
@@ -129,7 +146,11 @@ and explicitly accepted in G07/G17.
 - A no-match query shows an explicit empty state and does not merge `evidenceIndex`.
 - Corpus and resolver pages distinguish backend-persisted rows from local draft/demo rows.
 - Acceptance page distinguishes current-run artifacts from bundled historical QA artifacts.
+- Acceptance page expands fail/partial rows into live artifact/run details instead of making the user infer meaning from compressed counts.
 - Global graph route renders live API graph data or an explicit empty/error state, never a hidden static relation graph.
+- Global graph route uses a package-backed renderer for the live graph, not a static-looking hand SVG preview.
+- Global graph route labels or summarizes graph provenance so users can tell whether function, document-section, and semantic-edge layers are present.
+- Semantic-edge buttons/statuses distinguish no job run, running, succeeded with edge count, failed with provider evidence, and skipped due missing settings/candidates.
 - Read-style query/graph/status endpoints do not mutate index state unless the endpoint and UI explicitly say they are initializing/indexing.
 - Playwright tests cover backend empty, backend failure, no-match, and normal live-data states.
 
@@ -143,9 +164,13 @@ and explicitly accepted in G07/G17.
 - UI E2E test: graph API returns empty graph; `/graph` renders an empty graph state instead of hardcoded nodes.
 - UI E2E test: graph API returns HTTP 500; `/graph` renders an error state instead of hardcoded nodes.
 - UI E2E test: acceptance API returns HTTP 500; `/acceptance` renders an empty state instead of static historical QA rows.
+- UI E2E test: acceptance fail/partial run expands and shows failure reasons, missing surfaces, source paths/types, graph counts, and artifact path.
 - UI E2E test: corpus API returns `corpora: []`; `/corpus` renders an empty state instead of default corpus rows.
 - UI E2E test: resolver API returns `profiles: []`; `/resolver-profiles` renders an empty state instead of default resolver rows.
 - UI E2E test: graph API success updates the relationship panel from the API graph payload.
+- UI/browser test: graph package renderer receives the API payload and paints a nonblank weighted graph; tests must avoid private hand-written SVG selectors.
+- UI/API test: graph payload/provenance proves the default global graph is not a hardcoded/static sample and reports missing graph layers truthfully.
+- UI/API test: batch semantic-edge status and failure states do not show stale generated edges as if they came from the current provider/model.
 - API/architecture test or review checklist: `query` and `graph` read endpoints do not implicitly index/mutate state, or the implicit initialization is explicitly documented and accepted.
 - Design QA check: all visual anchors are treated as reference artifacts, not runtime data sources.
 

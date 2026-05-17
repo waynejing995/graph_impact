@@ -5,7 +5,9 @@ type SemanticEdgesRequest = {
   dbPath?: string;
   q?: string;
   query?: string;
+  mode?: string;
   limit?: number;
+  batchSize?: number;
 };
 
 export async function POST(request: Request) {
@@ -13,14 +15,29 @@ export async function POST(request: Request) {
   const dbPath = body.dbPath?.trim() || defaultDbPath;
   const query = (body.q ?? body.query ?? "").trim();
   const limit = Math.max(1, Math.min(24, Number(body.limit ?? 8) || 8));
+  const batchSize = Math.max(1, Math.min(12, Number(body.batchSize ?? 6) || 6));
+  const mode = String(body.mode ?? "query").trim().toLowerCase();
 
-  if (!query) {
+  if (mode !== "batch" && !query) {
     return NextResponse.json({ error: "semantic edge query is required" }, { status: 400 });
   }
 
   try {
     if (dbPath === defaultDbPath) {
       ensureWorkbenchIndex();
+    }
+    if (mode === "batch") {
+      return NextResponse.json(
+        runAsipCli<Record<string, unknown>>([
+          "semantic-edges-batch",
+          "--db",
+          dbPath,
+          "--limit",
+          String(limit),
+          "--batch-size",
+          String(batchSize)
+        ])
+      );
     }
     return NextResponse.json(
       runAsipCli<Record<string, unknown>>([

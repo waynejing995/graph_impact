@@ -25,14 +25,14 @@ test.describe("visual anchor route readiness", () => {
       await expect(page.getByRole("table", { name: "Evidence results" })).toBeVisible();
       await expect(page.getByTestId("relationship-panel")).toBeVisible();
       await expect(page.locator("[data-testid='marketing-hero']")).toHaveCount(0);
-      await expect(page.locator("[data-testid='graph-canvas']")).toHaveCount(0);
       await expect(page.locator(".workbench-grid")).toHaveCSS("display", "grid");
       if (pageCase.pageId === "graph-explorer") {
         await expect(page.getByTestId("global-network-graph")).toBeVisible();
-        await expect(page.getByLabel("Global weighted network graph")).toBeVisible();
+        await expect(page.getByTestId("force-graph")).toBeVisible();
+        await expect(page.getByTestId("force-graph")).toHaveAttribute("role", "img");
         await expect(page.getByText("weighted connections")).toBeVisible();
-        await expect(page.locator(".graph-edge-line").first()).toHaveAttribute("data-weight");
-        await expect(page.locator(".graph-edge-label").first()).toContainText(/\/ 0\.\d{2}/);
+        await expect(page.getByTestId("force-graph")).toContainText(/edges \d+/);
+        await expectForceGraphPainted(page);
       }
     });
   }
@@ -40,7 +40,7 @@ test.describe("visual anchor route readiness", () => {
 
 test("graph route renders API-backed weighted relation graph", async ({ page }) => {
   let graphApiRequested = false;
-  await page.route(/\/api\/workbench\/graph(?:\?|$)/, async (route) => {
+  await page.route("**/api/workbench/graph**", async (route) => {
     graphApiRequested = true;
     await route.fulfill({
       contentType: "application/json",
@@ -62,35 +62,21 @@ test("graph route renders API-backed weighted relation graph", async ({ page }) 
 
   await page.goto("/graph");
 
-  const strongEdgeWidth = await page.locator(".graph-edge-line--w5").evaluate((node) => {
-    return Number.parseFloat(node.getAttribute("stroke-width") ?? "0");
-  });
-  const weakEdgeWidth = await page.locator(".graph-edge-line--w1").first().evaluate((node) => {
-    return Number.parseFloat(node.getAttribute("stroke-width") ?? "0");
-  });
-  const strongEdgeWeight = await page.locator(".graph-edge-line--w5").getAttribute("data-weight");
-  const weakEdgeWeight = await page.locator(".graph-edge-line--w1").first().getAttribute("data-weight");
-  const centralNodeRadius = await page
-    .locator(".graph-bubble--register circle")
-    .first()
-    .evaluate((node) => Number.parseFloat(node.getAttribute("r") ?? "0"));
-  const peripheralNodeRadius = await page
-    .locator(".graph-bubble--neutral circle")
-    .evaluate((node) => Number.parseFloat(node.getAttribute("r") ?? "0"));
-
+  const forceGraph = page.getByTestId("force-graph");
+  await expect(forceGraph).toContainText("API_GRAPH_REGISTER");
   expect(graphApiRequested).toBe(true);
-  await expect(page.getByLabel("Global weighted network graph")).toContainText("API_GRAPH_REGISTER");
-  await expect(page.getByLabel("Global weighted network graph")).toContainText("api_sets_field / 0.91");
-  await expect(page.getByLabel("Global weighted network graph")).toContainText("api_relates / 0.28");
-  await expect(page.getByLabel("Global weighted network graph")).not.toContainText("maps_base / 0.68");
-  await expect(page.locator(".graph-edge-line")).toHaveCount(2);
+  await expect(forceGraph).toContainText("api_sets_field / 0.91");
+  await expect(forceGraph).toContainText("api_relates / 0.28");
+  await expect(forceGraph).not.toContainText("maps_base / 0.68");
+  await expect(forceGraph).toHaveAttribute("data-edge-count", "2");
+  const strongEdgeWeight = await forceGraph.getAttribute("data-strongest-weight");
+  const weakEdgeWeight = await forceGraph.getAttribute("data-weakest-weight");
   expect(Number(strongEdgeWeight)).toBeGreaterThan(Number(weakEdgeWeight));
-  expect(strongEdgeWidth).toBeGreaterThan(weakEdgeWidth);
-  expect(centralNodeRadius).toBeGreaterThan(peripheralNodeRadius);
+  await expectForceGraphPainted(page);
 });
 
 test("graph route requests global graph without a default seed and renders API_GLOBAL nodes", async ({ page }) => {
-  await page.route(/\/api\/workbench\/graph(?:\?|$)/, async (route) => {
+  await page.route("**/api/workbench/graph**", async (route) => {
     await route.fulfill({
       contentType: "application/json",
       body: JSON.stringify({
@@ -132,10 +118,45 @@ test("graph route requests global graph without a default seed and renders API_G
   expect(requested.searchParams.has("seed")).toBe(false);
   expect(requested.searchParams.has("queryId")).toBe(false);
   expect(requested.toString()).not.toContain("DOORBELL_INTERRUPT_DISABLE");
-  await expect(page.getByLabel("Global weighted network graph")).toContainText("API_GLOBAL_REGISTER");
-  await expect(page.getByLabel("Global weighted network graph")).toContainText("API_GLOBAL_FIELD");
-  await expect(page.getByLabel("Global weighted network graph")).toContainText("API_GLOBAL_DOC");
-  await expect(page.locator(".graph-edge-line")).toHaveCount(2);
+  const forceGraph = page.getByTestId("force-graph");
+  await expect(forceGraph).toContainText("API_GLOBAL_REGISTER");
+  await expect(forceGraph).toContainText("API_GLOBAL_FIELD");
+  await expect(forceGraph).toContainText("API_GLOBAL_DOC");
+  await expect(forceGraph).toHaveAttribute("data-edge-count", "2");
+  await expectForceGraphPainted(page);
+});
+
+test("graph route keeps a global node set instead of collapsing to a tiny seed preview", async ({ page }) => {
+  const nodes = Array.from({ length: 18 }, (_, index) => ({
+    id: `API_GLOBAL_NODE_${index + 1}`,
+    kind: index % 3 === 0 ? "register" : index % 3 === 1 ? "field" : "doc",
+    weight: 18 - index
+  }));
+  const edges = nodes.slice(1).map((node, index) => ({
+    src: nodes[index].id,
+    dst: node.id,
+    relation: "api_global_link",
+    confidence: 0.95 - index * 0.03,
+    weight: 0.95 - index * 0.03
+  }));
+  await page.route("**/api/workbench/graph**", async (route) => {
+    await route.fulfill({
+      contentType: "application/json",
+      body: JSON.stringify({
+        queryId: "global",
+        source: "networkx",
+        graph_runtime: "networkx",
+        nodes,
+        edges
+      })
+    });
+  });
+
+  await page.goto("/graph");
+
+  await expect(page.getByTestId("force-graph")).toContainText("API_GLOBAL_NODE_18");
+  await expect(page.getByTestId("force-graph")).toHaveAttribute("data-node-count", "18");
+  await expectForceGraphPainted(page);
 });
 
 test("desktop and mobile screenshots keep the workbench styled", async ({ page }) => {
@@ -217,15 +238,42 @@ test("graph visualization stays visible in light and dark modes", async ({ page 
   await page.goto("/graph");
 
   const graph = page.getByTestId("global-network-graph");
-  const graphSvg = page.getByLabel("Global weighted network graph");
+  const forceGraph = page.getByTestId("force-graph");
 
   await expect(page.locator("html")).toHaveAttribute("data-theme", "dark");
   await expect(graph).toBeVisible();
-  await expect(graphSvg).toBeVisible();
+  await expect(forceGraph).toBeVisible();
+  await expectForceGraphPainted(page);
 
   await page.getByRole("button", { name: "Switch to light theme" }).click();
   await expect(page.locator("html")).toHaveAttribute("data-theme", "light");
   await expect(graph).toBeVisible();
-  await expect(graphSvg).toBeVisible();
-  await expect(page.locator(".graph-edge-line").first()).toHaveAttribute("data-weight");
+  await expect(forceGraph).toBeVisible();
+  await expectForceGraphPainted(page);
 });
+
+async function expectForceGraphPainted(page: import("@playwright/test").Page) {
+  const canvas = page.getByTestId("force-graph").locator("canvas").first();
+  await expect(canvas).toBeVisible();
+  await expect
+    .poll(
+      async () =>
+        canvas.evaluate((element) => {
+          const graphCanvas = element as HTMLCanvasElement;
+          const context = graphCanvas.getContext("2d");
+          if (!context || graphCanvas.width === 0 || graphCanvas.height === 0) {
+            return 0;
+          }
+          const pixels = context.getImageData(0, 0, graphCanvas.width, graphCanvas.height).data;
+          let painted = 0;
+          for (let index = 3; index < pixels.length; index += 64) {
+            if (pixels[index] > 0) {
+              painted += 1;
+            }
+          }
+          return painted;
+        }),
+      { timeout: 10_000 }
+    )
+    .toBeGreaterThan(20);
+}

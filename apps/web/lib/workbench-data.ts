@@ -33,19 +33,6 @@ type SourceSnippet = {
   text: string;
 };
 
-type GeneratedCase = {
-  id: string;
-  edges?: GraphEdge[];
-};
-
-type GraphEdge = {
-  src: string;
-  relation: string;
-  dst: string;
-  confidence: number;
-  evidence: string;
-};
-
 type QueryResult = {
   id: string;
   case: string;
@@ -57,6 +44,22 @@ type QueryResult = {
   edge_count: number;
   source_hit_count: number;
   sources: string[];
+};
+
+type AcceptanceDetail = {
+  id: string;
+  status: string;
+  query?: string;
+  failureReasons: string[];
+  missing: string[];
+  missingSurfaces: string[];
+  sourcePaths: string[];
+  sourceTypes: string[];
+  retrievalSources: string[];
+  rowCount?: number;
+  graphEdgeCount?: number;
+  edgeCount?: number;
+  sourceHitCount?: number;
 };
 
 type FullCorpusRun = {
@@ -79,7 +82,7 @@ type FullCorpusRun = {
     summary: Record<string, unknown>;
   };
   generated: {
-    cases: GeneratedCase[];
+    cases?: unknown[];
     errors?: unknown[];
   };
   query_results: QueryResult[];
@@ -97,12 +100,31 @@ type FullCorpusRun = {
 type AcceptanceQueryRun = {
   source: "asip.acceptance";
   db_path: string;
+  database_health?: {
+    status?: string;
+    failure_reasons?: string[];
+  };
   summary: {
     total: number;
     passed: number;
     partial: number;
     failed: number;
   };
+  queries?: Array<{
+    id: string;
+    query?: string;
+    status: string;
+    failure_reasons?: string[];
+    missing?: string[];
+    missing_surfaces?: string[];
+    source_paths?: string[];
+    source_types?: string[];
+    retrieval_sources?: string[];
+    row_count?: number;
+    graph_edge_count?: number;
+    edge_count?: number;
+    source_hit_count?: number;
+  }>;
 };
 
 export type WorkbenchEvidenceRow = {
@@ -141,21 +163,6 @@ export function getCorpora() {
   });
 }
 
-export function searchWorkbench(query: string) {
-  const run = readDefaultRun();
-  const selected = selectQuery(run.scan.queries, query);
-  const graph = buildGraphForQuery(selected.id);
-  const rows = buildEvidenceRows(selected, run.query_results.find((result) => result.case === selected.id), graph.edges);
-
-  return {
-    query: query.trim(),
-    queryId: selected.id,
-    question: selected.question,
-    rows,
-    graph
-  };
-}
-
 export function listAcceptanceRuns() {
   const qaDir = path.join(repoRoot, "docs/qa");
   const files = readdirSync(qaDir)
@@ -184,7 +191,23 @@ export function listAcceptanceRuns() {
         resolvedQueryCount: run.summary.total - run.summary.failed,
         totalFilesScanned: 0,
         batchSize: 0,
-        errorCount: run.summary.failed
+        errorCount: run.summary.failed,
+        databaseHealth: buildDatabaseHealthDetails(run),
+        details: (run.queries ?? []).map((query) => ({
+          id: query.id,
+          status: query.status,
+          query: query.query,
+          failureReasons: query.failure_reasons ?? [],
+          missing: query.missing ?? [],
+          missingSurfaces: query.missing_surfaces ?? [],
+          sourcePaths: query.source_paths ?? [],
+          sourceTypes: query.source_types ?? [],
+          retrievalSources: query.retrieval_sources ?? [],
+          rowCount: query.row_count,
+          graphEdgeCount: query.graph_edge_count,
+          edgeCount: query.edge_count,
+          sourceHitCount: query.source_hit_count
+        }))
       };
     }
     return {
@@ -199,7 +222,8 @@ export function listAcceptanceRuns() {
       resolvedQueryCount: run.summary.resolved_query_count,
       totalFilesScanned: run.summary.total_files_scanned,
       batchSize: run.summary.batch_size,
-      errorCount: run.generated.errors?.length ?? 0
+      errorCount: run.generated.errors?.length ?? 0,
+      details: buildFullCorpusDetails(run)
     };
   });
 }
@@ -223,31 +247,46 @@ export function listResolverProfiles() {
     });
 }
 
-export function buildGraphForQuery(queryId: string) {
-  const run = readDefaultRun();
-  const generated = run.generated.cases.find((item) => item.id === queryId);
-  const query = run.scan.queries.find((item) => item.id === queryId);
-  const edges = generated?.edges ?? [];
-  const nodeWeights = new Map<string, { id: string; kind: string; weight: number }>();
-
-  for (const edge of edges) {
-    addNode(nodeWeights, edge.src);
-    addNode(nodeWeights, edge.dst);
-  }
-  for (const term of query?.expected_terms ?? []) {
-    addNode(nodeWeights, term);
-  }
-
-  return {
-    queryId,
-    nodes: Array.from(nodeWeights.values()).sort((left, right) => right.weight - left.weight),
-    edges,
-    snippets: query?.snippets ?? []
-  };
-}
-
 function isAcceptanceQueryRun(run: FullCorpusRun | AcceptanceQueryRun): run is AcceptanceQueryRun {
   return (run as AcceptanceQueryRun).source === "asip.acceptance";
+}
+
+function buildDatabaseHealthDetails(run: AcceptanceQueryRun): AcceptanceDetail[] {
+  if (!run.database_health || run.database_health.status === "pass") {
+    return [];
+  }
+  return [
+    {
+      id: "database_health",
+      status: run.database_health.status ?? "unknown",
+      failureReasons: run.database_health.failure_reasons ?? [],
+      missing: [],
+      missingSurfaces: [],
+      sourcePaths: [run.db_path],
+      sourceTypes: [],
+      retrievalSources: []
+    }
+  ];
+}
+
+function buildFullCorpusDetails(run: FullCorpusRun): AcceptanceDetail[] {
+  const queriesById = new Map(run.scan.queries.map((query) => [query.id, query]));
+  return run.query_results.map((result) => {
+    const query = queriesById.get(result.case);
+    return {
+      id: result.id,
+      status: result.passed ? "pass" : "fail",
+      query: query?.question,
+      failureReasons: result.passed ? [] : [`missing terms: ${result.missing.join(", ") || "not recorded"}`],
+      missing: result.missing ?? [],
+      missingSurfaces: result.missing_in_sources ?? [],
+      sourcePaths: result.sources ?? [],
+      sourceTypes: [],
+      retrievalSources: [],
+      edgeCount: result.edge_count,
+      sourceHitCount: result.source_hit_count
+    };
+  });
 }
 
 function readFullCorpusConfig() {
@@ -263,115 +302,6 @@ function readJson<T>(filePath: string): T {
     throw new Error(`Missing workbench artifact: ${path.relative(repoRoot, filePath)}`);
   }
   return JSON.parse(readFileSync(filePath, "utf8")) as T;
-}
-
-function selectQuery(queries: ArtifactQuery[], rawQuery: string) {
-  const tokens = tokenize(rawQuery);
-  const scored = queries.map((query) => {
-    const haystack = [
-      query.id,
-      query.question,
-      ...query.terms,
-      ...query.expected_terms,
-      ...(query.snippets ?? []).map((snippet) => snippet.text)
-    ]
-      .join(" ")
-      .toLowerCase();
-    return {
-      query,
-      score: tokens.reduce((sum, token) => sum + (haystack.includes(token) ? 1 : 0), 0)
-    };
-  });
-
-  return scored.sort((left, right) => right.score - left.score)[0]?.query ?? queries[0];
-}
-
-function buildEvidenceRows(query: ArtifactQuery, result: QueryResult | undefined, edges: GraphEdge[]) {
-  const sourceRows = (query.snippets ?? []).flatMap((snippet) =>
-    query.expected_terms.map((term): WorkbenchEvidenceRow => ({
-      source: query.corpus,
-      tone: toneForSymbol(term),
-      symbol: term,
-      relation: "term_match",
-      score: result?.passed ? "pass" : "source",
-      path: `${snippet.path}:${snippet.line_start}-${snippet.line_end}`,
-      snippet: snippet.text
-    }))
-  );
-
-  const edgeRows = edges.map((edge): WorkbenchEvidenceRow => ({
-    source: "edge",
-    tone: toneForSymbol(edge.dst),
-    symbol: edge.dst,
-    relation: edge.relation,
-    score: edge.confidence.toFixed(2),
-    path: edge.evidence
-  }));
-
-  return [...sourceRows, ...edgeRows].filter(
-    (row, index, allRows) =>
-      allRows.findIndex(
-        (candidate) =>
-          candidate.symbol === row.symbol && candidate.relation === row.relation && candidate.path === row.path
-      ) === index
-  );
-}
-
-function addNode(nodes: Map<string, { id: string; kind: string; weight: number }>, id: string) {
-  const normalized = normalizeNodeId(id);
-  const existing = nodes.get(normalized);
-  if (existing) {
-    existing.weight += 1;
-    return;
-  }
-  nodes.set(normalized, {
-    id: normalized,
-    kind: kindForSymbol(normalized),
-    weight: 1
-  });
-}
-
-function normalizeNodeId(id: string) {
-  const fieldMarker = "__";
-  if (id.includes(fieldMarker)) {
-    return id.slice(id.lastIndexOf(fieldMarker) + fieldMarker.length);
-  }
-  return id;
-}
-
-function kindForSymbol(symbol: string) {
-  if (/ENABLE|DISABLE|PENDING|MASK|SHIFT|MODE|SIZE|BASE/i.test(symbol) && !/CNTL|STATUS|REG/i.test(symbol)) {
-    return "field";
-  }
-  if (/CNTL|STATUS|REG|GCVM|GRBM|CP_|BIF_|RLC_|RB_/i.test(symbol)) {
-    return "register";
-  }
-  if (/\.pdf|doc|rst/i.test(symbol)) {
-    return "doc";
-  }
-  return "code";
-}
-
-function toneForSymbol(symbol: string): WorkbenchEvidenceRow["tone"] {
-  const kind = kindForSymbol(symbol);
-  if (kind === "field") {
-    return "success";
-  }
-  if (kind === "register") {
-    return "register";
-  }
-  if (kind === "doc") {
-    return "doc";
-  }
-  return "code";
-}
-
-function tokenize(query: string) {
-  return query
-    .toLowerCase()
-    .split(/[^a-z0-9_]+/)
-    .map((token) => token.trim())
-    .filter((token) => token.length > 2 && !new Set(["which", "what", "who", "the", "and", "for"]).has(token));
 }
 
 function runIdFromArtifact(file: string) {

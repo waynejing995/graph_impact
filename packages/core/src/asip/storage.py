@@ -4,8 +4,11 @@ from __future__ import annotations
 
 import json
 import math
+import re
 import sqlite3
 from dataclasses import dataclass
+from itertools import combinations
+from pathlib import Path
 from typing import Dict, Iterable, List, Optional
 
 
@@ -602,27 +605,151 @@ class AsipStore:
         }
 
     def global_graph_networkx(self, limit: int = 100) -> Dict[str, object]:
-        graph = self.to_networkx()
-        edges = [
-            {
-                "src": src,
-                "dst": dst,
-                "relation": data["relation"],
-                "confidence": float(data["confidence"]),
-            }
-            for src, dst, data in graph.edges(data=True)
-        ]
-        edges.sort(
-            key=lambda edge: (-float(edge["confidence"]), str(edge["src"]), str(edge["dst"]), str(edge["relation"]))
+        edge_limit = max(0, int(limit))
+        edge_stats: Dict[tuple[str, str, str], Dict[str, object]] = {}
+        node_kinds: Dict[str, str] = {}
+
+        def remember_node(node_id: str, kind: str) -> None:
+            if node_id and kind:
+                node_kinds.setdefault(node_id, _normalize_graph_kind(kind))
+
+        def add_edge(src: str, dst: str, relation: str, confidence: float, src_kind: str, dst_kind: str) -> None:
+            src = src.strip()
+            dst = dst.strip()
+            relation = relation.strip() or "related"
+            if not src or not dst or src == dst:
+                return
+            bounded_confidence = max(0.05, min(1.0, float(confidence or 0.5)))
+            key = (src, dst, relation)
+            stats = edge_stats.setdefault(key, {"confidence_sum": 0.0, "count": 0})
+            stats["confidence_sum"] = float(stats["confidence_sum"]) + bounded_confidence
+            stats["count"] = int(stats["count"]) + 1
+            remember_node(src, src_kind)
+            remember_node(dst, dst_kind)
+
+        for row in self.con.execute("select src, dst, relation, confidence from edges"):
+            add_edge(
+                str(row["src"]),
+                str(row["dst"]),
+                str(row["relation"]),
+                float(row["confidence"]),
+                _kind_for_graph_symbol(str(row["src"])),
+                _kind_for_graph_symbol(str(row["dst"])),
+            )
+
+        symbols_by_chunk: Dict[int, List[tuple[str, str, float]]] = {}
+        evidence_rows = self.con.execute(
+            """
+            select
+              evidence.chunk_id,
+              evidence.corpus_id,
+              evidence.source_type,
+              evidence.path,
+              evidence.line_start,
+              evidence.page,
+              evidence.symbol,
+              evidence.entity_type,
+              evidence.access_type,
+              evidence.confidence,
+              chunks.text as chunk_text,
+              corpora.source_root as source_root
+            from evidence
+            join chunks on chunks.id = evidence.chunk_id
+            left join corpora on corpora.id = evidence.corpus_id
+            order by evidence.chunk_id, evidence.confidence desc, evidence.id asc
+            """
         )
-        selected_edges = edges[: max(0, limit)]
+        function_cache: Dict[tuple[str, str, int, str], str] = {}
+        for row in evidence_rows:
+            symbol = str(row["symbol"])
+            entity_type = str(row["entity_type"] or "")
+            source_type = str(row["source_type"] or "code")
+            if not _is_meaningful_graph_symbol(symbol, entity_type):
+                continue
+            confidence = float(row["confidence"] or 0.5)
+            symbol_kind = _kind_for_graph_evidence(source_type, entity_type, symbol)
+            path = str(row["path"] or "")
+            path_kind = _normalize_graph_kind(source_type)
+            add_edge(symbol, path, f"appears_in_{path_kind}", confidence * 0.74, symbol_kind, path_kind)
+            section_id, section_kind = _section_node_for_graph_row(row)
+            if section_id:
+                add_edge(
+                    section_id,
+                    symbol,
+                    "section_mentions",
+                    confidence * 0.92,
+                    section_kind,
+                    symbol_kind,
+                )
+            if source_type == "code":
+                function_name = _function_context_for_graph_row(row, function_cache)
+                if function_name:
+                    add_edge(
+                        function_name,
+                        symbol,
+                        _operation_relation_for_graph(str(row["access_type"] or "mention")),
+                        confidence * 0.98,
+                        "code",
+                        symbol_kind,
+                    )
+                    add_edge(function_name, path, "defined_in", confidence * 0.56, "code", path_kind)
+            chunk_id = int(row["chunk_id"])
+            chunk_symbols = symbols_by_chunk.setdefault(chunk_id, [])
+            if not any(existing_symbol == symbol for existing_symbol, _kind, _confidence in chunk_symbols):
+                chunk_symbols.append((symbol, symbol_kind, confidence))
+
+        for chunk_symbols in symbols_by_chunk.values():
+            ranked = chunk_symbols[:8]
+            for left, right in combinations(ranked, 2):
+                src, dst = _ordered_graph_pair(left, right)
+                add_edge(
+                    src[0],
+                    dst[0],
+                    "co_occurs",
+                    (src[2] + dst[2]) / 2,
+                    src[1],
+                    dst[1],
+                )
+
+        edges = []
+        for (src, dst, relation), stats in edge_stats.items():
+            count = int(stats["count"])
+            average_confidence = float(stats["confidence_sum"]) / max(1, count)
+            frequency_boost = min(0.35, math.log1p(count) / 12) if count > 1 else 0.0
+            weight = min(1.0, average_confidence + frequency_boost)
+            edges.append(
+                {
+                    "src": src,
+                    "dst": dst,
+                    "relation": relation,
+                    "confidence": round(min(1.0, average_confidence), 4),
+                    "weight": round(weight, 4),
+                    "count": count,
+                }
+            )
+        edges.sort(
+            key=lambda edge: (
+                _graph_relation_priority(str(edge["relation"])),
+                -float(edge["weight"]),
+                -int(edge["count"]),
+                -float(edge["confidence"]),
+                str(edge["src"]),
+                str(edge["dst"]),
+                str(edge["relation"]),
+            )
+        )
+        selected_edges = edges[:edge_limit]
         node_weights: Dict[str, float] = {}
         for edge in selected_edges:
-            confidence = float(edge["confidence"])
-            node_weights[str(edge["src"])] = node_weights.get(str(edge["src"]), 0.0) + confidence
-            node_weights[str(edge["dst"])] = node_weights.get(str(edge["dst"]), 0.0) + confidence
+            weight = float(edge["weight"])
+            node_weights[str(edge["src"])] = node_weights.get(str(edge["src"]), 0.0) + weight
+            node_weights[str(edge["dst"])] = node_weights.get(str(edge["dst"]), 0.0) + weight
         nodes = [
-            {"id": node, "weight": round(weight, 4)}
+            {
+                "id": node,
+                "kind": node_kinds.get(node, _kind_for_graph_symbol(node)),
+                "weight": round(weight, 4),
+            }
             for node, weight in sorted(node_weights.items(), key=lambda item: (-item[1], item[0]))
         ]
         return {
@@ -655,3 +782,187 @@ def _cosine_similarity(left: List[float], right: List[float]) -> float:
     if left_norm == 0 or right_norm == 0:
         return 0.0
     return dot / (left_norm * right_norm)
+
+
+_GRAPH_STOP_WORDS = {
+    "THE",
+    "AND",
+    "FOR",
+    "WITH",
+    "WITHOUT",
+    "WARRANTY",
+    "WARRANTIES",
+    "SOFTWARE",
+    "PURPOSE",
+    "PROVIDED",
+    "SHALL",
+    "OTHER",
+    "OTHERWISE",
+    "PARTICULAR",
+    "TORT",
+}
+
+
+def _is_meaningful_graph_symbol(symbol: str, entity_type: str) -> bool:
+    if len(symbol) < 3 or symbol.upper() in _GRAPH_STOP_WORDS:
+        return False
+    if "->" in symbol or "_" in symbol or re.search(r"\d", symbol):
+        return True
+    if symbol.startswith(("reg", "mm", "RREG", "WREG", "REG_")):
+        return True
+    return entity_type in {"register", "field", "macro", "context"} and len(symbol) > 3
+
+
+def _normalize_graph_kind(kind: str) -> str:
+    normalized = kind.lower()
+    if normalized in {"register", "macro"}:
+        return "register"
+    if normalized in {"field"}:
+        return "field"
+    if normalized in {"doc_section", "section"}:
+        return "doc_section"
+    if normalized in {"pdf_section", "pdf_page"}:
+        return "pdf_section"
+    if normalized in {"doc"}:
+        return "doc"
+    if normalized in {"pdf"}:
+        return "pdf"
+    return "code"
+
+
+def _kind_for_graph_symbol(symbol: str) -> str:
+    if re.search(r"ENABLE|DISABLE|PENDING|MASK|SHIFT|RESET_REQUEST|INVALIDATE|FIELD", symbol):
+        return "field"
+    if symbol.startswith(("reg", "mm", "RREG", "WREG", "REG_")) or re.search(
+        r"CNTL|STATUS|RESET|BASE|SIZE|VMID|DOORBELL|QUEUE",
+        symbol,
+    ):
+        return "register"
+    return "code"
+
+
+def _kind_for_graph_evidence(source_type: str, entity_type: str, symbol: str) -> str:
+    if entity_type in {"register", "field", "macro", "context"}:
+        return _normalize_graph_kind(entity_type)
+    inferred = _kind_for_graph_symbol(symbol)
+    if inferred != "code":
+        return inferred
+    return _normalize_graph_kind(source_type)
+
+
+def _ordered_graph_pair(
+    left: tuple[str, str, float],
+    right: tuple[str, str, float],
+) -> tuple[tuple[str, str, float], tuple[str, str, float]]:
+    priority = {"register": 0, "field": 1, "code": 2, "doc": 3, "pdf": 3}
+    left_key = (priority.get(left[1], 9), left[0])
+    right_key = (priority.get(right[1], 9), right[0])
+    return (left, right) if left_key <= right_key else (right, left)
+
+
+def _operation_relation_for_graph(access_type: str) -> str:
+    if access_type in {"field_set", "read", "write", "read_modify_write"}:
+        return access_type
+    return "mentions"
+
+
+def _section_node_for_graph_row(row: sqlite3.Row) -> tuple[str, str]:
+    source_type = str(row["source_type"] or "")
+    if source_type not in {"doc", "pdf"}:
+        return "", ""
+    path = str(row["path"] or "").strip()
+    if not path:
+        return "", ""
+    chunk_text = str(row["chunk_text"] or "")
+    heading = _first_markdown_heading(chunk_text)
+    if heading:
+        return f"{path}#{_slug_for_graph_heading(heading)}", "doc_section" if source_type == "doc" else "pdf_section"
+    if source_type == "pdf":
+        page = int(row["page"] or 0) if "page" in row.keys() else 0
+        if page:
+            return f"{path}#page-{page}", "pdf_section"
+    line_start = int(row["line_start"] or 0)
+    if line_start:
+        return f"{path}#lines-{line_start}", "doc_section" if source_type == "doc" else "pdf_section"
+    return f"{path}#section", "doc_section" if source_type == "doc" else "pdf_section"
+
+
+def _first_markdown_heading(text: str) -> str:
+    for line in text.splitlines():
+        match = re.match(r"^\s{0,3}(?:\d+:\s*)?#{1,6}\s+(.+?)\s*$", line)
+        if match:
+            return match.group(1).strip().strip("#").strip()
+    return ""
+
+
+def _slug_for_graph_heading(heading: str) -> str:
+    slug = re.sub(r"[^a-z0-9]+", "-", heading.lower()).strip("-")
+    return slug or "section"
+
+
+def _graph_relation_priority(relation: str) -> int:
+    if relation in {"field_set", "read", "write", "read_modify_write", "sets_field"}:
+        return 0
+    if relation in {"has_field", "used_by", "calls", "wraps", "maps_base", "documented_by"}:
+        return 1
+    if relation == "section_mentions":
+        return 2
+    if relation == "co_occurs":
+        return 3
+    if relation.startswith("appears_in"):
+        return 4
+    if relation == "defined_in":
+        return 5
+    return 6
+
+
+def _function_context_for_graph_row(
+    row: sqlite3.Row,
+    cache: Dict[tuple[str, str, int, str], str],
+) -> str:
+    path = str(row["path"] or "")
+    source_root = str(row["source_root"] or "")
+    line_start = int(row["line_start"] or 0)
+    chunk_text = str(row["chunk_text"] or "")
+    cache_key = (source_root, path, line_start, chunk_text[:80])
+    if cache_key in cache:
+        return cache[cache_key]
+
+    function_name = ""
+    if path and source_root:
+        candidate = (Path(source_root).expanduser() / path).resolve()
+        if candidate.exists() and candidate.is_file():
+            function_name = _function_name_from_source_file(candidate, line_start)
+    if not function_name:
+        function_name = _function_name_from_chunk_text(chunk_text)
+    cache[cache_key] = function_name
+    return function_name
+
+
+def _function_name_from_source_file(file_path: Path, line_start: int) -> str:
+    try:
+        lines = file_path.read_text(encoding="utf-8", errors="replace").splitlines()
+    except OSError:
+        return ""
+    if not lines:
+        return ""
+    end = min(max(1, line_start), len(lines))
+    start = max(0, end - 800)
+    return _last_function_name_in_text("\n".join(lines[start:end]))
+
+
+def _function_name_from_chunk_text(text: str) -> str:
+    cleaned = re.sub(r"(?m)^\s*\d+:\s?", "", text)
+    return _last_function_name_in_text(cleaned)
+
+
+def _last_function_name_in_text(text: str) -> str:
+    pattern = re.compile(
+        r"(?ms)^\s*(?:static\s+)?(?:inline\s+)?(?:[A-Za-z_][\w\s\*]*\s+)+(?P<name>[A-Za-z_]\w*)\s*\([^;{}]*\)\s*\{"
+    )
+    ignored = {"if", "for", "while", "switch", "return", "sizeof"}
+    matches = [match.group("name") for match in pattern.finditer(text)]
+    for name in reversed(matches):
+        if name not in ignored:
+            return name
+    return ""

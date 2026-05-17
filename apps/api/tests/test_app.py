@@ -136,6 +136,62 @@ class ApiAppTests(unittest.TestCase):
             server.shutdown()
             server.server_close()
 
+    def test_semantic_edges_endpoint_runs_batch_generation(self):
+        server = _start_fake_edge_server()
+        try:
+            with TemporaryDirectory() as tmpdir:
+                root = Path(tmpdir)
+                corpus_root = root / "corpus"
+                corpus_root.mkdir()
+                (corpus_root / "note.md").write_text(
+                    "# FastAPI semantic batch\n"
+                    "GCVM_L2_CNTL has field ENABLE_L2_CACHE for FastAPI batch semantic edge generation.",
+                    encoding="utf-8",
+                )
+                db_path = str(root / "asip.db")
+                self.client.post(
+                    "/providers/settings",
+                    json={
+                        "db_path": db_path,
+                        "settings": {
+                            "edge": {
+                                "provider": "ollama",
+                                "base_url": server.base_url,
+                                "api_path": "/api/chat",
+                                "model": "gemma4:e4b",
+                                "timeout_seconds": 2,
+                            }
+                        },
+                    },
+                )
+                self.client.post(
+                    "/corpora",
+                    json={
+                        "db_path": db_path,
+                        "id": "api-edge-batch-docs",
+                        "repo": "local",
+                        "source_root": str(corpus_root),
+                        "include": ["**/*.md"],
+                        "type": "doc",
+                    },
+                )
+                self.client.post("/index", json={"db_path": db_path, "corpus_ids": ["api-edge-batch-docs"]})
+
+                response = self.client.post(
+                    "/semantic-edges",
+                    json={"db_path": db_path, "mode": "batch", "limit": 4, "batch_size": 2},
+                )
+
+                self.assertEqual(response.status_code, 200)
+                payload = response.json()
+                self.assertEqual(payload["source"], "semantic_edge_batch_job")
+                self.assertEqual(payload["edge_count"], 1)
+                self.assertGreaterEqual(payload["candidate_count"], 1)
+                self.assertTrue(any(node["kind"] == "doc_section" for node in payload["graph"]["nodes"]))
+        finally:
+            server.shutdown()
+            server.server_close()
+
     def test_resolver_and_acceptance_endpoints_are_available(self):
         resolver = self.client.get("/resolver-profiles/linux-amdgpu")
         acceptance = self.client.get("/acceptance/runs")
@@ -274,7 +330,22 @@ class ApiAppTests(unittest.TestCase):
 
     def test_resolver_profile_endpoints_add_list_and_validate_dynamic_profile(self):
         with TemporaryDirectory() as tmpdir:
-            db_path = str(Path(tmpdir) / "asip.db")
+            root = Path(tmpdir)
+            db_path = str(root / "asip.db")
+            resolver_config = root / "api-python.yaml"
+            resolver_config.write_text(
+                "\n".join(
+                    [
+                        "id: api-python",
+                        "language: python",
+                        "context_vars: []",
+                        "symbol_prefixes: []",
+                        "python_extractors: [gpu_register]",
+                        "wrappers: {}",
+                    ]
+                ),
+                encoding="utf-8",
+            )
 
             create = self.client.post(
                 "/resolver-profiles",
@@ -284,7 +355,7 @@ class ApiAppTests(unittest.TestCase):
                     "language": "python",
                     "wrappers": ["gpu_register"],
                     "strategy": "python-call",
-                    "path": "configs/resolvers/api-python.yaml",
+                    "path": str(resolver_config),
                     "enabled": True,
                 },
             )

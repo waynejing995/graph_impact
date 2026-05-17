@@ -1,0 +1,17 @@
+id: initial
+language: cpp
+context_vars: [adev]
+symbol_prefixes: [reg, mm]
+wrappers:
+  RREG32:
+    symbol_arg: 0
+    access: read
+  WREG32:
+    symbol_arg: 0
+    access: write
+  REG_SET_FIELD:
+    symbol_arg: 1
+    access: field_set
+  REG_GET_FIELD:
+    symbol_arg: 1
+    access: field_get

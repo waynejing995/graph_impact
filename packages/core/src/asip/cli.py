@@ -15,6 +15,7 @@ from .workbench import (
     backfill_provider_embeddings,
     expand_query_graph,
     explain_entity,
+    generate_semantic_edges_batch,
     generate_semantic_edges_for_query,
     get_evidence_detail,
     global_graph,
@@ -97,6 +98,14 @@ def main(argv: Optional[List[str]] = None) -> int:
     semantic_edges.add_argument("--db", required=True)
     semantic_edges.add_argument("--q", required=True)
     semantic_edges.add_argument("--limit", type=int, default=8)
+
+    semantic_edges_batch = subcommands.add_parser(
+        "semantic-edges-batch",
+        help="Generate semantic edges from indexed corpus candidates",
+    )
+    semantic_edges_batch.add_argument("--db", required=True)
+    semantic_edges_batch.add_argument("--limit", type=int, default=24)
+    semantic_edges_batch.add_argument("--batch-size", type=int, default=6)
 
     evidence_detail = subcommands.add_parser("evidence-detail", help="Read a single evidence row by id")
     evidence_detail.add_argument("--db", required=True)
@@ -211,6 +220,14 @@ def main(argv: Optional[List[str]] = None) -> int:
         return 0
     if args.command == "semantic-edges":
         print(json.dumps(generate_semantic_edges_for_query(Path(args.db), args.q, limit=args.limit), indent=2))
+        return 0
+    if args.command == "semantic-edges-batch":
+        print(
+            json.dumps(
+                generate_semantic_edges_batch(Path(args.db), limit=args.limit, batch_size=args.batch_size),
+                indent=2,
+            )
+        )
         return 0
     if args.command == "evidence-detail":
         print(json.dumps(get_evidence_detail(Path(args.db), args.id), indent=2))

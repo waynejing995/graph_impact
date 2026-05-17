@@ -1,4 +1,4 @@
-import { expect, test } from "@playwright/test";
+import { expect, test, type Page } from "@playwright/test";
 import { mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
 import { createServer, type Server } from "node:http";
 import type { AddressInfo } from "node:net";
@@ -6,20 +6,29 @@ import { tmpdir } from "node:os";
 import { spawnSync } from "node:child_process";
 import path from "node:path";
 
+async function chooseSelectOption(page: Page, name: string, option: string, exact = false) {
+  await page.getByRole("combobox", { name, exact }).click();
+  await page.getByRole("option", { name: option, exact: true }).click();
+}
+
+async function expectSelectText(page: Page, name: string, text: string, exact = false) {
+  await expect(page.getByRole("combobox", { name, exact })).toContainText(text);
+}
+
 test("first screen is the ASIP evidence workbench", async ({ page }) => {
   await page.goto("/");
 
   await expect(page.getByTestId("asip-workbench")).toBeVisible();
   await expect(page.getByRole("banner")).toContainText("ASIP Evidence Workbench");
   await expect(page.getByRole("navigation", { name: "ASIP sections" })).toContainText("Evidence Search");
-  await expect(page.getByRole("textbox", { name: "Evidence query" })).toHaveValue(
-    "Who writes regGCVM_L2_CNTL?"
+  await expect(page.getByRole("textbox", { name: "Evidence query" })).toHaveValue("");
+  await expect(page.getByRole("table", { name: "Evidence results" })).toContainText(
+    "Enter a query to search live evidence."
   );
-  await expect(page.getByRole("table", { name: "Evidence results" })).toContainText("GCVM_L2_CNTL");
-  await expect(page.getByTestId("relationship-panel")).toContainText("has_field");
+  await expect(page.locator("body")).not.toContainText("GCVM_L2_CNTL");
 });
 
-test("first screen loads live default query instead of static evidence rows", async ({ page }) => {
+test("first screen does not run a static default query or render static evidence rows", async ({ page }) => {
   let requestedUrl = "";
   await page.route("**/api/workbench/query?**", async (route) => {
     requestedUrl = route.request().url();
@@ -48,24 +57,22 @@ test("first screen loads live default query instead of static evidence rows", as
 
   await page.goto("/");
 
-  await expect.poll(() => requestedUrl).toContain("/api/workbench/query");
-  const requested = new URL(requestedUrl);
-  expect(requested.searchParams.get("q")).toBe("Who writes regGCVM_L2_CNTL?");
+  expect(requestedUrl).toBe("");
   const resultsTable = page.getByRole("table", { name: "Evidence results" });
-  await expect(resultsTable).toContainText("API_INITIAL_REGISTER");
+  await expect(resultsTable).not.toContainText("API_INITIAL_REGISTER");
   await expect(resultsTable).not.toContainText("gmc_v11_0_init_golden_registers");
-  await expect(page.getByTestId("query-network-graph")).toContainText("API_INITIAL_REGISTER");
+  await expect(page.getByTestId("query-network-graph")).not.toContainText("API_INITIAL_REGISTER");
 });
 
 test("settings page persists configurable provider model api and headers", async ({ page }) => {
   await page.goto("/settings");
 
-  await page.getByRole("combobox", { name: "Provider", exact: true }).selectOption("openai-compatible");
+  await chooseSelectOption(page, "Provider", "OpenAI compatible", true);
   await page.getByRole("textbox", { name: "Edge API base URL" }).fill("https://edge.example.test");
   await page.getByRole("textbox", { name: "Edge API path" }).fill("/v1/chat/completions");
   await page.getByRole("textbox", { name: "Edge model" }).fill("qwen3.6");
   await page.getByRole("textbox", { name: "Fallback model" }).fill("");
-  await page.getByRole("combobox", { name: "Embedding provider" }).selectOption("openai-compatible");
+  await chooseSelectOption(page, "Embedding provider", "OpenAI compatible");
   await page.getByRole("textbox", { name: "Embedding API base URL" }).fill("https://embed.example.test");
   await page.getByRole("textbox", { name: "Embedding API path" }).fill("/v1/embeddings");
   await page.getByRole("textbox", { name: "Embedding model" }).fill("text-embedding-3-small");
@@ -129,10 +136,10 @@ test("settings page persists configurable provider model api and headers", async
   });
 
   await page.reload();
-  await expect(page.getByRole("combobox", { name: "Provider", exact: true })).toHaveValue("openai-compatible");
+  await expectSelectText(page, "Provider", "OpenAI compatible", true);
   await expect(page.getByRole("textbox", { name: "Edge model" })).toHaveValue("qwen3.6");
   await expect(page.getByRole("textbox", { name: "Fallback model" })).toHaveValue("");
-  await expect(page.getByRole("combobox", { name: "Embedding provider" })).toHaveValue("openai-compatible");
+  await expectSelectText(page, "Embedding provider", "OpenAI compatible");
   await expect(page.getByRole("textbox", { name: "Embedding API base URL" })).toHaveValue("https://embed.example.test");
   await expect(page.getByRole("textbox", { name: "Embedding API path" })).toHaveValue("/v1/embeddings");
   await expect(page.getByRole("textbox", { name: "Embedding extra headers JSON" })).toHaveValue(
@@ -171,10 +178,10 @@ test("settings page hydrates backend provider settings without local storage", a
 
   await page.goto("/settings");
 
-  await expect(page.getByRole("combobox", { name: "Provider", exact: true })).toHaveValue("openai-compatible");
+  await expectSelectText(page, "Provider", "OpenAI compatible", true);
   await expect(page.getByRole("textbox", { name: "Edge API base URL" })).toHaveValue("https://backend-edge.example.test");
   await expect(page.getByRole("textbox", { name: "Edge model" })).toHaveValue("backend-edge-model");
-  await expect(page.getByRole("combobox", { name: "Embedding provider" })).toHaveValue("ollama");
+  await expectSelectText(page, "Embedding provider", "Ollama");
   await expect(page.getByRole("textbox", { name: "Embedding API base URL" })).toHaveValue("http://backend-embed.example.test");
   await expect(page.getByRole("textbox", { name: "Embedding model" })).toHaveValue("backend-embed-model");
   await expect(page.getByRole("textbox", { name: "Context tokens" })).toHaveValue("8192");
@@ -713,6 +720,7 @@ test("corpus page runs the index job through the workbench API", async ({ page }
   });
   await page.goto("/corpus");
 
+  await expect(page.getByRole("checkbox", { name: /^Index / }).first()).toBeChecked();
   await page.getByRole("button", { name: "Run index" }).click();
 
   await expect(page.getByTestId("action-feedback")).toContainText(
@@ -843,6 +851,49 @@ test("acceptance page loads real run summaries from the workbench API", async ({
   await expect(page.getByRole("table", { name: "Evidence results" })).toContainText("docs/qa/api-run.json");
 });
 
+test("acceptance failures expand with query-level reasons and evidence sources", async ({ page }) => {
+  await page.route("**/api/workbench/acceptance", async (route) => {
+    await route.fulfill({
+      contentType: "application/json",
+      body: JSON.stringify({
+        runs: [
+          {
+            id: "api-failing-run",
+            model: "asip.acceptance",
+            passed: 0,
+            partial: 0,
+            failed: 1,
+            queryCount: 1,
+            artifactPath: "docs/qa/api-failing-run.json",
+            details: [
+              {
+                id: "AQ01",
+                status: "fail",
+                query: "Who reads or writes regGCVM_L2_CNTL?",
+                failureReasons: ["index job 3 failed: interrupted after embedding reindex"],
+                missingSurfaces: ["Web", "MCP"],
+                sourcePaths: ["drivers/gpu/drm/amd/amdgpu/gfxhub_v11_5_0.c"],
+                sourceTypes: ["code"],
+                rowCount: 24,
+                graphEdgeCount: 2
+              }
+            ]
+          }
+        ]
+      })
+    });
+  });
+
+  await page.goto("/acceptance");
+  await page.getByRole("button", { name: /api-failing-run/ }).click();
+
+  await expect(page.getByText("AQ01")).toBeVisible();
+  await expect(page.getByText("index job 3 failed: interrupted after embedding reindex")).toBeVisible();
+  await expect(page.getByText("missing surfaces: Web, MCP")).toBeVisible();
+  await expect(page.getByText("drivers/gpu/drm/amd/amdgpu/gfxhub_v11_5_0.c")).toBeVisible();
+  await expect(page.getByText("rows 24 / graph edges 2")).toBeVisible();
+});
+
 test("acceptance API failure shows explicit empty state without static QA seed rows", async ({ page }) => {
   await page.route("**/api/workbench/acceptance", async (route) => {
     await route.fulfill({
@@ -913,7 +964,8 @@ test("corpus page adds indexes and queries a real local corpus through the UI", 
   await expect(page.getByRole("table", { name: "Evidence results" })).toContainText("indexed");
 
   await page.getByRole("link", { name: "Evidence Search" }).click();
-  await expect(page.getByRole("textbox", { name: "Evidence query" })).toHaveValue("Who writes regGCVM_L2_CNTL?");
+  await expect(page).toHaveURL("/");
+  await expect(page.getByRole("textbox", { name: "Evidence query" })).toHaveValue("");
   await page.getByRole("textbox", { name: "Evidence query" }).fill(uniqueSymbol);
   await page.getByRole("button", { name: "Run query" }).click();
 
@@ -925,46 +977,37 @@ test("corpus page adds indexes and queries a real local corpus through the UI", 
 test("resolver page adds configurable profiles", async ({ page }) => {
   await page.goto("/resolver-profiles");
 
-  await page.getByRole("textbox", { name: "Profile id" }).fill("linux-gfx12");
-  await page.getByRole("textbox", { name: "Wrapper symbol" }).fill("WREG32_SOC24");
-  await page.getByRole("textbox", { name: "Language strategy" }).fill("macro");
+  await expect(page.getByRole("textbox", { name: "Profile id" })).toHaveValue("initial");
+  await expect(page.getByRole("textbox", { name: "Wrapper symbol" })).toHaveValue("RREG32");
+  await expect(page.getByRole("textbox", { name: "Config path" })).toHaveValue("configs/resolvers/initial.yaml");
   await page.getByRole("button", { name: "Add resolver profile" }).click();
 
-  await expect(page.getByRole("table", { name: "Evidence results" })).toContainText("WREG32_SOC24");
-  await expect(page.getByRole("table", { name: "Evidence results" })).toContainText("linux-gfx12");
-  await expect(page.getByText("Resolver profile linux-gfx12 added")).toBeVisible();
+  await expect(page.getByRole("table", { name: "Evidence results" })).toContainText("RREG32");
+  await expect(page.getByRole("table", { name: "Evidence results" })).toContainText("initial");
+  await expect(page.getByText("Resolver profile initial added")).toBeVisible();
 });
 
 test("resolver page validates configurable profiles from user source", async ({ page }) => {
-  const profileId = `ui-python-${Date.now()}`;
   const symbol = `UI_DYNAMIC_REGISTER_${Date.now()}`;
   await page.goto("/resolver-profiles");
 
-  await page.getByRole("textbox", { name: "Profile id" }).fill(profileId);
-  await page.getByRole("textbox", { name: "Wrapper symbol" }).fill("gpu_register");
-  await page.getByRole("textbox", { name: "Language strategy" }).fill("python-call");
   await page.getByRole("button", { name: "Add resolver profile" }).click();
-  await expect(page.getByText(`Resolver profile ${profileId} added`)).toBeVisible();
+  await expect(page.getByText("Resolver profile initial added")).toBeVisible();
 
-  await page.getByRole("textbox", { name: "Profile id" }).fill(profileId);
-  await page.getByRole("textbox", { name: "Validation source" }).fill(`@gpu_register("${symbol}")`);
+  await page.getByRole("textbox", { name: "Validation source" }).fill(`RREG32(${symbol});`);
   await page.getByRole("button", { name: "Validate resolver profile" }).click();
 
-  await expect(page.getByText(`Resolver profile ${profileId} validated ${symbol}`)).toBeVisible();
+  await expect(page.getByText(`Resolver profile initial validated ${symbol}`)).toBeVisible();
 });
 
 test("resolver page can add disabled profiles with visible status", async ({ page }) => {
-  const profileId = `ui-off-${Date.now()}`;
   await page.goto("/resolver-profiles");
 
-  await page.getByRole("textbox", { name: "Profile id" }).fill(profileId);
-  await page.getByRole("textbox", { name: "Wrapper symbol" }).fill("DISABLED_WRAPPER");
-  await page.getByRole("textbox", { name: "Language strategy" }).fill("macro");
   await page.getByRole("checkbox", { name: "Enable resolver profile" }).uncheck();
   await page.getByRole("button", { name: "Add resolver profile" }).click();
 
   const resultsTable = page.getByRole("table", { name: "Evidence results" });
-  await expect(resultsTable).toContainText("DISABLED_WRAPPER");
+  await expect(resultsTable).toContainText("RREG32");
   await expect(resultsTable).toContainText("disabled");
 });
 
@@ -1027,6 +1070,35 @@ test("graph API failure shows graph error empty state without static seed nodes"
   await expect(graph).not.toContainText("GCVM_L2_CNTL");
   await expect(graph).not.toContainText("MI300 CDNA3 ISA");
   await expect(graph).not.toContainText("DOORBELL_INTERRUPT_DISABLE");
+  await expect(page.locator("body")).not.toContainText("GCVM_L2_CNTL");
+  await expect(page.locator("body")).not.toContainText("MI300 CDNA3 ISA");
+  await expect(page.locator("body")).not.toContainText("DOORBELL_INTERRUPT_DISABLE");
+  await expect(page.locator("body")).not.toContainText("Shortest Path");
+  await expect(page.locator("body")).not.toContainText("Neighborhood:");
+});
+
+test("graph empty state does not render static seed copy anywhere on the page", async ({ page }) => {
+  await page.route(/\/api\/workbench\/graph(?:\?|$)/, async (route) => {
+    await route.fulfill({
+      contentType: "application/json",
+      body: JSON.stringify({
+        queryId: "global",
+        source: "networkx",
+        graph_runtime: "networkx",
+        nodes: [],
+        edges: []
+      })
+    });
+  });
+
+  await page.goto("/graph");
+
+  await expect(page.getByTestId("global-network-graph")).toContainText("No graph data returned.");
+  await expect(page.locator("body")).not.toContainText("GCVM_L2_CNTL");
+  await expect(page.locator("body")).not.toContainText("ENABLE_L2_CACHE");
+  await expect(page.locator("body")).not.toContainText("gmc_v11_0_init_golden_registers");
+  await expect(page.locator("body")).not.toContainText("MI300 CDNA3 ISA");
+  await expect(page.locator("body")).not.toContainText("DOORBELL_INTERRUPT_DISABLE");
 });
 
 test("graph page relationship panel is API-backed when graph API succeeds", async ({ page }) => {
@@ -1095,11 +1167,99 @@ test("graph page runs semantic edge generation through the workbench API", async
   });
 
   await page.goto("/graph");
+  await page.getByRole("textbox", { name: "Evidence query" }).fill("UI_EDGE_REGISTER UI_EDGE_FIELD");
   await page.getByRole("button", { name: "Generate semantic edges" }).click();
 
-  expect(requestBody.q).toBe("Expand GCVM_L2_CNTL by 2 hops");
+  expect(requestBody.q).toBe("UI_EDGE_REGISTER UI_EDGE_FIELD");
   await expect(page.getByTestId("action-feedback")).toContainText("Semantic edges generated: 1");
   await expect(page.getByTestId("global-network-graph")).toContainText("UI_EDGE_FIELD");
+});
+
+test("graph page runs batch semantic edge generation through the workbench API", async ({ page }) => {
+  let requestBody: { mode?: string; batchSize?: number } = {};
+  await page.route("**/api/workbench/semantic-edges", async (route) => {
+    requestBody = route.request().postDataJSON() as typeof requestBody;
+    await route.fulfill({
+      contentType: "application/json",
+      body: JSON.stringify({
+        source: "semantic_edge_batch_job",
+        edge_count: 1,
+        candidate_count: 2,
+        provider: "ollama",
+        model: "gemma4:e4b",
+        graph: {
+          nodes: [
+            { id: "docs/guide.md#programming-local-registers", kind: "doc_section", weight: 1 },
+            { id: "UI_BATCH_REGISTER", kind: "register", weight: 1 },
+            { id: "UI_BATCH_FIELD", kind: "field", weight: 1 }
+          ],
+          edges: [
+            {
+              src: "UI_BATCH_REGISTER",
+              relation: "sets_field",
+              dst: "UI_BATCH_FIELD",
+              confidence: 0.93,
+              weight: 0.93
+            }
+          ],
+          source: "networkx",
+          graph_runtime: "networkx"
+        }
+      })
+    });
+  });
+
+  await page.goto("/graph");
+  await page.getByRole("button", { name: "Generate batch semantic edges" }).click();
+
+  expect(requestBody.mode).toBe("batch");
+  expect(requestBody.batchSize).toBe(6);
+  await expect(page.getByTestId("action-feedback")).toContainText("Batch semantic edges generated: 1 from 2 candidates");
+  await expect(page.getByTestId("global-network-graph")).toContainText("UI_BATCH_FIELD");
+});
+
+test("shadcn Radix controls keep styled dimensions instead of bare browser defaults", async ({ page }) => {
+  await page.goto("/corpus");
+
+  const button = page.locator('[data-slot="button"]').first();
+  const input = page.locator('[data-slot="input"]').first();
+  const tableContainer = page.locator('[data-slot="table-container"]').first();
+  const checkbox = page.locator('[data-slot="checkbox"]').first();
+
+  await expect(button).toBeVisible();
+  await expect(input).toBeVisible();
+  await expect(tableContainer).toBeVisible();
+  await expect(checkbox).toBeVisible();
+
+  const styles = await page.evaluate(() => {
+    const read = (selector: string) => {
+      const element = document.querySelector(selector);
+      if (!element) {
+        return null;
+      }
+      const computed = window.getComputedStyle(element);
+      return {
+        borderRadius: computed.borderRadius,
+        display: computed.display,
+        height: computed.height,
+        overflowX: computed.overflowX,
+        width: computed.width
+      };
+    };
+    return {
+      button: read('[data-slot="button"]'),
+      input: read('[data-slot="input"]'),
+      table: read('[data-slot="table-container"]'),
+      checkbox: read('[data-slot="checkbox"]')
+    };
+  });
+
+  expect(styles.button?.display).toMatch(/^(inline-)?flex$/);
+  expect(parseFloat(styles.button?.height ?? "0")).toBeGreaterThanOrEqual(30);
+  expect(parseFloat(styles.input?.height ?? "0")).toBeGreaterThanOrEqual(30);
+  expect(parseFloat(styles.input?.borderRadius ?? "0")).toBeGreaterThanOrEqual(4);
+  expect(styles.table?.overflowX).toBe("auto");
+  expect(parseFloat(styles.checkbox?.width ?? "0")).toBeGreaterThanOrEqual(14);
 });
 
 test("page action buttons show visible queued feedback", async ({ page }) => {
@@ -1107,7 +1267,7 @@ test("page action buttons show visible queued feedback", async ({ page }) => {
 
   await page.getByRole("button", { name: "Generate semantic edges" }).click();
 
-  await expect(page.getByTestId("action-feedback")).toContainText(/Generating semantic edges|Semantic edges generated|semantic edge generation failed|edge provider settings are missing/);
+  await expect(page.getByTestId("action-feedback")).toContainText("Enter a query before generating semantic edges.");
 });
 
 async function startFakeOllamaEdgeServer(): Promise<{ server: Server; baseUrl: string }> {

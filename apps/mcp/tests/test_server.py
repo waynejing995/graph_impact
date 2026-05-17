@@ -64,6 +64,7 @@ class McpServerTests(unittest.TestCase):
                     "resolver_profiles_list",
                     "run_acceptance",
                     "search_evidence",
+                    "semantic_edges_generate_batch",
                     "semantic_edges_generate",
                 ]
             ),

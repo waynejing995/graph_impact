@@ -19,7 +19,9 @@ class ResolverProfileTests(unittest.TestCase):
 
         self.assertIn("linux-amdgpu", profiles)
         self.assertIn("amd-mxgpu", profiles)
+        self.assertIn("initial", profiles)
         self.assertIn("toy-python", profiles)
+        self.assertIn("RREG32", profiles["initial"].wrappers)
         self.assertIn("WREG32_SOC15", profiles["linux-amdgpu"].wrappers)
         self.assertEqual(profiles["toy-python"].language, "python")
 

@@ -6,7 +6,7 @@ export function GET(request: NextRequest) {
     request.nextUrl.searchParams.get("seed") ??
     request.nextUrl.searchParams.get("queryId");
   const hops = request.nextUrl.searchParams.get("hops") ?? "1";
-  const limit = request.nextUrl.searchParams.get("limit") ?? "100";
+  const limit = request.nextUrl.searchParams.get("limit") ?? "400";
   const dbPath = request.nextUrl.searchParams.get("dbPath")?.trim() || defaultDbPath;
   try {
     const args = seed

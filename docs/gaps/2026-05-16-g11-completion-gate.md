@@ -1,6 +1,6 @@
 # G11 Completion Gate And Documentation Review
 
-Status: Blocking
+Status: Verification pass complete for current user-review blockers; final git gate remains open
 
 ## Requirement
 
@@ -12,23 +12,26 @@ Commit and push happen only after verification.
 
 - The active goal explicitly requires full implementation, E2E tests, design-doc review, visual QA, then commit/push.
 - Prior progress docs contain mixed old and new status, so this `docs/gaps/` ledger is the current source of truth.
-- The worktree currently contains many uncommitted implementation files plus generated caches.
+- The worktree currently contains many uncommitted implementation files; generated caches must be removed before staging.
 - Final-candidate evidence package now exists at `docs/qa/2026-05-17-final-clean-evidence-package.md`, linking the clean AMD DB, AQ01-AQ09 9/9 artifact, six free queries, semantic-edge jobs, visual QA, automated verification, and architecture review.
 - `git diff --check` passed after the current changes, and generated `apps/web/tsconfig.tsbuildinfo` plus the temporary root screenshot were removed from the worktree.
+- 2026-05-17 user review reopened the completion gate for UI: package-backed graph rendering, shadcn-native UI composition, static-data cleanup, and expandable acceptance detail QA. Those blockers now have implementation and test evidence in `docs/qa/2026-05-17-graph-function-section-batch-qa.md`.
+- Latest verification after the user-review blocker pass: core unittest 90 OK with 1 sqlite-vec skip; API/MCP unittest 41 OK with 1 optional MCP runtime skip; Web API Playwright 21 passed; Web smoke Playwright 39 passed; visual route Playwright 14 passed; lint/build/tsc/diff checks passed.
 
 ## Remaining Gap
 
-Completion evidence is now separated in the final-candidate QA package, but the branch is not complete until the final git gate, commit, and push are done.
+Completion evidence is now separated in the final-candidate QA package and the current graph/UI/acceptance-detail blocker pass is documented. The branch is not complete until the remaining final git gate is executed: artifact hygiene, final diff review, commit, push, and any user-accepted deferrals.
 
 The final branch must avoid staging generated local artifacts such as `data/asip.db`, `apps/web/tsconfig.tsbuildinfo`, Python `__pycache__`, and transient browser screenshots outside `docs/qa`.
 
 Completion must follow this order:
 
 1. Reconcile final docs against `docs/gaps/README.md`, the gap register, the AQ matrix, and [Final Clean Evidence Package Gate](2026-05-17-final-clean-evidence-package.md).
-2. Run the full automated core/API/MCP/Web/build/lint/diff verification suite. Done in `docs/qa/2026-05-17-final-clean-evidence-package.md`.
-3. Run fresh browser visual QA after the final functional change, including light and dark themes. Done in `docs/qa/visual-qa-2026-05-17/visual-qa.md`.
-4. Review `git status --short` and generated/local artifact hygiene.
-5. Commit and push only after the previous steps are recorded in the final QA doc.
+2. Confirm the currently implemented G03/G10/G14/G16/G17 blockers remain green: package-backed graph, shadcn-native UI pass, expandable acceptance details, and static-data cleanup.
+3. Preserve the full automated core/API/MCP/Web/build/lint/diff verification suite results after those changes.
+4. Preserve fresh browser visual QA after the final functional change, including light and dark themes.
+5. Review `git status --short` and generated/local artifact hygiene.
+6. Commit and push only after the previous steps are recorded in the final QA doc.
 
 ## Acceptance Criteria
 

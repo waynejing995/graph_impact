@@ -366,6 +366,48 @@ test("graph API returns data-driven weighted edges for a selected seed", async (
   );
 });
 
+test("graph API global view derives weighted edges from indexed evidence", async ({ request }) => {
+  const { dbPath } = await createIndexedRawFixture(request);
+  const response = await request.get(`/api/workbench/graph?dbPath=${encodeURIComponent(dbPath)}&limit=40`);
+
+  expect(response.ok()).toBe(true);
+  const body = (await response.json()) as {
+    queryId: string;
+    nodes: Array<{ id: string; kind: string; weight: number }>;
+    edges: Array<{ src: string; relation: string; dst: string; confidence: number; weight: number }>;
+  };
+
+  expect(body.queryId).toBe("global");
+  expect(body.nodes).toEqual(
+    expect.arrayContaining([
+      expect.objectContaining({ id: "LOCAL_TEST_CNTL", kind: "register" }),
+      expect.objectContaining({ id: "ENABLE_LOCAL_FIELD", kind: "field" }),
+      expect.objectContaining({ id: "program_local_register", kind: "code" }),
+      expect.objectContaining({ id: "src/gfx.c", kind: "code" })
+    ])
+  );
+  expect(body.edges).toEqual(
+    expect.arrayContaining([
+      expect.objectContaining({
+        src: "LOCAL_TEST_CNTL",
+        relation: "co_occurs",
+        dst: "ENABLE_LOCAL_FIELD"
+      }),
+      expect.objectContaining({
+        src: "LOCAL_TEST_CNTL",
+        relation: "appears_in_code",
+        dst: "src/gfx.c"
+      }),
+      expect.objectContaining({
+        src: "program_local_register",
+        relation: "field_set",
+        dst: "ENABLE_LOCAL_FIELD"
+      })
+    ])
+  );
+  expect(body.edges.every((edge) => edge.weight > 0)).toBe(true);
+});
+
 test("graph API does not implicitly index or fall back when reading an explicit empty DB", async ({ request }) => {
   const root = mkdtempSync(path.join(tmpdir(), "asip-read-graph-"));
   const dbPath = path.join(root, "empty.db");
@@ -422,6 +464,66 @@ test("semantic edges API generates graph edges from a supplied DB", async ({ req
           relation: "sets_field",
           dst: "ENABLE_L2_CACHE",
           weight: 0.91
+        })
+      ])
+    );
+  } finally {
+    await new Promise<void>((resolve, reject) => {
+      edgeServer.server.close((error) => (error ? reject(error) : resolve()));
+    });
+  }
+});
+
+test("semantic edges API supports batch generation from indexed candidates", async ({ request }) => {
+  const edgeServer = await startFakeOllamaEdgeServer();
+  const root = mkdtempSync(path.join(tmpdir(), "asip-edge-batch-api-"));
+  const dbPath = path.join(root, "edges.db");
+  const corpusRoot = path.join(root, "docs");
+  mkdirSync(corpusRoot, { recursive: true });
+  writeFileSync(
+    path.join(corpusRoot, "edge.md"),
+    "# Programming local registers\nGCVM_L2_CNTL has field ENABLE_L2_CACHE in this batch semantic edge fixture.",
+    "utf8"
+  );
+  seedProviderAcceptanceDb(dbPath, corpusRoot, edgeServer.baseUrl);
+
+  try {
+    const response = await request.post("/api/workbench/semantic-edges", {
+      data: {
+        dbPath,
+        mode: "batch",
+        limit: 4,
+        batchSize: 2
+      }
+    });
+
+    expect(response.ok()).toBe(true);
+    const body = (await response.json()) as {
+      source: string;
+      edge_count: number;
+      candidate_count: number;
+      provider: string;
+      model: string;
+      graph: { nodes: Array<{ id: string; kind: string }>; edges: Array<{ src: string; relation: string; dst: string }> };
+    };
+    expect(body).toMatchObject({
+      source: "semantic_edge_batch_job",
+      edge_count: 1,
+      provider: "ollama",
+      model: "gemma4:e4b"
+    });
+    expect(body.candidate_count).toBeGreaterThan(0);
+    expect(body.graph.nodes).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ id: "edge.md#programming-local-registers", kind: "doc_section" })
+      ])
+    );
+    expect(body.graph.edges).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          src: "GCVM_L2_CNTL",
+          relation: "sets_field",
+          dst: "ENABLE_L2_CACHE"
         })
       ])
     );
@@ -657,6 +759,12 @@ test("resolver profiles API reads committed configurable profiles", async ({ req
         path: "configs/resolvers/linux-amdgpu.yaml"
       }),
       expect.objectContaining({
+        id: "initial",
+        language: "cpp",
+        wrappers: expect.arrayContaining(["RREG32"]),
+        path: "configs/resolvers/initial.yaml"
+      }),
+      expect.objectContaining({
         id: "toy-python",
         language: "python",
         wrappers: expect.arrayContaining(["gpu_register"])
@@ -668,29 +776,46 @@ test("resolver profiles API reads committed configurable profiles", async ({ req
 test("resolver profiles API persists and validates user profiles", async ({ request }) => {
   const create = await request.post("/api/workbench/resolver-profiles", {
     data: {
-      id: "api-python",
-      language: "python",
-      wrappers: ["gpu_register"],
-      strategy: "python-call",
-      path: "configs/resolvers/api-python.yaml",
+      id: "initial",
+      language: "cpp",
+      wrappers: ["RREG32"],
+      strategy: "macro",
+      path: "configs/resolvers/initial.yaml",
       enabled: true
     }
   });
   expect(create.ok()).toBe(true);
   const created = (await create.json()) as { id: string; wrappers: string[] };
-  expect(created.id).toBe("api-python");
-  expect(created.wrappers).toEqual(["gpu_register"]);
+  expect(created.id).toBe("initial");
+  expect(created.wrappers).toEqual(["RREG32"]);
 
   const validate = await request.post("/api/workbench/resolver-profiles", {
     data: {
-      id: "api-python",
-      validateSource: '@gpu_register("CP_INT_CNTL_RING0")'
+      id: "initial",
+      validateSource: "RREG32(CP_INT_CNTL_RING0);"
     }
   });
   expect(validate.ok()).toBe(true);
   const validation = (await validate.json()) as { valid: boolean; symbols: Array<{ symbol: string }> };
   expect(validation.valid).toBe(true);
   expect(validation.symbols).toEqual([expect.objectContaining({ symbol: "CP_INT_CNTL_RING0" })]);
+});
+
+test("resolver profiles API rejects profiles without existing yaml config", async ({ request }) => {
+  const response = await request.post("/api/workbench/resolver-profiles", {
+    data: {
+      id: "missing-yaml",
+      language: "cpp",
+      wrappers: ["MISSING_WRAPPER"],
+      strategy: "macro",
+      path: "configs/resolvers/missing-yaml.yaml",
+      enabled: true
+    }
+  });
+
+  expect(response.status()).toBe(400);
+  const body = (await response.json()) as { error: string };
+  expect(body.error).toContain("existing YAML config");
 });
 
 test("index API can target user-added corpora and record provider settings", async ({ request }) => {

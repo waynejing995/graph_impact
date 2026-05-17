@@ -15,6 +15,7 @@ from asip.workbench import (
     add_resolver_profile,
     explain_entity,
     expand_query_graph,
+    generate_semantic_edges_batch,
     generate_semantic_edges_for_query,
     get_evidence_detail,
     index_registered_corpora,
@@ -49,6 +50,11 @@ def graph_expand(seed: str, db_path: str | None = None) -> Dict[str, Any]:
 def semantic_edges_generate(query: str, db_path: str | None = None, limit: int = 8) -> Dict[str, Any]:
     db = Path(db_path) if db_path else DEFAULT_DB
     return generate_semantic_edges_for_query(db, query, limit=limit)
+
+
+def semantic_edges_generate_batch(db_path: str | None = None, limit: int = 24, batch_size: int = 6) -> Dict[str, Any]:
+    db = Path(db_path) if db_path else DEFAULT_DB
+    return generate_semantic_edges_batch(db, limit=limit, batch_size=batch_size)
 
 
 def resolver_inspect(profile_id: str) -> Dict[str, Any]:

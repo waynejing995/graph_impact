@@ -8,6 +8,8 @@ Resolver behavior must be configurable, not hardcoded. MVP-1 must support Linux 
 
 Configurable fields include wrapper names, argument positions, prefixes, base-index suffixes, context variables, field rules, and language-specific extraction strategies.
 
+Every resolver shown in the UI must correspond to a real YAML config file under `configs/resolvers/` or a backend-persisted profile that points to an existing YAML file. The UI must not show profile-like static rows that cannot be loaded or validated by the resolver engine.
+
 ## Current Evidence
 
 - `configs/resolvers/linux-amdgpu.yaml`, `configs/resolvers/amd-mxgpu.yaml`, and `configs/resolvers/toy-python.yaml` exist.
@@ -25,6 +27,7 @@ Configurable fields include wrapper names, argument positions, prefixes, base-in
 - The Resolver Profiles UI now exposes an `Enable resolver profile` checkbox when adding profiles, and disabled profiles render a visible `disabled` status in the results table.
 - `apps/web/tests/workbench-smoke.spec.ts` verifies a user-created Python `gpu_register` profile can validate a dynamic source snippet from the UI.
 - `apps/web/tests/workbench-smoke.spec.ts` verifies a user-created disabled profile has visible disabled status.
+- 2026-05-17 user review clarified that all resolver profiles shown by the UI must be backed by real YAML config. A starter `initial.yaml` is required only if it is real and loadable, not a decorative default row.
 
 ## Remaining Gap
 
@@ -32,10 +35,13 @@ Resolver profiles are not yet a full product feature because only a minimal regi
 
 The UI now supports add, validate, and enabled/disabled creation state. It still lacks edit-in-place, profile selection per indexing job, richer diagnostics, and broader C/C++ argument-position, multiline/nested macro, Linux/MxGPU-specific, and non-macro Python extraction semantics; those need either implementation or explicit MVP limits.
 
+The next UI/backend pass must also remove any resolver rows that are not backed by a real YAML config, and seed only a truthful initial resolver profile.
+
 ## Acceptance Criteria
 
 - Profiles are parsed with structured code, not ad hoc regex in Web product paths.
 - UI can add, enable/disable on creation, and validate profiles through backend state. Edit-in-place and per-job selection remain open.
+- UI only lists resolver profiles that can be loaded from real YAML config or backend-persisted state with an existing config path.
 - Resolver validation calls core resolver logic and returns structured diagnostics.
 - Linux and MxGPU wrapper changes affect indexing/query without code changes.
 - Toy Python/non-macro extraction is represented as a real strategy interface, not only a fixture row.

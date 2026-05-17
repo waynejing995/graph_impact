@@ -17,6 +17,7 @@ from .providers import EmbeddingProviderConfig, EmbeddingTransport, create_embed
 from .resolver_profiles import (
     ResolverProfile,
     WrapperRule,
+    load_resolver_profile,
     resolve_cpp_register_call,
     resolve_python_symbol,
 )
@@ -371,6 +372,7 @@ def global_graph(db_path: Path, limit: int = 100) -> Dict[str, Any]:
         "nodes": [
             {
                 **_node_with_kind(str(node["id"])),
+                **({"kind": str(node["kind"])} if node.get("kind") else {}),
                 "weight": node.get("weight", 1),
             }
             for node in graph["nodes"]
@@ -718,6 +720,63 @@ def generate_semantic_edges_for_query(
     }
 
 
+def generate_semantic_edges_batch(
+    db_path: Path,
+    limit: int = 24,
+    batch_size: int = 6,
+    edge_provider: Optional[EdgeProvider] = None,
+) -> Dict[str, Any]:
+    """Generate semantic edges from indexed corpus candidates and persist them."""
+
+    db_path.parent.mkdir(parents=True, exist_ok=True)
+    store = AsipStore.connect(str(db_path))
+    store.migrate()
+    provider_settings = load_provider_settings(db_path)
+    config = _edge_provider_config(provider_settings)
+    if config is None:
+        raise ValueError("edge provider settings are missing")
+    candidate_limit = max(1, int(limit))
+    batch_size = max(1, int(batch_size))
+    candidates = _semantic_edge_batch_candidates(store, limit=candidate_limit)
+    if not candidates:
+        raise ValueError("no indexed semantic edge candidates found")
+    job_id = store.start_job(
+        "semantic_edges_batch",
+        f"Generating semantic edges from {len(candidates)} indexed candidates",
+        metadata={
+            "mode": "batch",
+            "candidate_count": len(candidates),
+            "batch_size": batch_size,
+            "provider_settings": provider_settings,
+        },
+    )
+    provider = edge_provider or create_edge_provider(config)
+    edge_count = 0
+    try:
+        for start in range(0, len(candidates), batch_size):
+            batch = candidates[start : start + batch_size]
+            prompt = _semantic_edge_batch_prompt(batch)
+            generated = normalize_generated_cases(provider.generate(prompt, config))
+            edge_count += _persist_generated_edges(store, generated)
+        if edge_count <= 0:
+            raise ValueError("semantic edge provider returned no persistable edges")
+        store.finish_job(job_id, "generated", f"Generated {edge_count} semantic edges from {len(candidates)} candidates")
+    except Exception as exc:
+        store.finish_job(job_id, "failed", str(exc))
+        raise
+    return {
+        "source": "semantic_edge_batch_job",
+        "db_path": str(db_path),
+        "provider": config.provider,
+        "model": config.preferred,
+        "candidate_count": len(candidates),
+        "batch_size": batch_size,
+        "edge_count": edge_count,
+        "job_id": job_id,
+        "graph": global_graph(db_path, limit=400),
+    }
+
+
 def add_resolver_profile(
     db_path: Path,
     profile_id: str,
@@ -727,11 +786,17 @@ def add_resolver_profile(
     path: str,
     enabled: bool = True,
 ) -> Dict[str, Any]:
+    config_path = _resolve_resolver_config_path(path or f"configs/resolvers/{profile_id}.yaml")
+    if not config_path.exists():
+        raise FileNotFoundError(f"resolver config must exist: {config_path}")
+    config_profile = load_resolver_profile(config_path)
+    if config_profile.id != profile_id:
+        raise ValueError(f"resolver config id {config_profile.id!r} does not match profile id {profile_id!r}")
     db_path.parent.mkdir(parents=True, exist_ok=True)
     store = AsipStore.connect(str(db_path))
     store.migrate()
-    wrapper_list = list(wrappers)
-    store.upsert_resolver_profile(profile_id, language, wrapper_list, strategy, path, enabled)
+    wrapper_list = list(wrappers) or list(config_profile.wrappers) or list(config_profile.python_extractors)
+    store.upsert_resolver_profile(profile_id, language, wrapper_list, strategy, str(path), enabled)
     return {
         "id": profile_id,
         "language": language,
@@ -740,6 +805,13 @@ def add_resolver_profile(
         "path": path,
         "enabled": enabled,
     }
+
+
+def _resolve_resolver_config_path(path: str) -> Path:
+    config_path = Path(path)
+    if config_path.is_absolute():
+        return config_path
+    return Path.cwd() / config_path
 
 
 def list_resolver_profiles(db_path: Path) -> List[Dict[str, Any]]:
@@ -996,6 +1068,150 @@ def _semantic_edge_prompt(query: str, rows: Iterable[Mapping[str, Any]]) -> str:
     )
 
 
+def _semantic_edge_batch_candidates(store: AsipStore, limit: int) -> List[Dict[str, Any]]:
+    rows = store.con.execute(
+        """
+        select
+          evidence.chunk_id,
+          evidence.source_type,
+          evidence.path,
+          evidence.line_start,
+          evidence.line_end,
+          evidence.page,
+          evidence.symbol,
+          evidence.entity_type,
+          evidence.access_type,
+          evidence.confidence,
+          evidence.snippet,
+          chunks.text as chunk_text
+        from evidence
+        join chunks on chunks.id = evidence.chunk_id
+        order by evidence.confidence desc, evidence.id asc
+        limit ?
+        """,
+        (max(1, int(limit)) * 8,),
+    ).fetchall()
+    candidates: Dict[str, Dict[str, Any]] = {}
+    for row in rows:
+        symbol = str(row["symbol"] or "").strip()
+        if not symbol or not _is_symbol_like(symbol):
+            continue
+        candidate_id = _semantic_edge_candidate_id(row)
+        candidate = candidates.setdefault(
+            candidate_id,
+            {
+                "id": candidate_id,
+                "source_type": str(row["source_type"] or ""),
+                "path": str(row["path"] or ""),
+                "line_start": row["line_start"],
+                "line_end": row["line_end"],
+                "page": row["page"],
+                "terms": [],
+                "snippets": [],
+            },
+        )
+        if symbol not in candidate["terms"]:
+            candidate["terms"].append(symbol)
+        snippet = str(row["snippet"] or row["chunk_text"] or "").strip()
+        if snippet and snippet not in candidate["snippets"]:
+            candidate["snippets"].append(snippet[:500])
+    ranked = [
+        candidate
+        for candidate in candidates.values()
+        if len(candidate.get("terms") or []) >= 1 and (candidate.get("snippets") or [])
+    ]
+    ranked.sort(key=lambda item: (-len(item.get("terms") or []), str(item["id"])))
+    return ranked[: max(1, int(limit))]
+
+
+def _semantic_edge_batch_prompt(candidates: Iterable[Mapping[str, Any]]) -> str:
+    lines = [
+        "Generate potential ASIP semantic graph edges from indexed corpus candidates.",
+        "Return JSON cases with edges containing src, relation, dst, confidence, and evidence.",
+    ]
+    for candidate in candidates:
+        candidate_id = str(candidate.get("id") or "candidate")
+        terms = ", ".join(str(term) for term in candidate.get("terms", []) if term)
+        source = _semantic_edge_candidate_source(candidate)
+        lines.extend(
+            [
+                f"CASE {candidate_id}",
+                f"SOURCE: {source}",
+                f"TERMS: {terms}",
+                "SNIPPET:",
+            ]
+        )
+        snippets = list(candidate.get("snippets", []) or [])
+        for index, snippet in enumerate(snippets[:3], start=1):
+            lines.append(f"{index}: {snippet}")
+    return "\n".join(lines)
+
+
+def _persist_generated_edges(store: AsipStore, generated: Mapping[str, Any]) -> int:
+    edge_count = 0
+    for case in generated.get("cases", []):
+        if not isinstance(case, Mapping):
+            continue
+        for edge in case.get("edges", []):
+            if not isinstance(edge, Mapping):
+                continue
+            src = str(edge.get("src") or "").strip()
+            dst = str(edge.get("dst") or "").strip()
+            relation = str(edge.get("relation") or "mentions").strip()
+            if not src or not dst:
+                continue
+            store.add_edge(
+                src=src,
+                dst=dst,
+                relation=relation,
+                confidence=float(edge.get("confidence") or 0.5),
+            )
+            edge_count += 1
+    return edge_count
+
+
+def _semantic_edge_candidate_id(row: Mapping[str, Any]) -> str:
+    source_type = str(row["source_type"] or "")
+    path = str(row["path"] or "candidate")
+    text = str(row["chunk_text"] or "")
+    if source_type in {"doc", "pdf"}:
+        heading = _first_markdown_heading_for_semantic_candidate(text)
+        if heading:
+            return f"{path}#{_slug_for_semantic_candidate(heading)}"
+        page = int(row["page"] or 0)
+        if page:
+            return f"{path}#page-{page}"
+    line_start = int(row["line_start"] or 0)
+    line_end = int(row["line_end"] or line_start or 0)
+    if line_start:
+        return f"{path}#lines-{line_start}-{line_end}"
+    return f"{path}#chunk-{row['chunk_id']}"
+
+
+def _semantic_edge_candidate_source(candidate: Mapping[str, Any]) -> str:
+    path = str(candidate.get("path") or "unknown")
+    if candidate.get("page"):
+        return f"{path}:page {candidate['page']}"
+    if candidate.get("line_start"):
+        line_start = candidate.get("line_start")
+        line_end = candidate.get("line_end") or line_start
+        return f"{path}:lines {line_start}-{line_end}"
+    return path
+
+
+def _first_markdown_heading_for_semantic_candidate(text: str) -> str:
+    for line in text.splitlines():
+        match = re.match(r"^\s{0,3}(?:\d+:\s*)?#{1,6}\s+(.+?)\s*$", line)
+        if match:
+            return match.group(1).strip().strip("#").strip()
+    return ""
+
+
+def _slug_for_semantic_candidate(heading: str) -> str:
+    slug = re.sub(r"[^a-z0-9]+", "-", heading.lower()).strip("-")
+    return slug or "section"
+
+
 def _index_chunk_edges(store: AsipStore, chunk: IndexedChunk, queries: Iterable[Any]) -> int:
     count = 0
     for query in queries:
@@ -1147,6 +1363,8 @@ def _entity_type_for_symbol(symbol: str) -> str:
 
 
 def _entity_type_for_source_symbol(source_type: str, symbol: str) -> str:
+    if source_type in {"doc", "pdf"} and _is_symbol_like(symbol):
+        return _entity_type_for_symbol(symbol)
     if source_type == "pdf":
         return "pdf_page"
     if source_type == "doc":
@@ -1287,7 +1505,7 @@ def _json_ready(row: Dict[str, object]) -> Dict[str, Any]:
 
 def _edge_with_weight(edge: Dict[str, object]) -> Dict[str, Any]:
     result = dict(edge)
-    result["weight"] = float(edge.get("confidence") or 0)
+    result["weight"] = float(edge.get("weight") or edge.get("confidence") or 0)
     return result
 
 

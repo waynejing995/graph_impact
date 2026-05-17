@@ -39,6 +39,20 @@ class WorkbenchBackendStateTests(unittest.TestCase):
     def test_resolver_profile_is_persisted_and_validated_in_backend(self):
         with tempfile.TemporaryDirectory() as tmpdir:
             db_path = Path(tmpdir) / "asip.db"
+            profile_path = Path(tmpdir) / "local-python.yaml"
+            profile_path.write_text(
+                "\n".join(
+                    [
+                        "id: local-python",
+                        "language: python",
+                        "context_vars: []",
+                        "symbol_prefixes: []",
+                        "python_extractors: [gpu_register]",
+                        "wrappers: {}",
+                    ]
+                ),
+                encoding="utf-8",
+            )
 
             added = add_resolver_profile(
                 db_path,
@@ -46,7 +60,7 @@ class WorkbenchBackendStateTests(unittest.TestCase):
                 language="python",
                 wrappers=["gpu_register"],
                 strategy="python-call",
-                path="configs/resolvers/local-python.yaml",
+                path=str(profile_path),
                 enabled=True,
             )
             validation = validate_resolver_profile(db_path, "local-python", '@gpu_register("CP_INT_CNTL_RING0")')
@@ -57,12 +71,43 @@ class WorkbenchBackendStateTests(unittest.TestCase):
             self.assertEqual(validation["symbols"][0]["symbol"], "CP_INT_CNTL_RING0")
             self.assertEqual(profiles[0]["wrappers"], ["gpu_register"])
 
+    def test_resolver_profile_requires_existing_yaml_config(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            db_path = Path(tmpdir) / "asip.db"
+
+            with self.assertRaises(FileNotFoundError):
+                add_resolver_profile(
+                    db_path,
+                    profile_id="missing-yaml",
+                    language="cpp",
+                    wrappers=["MISSING_WRAPPER"],
+                    strategy="macro",
+                    path=str(Path(tmpdir) / "missing-yaml.yaml"),
+                    enabled=True,
+                )
+
     def test_provider_settings_persist_and_are_recorded_on_selected_corpus_index_job(self):
         with tempfile.TemporaryDirectory() as tmpdir:
             root = Path(tmpdir)
             db_path = root / "asip.db"
             corpus_root = root / "docs"
             corpus_root.mkdir()
+            profile_path = root / "custom-c.yaml"
+            profile_path.write_text(
+                "\n".join(
+                    [
+                        "id: custom-c",
+                        "language: cpp",
+                        "context_vars: []",
+                        "symbol_prefixes: []",
+                        "wrappers:",
+                        "  CUSTOM_WRITE:",
+                        "    symbol_arg: 0",
+                        "    access: write",
+                    ]
+                ),
+                encoding="utf-8",
+            )
             (corpus_root / "note.md").write_text(
                 "CP_INT_CNTL_RING0 sets CNTX_BUSY_INT_ENABLE before interrupt tests.",
                 encoding="utf-8",
@@ -105,6 +150,22 @@ class WorkbenchBackendStateTests(unittest.TestCase):
             db_path = root / "asip.db"
             corpus_root = root / "driver"
             corpus_root.mkdir()
+            profile_path = root / "custom-c.yaml"
+            profile_path.write_text(
+                "\n".join(
+                    [
+                        "id: custom-c",
+                        "language: cpp",
+                        "context_vars: []",
+                        "symbol_prefixes: []",
+                        "wrappers:",
+                        "  CUSTOM_WRITE:",
+                        "    symbol_arg: 0",
+                        "    access: write",
+                    ]
+                ),
+                encoding="utf-8",
+            )
             (corpus_root / "custom.c").write_text(
                 "void program(void) {\n"
                 "  CUSTOM_WRITE(DoorbellRegister, 1);\n"
@@ -130,7 +191,7 @@ class WorkbenchBackendStateTests(unittest.TestCase):
                 language="cpp",
                 wrappers=["CUSTOM_WRITE"],
                 strategy="write",
-                path="configs/resolvers/custom-c.yaml",
+                path=str(profile_path),
                 enabled=True,
             )
             add_corpus(

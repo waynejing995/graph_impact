@@ -24,6 +24,7 @@ from apps.mcp.tools import (
     resolver_profiles_list,
     run_acceptance,
     search_evidence,
+    semantic_edges_generate_batch,
     semantic_edges_generate,
 )
 
@@ -52,9 +53,11 @@ class IndexRequest(BaseModel):
 
 
 class SemanticEdgesRequest(BaseModel):
-    q: str
+    q: str = ""
     db_path: Optional[str] = None
     limit: int = 8
+    mode: str = "query"
+    batch_size: int = 6
 
 
 class ProviderSettingsRequest(BaseModel):
@@ -90,6 +93,12 @@ def graph(query_id: str, db_path: Optional[str] = None):
 @app.post("/semantic-edges")
 def semantic_edges(request: SemanticEdgesRequest):
     try:
+        if request.mode.lower() == "batch":
+            return semantic_edges_generate_batch(
+                db_path=request.db_path,
+                limit=request.limit,
+                batch_size=request.batch_size,
+            )
         return semantic_edges_generate(
             request.q,
             db_path=request.db_path,
