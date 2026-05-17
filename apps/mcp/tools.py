@@ -29,7 +29,7 @@ from asip.workbench import (
 
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
-DEFAULT_CONFIG = REPO_ROOT / "configs/edge_cases/full-corpus-qwen35.json"
+DEFAULT_CONFIG = REPO_ROOT / "configs/edge_cases/full-corpus-gemma4-e4b.json"
 DEFAULT_DB = REPO_ROOT / "data/asip.db"
 
 
@@ -47,12 +47,16 @@ def graph_expand(seed: str, db_path: str | None = None) -> Dict[str, Any]:
     return payload
 
 
-def semantic_edges_generate(query: str, db_path: str | None = None, limit: int = 8) -> Dict[str, Any]:
+def semantic_edges_generate(query: str, db_path: str | None = None, limit: int | None = None) -> Dict[str, Any]:
     db = Path(db_path) if db_path else DEFAULT_DB
     return generate_semantic_edges_for_query(db, query, limit=limit)
 
 
-def semantic_edges_generate_batch(db_path: str | None = None, limit: int = 24, batch_size: int = 6) -> Dict[str, Any]:
+def semantic_edges_generate_batch(
+    db_path: str | None = None,
+    limit: int | None = None,
+    batch_size: int | None = None,
+) -> Dict[str, Any]:
     db = Path(db_path) if db_path else DEFAULT_DB
     return generate_semantic_edges_batch(db, limit=limit, batch_size=batch_size)
 

@@ -19,7 +19,7 @@ class IndexArtifactsTests(unittest.TestCase):
 
             self.assertEqual(summary["documents"], 5)
             self.assertEqual(summary["chunks"], 9)
-            self.assertEqual(summary["edges"], 16)
+            self.assertEqual(summary["edges"], 13)
             con = sqlite3.connect(db_path)
             search_rows = list(
                 con.execute(
@@ -32,9 +32,19 @@ class IndexArtifactsTests(unittest.TestCase):
                 )
             )
             edge_rows = list(con.execute("select relation from edges where relation = 'sets_field'"))
+            wrapper_rows = list(
+                con.execute(
+                    """
+                    select src, dst
+                    from edges
+                    where src like 'WREG%' or dst like 'WREG%' or src like 'RREG%' or dst like 'RREG%'
+                    """
+                )
+            )
 
             self.assertTrue(search_rows)
             self.assertTrue(edge_rows)
+            self.assertEqual(wrapper_rows, [])
 
 
 if __name__ == "__main__":

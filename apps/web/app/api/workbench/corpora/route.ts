@@ -1,10 +1,11 @@
 import { NextResponse } from "next/server";
 import { defaultConfigPath, defaultDbPath, runAsipCli } from "@/lib/asip-cli";
 
-export function GET() {
+export function GET(request: Request) {
+  const dbPath = new URL(request.url).searchParams.get("dbPath")?.trim() || defaultDbPath;
   try {
     return NextResponse.json(
-      runAsipCli<Record<string, unknown>>(["corpora", "--db", defaultDbPath, "--config", defaultConfigPath])
+      runAsipCli<Record<string, unknown>>(["corpora", "--db", dbPath, "--config", defaultConfigPath])
     );
   } catch (error) {
     return NextResponse.json(
@@ -22,9 +23,11 @@ export async function POST(request: Request) {
     source_root?: string;
     include?: string[] | string;
     type?: string;
+    dbPath?: string;
   };
   const id = body.id?.trim();
   const sourceRoot = (body.sourceRoot ?? body.source_root ?? "").trim();
+  const dbPath = body.dbPath?.trim() || defaultDbPath;
   if (!id || !sourceRoot) {
     return NextResponse.json({ error: "Corpus id and source root are required." }, { status: 400 });
   }
@@ -38,7 +41,7 @@ export async function POST(request: Request) {
     const args = [
       "corpus-add",
       "--db",
-      defaultDbPath,
+      dbPath,
       "--id",
       id,
       "--repo",

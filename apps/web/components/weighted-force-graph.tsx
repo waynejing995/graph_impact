@@ -7,7 +7,11 @@ import type { ForceGraphProps, LinkObject, NodeObject } from "react-force-graph-
 type WeightedGraphNode = {
   id: string;
   kind?: string;
+  label?: string;
   weight?: number;
+  in?: string[];
+  out?: string[];
+  attr?: Record<string, unknown>;
 };
 
 type WeightedGraphEdge = {
@@ -16,6 +20,9 @@ type WeightedGraphEdge = {
   relation: string;
   confidence?: number;
   weight?: number;
+  stage?: string;
+  sources?: Array<Record<string, unknown>>;
+  attr?: Record<string, unknown>;
 };
 
 export type WeightedGraphPayload = {
@@ -23,11 +30,16 @@ export type WeightedGraphPayload = {
   edges: WeightedGraphEdge[];
 };
 
+type ProductGraphKind = "function" | "register" | "doc_section" | "pdf_section" | "doc_box";
+
 type ForceNode = NodeObject<{
   id: string;
-  kind: string;
+  kind: ProductGraphKind;
   label: string;
   weight: number;
+  in: string[];
+  out: string[];
+  attr: Record<string, unknown>;
 }>;
 
 type ForceLink = LinkObject<
@@ -42,9 +54,8 @@ type ForceLink = LinkObject<
 >;
 
 type GraphPalette = {
-  code: string;
+  function: string;
   register: string;
-  field: string;
   doc: string;
   pdf: string;
   edge: string;
@@ -57,9 +68,8 @@ const ForceGraph2D = dynamic(() => import("react-force-graph-2d"), {
 }) as ComponentType<ForceGraphProps<ForceNode, ForceLink>>;
 
 const fallbackPalette: GraphPalette = {
-  code: "#7dd3fc",
+  function: "#7dd3fc",
   register: "#facc15",
-  field: "#39d98a",
   doc: "#c084fc",
   pdf: "#fb7185",
   edge: "#60a5fa",
@@ -69,14 +79,22 @@ const fallbackPalette: GraphPalette = {
 
 export function WeightedForceGraph({
   graph,
-  label = "Global weighted network graph"
+  label = "Global weighted network graph",
+  maxEdges,
+  maxNodes,
+  minEdgeWeight = 0,
+  summaryLimit
 }: {
   graph: WeightedGraphPayload;
   label?: string;
+  maxEdges: number;
+  maxNodes: number;
+  minEdgeWeight?: number;
+  summaryLimit: number;
 }) {
   const summaryId = useId();
   const containerRef = useRef<HTMLDivElement | null>(null);
-  const [size, setSize] = useState({ width: 960, height: 420 });
+  const [size, setSize] = useState({ width: 1280, height: 720 });
   const [ready, setReady] = useState(false);
   const [palette, setPalette] = useState<GraphPalette>(fallbackPalette);
 
@@ -87,7 +105,7 @@ export function WeightedForceGraph({
     }
     const observer = new ResizeObserver(([entry]) => {
       const width = Math.max(320, Math.round(entry.contentRect.width));
-      const height = Math.max(300, Math.round(Math.min(560, width * 0.44)));
+      const height = Math.max(560, Math.round(Math.min(920, width * 0.62)));
       setSize({ width, height });
     });
     observer.observe(element);
@@ -97,9 +115,8 @@ export function WeightedForceGraph({
   useEffect(() => {
     const root = getComputedStyle(document.documentElement);
     setPalette({
-      code: cssValue(root, "--code", fallbackPalette.code),
+      function: cssValue(root, "--code", fallbackPalette.function),
       register: cssValue(root, "--register", fallbackPalette.register),
-      field: cssValue(root, "--primary", fallbackPalette.field),
       doc: cssValue(root, "--doc", fallbackPalette.doc),
       pdf: cssValue(root, "--pdf", fallbackPalette.pdf),
       edge: cssValue(root, "--graph-edge", fallbackPalette.edge),
@@ -109,19 +126,31 @@ export function WeightedForceGraph({
   }, [graph]);
 
   const graphData = useMemo(() => {
-    const nodes = graph.nodes.slice(0, 140).map((node): ForceNode => {
+    const requestedMaxNodes = Math.max(1, Math.floor(maxNodes));
+    const requestedMaxEdges = Math.max(1, Math.floor(maxEdges));
+    const minimumWeight = Math.max(0, Math.min(1, minEdgeWeight));
+    const nodes = graph.nodes.flatMap((node): ForceNode[] => {
       const kind = normalizeKind(node.kind);
-      return {
-        id: node.id,
-        label: node.id,
+      if (!kind || !node.id) {
+        return [];
+      }
+      return [{
+        id: String(node.id),
+        label: String(node.label ?? node.id),
         kind,
-        weight: Math.max(1, Number(node.weight ?? 1))
-      };
-    });
+        weight: Math.max(1, Number(node.weight ?? 1)),
+        in: Array.isArray(node.in) ? node.in.map(String) : [],
+        out: Array.isArray(node.out) ? node.out.map(String) : [],
+        attr: isPlainObject(node.attr) ? node.attr : {}
+      } satisfies ForceNode];
+    }).slice(0, requestedMaxNodes);
     const nodeIds = new Set(nodes.map((node) => String(node.id)));
     const links = graph.edges
-      .filter((edge) => edge.src && edge.dst && nodeIds.has(edge.src) && nodeIds.has(edge.dst))
-      .slice(0, 260)
+      .filter((edge) => {
+        const weight = normalizedWeight(edge);
+        return edge.src && edge.dst && nodeIds.has(edge.src) && nodeIds.has(edge.dst) && weight >= minimumWeight;
+      })
+      .slice(0, requestedMaxEdges)
       .map((edge): ForceLink => {
         const weight = normalizedWeight(edge);
         return {
@@ -133,16 +162,19 @@ export function WeightedForceGraph({
         };
       });
     return { nodes, links };
-  }, [graph]);
+  }, [graph, maxEdges, maxNodes, minEdgeWeight]);
 
   const topNodes = useMemo(
-    () => [...graphData.nodes].sort((left, right) => right.weight - left.weight).slice(0, 8),
-    [graphData.nodes]
+    () => [...graphData.nodes].sort((left, right) => right.weight - left.weight).slice(0, summaryLimit),
+    [graphData.nodes, summaryLimit]
   );
-  const summaryNodes = graphData.nodes.length <= 32 ? graphData.nodes : topNodes;
+  const summaryNodes =
+    graphData.nodes.length <= summaryLimit
+      ? graphData.nodes
+      : uniqueNodesForSummary([...topNodes, ...graphData.nodes.slice(-summaryLimit)]);
   const topLinks = useMemo(
-    () => [...graphData.links].sort((left, right) => right.weight - left.weight).slice(0, 8),
-    [graphData.links]
+    () => [...graphData.links].sort((left, right) => right.weight - left.weight).slice(0, summaryLimit),
+    [graphData.links, summaryLimit]
   );
   const kindCounts = useMemo(() => {
     const counts = new Map<string, number>();
@@ -158,11 +190,16 @@ export function WeightedForceGraph({
       aria-label={label}
       className="force-graph-shell"
       data-edge-count={graphData.links.length}
+      data-edge-total={graph.edges.length}
+      data-max-edges={maxEdges}
+      data-max-nodes={maxNodes}
+      data-min-edge-weight={minEdgeWeight.toFixed(2)}
       data-ready={ready ? "true" : "false"}
       data-strongest-weight={topLinks[0]?.weight.toFixed(2) ?? "0.00"}
       data-testid="force-graph"
       data-weakest-weight={topLinks.at(-1)?.weight.toFixed(2) ?? "0.00"}
       data-node-count={graphData.nodes.length}
+      data-node-total={graph.nodes.length}
       ref={containerRef}
       role="img"
     >
@@ -236,18 +273,17 @@ function drawNodeLabel(
 }
 
 function normalizeKind(kind: string | undefined) {
-  const normalized = String(kind || "code").toLowerCase();
+  const normalized = String(kind || "").toLowerCase();
   if (
     normalized === "register" ||
-    normalized === "field" ||
-    normalized === "doc" ||
+    normalized === "function" ||
     normalized === "doc_section" ||
-    normalized === "pdf" ||
+    normalized === "doc_box" ||
     normalized === "pdf_section"
   ) {
-    return normalized;
+    return normalized as ProductGraphKind;
   }
-  return "code";
+  return null;
 }
 
 function normalizedWeight(edge: WeightedGraphEdge) {
@@ -262,16 +298,13 @@ function colorForKind(kind: string, palette: GraphPalette) {
   if (kind === "register") {
     return palette.register;
   }
-  if (kind === "field") {
-    return palette.field;
-  }
-  if (kind === "doc" || kind === "doc_section") {
+  if (kind === "doc_section" || kind === "doc_box") {
     return palette.doc;
   }
-  if (kind === "pdf" || kind === "pdf_section") {
+  if (kind === "pdf_section") {
     return palette.pdf;
   }
-  return palette.code;
+  return palette.function;
 }
 
 function cssValue(styles: CSSStyleDeclaration, name: string, fallback: string) {
@@ -280,4 +313,20 @@ function cssValue(styles: CSSStyleDeclaration, name: string, fallback: string) {
 
 function shortLabel(value: string) {
   return value.length > 24 ? `${value.slice(0, 21)}...` : value;
+}
+
+function uniqueNodesForSummary(nodes: ForceNode[]) {
+  const seen = new Set<string>();
+  return nodes.filter((node) => {
+    const id = String(node.id);
+    if (seen.has(id)) {
+      return false;
+    }
+    seen.add(id);
+    return true;
+  });
+}
+
+function isPlainObject(value: unknown): value is Record<string, unknown> {
+  return Boolean(value) && typeof value === "object" && !Array.isArray(value);
 }

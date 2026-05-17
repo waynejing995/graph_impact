@@ -1,6 +1,6 @@
 # G14 Static Data And Truthful Empty States
 
-Status: Partial/blocking; static data removal, package graph renderer, and acceptance detail truthfulness remain open
+Status: Partial/blocking; static data removal and final route-by-route truth audit remain open
 
 ## Requirement
 
@@ -102,18 +102,44 @@ Truthfulness for `/graph` now includes graph-source truthfulness. The UI must no
   - The Acceptance page compresses fail/partial runs into rows without expandable query-level detail, even though `asip.acceptance` artifacts contain `failure_reasons`, `missing_surfaces`, `source_paths`, `source_types`, provider checks, row counts, and graph counts.
 - Product truth now requires deleting hidden/static UI fallbacks, replacing the graph renderer with a package-backed React graph, and showing acceptance details through a real expandable UI.
 - 2026-05-17 graph semantic slice proves the default `/graph` can render live API payloads with 400 edges from the dirty local DB and exposes the batch semantic-edge action. Final route-by-route static/demo audit is still open.
+- 2026-05-17 acceptance provider-check correction: expandable Acceptance details now include provider checks from current artifacts, including embedding/semantic-edge status, provider, model, and message. The stale user-review note above remains historical context for why this slice was required.
 
 ## Remaining Gap
 
 The UI has become partially live, and query/graph/backend empty/failure paths plus selected Corpus failure, acceptance failure, empty corpus API, empty resolver API, graph relationship-panel paths, Web BFF query/graph read-route no-mutation, MCP/FastAPI default-corpus no-auto-index behavior, status/list no-migration behavior, FastAPI live HTTP smoke including `pnpm dev:api`, MCP server tool-matrix registration, and Web/MCP query/evidence/entity agreement are now explicitly covered. Initial Evidence Workbench success rows now come from the live query API, row-derived graph fallback no longer mixes `evidenceIndex` into API results, live query rows now drive the right inspector, user-added corpora can reach live query results through the Web UI, resolver validation now uses live backend state, and acceptance/corpus/resolver/graph routes no longer silently fall back to their most misleading static rows in the covered states.
 
-This gap remains open because static/default data and custom UI can still hide the truth:
+This gap remains open because static/default data can still hide the truth:
 
-- `/graph` must not use hand-written fixed-layout SVG as the primary product renderer.
-- `/acceptance` must expose the real artifact/run detail behind fail/partial counts.
 - route-level fallback rows, static metrics, and demo labels must be audited again after the shadcn/package pass.
 - provider failure nuance, optional real MCP runtime smoke, and remaining route-specific demo states still need route-by-route truth audit before this gap can close.
 - graph provenance must be visible enough to distinguish raw explicit edges, indexed-evidence edges, function-operation edges, document-section edges, and LLM semantic edges. Missing graph layers must not be hidden behind a generic `ready` label.
+
+2026-05-17 final route truth audit:
+
+| Route / Surface | Live Data State | Empty/Error State | Static/Demo Policy |
+| --- | --- | --- | --- |
+| `/` Evidence Search | Queries `/api/workbench/query`; successful rows, inspector, and query graph come from the same API payload. | No-match and HTTP 500 are explicit empty/error states with no seed rows. | No static initial rows; row-derived graph fallback uses API rows only. |
+| `/graph` | Requests `/api/workbench/graph` without a default seed and renders `react-force-graph-2d` from API nodes/edges. Current live DB graph has function/register/doc_box/doc_section nodes and semantic edges. | Empty graph and graph API failure render explicit empty/error states. | No hardcoded graph sample; graph budget/weight filters are visible controls. |
+| `/corpus` | Reads persisted corpora and can add/index/query a user local corpus through the real API. | Empty API corpora and failed index jobs are explicit. | No default corpus substitution when API returns `corpora: []`. |
+| `/resolver-profiles` | Reads committed YAML-backed profiles and persisted user profiles. | Empty API profiles and missing YAML validation are explicit. | Wrapper names are shown as profile operators/counts, not graph nodes. |
+| `/acceptance` | Reads current QA artifacts and can run selected AQ IDs/surfaces/output paths through `/api/workbench/acceptance/run`. | Acceptance API failure renders `runs: 0`; fail/partial rows expand with reasons/provider/source details. | Historical artifacts are labeled as QA runs; no silent qwen/gemma seed rows on API failure. |
+| `/settings` | Reads/saves provider settings through backend; supports separate edge/embedding provider/base URL/path/model/headers. | Provider status remains `unverified` until smoke/AQ pass; failed smoke is explicit. | Ollama detection is an action, not a hidden default; current default restored to `ollama/gemma4:e4b`. |
+| Web BFF/API/MCP read routes | Query/graph/evidence/entity/provider/resolver/corpora/acceptance reads honor explicit missing/empty DBs. | Missing/empty DBs return empty/not-found/fail payloads without creating default indexes. | Read routes do not auto-index default data. Indexing is a separate explicit action. |
+
+Fresh tests covering this truth audit:
+
+```text
+Web API + smoke Playwright: 69 passed
+Visual route Playwright: 15 passed
+FastAPI/MCP unittest: 41 OK, 1 optional MCP runtime skip
+Core unittest discovery: 141 OK, 1 sqlite-vec skip
+```
+
+2026-05-17 continuation after subagent audit:
+
+- Top-bar global search now runs a real query on graph-capable pages instead of acting as decorative input.
+- Source-type controls now constrain the live query request with `sourceTypes`; core `query_evidence()` filters by `source_type`.
+- The graph header exposes deterministic/semantic layer counts so users can distinguish graph provenance instead of seeing only generic weighted connections.
 
 The product needs a clear data truth policy:
 
@@ -164,7 +190,7 @@ and explicitly accepted in G07/G17.
 - UI E2E test: graph API returns empty graph; `/graph` renders an empty graph state instead of hardcoded nodes.
 - UI E2E test: graph API returns HTTP 500; `/graph` renders an error state instead of hardcoded nodes.
 - UI E2E test: acceptance API returns HTTP 500; `/acceptance` renders an empty state instead of static historical QA rows.
-- UI E2E test: acceptance fail/partial run expands and shows failure reasons, missing surfaces, source paths/types, graph counts, and artifact path.
+- UI E2E test: acceptance fail/partial run expands and shows failure reasons, missing surfaces, source paths/types, graph counts, provider checks, and artifact path.
 - UI E2E test: corpus API returns `corpora: []`; `/corpus` renders an empty state instead of default corpus rows.
 - UI E2E test: resolver API returns `profiles: []`; `/resolver-profiles` renders an empty state instead of default resolver rows.
 - UI E2E test: graph API success updates the relationship panel from the API graph payload.

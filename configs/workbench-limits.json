@@ -1,0 +1,35 @@
+{
+  "graph": {
+    "defaultHops": 1,
+    "edgeBudget": 3000,
+    "maxEdgeBudget": 20000,
+    "visibleNodeBudget": 1000,
+    "visibleEdgeBudget": 3000,
+    "minimumEdgeWeight": 0,
+    "evidenceRowCap": 5000,
+    "querySeedLimit": 4,
+    "cooccurrenceSymbolLimit": 8,
+    "inspectorEdgePreviewLimit": 12,
+    "accessibilitySummaryLimit": 8
+  },
+  "semantic": {
+    "queryLimit": 8,
+    "batchCandidateLimit": 24,
+    "batchSize": 6,
+    "postBatchGraphEdgeBudget": 400,
+    "candidateOverfetchMultiplier": 8,
+    "fullCorpusBatchSize": 3
+  },
+  "retrieval": {
+    "resultLimit": 24,
+    "candidateMultiplier": 240,
+    "candidateFloor": 2000,
+    "evidenceCandidateLimit": 5000,
+    "maxQueryTokens": 8,
+    "vectorLimit": 5
+  },
+  "embedding": {
+    "backfillLimit": 0,
+    "batchSize": 64
+  }
+}

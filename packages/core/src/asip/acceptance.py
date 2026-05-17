@@ -122,7 +122,7 @@ def _run_one_acceptance_query(
     provider_checks: Dict[str, Any],
     database_health: List[str],
 ) -> Dict[str, Any]:
-    payload = query_evidence(db_path, str(query["query"]), limit=24)
+    payload = query_evidence(db_path, str(query["query"]))
     rows = list(payload.get("rows", []))
     graph = dict(payload.get("graph", {}))
     required_surfaces = [str(surface) for surface in query.get("required_surfaces", [])]

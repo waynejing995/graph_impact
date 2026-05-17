@@ -280,6 +280,35 @@ textarea {
   font-weight: 700;
 }
 
+.acceptance-runner-card {
+  margin-bottom: 12px;
+}
+
+.acceptance-runner-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.acceptance-runner-grid [data-slot="field"] {
+  min-width: 0;
+}
+
+.acceptance-surface-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin: 12px 0;
+}
+
+.checkbox-inline {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--text);
+  font-size: 13px;
+}
+
 .provider-settings-field--wide {
   grid-column: 1 / -1;
 }
@@ -375,8 +404,8 @@ textarea {
   position: relative;
   display: block;
   width: 100%;
-  aspect-ratio: 960 / 420;
-  min-height: 300px;
+  aspect-ratio: 16 / 9;
+  min-height: 560px;
   overflow: hidden;
   border: 1px solid var(--border);
   border-radius: 8px;
@@ -410,6 +439,55 @@ textarea {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.graph-controls {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+  padding: 10px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface-2);
+}
+
+.graph-control {
+  display: grid;
+  min-width: 0;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 8px 10px;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 650;
+}
+
+.graph-control [data-slot="slider"] {
+  grid-column: 1 / -1;
+}
+
+.graph-control strong {
+  color: var(--foreground);
+  font-size: 12px;
+  font-weight: 750;
+}
+
+[data-slot="slider-track"] {
+  height: 8px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--surface-1);
+}
+
+[data-slot="slider-range"] {
+  background: var(--primary);
+}
+
+[data-slot="slider-thumb"] {
+  width: 16px;
+  height: 16px;
+  border: 2px solid var(--primary);
+  background: var(--background);
 }
 
 .network-empty {
@@ -734,10 +812,18 @@ code {
   }
 
   .force-graph-shell {
-    min-height: 190px;
+    min-height: 360px;
+  }
+
+  .graph-controls {
+    grid-template-columns: 1fr;
   }
 
   .provider-settings-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .acceptance-runner-grid {
     grid-template-columns: 1fr;
   }
 

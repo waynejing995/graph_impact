@@ -38,6 +38,7 @@ import {
   SelectTrigger,
   SelectValue
 } from "@/components/ui/select";
+import { Slider } from "@/components/ui/slider";
 import {
   Table,
   TableBody,
@@ -57,6 +58,7 @@ type WorkbenchPageProps = {
 const providerSettingsStorageKey = "asip-provider-settings";
 const themeStorageKey = "asip-theme";
 const defaultTheme = "dark";
+const sourceFilterTypes = ["code", "register", "doc", "pdf"] as const;
 
 type Theme = "dark" | "light";
 type ProviderVerificationState = "unverified" | "verified" | "failed";
@@ -124,6 +126,31 @@ type ProviderAcceptanceRun = {
   }>;
 };
 
+type AcceptanceSurface = "CLI" | "API" | "Web" | "MCP";
+
+type AcceptanceRunnerDraft = {
+  dbPath: string;
+  queryIds: string;
+  surfaces: Record<AcceptanceSurface, boolean>;
+  outputJson: string;
+  outputMd: string;
+};
+
+type AcceptanceRunPayload = {
+  source?: string;
+  summary?: {
+    total?: number;
+    passed?: number;
+    partial?: number;
+    failed?: number;
+  };
+  surfaces_checked?: string[];
+  queries?: Array<Partial<AcceptanceDetail> & Record<string, unknown>>;
+  database_health?: Record<string, unknown>;
+  output_json?: string;
+  output_md?: string;
+};
+
 type BackendProviderSettings = {
   edge?: {
     provider?: string;
@@ -171,6 +198,19 @@ const defaultProviderSettings: ProviderSettings = {
   extraHeaders: {}
 };
 
+const defaultAcceptanceRunnerDraft: AcceptanceRunnerDraft = {
+  dbPath: "",
+  queryIds: "AQ01, AQ09",
+  surfaces: {
+    CLI: true,
+    API: true,
+    Web: true,
+    MCP: false
+  },
+  outputJson: "",
+  outputMd: ""
+};
+
 type CorpusEntry = {
   id: string;
   repo: string;
@@ -194,6 +234,7 @@ type ApiCorpusEntry = {
 type ResolverProfile = {
   id: string;
   wrapper: string;
+  wrappers: string[];
   strategy: string;
   path: string;
   enabled: boolean;
@@ -233,9 +274,30 @@ type AcceptanceDetail = {
   edgeCount?: number;
   sourceHitCount?: number;
   retrievalSources?: string[];
+  providerChecks?: {
+    embedding?: ProviderAcceptanceCheck;
+    semanticEdge?: ProviderAcceptanceCheck;
+  };
 };
 
 type GraphPayload = WeightedGraphPayload;
+
+type WorkbenchLimits = {
+  graph?: {
+    edgeBudget?: number;
+    maxEdgeBudget?: number;
+    visibleNodeBudget?: number;
+    visibleEdgeBudget?: number;
+    minimumEdgeWeight?: number;
+    evidenceRowCap?: number;
+    inspectorEdgePreviewLimit?: number;
+    accessibilitySummaryLimit?: number;
+  };
+  semantic?: {
+    batchCandidateLimit?: number;
+    batchSize?: number;
+  };
+};
 
 type ApiQueryResponse = {
   rows?: EvidenceRow[];
@@ -255,7 +317,11 @@ export function WorkbenchPage({ pageId }: WorkbenchPageProps) {
   const [themeReady, setThemeReady] = useState(false);
   const [providerSettings, setProviderSettings] = useState<ProviderSettings>(defaultProviderSettings);
   const [providerVerification, setProviderVerification] = useState<ProviderVerificationState>("unverified");
+  const [workbenchLimits, setWorkbenchLimits] = useState<WorkbenchLimits>({});
+  const [limitsReady, setLimitsReady] = useState(false);
+  const [graphEdgeBudget, setGraphEdgeBudget] = useState<number | null>(null);
   const providerSettingsDirtyRef = useRef(false);
+  const initialSearchHandledRef = useRef(false);
   const queryInputRef = useRef<HTMLInputElement | null>(null);
   const queryRequestSeqRef = useRef(0);
   const [settingsDraft, setSettingsDraft] = useState<ProviderSettingsDraft>(
@@ -263,7 +329,12 @@ export function WorkbenchPage({ pageId }: WorkbenchPageProps) {
   );
   const [settingsMessage, setSettingsMessage] = useState("");
   const [settingsError, setSettingsError] = useState("");
+  const [semanticLimitDraft, setSemanticLimitDraft] = useState("");
+  const [semanticBatchSizeDraft, setSemanticBatchSizeDraft] = useState("");
   const [acceptanceDbPath, setAcceptanceDbPath] = useState("");
+  const [acceptanceRunnerDraft, setAcceptanceRunnerDraft] = useState<AcceptanceRunnerDraft>(
+    defaultAcceptanceRunnerDraft
+  );
   const [corpora, setCorpora] = useState<CorpusEntry[]>([]);
   const [selectedCorpusIds, setSelectedCorpusIds] = useState<string[]>([]);
   const [corpusDraft, setCorpusDraft] = useState<CorpusEntry>({
@@ -274,10 +345,13 @@ export function WorkbenchPage({ pageId }: WorkbenchPageProps) {
     fileCount: "user"
   });
   const [corpusMessage, setCorpusMessage] = useState("");
+  const [globalQuery, setGlobalQuery] = useState("");
+  const [selectedSourceTypes, setSelectedSourceTypes] = useState<string[]>([...sourceFilterTypes]);
   const [resolverProfiles, setResolverProfiles] = useState<ResolverProfile[]>([]);
   const [resolverDraft, setResolverDraft] = useState<ResolverProfile>({
     id: "initial",
     wrapper: "RREG32",
+    wrappers: ["RREG32"],
     strategy: "macro",
     path: "configs/resolvers/initial.yaml",
     enabled: true
@@ -317,7 +391,62 @@ export function WorkbenchPage({ pageId }: WorkbenchPageProps) {
     setActionMessage("");
   }, [config.actionLabel]);
 
+  useEffect(() => {
+    if (config.id !== "evidence-workbench" || initialSearchHandledRef.current) {
+      return;
+    }
+    const storedGlobalQuery = window.sessionStorage.getItem("asip-global-query")?.trim() ?? "";
+    const initialQuery = new URLSearchParams(window.location.search).get("q")?.trim() || storedGlobalQuery;
+    if (!initialQuery) {
+      return;
+    }
+    initialSearchHandledRef.current = true;
+    window.sessionStorage.removeItem("asip-global-query");
+    setGlobalQuery(initialQuery);
+    void runQuery(initialQuery);
+  }, [config.id]);
+
+  useEffect(() => {
+    let cancelled = false;
+    fetch("/api/workbench/limits")
+      .then((response) => {
+        if (!response.ok) {
+          throw new Error(`Limits API returned ${response.status}`);
+        }
+        return response.json() as Promise<WorkbenchLimits>;
+      })
+      .then((payload) => {
+        if (cancelled) {
+          return;
+        }
+        setWorkbenchLimits(payload);
+        setGraphEdgeBudget((current) => current ?? payload.graph?.edgeBudget ?? null);
+        setLimitsReady(true);
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setLimitsReady(true);
+        }
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
   useLayoutEffect(() => {
+    if (config.id === "evidence-workbench" && !initialSearchHandledRef.current) {
+      const storedGlobalQuery = window.sessionStorage.getItem("asip-global-query")?.trim() ?? "";
+      const initialQuery = new URLSearchParams(window.location.search).get("q")?.trim() || storedGlobalQuery;
+      if (initialQuery) {
+        initialSearchHandledRef.current = true;
+        window.sessionStorage.removeItem("asip-global-query");
+        setGlobalQuery(initialQuery);
+        updateQuery(initialQuery);
+        setQueryEmptyMessage("");
+        void executeQuery(initialQuery, { announce: true, incrementRun: true });
+        return;
+      }
+    }
     if (config.id === "evidence-workbench" && queryValueRef.current.trim()) {
       setQueryEmptyMessage("");
       return;
@@ -343,7 +472,16 @@ export function WorkbenchPage({ pageId }: WorkbenchPageProps) {
 
     let cancelled = false;
     setGraphEmptyMessage("");
-    fetch("/api/workbench/graph")
+    if (!limitsReady) {
+      return;
+    }
+
+    const params = new URLSearchParams();
+    if (graphEdgeBudget !== null) {
+      params.set("limit", String(graphEdgeBudget));
+    }
+    const queryString = params.toString();
+    fetch(`/api/workbench/graph${queryString ? `?${queryString}` : ""}`)
       .then((response) => {
         if (!response.ok) {
           throw new Error(`Graph API returned ${response.status}`);
@@ -352,8 +490,9 @@ export function WorkbenchPage({ pageId }: WorkbenchPageProps) {
       })
       .then((payload) => {
         if (!cancelled) {
-          setApiGraph(payload);
-          setGraphEmptyMessage(payload.nodes.length || payload.edges.length ? "" : "No graph data returned.");
+          const graphPayload = sanitizeGraphPayload(payload) ?? { nodes: [], edges: [] };
+          setApiGraph(graphPayload);
+          setGraphEmptyMessage(graphPayload.nodes.length || graphPayload.edges.length ? "" : "No graph data returned.");
         }
       })
       .catch((error) => {
@@ -366,7 +505,7 @@ export function WorkbenchPage({ pageId }: WorkbenchPageProps) {
     return () => {
       cancelled = true;
     };
-  }, [config.id]);
+  }, [config.id, graphEdgeBudget, limitsReady]);
 
   useEffect(() => {
     let cancelled = false;
@@ -425,12 +564,12 @@ export function WorkbenchPage({ pageId }: WorkbenchPageProps) {
       .then((payload) => {
         if (!cancelled) {
           const apiProfiles = (payload.profiles ?? []).map(normalizeApiResolverProfile);
-          setResolverProfiles(apiProfiles);
+          setResolverProfiles((current) => mergeResolverProfiles(apiProfiles, current));
         }
       })
       .catch(() => {
         if (!cancelled) {
-          setResolverProfiles([]);
+          setResolverProfiles((current) => current);
         }
       });
 
@@ -531,11 +670,11 @@ export function WorkbenchPage({ pageId }: WorkbenchPageProps) {
         return buildLiveRelationshipLines(selectedEvidence, apiGraph);
       }
       if (config.id === "graph-explorer" && apiGraph) {
-        return buildGraphRelationshipLines(apiGraph, graphEmptyMessage);
+        return buildGraphRelationshipLines(apiGraph, graphEmptyMessage, workbenchLimits.graph?.inspectorEdgePreviewLimit);
       }
       return ["No relationship data returned from API."];
     },
-    [apiGraph, config.id, graphEmptyMessage, selectedEvidence]
+    [apiGraph, config.id, graphEmptyMessage, selectedEvidence, workbenchLimits.graph?.inspectorEdgePreviewLimit]
   );
 
   const providerLabel = providerSettings.provider === "ollama" ? "Ollama" : "OpenAI-compatible";
@@ -597,6 +736,20 @@ export function WorkbenchPage({ pageId }: WorkbenchPageProps) {
     void runQuery(String(formData.get("query") ?? ""));
   }
 
+  function handleGlobalSearchSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const nextQuery = globalQuery.trim();
+    if (!nextQuery) {
+      return;
+    }
+    if (config.id === "evidence-workbench" || config.id === "graph-explorer") {
+      void runQuery(nextQuery);
+      return;
+    }
+    window.sessionStorage.setItem("asip-global-query", nextQuery);
+    window.location.assign(`/?q=${encodeURIComponent(nextQuery)}`);
+  }
+
   async function executeQuery(
     nextQuery: string,
     options: { announce: boolean; incrementRun: boolean }
@@ -619,6 +772,9 @@ export function WorkbenchPage({ pageId }: WorkbenchPageProps) {
       if (asicFilter.trim()) {
         params.set("asic", asicFilter.trim());
       }
+      if (selectedSourceTypes.length !== sourceFilterTypes.length) {
+        params.set("sourceTypes", selectedSourceTypes.length ? selectedSourceTypes.join(",") : "__none__");
+      }
       const response = await fetch(`/api/workbench/query?${params.toString()}`);
       if (!response.ok) {
         throw new Error(`Query API returned ${response.status}`);
@@ -629,9 +785,10 @@ export function WorkbenchPage({ pageId }: WorkbenchPageProps) {
       }
       if (Array.isArray(payload.rows)) {
         const normalizedRows = payload.rows.map(normalizeApiEvidenceRow);
+        const graphPayload = sanitizeGraphPayload(payload.graph);
         setApiQueryRows(normalizedRows);
         setSelectedEvidenceKey(normalizedRows[0] ? evidenceRowKey(normalizedRows[0]) : "");
-        setApiGraph(payload.graph ?? null);
+        setApiGraph(graphPayload);
         setQueryEmptyMessage(payload.rows.length ? "" : payload.empty_state ?? `No evidence matched query: ${nextQuery}`);
       } else {
         setApiQueryRows([]);
@@ -659,7 +816,7 @@ export function WorkbenchPage({ pageId }: WorkbenchPageProps) {
     }
   }
 
-  async function runPageAction(options: { semanticMode?: "query" | "batch" } = {}) {
+  async function runPageAction(options: { semanticMode?: "query" | "batch" | "doc-nodes" } = {}) {
     if (config.id === "corpus") {
       const selectedIds = selectedCorpusIds.filter((id) => corpora.some((corpus) => corpus.id === id));
       if (selectedIds.length === 0) {
@@ -723,13 +880,58 @@ export function WorkbenchPage({ pageId }: WorkbenchPageProps) {
 
     if (config.id !== "settings") {
       if (config.id === "graph-explorer") {
-        if (options.semanticMode === "batch") {
-          setActionMessage("Generating batch semantic edges...");
+        if (options.semanticMode === "doc-nodes") {
+          setActionMessage("Extracting document graph nodes...");
           try {
+            const docNodePayload = {
+              mode: "doc-nodes",
+              ...semanticGenerationLimits()
+            };
             const response = await fetch("/api/workbench/semantic-edges", {
               method: "POST",
               headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({ mode: "batch", limit: 24, batchSize: 6 })
+              body: JSON.stringify(docNodePayload)
+            });
+            const payload = (await response.json()) as {
+              candidate_count?: number;
+              box_count?: number;
+              edge_count?: number;
+              graph?: GraphPayload;
+              error?: string;
+            };
+            if (!response.ok) {
+              throw new Error(payload.error ?? `Doc node API returned ${response.status}`);
+            }
+            if (payload.graph) {
+              const graphPayload = sanitizeGraphPayload(payload.graph) ?? { nodes: [], edges: [] };
+              setApiGraph(graphPayload);
+              setGraphEmptyMessage(
+                graphPayload.nodes.length || graphPayload.edges.length
+                  ? ""
+                  : "Document node job returned no graph data"
+              );
+            }
+            setActionMessage(
+              `Document nodes extracted: ${payload.box_count ?? 0} boxes, ${payload.edge_count ?? 0} edges from ${
+                payload.candidate_count ?? 0
+              } candidates`
+            );
+          } catch (error) {
+            setActionMessage(error instanceof Error ? error.message : "document node extraction failed");
+          }
+          return;
+        }
+        if (options.semanticMode === "batch") {
+          setActionMessage("Generating batch semantic edges...");
+          try {
+            const semanticPayload = {
+              mode: "batch",
+              ...semanticGenerationLimits()
+            };
+            const response = await fetch("/api/workbench/semantic-edges", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify(semanticPayload)
             });
             const payload = (await response.json()) as {
               candidate_count?: number;
@@ -741,9 +943,10 @@ export function WorkbenchPage({ pageId }: WorkbenchPageProps) {
               throw new Error(payload.error ?? `Semantic edge API returned ${response.status}`);
             }
             if (payload.graph) {
-              setApiGraph(payload.graph);
+              const graphPayload = sanitizeGraphPayload(payload.graph) ?? { nodes: [], edges: [] };
+              setApiGraph(graphPayload);
               setGraphEmptyMessage(
-                payload.graph.nodes.length || payload.graph.edges.length
+                graphPayload.nodes.length || graphPayload.edges.length
                   ? ""
                   : "Batch semantic edge job returned no graph data"
               );
@@ -765,18 +968,20 @@ export function WorkbenchPage({ pageId }: WorkbenchPageProps) {
         }
         setActionMessage("Generating semantic edges...");
         try {
+          const limits = semanticGenerationLimits();
           const response = await fetch("/api/workbench/semantic-edges", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ q: semanticEdgeQuery })
+            body: JSON.stringify({ q: semanticEdgeQuery, ...(limits.limit !== undefined ? { limit: limits.limit } : {}) })
           });
           const payload = (await response.json()) as { edge_count?: number; graph?: GraphPayload; error?: string };
           if (!response.ok) {
             throw new Error(payload.error ?? `Semantic edge API returned ${response.status}`);
           }
           if (payload.graph) {
-            setApiGraph(payload.graph);
-            setGraphEmptyMessage(payload.graph.nodes.length || payload.graph.edges.length ? "" : "Semantic edge job returned no graph data");
+            const graphPayload = sanitizeGraphPayload(payload.graph) ?? { nodes: [], edges: [] };
+            setApiGraph(graphPayload);
+            setGraphEmptyMessage(graphPayload.nodes.length || graphPayload.edges.length ? "" : "Semantic edge job returned no graph data");
           }
           setActionMessage(`Semantic edges generated: ${payload.edge_count ?? 0}`);
         } catch (error) {
@@ -850,6 +1055,34 @@ export function WorkbenchPage({ pageId }: WorkbenchPageProps) {
     } catch (error) {
       setProviderVerification("failed");
       setActionMessage(error instanceof Error ? error.message : "AQ09 provider acceptance failed");
+    }
+  }
+
+  async function runAcceptanceFromPage() {
+    const queryIds = parseCsvList(acceptanceRunnerDraft.queryIds);
+    const surfaces = acceptanceSurfacesFromDraft(acceptanceRunnerDraft);
+    setActionMessage("Running acceptance...");
+    try {
+      const response = await fetch("/api/workbench/acceptance/run", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          ...(acceptanceRunnerDraft.dbPath.trim() ? { dbPath: acceptanceRunnerDraft.dbPath.trim() } : {}),
+          ...(queryIds.length ? { queryIds } : {}),
+          surfaces,
+          ...(acceptanceRunnerDraft.outputJson.trim() ? { outputJson: acceptanceRunnerDraft.outputJson.trim() } : {}),
+          ...(acceptanceRunnerDraft.outputMd.trim() ? { outputMd: acceptanceRunnerDraft.outputMd.trim() } : {})
+        })
+      });
+      const payload = (await response.json()) as AcceptanceRunPayload & { error?: string };
+      if (!response.ok) {
+        throw new Error(payload.error ?? `Acceptance API returned ${response.status}`);
+      }
+      const run = acceptanceRunFromPayload(payload);
+      setAcceptanceRuns((runs) => [run, ...runs.filter((existing) => existing.id !== run.id)]);
+      setActionMessage(formatAcceptanceRunMessage(run));
+    } catch (error) {
+      setActionMessage(error instanceof Error ? error.message : "acceptance run failed");
     }
   }
 
@@ -942,6 +1175,7 @@ export function WorkbenchPage({ pageId }: WorkbenchPageProps) {
     const next: ResolverProfile = {
       id,
       wrapper,
+      wrappers: [wrapper],
       strategy: resolverDraft.strategy.trim() || "macro",
       path: resolverDraft.path.trim() || `configs/resolvers/${id}.yaml`,
       enabled: resolverDraft.enabled
@@ -969,11 +1203,12 @@ export function WorkbenchPage({ pageId }: WorkbenchPageProps) {
       setResolverDraft({
         id: "initial",
         wrapper: "RREG32",
+        wrappers: ["RREG32"],
         strategy: "macro",
         path: "configs/resolvers/initial.yaml",
         enabled: true
       });
-      setResolverMessage(`Resolver profile ${persisted.id} added`);
+      setResolverMessage(`Resolver profile ${persisted.id} saved`);
     } catch (error) {
       setResolverMessage(error instanceof Error ? error.message : "Resolver profile add failed");
     }
@@ -1022,6 +1257,31 @@ export function WorkbenchPage({ pageId }: WorkbenchPageProps) {
     });
   }
 
+  function toggleSourceType(sourceType: string) {
+    setSelectedSourceTypes((current) =>
+      current.includes(sourceType)
+        ? current.filter((item) => item !== sourceType)
+        : [...current, sourceType].sort((left, right) => sourceFilterTypes.indexOf(left as typeof sourceFilterTypes[number]) - sourceFilterTypes.indexOf(right as typeof sourceFilterTypes[number]))
+    );
+  }
+
+  function semanticGenerationLimits() {
+    const parsedLimit = Number(semanticLimitDraft);
+    const parsedBatchSize = Number(semanticBatchSizeDraft);
+    return {
+      ...(Number.isFinite(parsedLimit) && parsedLimit > 0
+        ? { limit: parsedLimit }
+        : workbenchLimits.semantic?.batchCandidateLimit !== undefined
+          ? { limit: workbenchLimits.semantic.batchCandidateLimit }
+          : {}),
+      ...(Number.isFinite(parsedBatchSize) && parsedBatchSize > 0
+        ? { batchSize: parsedBatchSize }
+        : workbenchLimits.semantic?.batchSize !== undefined
+          ? { batchSize: workbenchLimits.semantic.batchSize }
+          : {})
+    };
+  }
+
   return (
     <div className="workbench-shell" data-page-id={config.id} data-testid="asip-workbench">
       <header className="topbar" role="banner">
@@ -1029,10 +1289,15 @@ export function WorkbenchPage({ pageId }: WorkbenchPageProps) {
           <Image alt="" className="brand-logo" height={32} priority src="/brand/asip-logo.png" width={32} />
           <span>ASIP Evidence Workbench</span>
         </div>
-        <label className="global-search">
+        <form className="global-search" onSubmit={handleGlobalSearchSubmit}>
           <Search aria-hidden="true" size={15} />
-          <Input aria-label="Global symbol search" placeholder="Search indexed symbols" />
-        </label>
+          <Input
+            aria-label="Global symbol search"
+            onChange={(event) => setGlobalQuery(event.target.value)}
+            placeholder="Search indexed symbols"
+            value={globalQuery}
+          />
+        </form>
         <div className="status-row" aria-label="Workbench status">
           <ToneBadge tone={providerVerification === "verified" ? "success" : "neutral"}>
             <span className="status-dot" />
@@ -1109,11 +1374,18 @@ export function WorkbenchPage({ pageId }: WorkbenchPageProps) {
           </div>
 
           <div className="filter-row" aria-label="Evidence source filters">
-            {config.filters.map(({ icon: Icon, label, tone }) => (
-              <ToneBadge key={label} tone={tone}>
+            {config.filters.map(({ icon: Icon, label }) => (
+              <Button
+                aria-label={`Source filter ${label}`}
+                aria-pressed={selectedSourceTypes.includes(label.toLowerCase())}
+                key={label}
+                onClick={() => toggleSourceType(label.toLowerCase())}
+                type="button"
+                variant={selectedSourceTypes.includes(label.toLowerCase()) ? "secondary" : "ghost"}
+              >
                 <Icon aria-hidden="true" size={14} />
                 {label}
-              </ToneBadge>
+              </Button>
             ))}
           </div>
 
@@ -1153,6 +1425,7 @@ export function WorkbenchPage({ pageId }: WorkbenchPageProps) {
               onChange={setResolverDraft}
               onValidate={validateResolverProfile}
               onValidateSourceChange={setResolverValidateSource}
+              profiles={resolverProfiles}
               validateSource={resolverValidateSource}
             />
           ) : null}
@@ -1161,12 +1434,24 @@ export function WorkbenchPage({ pageId }: WorkbenchPageProps) {
             <GlobalNetworkGraph
               emptyMessage={graphEmptyMessage || queryEmptyMessage}
               graph={apiGraph}
+              limits={workbenchLimits}
+              loadedEdgeBudget={graphEdgeBudget}
+              onLoadedEdgeBudgetChange={setGraphEdgeBudget}
               rows={queryEvidenceRows}
               testId={config.id === "graph-explorer" ? "global-network-graph" : "query-network-graph"}
             />
           ) : null}
 
-          {config.id === "acceptance-tests" ? <AcceptanceRunsPanel runs={acceptanceRuns} /> : null}
+          {config.id === "acceptance-tests" ? (
+            <>
+              <AcceptanceRunnerPanel
+                draft={acceptanceRunnerDraft}
+                onChange={setAcceptanceRunnerDraft}
+                onRun={runAcceptanceFromPage}
+              />
+              <AcceptanceRunsPanel runs={acceptanceRuns} />
+            </>
+          ) : null}
 
           <EvidenceResultsTable
             emptyMessage={queryEmptyMessage || "No evidence matched this query."}
@@ -1219,19 +1504,55 @@ export function WorkbenchPage({ pageId }: WorkbenchPageProps) {
             {config.actionLabel}
           </Button>
           {config.id === "graph-explorer" ? (
-            <Button
-              className="settings-button"
-              onClick={() => void runPageAction({ semanticMode: "batch" })}
-              type="button"
-              variant="secondary"
-            >
-              Generate batch semantic edges
-            </Button>
+            <>
+              <Button
+                className="settings-button"
+                onClick={() => void runPageAction({ semanticMode: "batch" })}
+                type="button"
+                variant="secondary"
+              >
+                Generate batch semantic edges
+              </Button>
+              <Button
+                className="settings-button"
+                onClick={() => void runPageAction({ semanticMode: "doc-nodes" })}
+                type="button"
+                variant="secondary"
+              >
+                Extract document nodes
+              </Button>
+            </>
           ) : null}
           {actionMessage ? (
             <p className="action-feedback" data-testid="action-feedback">
               {actionMessage}
             </p>
+          ) : null}
+          {config.id === "graph-explorer" ? (
+            <div className="semantic-limit-controls" aria-label="Semantic generation controls">
+              <label>
+                <span>Semantic candidate limit</span>
+                <Input
+                  aria-label="Semantic candidate limit"
+                  min={1}
+                  onChange={(event) => setSemanticLimitDraft(event.target.value)}
+                  placeholder={String(workbenchLimits.semantic?.batchCandidateLimit ?? "")}
+                  type="number"
+                  value={semanticLimitDraft}
+                />
+              </label>
+              <label>
+                <span>Semantic batch size</span>
+                <Input
+                  aria-label="Semantic batch size"
+                  min={1}
+                  onChange={(event) => setSemanticBatchSizeDraft(event.target.value)}
+                  placeholder={String(workbenchLimits.semantic?.batchSize ?? "")}
+                  type="number"
+                  value={semanticBatchSizeDraft}
+                />
+              </label>
+            </div>
           ) : null}
         </aside>
       </main>
@@ -1373,6 +1694,83 @@ function EvidenceResultsTable({
   );
 }
 
+function AcceptanceRunnerPanel({
+  draft,
+  onChange,
+  onRun
+}: {
+  draft: AcceptanceRunnerDraft;
+  onChange: (draft: AcceptanceRunnerDraft) => void;
+  onRun: () => void;
+}) {
+  const update = <Key extends keyof AcceptanceRunnerDraft>(key: Key, value: AcceptanceRunnerDraft[Key]) => {
+    onChange({ ...draft, [key]: value });
+  };
+  const toggleSurface = (surface: AcceptanceSurface, checked: boolean) => {
+    onChange({ ...draft, surfaces: { ...draft.surfaces, [surface]: checked } });
+  };
+
+  return (
+    <Card className="acceptance-runner-card" aria-label="Acceptance runner">
+      <CardHeader>
+        <CardTitle>Acceptance Runner</CardTitle>
+        <CardDescription>Run selected QA queries against any indexed DB and capture output artifacts.</CardDescription>
+      </CardHeader>
+      <CardContent>
+        <FieldGroup className="acceptance-runner-grid">
+          <Field>
+            <FieldLabel>Acceptance query IDs</FieldLabel>
+            <Input
+              aria-label="Acceptance query IDs"
+              onChange={(event) => update("queryIds", event.target.value)}
+              value={draft.queryIds}
+            />
+          </Field>
+          <Field>
+            <FieldLabel>Acceptance DB path</FieldLabel>
+            <Input
+              aria-label="Acceptance DB path"
+              onChange={(event) => update("dbPath", event.target.value)}
+              value={draft.dbPath}
+            />
+          </Field>
+          <Field>
+            <FieldLabel>Acceptance output JSON</FieldLabel>
+            <Input
+              aria-label="Acceptance output JSON"
+              onChange={(event) => update("outputJson", event.target.value)}
+              value={draft.outputJson}
+            />
+          </Field>
+          <Field>
+            <FieldLabel>Acceptance output Markdown</FieldLabel>
+            <Input
+              aria-label="Acceptance output Markdown"
+              onChange={(event) => update("outputMd", event.target.value)}
+              value={draft.outputMd}
+            />
+          </Field>
+        </FieldGroup>
+        <div className="acceptance-surface-row" aria-label="Acceptance surfaces">
+          {(Object.keys(draft.surfaces) as AcceptanceSurface[]).map((surface) => (
+            <label className="checkbox-inline" key={surface}>
+              <Checkbox
+                aria-label={`${surface} surface`}
+                checked={draft.surfaces[surface]}
+                onCheckedChange={(checked) => toggleSurface(surface, checked === true)}
+              />
+              <span>{surface}</span>
+            </label>
+          ))}
+        </div>
+        <Button onClick={onRun} type="button">
+          Run acceptance
+        </Button>
+      </CardContent>
+    </Card>
+  );
+}
+
 function AcceptanceRunsPanel({ runs }: { runs: AcceptanceRun[] }) {
   if (runs.length === 0) {
     return null;
@@ -1456,7 +1854,8 @@ function AcceptanceDetailText({ detail }: { detail: AcceptanceDetail }) {
   const lines = [
     ...detail.failureReasons,
     detail.missingSurfaces.length ? `missing surfaces: ${detail.missingSurfaces.join(", ")}` : "",
-    detail.missing.length ? `missing terms: ${detail.missing.join(", ")}` : ""
+    detail.missing.length ? `missing terms: ${detail.missing.join(", ")}` : "",
+    ...formatAcceptanceProviderChecks(detail.providerChecks)
   ].filter(Boolean);
   return lines.length ? (
     <div className="acceptance-detail-stack">
@@ -1479,6 +1878,59 @@ function AcceptanceSourceText({ detail }: { detail: AcceptanceDetail }) {
       ))}
     </div>
   );
+}
+
+function formatAcceptanceProviderChecks(checks: AcceptanceDetail["providerChecks"]): string[] {
+  if (!checks) {
+    return [];
+  }
+  return [
+    formatAcceptanceProviderCheck("embedding", checks.embedding),
+    formatAcceptanceProviderCheck("semantic edge", checks.semanticEdge)
+  ].filter(Boolean) as string[];
+}
+
+function formatAcceptanceProviderCheck(label: string, check: ProviderAcceptanceCheck | undefined): string {
+  if (!check) {
+    return "";
+  }
+  const status = check.status || "unknown";
+  const provider = check.provider || "unknown-provider";
+  const model = check.model || "unknown-model";
+  const message = check.message ? `: ${check.message}` : "";
+  return `${label} ${status}: ${provider} / ${model}${message}`;
+}
+
+function parseCsvList(value: string): string[] {
+  return value
+    .split(",")
+    .map((item) => item.trim())
+    .filter(Boolean);
+}
+
+function acceptanceSurfacesFromDraft(draft: AcceptanceRunnerDraft): AcceptanceSurface[] {
+  const selected = (Object.keys(draft.surfaces) as AcceptanceSurface[]).filter((surface) => draft.surfaces[surface]);
+  return selected.length ? selected : ["CLI", "Web"];
+}
+
+function acceptanceRunFromPayload(payload: AcceptanceRunPayload): AcceptanceRun {
+  const summary = payload.summary ?? {};
+  const runId = `acceptance-live-${Date.now()}`;
+  return normalizeAcceptanceRun({
+    id: runId,
+    model: payload.source ?? "asip.acceptance",
+    passed: Number(summary.passed ?? 0),
+    partial: Number(summary.partial ?? 0),
+    failed: Number(summary.failed ?? 0),
+    queryCount: Number(summary.total ?? payload.queries?.length ?? 0),
+    artifactPath: payload.output_json ?? payload.output_md ?? "live acceptance run",
+    details: (payload.queries ?? []).map((query) => normalizeAcceptanceDetail(query))
+  });
+}
+
+function formatAcceptanceRunMessage(run: AcceptanceRun): string {
+  const status = run.failed ? "failed" : run.partial ? "partial" : "passed";
+  return `Acceptance run ${status}: ${run.passed}/${run.queryCount}`;
 }
 
 function settingsToDraft(settings: ProviderSettings): ProviderSettingsDraft {
@@ -1759,9 +2211,9 @@ function buildPageRows(
     return resolverProfiles.map((profile) => ({
       source: "profile",
       tone: profile.enabled ? "success" : "neutral",
-      symbol: profile.wrapper,
+      symbol: profile.id,
       relation: profile.enabled ? profile.strategy : "disabled",
-      score: profile.id,
+      score: `${profile.wrappers.length} operator${profile.wrappers.length === 1 ? "" : "s"}`,
       path: profile.path
     }));
   }
@@ -1827,13 +2279,26 @@ function normalizeApiCorpus(corpus: ApiCorpusEntry): CorpusEntry {
 }
 
 function normalizeApiResolverProfile(profile: ApiResolverProfile): ResolverProfile {
+  const wrappers = profile.wrappers?.filter(Boolean) ?? [];
   return {
     id: profile.id,
-    wrapper: profile.wrappers?.[0] ?? profile.id,
+    wrapper: wrappers[0] ?? profile.id,
+    wrappers,
     strategy: profile.language ?? "config",
     path: profile.path ?? `configs/resolvers/${profile.id}.yaml`,
     enabled: profile.enabled ?? true
   };
+}
+
+function mergeResolverProfiles(base: ResolverProfile[], overrides: ResolverProfile[]) {
+  const merged = new Map<string, ResolverProfile>();
+  for (const profile of base) {
+    merged.set(profile.id, profile);
+  }
+  for (const profile of overrides) {
+    merged.set(profile.id, profile);
+  }
+  return Array.from(merged.values());
 }
 
 function normalizeApiEvidenceRow(row: EvidenceRow): EvidenceRow {
@@ -1878,7 +2343,36 @@ function normalizeAcceptanceDetail(detail: Partial<AcceptanceDetail> & Record<st
     rowCount: normalizeOptionalNumber(detail.rowCount ?? detail.row_count),
     graphEdgeCount: normalizeOptionalNumber(detail.graphEdgeCount ?? detail.graph_edge_count),
     edgeCount: normalizeOptionalNumber(detail.edgeCount ?? detail.edge_count),
-    sourceHitCount: normalizeOptionalNumber(detail.sourceHitCount ?? detail.source_hit_count)
+    sourceHitCount: normalizeOptionalNumber(detail.sourceHitCount ?? detail.source_hit_count),
+    providerChecks: normalizeAcceptanceProviderChecks(detail.providerChecks ?? detail.provider_checks)
+  };
+}
+
+function normalizeAcceptanceProviderChecks(value: unknown): AcceptanceDetail["providerChecks"] | undefined {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    return undefined;
+  }
+  const checks = value as {
+    embedding?: ProviderAcceptanceCheck;
+    semanticEdge?: ProviderAcceptanceCheck;
+    semantic_edge?: ProviderAcceptanceCheck;
+  };
+  return {
+    embedding: normalizeProviderAcceptanceCheck(checks.embedding),
+    semanticEdge: normalizeProviderAcceptanceCheck(checks.semanticEdge ?? checks.semantic_edge)
+  };
+}
+
+function normalizeProviderAcceptanceCheck(check: unknown): ProviderAcceptanceCheck | undefined {
+  if (!check || typeof check !== "object" || Array.isArray(check)) {
+    return undefined;
+  }
+  const payload = check as Record<string, unknown>;
+  return {
+    status: typeof payload.status === "string" ? payload.status : undefined,
+    provider: typeof payload.provider === "string" ? payload.provider : undefined,
+    model: typeof payload.model === "string" ? payload.model : undefined,
+    message: typeof payload.message === "string" ? payload.message : undefined
   };
 }
 
@@ -1954,11 +2448,12 @@ function buildLiveRelationshipLines(row: EvidenceRow, graph: GraphPayload | null
   return Array.from(lines);
 }
 
-function buildGraphRelationshipLines(graph: GraphPayload, emptyMessage: string): string[] {
+function buildGraphRelationshipLines(graph: GraphPayload, emptyMessage: string, limit?: number): string[] {
   if (graph.edges.length === 0) {
     return [emptyMessage || "No graph relationships returned."];
   }
-  return graph.edges.slice(0, 12).map((edge) => `${edge.src} ${edge.relation} ${edge.dst}`);
+  const previewLimit = Math.max(1, limit ?? graph.edges.length);
+  return graph.edges.slice(0, previewLimit).map((edge) => `${edge.src} ${edge.relation} ${edge.dst}`);
 }
 
 function sumFileCounts(corpora: CorpusEntry[]): string {
@@ -2323,6 +2818,7 @@ function ResolverProfileEditor({
   onChange,
   onValidate,
   onValidateSourceChange,
+  profiles,
   validateSource
 }: {
   draft: ResolverProfile;
@@ -2331,8 +2827,10 @@ function ResolverProfileEditor({
   onChange: (draft: ResolverProfile) => void;
   onValidate: () => void;
   onValidateSourceChange: (source: string) => void;
+  profiles: ResolverProfile[];
   validateSource: string;
 }) {
+  const [selectedProfileId, setSelectedProfileId] = useState(draft.id);
   const update = <Key extends keyof ResolverProfile>(key: Key, value: ResolverProfile[Key]) => {
     const next = { ...draft, [key]: value };
     if (key === "id") {
@@ -2347,6 +2845,19 @@ function ResolverProfileEditor({
     }
     onChange(next);
   };
+  const loadSelectedProfile = () => {
+    const selectedProfile = profiles.find((profile) => profile.id === selectedProfileId);
+    if (!selectedProfile) {
+      return;
+    }
+    onChange({
+      ...selectedProfile,
+      wrapper: selectedProfile.wrapper || selectedProfile.wrappers[0] || selectedProfile.id,
+      wrappers: selectedProfile.wrappers.length
+        ? selectedProfile.wrappers
+        : [selectedProfile.wrapper].filter(Boolean)
+    });
+  };
 
   return (
     <Card className="provider-settings-panel" aria-label="Resolver profile editor">
@@ -2359,6 +2870,27 @@ function ResolverProfileEditor({
       </CardHeader>
       <CardContent className="provider-settings-content">
       <FieldGroup className="provider-settings-grid">
+        <Field>
+          <FieldLabel>Existing profile</FieldLabel>
+          <Select onValueChange={setSelectedProfileId} value={selectedProfileId}>
+            <SelectTrigger aria-label="Existing resolver profile">
+              <SelectValue placeholder="Choose profile" />
+            </SelectTrigger>
+            <SelectContent>
+              {profiles.map((profile) => (
+                <SelectItem key={profile.id} value={profile.id}>
+                  {profile.id}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </Field>
+        <Field>
+          <FieldLabel>Profile action</FieldLabel>
+          <Button onClick={loadSelectedProfile} type="button" variant="secondary">
+            Load resolver profile
+          </Button>
+        </Field>
         <Field>
           <FieldLabel>Profile id</FieldLabel>
           <Input aria-label="Profile id" onChange={(event) => update("id", event.target.value)} value={draft.id} />
@@ -2410,7 +2942,7 @@ function ResolverProfileEditor({
       </FieldGroup>
       <div className="provider-settings-actions">
         <Button onClick={onAdd} type="button">
-          Add resolver profile
+          Save resolver profile
         </Button>
         <Button onClick={onValidate} type="button" variant="secondary">
           Validate resolver profile
@@ -2425,40 +2957,169 @@ function ResolverProfileEditor({
 function GlobalNetworkGraph({
   emptyMessage,
   graph,
+  limits,
+  loadedEdgeBudget,
+  onLoadedEdgeBudgetChange,
   rows,
   testId
 }: {
   emptyMessage?: string;
   graph: GraphPayload | null;
+  limits: WorkbenchLimits;
+  loadedEdgeBudget: number | null;
+  onLoadedEdgeBudgetChange: (value: number | null) => void;
   rows: EvidenceRow[];
   testId: string;
 }) {
   const graphData = buildGraphData(graph, rows);
   const isEmpty = graphData.nodes.length === 0;
+  const [minEdgeWeight, setMinEdgeWeight] = useState<number | null>(null);
+  const [maxNodes, setMaxNodes] = useState<number | null>(null);
+  const [maxEdges, setMaxEdges] = useState<number | null>(null);
+  const effectiveMinEdgeWeight = minEdgeWeight ?? limits.graph?.minimumEdgeWeight ?? 0;
+  const effectiveMaxNodes = maxNodes ?? limits.graph?.visibleNodeBudget ?? graphData.nodes.length;
+  const effectiveMaxEdges = maxEdges ?? limits.graph?.visibleEdgeBudget ?? graphData.edges.length;
+  const summaryLimit = Math.max(1, limits.graph?.accessibilitySummaryLimit ?? (graphData.nodes.length || 1));
+  const layerSummary = graphLayerSummary(graphData.edges);
 
   return (
     <div className="network-preview network-preview--global" data-testid={testId}>
       <div className="network-preview__header">
         <span>Global Relation Graph</span>
         <ToneBadge tone="code">weighted connections</ToneBadge>
+        {layerSummary ? <ToneBadge tone="success">layers {layerSummary}</ToneBadge> : null}
       </div>
+      <GraphDisplayControls
+        edgeTotal={graphData.edges.length}
+        loadedEdgeBudget={loadedEdgeBudget}
+        maxEdgeBudget={limits.graph?.maxEdgeBudget}
+        maxEdges={effectiveMaxEdges}
+        maxNodes={effectiveMaxNodes}
+        minEdgeWeight={effectiveMinEdgeWeight}
+        nodeTotal={graphData.nodes.length}
+        onLoadedEdgeBudgetChange={onLoadedEdgeBudgetChange}
+        onMaxEdgesChange={setMaxEdges}
+        onMaxNodesChange={setMaxNodes}
+        onMinEdgeWeightChange={setMinEdgeWeight}
+      />
       {isEmpty ? (
         <div className="network-empty" role="status">
           <code>{emptyMessage || "No graph data returned."}</code>
         </div>
       ) : (
-        <WeightedForceGraph graph={graphData} />
+        <WeightedForceGraph
+          graph={graphData}
+          maxEdges={effectiveMaxEdges}
+          maxNodes={effectiveMaxNodes}
+          minEdgeWeight={effectiveMinEdgeWeight}
+          summaryLimit={summaryLimit}
+        />
       )}
+    </div>
+  );
+}
+
+function graphLayerSummary(edges: Array<{ stage?: string }>): string {
+  const counts = new Map<string, number>();
+  for (const edge of edges) {
+    const stage = (edge.stage || "unspecified").trim() || "unspecified";
+    counts.set(stage, (counts.get(stage) ?? 0) + 1);
+  }
+  return Array.from(counts.entries())
+    .sort(([left], [right]) => left.localeCompare(right))
+    .map(([stage, count]) => `${stage}: ${count}`)
+    .join(" ");
+}
+
+function GraphDisplayControls({
+  edgeTotal,
+  loadedEdgeBudget,
+  maxEdgeBudget,
+  maxEdges,
+  maxNodes,
+  minEdgeWeight,
+  nodeTotal,
+  onLoadedEdgeBudgetChange,
+  onMaxEdgesChange,
+  onMaxNodesChange,
+  onMinEdgeWeightChange
+}: {
+  edgeTotal: number;
+  loadedEdgeBudget: number | null;
+  maxEdgeBudget?: number;
+  maxEdges: number;
+  maxNodes: number;
+  minEdgeWeight: number;
+  nodeTotal: number;
+  onLoadedEdgeBudgetChange: (value: number | null) => void;
+  onMaxEdgesChange: (value: number) => void;
+  onMaxNodesChange: (value: number) => void;
+  onMinEdgeWeightChange: (value: number) => void;
+}) {
+  const nodeMax = Math.max(nodeTotal || 1, maxNodes || 1);
+  const edgeMax = Math.max(edgeTotal || 1, maxEdges || 1);
+  const sourceMax = Math.max(maxEdgeBudget ?? 1, loadedEdgeBudget ?? 1, edgeTotal || 1);
+  const sourceStep = Math.max(1, Math.ceil(sourceMax / 100));
+  const visibleNodeStep = Math.max(1, Math.ceil(nodeMax / 100));
+  const visibleEdgeStep = Math.max(1, Math.ceil(edgeMax / 100));
+
+  return (
+    <div className="graph-controls" aria-label="Graph display controls">
+      <label className="graph-control">
+        <span>Loaded edge budget</span>
+        <strong>{loadedEdgeBudget ?? "config"} / {sourceMax}</strong>
+        <Slider
+          aria-label="Loaded edge budget"
+          max={sourceMax}
+          min={1}
+          onValueChange={([value]) => onLoadedEdgeBudgetChange(Math.max(1, Math.round(Number(value ?? 1))))}
+          step={sourceStep}
+          value={[Math.min(loadedEdgeBudget ?? sourceMax, sourceMax)]}
+        />
+      </label>
+      <label className="graph-control">
+        <span>Minimum edge weight</span>
+        <strong>{minEdgeWeight.toFixed(2)}</strong>
+        <Slider
+          aria-label="Minimum edge weight"
+          max={1}
+          min={0}
+          onValueChange={([value]) => onMinEdgeWeightChange(Number(value ?? 0))}
+          step={0.05}
+          value={[minEdgeWeight]}
+        />
+      </label>
+      <label className="graph-control">
+        <span>Visible nodes</span>
+        <strong>{Math.min(maxNodes, nodeTotal || maxNodes)} / {nodeTotal}</strong>
+        <Slider
+          aria-label="Visible nodes"
+          max={nodeMax}
+          min={1}
+          onValueChange={([value]) => onMaxNodesChange(Math.max(1, Math.round(Number(value ?? 1))))}
+          step={visibleNodeStep}
+          value={[Math.min(maxNodes, nodeMax)]}
+        />
+      </label>
+      <label className="graph-control">
+        <span>Visible edges</span>
+        <strong>{Math.min(maxEdges, edgeTotal || maxEdges)} / {edgeTotal}</strong>
+        <Slider
+          aria-label="Visible edges"
+          max={edgeMax}
+          min={1}
+          onValueChange={([value]) => onMaxEdgesChange(Math.max(1, Math.round(Number(value ?? 1))))}
+          step={visibleEdgeStep}
+          value={[Math.min(maxEdges, edgeMax)]}
+        />
+      </label>
     </div>
   );
 }
 
 function buildGraphData(graph: GraphPayload | null, rows: EvidenceRow[]): GraphPayload {
   if (graph) {
-    return {
-      nodes: graph.nodes,
-      edges: graph.edges.filter((edge) => edge.src && edge.dst)
-    };
+    return sanitizeGraphPayload(graph) ?? { nodes: [], edges: [] };
   }
   if (rows.length === 0) {
     return { nodes: [], edges: [] };
@@ -2476,16 +3137,146 @@ function buildGraphData(graph: GraphPayload | null, rows: EvidenceRow[]): GraphP
     const [pdfRow] = merged.splice(pdfIndex, 1);
     merged.splice(Math.min(6, merged.length), 0, pdfRow);
   }
-  const nodes = merged.slice(0, 9).map((row, index) => ({
-    id: row.symbol,
-    kind: row.tone === "success" ? "field" : row.tone,
-    weight: Math.max(1, 9 - index)
-  }));
+  const nodes = merged.flatMap((row, index) => {
+    const kind = graphKindForEvidenceRow(row);
+    if (!kind || !row.symbol) {
+      return [];
+    }
+    return [{
+      id: row.symbol,
+      kind,
+      label: row.symbol,
+      in: [],
+      out: [],
+      attr: {
+        entity_type: row.entity_type ?? "",
+        source_type: row.source_type ?? "",
+        source: [sourceRecordForEvidenceRow(row)]
+      },
+      weight: Math.max(1, 9 - index)
+    }];
+  }).slice(0, 9);
   const edges = nodes.slice(1).map((node, index) => ({
     src: nodes[0].id,
     dst: node.id,
-    relation: merged[index + 1]?.relation ?? "related",
+    relation: normalizeGraphRelation(merged[index + 1]?.relation ?? "relates_to").relation,
     weight: Number(merged[index + 1]?.score) || Math.max(0.2, 0.9 - index * 0.08)
   }));
+  return sanitizeGraphPayload({ nodes, edges }) ?? { nodes: [], edges: [] };
+}
+
+const allowedGraphKinds = new Set(["function", "register", "doc_section", "pdf_section", "doc_box"]);
+const allowedGraphRelations = new Set([
+  "reads",
+  "writes",
+  "sets_field",
+  "maps_base",
+  "calls",
+  "contains",
+  "documents",
+  "relates_to",
+  "depends_on",
+  "configures",
+  "resets"
+]);
+
+function sanitizeGraphPayload(graph: GraphPayload | null | undefined): GraphPayload | null {
+  if (!graph) {
+    return null;
+  }
+  const nodes = (Array.isArray(graph.nodes) ? graph.nodes : [])
+    .filter((node) => node.id && allowedGraphKinds.has(String(node.kind ?? "")))
+    .map((node) => {
+      const attr = isObjectRecord(node.attr) ? { ...node.attr } : {};
+      if (!Array.isArray(attr.source)) {
+        attr.source = [unknownSourceRecord()];
+      }
+      return {
+        ...node,
+        id: String(node.id),
+        kind: String(node.kind),
+        label: String(node.label ?? node.id),
+        in: Array.isArray(node.in) ? node.in.map(String) : [],
+        out: Array.isArray(node.out) ? node.out.map(String) : [],
+        attr
+      };
+    });
+  const nodeIds = new Set(nodes.map((node) => node.id));
+  const edges = (Array.isArray(graph.edges) ? graph.edges : []).flatMap((edge) => {
+    if (!edge.src || !edge.dst || !nodeIds.has(String(edge.src)) || !nodeIds.has(String(edge.dst))) {
+      return [];
+    }
+    const relation = normalizeGraphRelation(edge.relation);
+    return [{
+      ...edge,
+      src: String(edge.src),
+      dst: String(edge.dst),
+      relation: relation.relation,
+      attr: {
+        ...(isObjectRecord(edge.attr) ? edge.attr : {}),
+        ...(relation.original ? { original_relation: relation.original } : {})
+      }
+    }];
+  });
   return { nodes, edges };
+}
+
+function graphKindForEvidenceRow(row: EvidenceRow) {
+  if (row.tone === "register") {
+    return "register";
+  }
+  if (row.tone === "doc") {
+    return "doc_section";
+  }
+  if (row.tone === "pdf") {
+    return "pdf_section";
+  }
+  if (row.tone === "code" && row.entity_type === "function") {
+    return "function";
+  }
+  return null;
+}
+
+function normalizeGraphRelation(rawRelation: string | undefined) {
+  const raw = String(rawRelation ?? "").trim();
+  const normalized = raw.toLowerCase().replace(/[-\s]+/g, "_");
+  const aliases: Record<string, string> = {
+    field_set: "sets_field",
+    field_write: "writes",
+    field_read: "reads",
+    has_field: "sets_field",
+    api_sets_field: "sets_field",
+    api_global_sets_field: "sets_field",
+    contains_box: "contains",
+    section_contains_box: "contains",
+    documents_register: "documents",
+    section_mentions: "documents",
+    api_relates: "relates_to",
+    api_global_documented_by: "documents",
+    related: "relates_to"
+  };
+  const candidate = aliases[normalized] ?? normalized;
+  if (allowedGraphRelations.has(candidate)) {
+    return { relation: candidate, original: candidate === normalized ? "" : raw };
+  }
+  return { relation: "relates_to", original: raw };
+}
+
+function sourceRecordForEvidenceRow(row: EvidenceRow) {
+  return {
+    corpus_id: row.corpus_id ?? "unknown",
+    repo: row.source ?? "unknown",
+    path: row.path ?? "",
+    ...(row.line_start ? { line_start: row.line_start } : {}),
+    ...(row.line_end ? { line_end: row.line_end } : {}),
+    ...(row.page ? { page: row.page } : {})
+  };
+}
+
+function unknownSourceRecord() {
+  return { corpus_id: "unknown", repo: "unknown", path: "" };
+}
+
+function isObjectRecord(value: unknown): value is Record<string, unknown> {
+  return Boolean(value) && typeof value === "object" && !Array.isArray(value);
 }

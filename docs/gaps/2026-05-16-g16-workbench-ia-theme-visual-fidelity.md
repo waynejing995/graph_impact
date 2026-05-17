@@ -1,6 +1,6 @@
 # G16 Workbench IA Theme And Visual Fidelity
 
-Status: Blocking; shadcn-native UI and package-backed graph rendering are now explicit requirements
+Status: Current pass verified; final G11/git gate remains
 
 ## Requirement
 
@@ -29,17 +29,15 @@ The chosen UI direction is:
 - `docs/visual-anchors/README.md` defines canonical reference assets only; it is not a final visual QA pass.
 - Current visual QA `docs/qa/visual-qa-2026-05-17/visual-qa.md` captures 2K dark and light screenshots for `/`, `/graph`, `/corpus`, `/resolver-profiles`, `/acceptance`, and `/settings` against their individual anchors. Summary: 6 routes, 6 pass, 0 fail.
 - The current `/graph` browser QA records 12 visible graph nodes and 4 weighted edges in both dark and light themes, with edge labels such as `sets_field / 0.90`.
-- User review on 2026-05-17 rejected the hand-written graph renderer and custom-looking UI primitives. The visual QA evidence above is therefore stale for `/graph` and any route touched while replacing custom UI with shadcn primitives.
-- 2026-05-17 targeted browser screenshot after the graph semantic slice: `docs/qa/visual-qa-2026-05-17-graph-semantic/graph-global-2048-after-function-section-batch.png`. It verifies the `/graph` route exposes the package graph and batch semantic-edge action, but it is not a full all-route light/dark visual QA rerun.
+- User review on 2026-05-17 rejected the hand-written graph renderer and custom-looking UI primitives. The current implementation now uses `react-force-graph-2d` for the graph surface and shadcn/Radix primitives for standard tables, cards, accordions, inputs, selects, sliders, checkboxes, and buttons.
+- 2026-05-17 continuation verification after the subagent audit: global search now runs a real query, source-type filters affect query requests, semantic generation candidate/batch controls are configurable from `/graph`, the resolver editor can load/save existing profiles, and graph layer provenance is visible in the graph header.
+- Fresh verification after those changes: core unittest discovery `141` tests OK with `1` sqlite-vec skip; API/MCP unittest `41` OK with `1` optional MCP runtime skip; Web API+smoke Playwright `69` passed; visual route Playwright `15` passed; `pnpm --filter web run lint`, `pnpm --filter web exec tsc --noEmit`, `pnpm --filter web run build`, and `git diff --check` passed.
 
 ## Remaining Gap
 
-Visual tests and the latest visual QA proved route geometry, light/dark persistence, screenshots, and graph visibility for the previous implementation. That proof no longer closes this gap after the 2026-05-17 user review because `/graph` must be rebuilt with a maintained React graph package and UI surfaces must use shadcn-native primitives where available.
+The package graph, shadcn-native control pass, light/dark persistence, live global search, source-type filters, semantic generation controls, resolver edit flow, and graph layer provenance are now covered by automated route tests. G16 is no longer blocked on a missing graph package or purely decorative UI controls.
 
-The remaining gap is now twofold:
-
-- replace custom-looking workbench controls/tables/details with shadcn-native composition where practical,
-- recapture visual QA after the package-backed graph and shadcn pass, then run the final design-review checklist that verifies the full ASIP workbench information architecture, theme tokens, source-type indicators, right inspector responsibilities, and text overflow constraints against the design docs.
+The remaining G16 work is part of the final G11 review: ensure the final staged diff and screenshots match the documented visual-anchor workflow, and recapture visual QA if any further UI-affecting changes land before commit.
 
 The visual anchors must be used as reference artifacts page by page. A combined multi-panel image is not acceptable as the QA baseline.
 

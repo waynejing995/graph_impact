@@ -10,6 +10,8 @@ from dataclasses import dataclass, field
 from pathlib import Path, PurePosixPath
 from typing import Any, Dict, Iterable, List, Mapping, Optional, Protocol, Tuple
 
+from .limits import load_workbench_limits
+
 
 @dataclass(frozen=True)
 class EdgeModelConfig:
@@ -563,14 +565,18 @@ def run_full_corpus_generation(
     output_md: Optional[Path] = None,
     provider: Optional[EdgeProvider] = None,
     min_pass: int = 6,
-    batch_size: int = 3,
+    batch_size: Optional[int] = None,
 ) -> Dict[str, Any]:
+    limits = load_workbench_limits()
+    effective_batch_size = batch_size if batch_size is not None else limits.int_value("semantic", "full_corpus_batch_size", minimum=1)
+    if effective_batch_size is None:
+        raise ValueError(f"semantic.fullCorpusBatchSize is missing from {limits.path}")
     config = load_full_corpus_edge_config(config_path)
     actual_source_roots = source_roots or {}
     edge_provider = provider or create_edge_provider(config.model)
     started = time.time()
     scan = scan_full_corpus_queries(config, actual_source_roots)
-    generated = generate_full_corpus_batches(scan, edge_provider, config.model, batch_size=batch_size)
+    generated = generate_full_corpus_batches(scan, edge_provider, config.model, batch_size=effective_batch_size)
     ollama_ps = provider_status_after_run(edge_provider, config.model)
     query_results = verify_full_corpus_queries(config, scan, generated)
     passed = sum(1 for item in query_results if item["passed"])
@@ -590,7 +596,7 @@ def run_full_corpus_generation(
             "passed": passed,
             "failed": len(query_results) - passed,
             "min_pass": min_pass,
-            "batch_size": batch_size,
+            "batch_size": effective_batch_size,
             "resolved_query_count": scan["summary"]["resolved_query_count"],
             "total_files_scanned": scan["summary"]["total_files_scanned"],
             "ollama_ps_after": ollama_ps.strip(),
@@ -611,8 +617,13 @@ def generate_full_corpus_batches(
     scan: Dict[str, Any],
     provider: EdgeProvider,
     model: EdgeModelConfig,
-    batch_size: int = 3,
+    batch_size: Optional[int] = None,
 ) -> Dict[str, Any]:
+    if batch_size is None:
+        limits = load_workbench_limits()
+        batch_size = limits.int_value("semantic", "full_corpus_batch_size", minimum=1)
+    if batch_size is None:
+        raise ValueError("semantic.fullCorpusBatchSize is missing from workbench limits")
     if batch_size <= 0:
         raise ValueError("batch_size must be positive")
     all_cases: List[Dict[str, Any]] = []

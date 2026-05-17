@@ -60,6 +60,17 @@ type AcceptanceDetail = {
   graphEdgeCount?: number;
   edgeCount?: number;
   sourceHitCount?: number;
+  providerChecks?: {
+    embedding?: ProviderAcceptanceCheck;
+    semanticEdge?: ProviderAcceptanceCheck;
+  };
+};
+
+type ProviderAcceptanceCheck = {
+  status?: string;
+  provider?: string;
+  model?: string;
+  message?: string;
 };
 
 type FullCorpusRun = {
@@ -124,6 +135,10 @@ type AcceptanceQueryRun = {
     graph_edge_count?: number;
     edge_count?: number;
     source_hit_count?: number;
+    provider_checks?: {
+      embedding?: ProviderAcceptanceCheck;
+      semantic_edge?: ProviderAcceptanceCheck;
+    };
   }>;
 };
 
@@ -138,10 +153,10 @@ export type WorkbenchEvidenceRow = {
 };
 
 const repoRoot = path.resolve(process.cwd(), "../..");
-const fullCorpusConfigPath = path.join(repoRoot, "configs/edge_cases/full-corpus-qwen35.json");
+const fullCorpusConfigPath = path.join(repoRoot, "configs/edge_cases/full-corpus-gemma4-e4b.json");
 const defaultRunPath = path.join(
   repoRoot,
-  "docs/qa/2026-05-16-full-corpus-edge-generation-qwen35-strict-batch1.json"
+  "docs/qa/2026-05-16-full-corpus-edge-generation-gemma4-e4b-strict-batch1.json"
 );
 
 export function getCorpora() {
@@ -206,7 +221,11 @@ export function listAcceptanceRuns() {
           rowCount: query.row_count,
           graphEdgeCount: query.graph_edge_count,
           edgeCount: query.edge_count,
-          sourceHitCount: query.source_hit_count
+          sourceHitCount: query.source_hit_count,
+          providerChecks: {
+            embedding: query.provider_checks?.embedding,
+            semanticEdge: query.provider_checks?.semantic_edge
+          }
         }))
       };
     }

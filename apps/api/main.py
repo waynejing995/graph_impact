@@ -55,9 +55,9 @@ class IndexRequest(BaseModel):
 class SemanticEdgesRequest(BaseModel):
     q: str = ""
     db_path: Optional[str] = None
-    limit: int = 8
+    limit: Optional[int] = None
     mode: str = "query"
-    batch_size: int = 6
+    batch_size: Optional[int] = None
 
 
 class ProviderSettingsRequest(BaseModel):

@@ -1,0 +1,35 @@
+id: amd-field-macros
+language: cpp
+context_vars: [adev, adapt]
+symbol_prefixes: [reg, mm, smn]
+wrappers:
+  REG_SET_FIELD:
+    symbol_args: [1, 2]
+    access: field_set
+  REG_GET_FIELD:
+    symbol_args: [1, 2]
+    access: field_get
+  REG_FIELD_MASK:
+    symbol_args: [0, 1]
+    access: field_mask
+  REG_FIELD_SHIFT:
+    symbol_args: [0, 1]
+    access: field_shift
+  REG_FIELD_VALUE:
+    symbol_args: [0, 1]
+    access: field_value
+  WREG32_FIELD:
+    symbol_args: [0, 1]
+    access: field_write
+  RREG32_FIELD:
+    symbol_args: [0, 1]
+    access: field_read
+  WREG32_FIELD15:
+    symbol_args: [2, 3]
+    access: field_write
+  WREG32_FIELD15_PREREG:
+    symbol_args: [2, 3]
+    access: field_write
+  WREG32_FIELD15_OFFSET:
+    symbol_args: [2, 3]
+    access: field_write

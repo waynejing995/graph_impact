@@ -67,7 +67,10 @@ test("query API ranks live SQLite evidence and graph edges for a free-form query
     queryId: string;
     source: string;
     rows: Array<{ symbol: string; relation: string; path: string; source_type: string; resolved_chain: string }>;
-    graph: { nodes: Array<{ id: string }>; edges: Array<{ src: string; dst: string; confidence: number; weight: number }> };
+    graph: {
+      nodes: Array<{ id: string; kind?: string; attr?: Record<string, unknown> }>;
+      edges: Array<{ src: string; relation?: string; dst: string; confidence: number; weight: number }>;
+    };
   };
 
   expect(body.source).toBe("sqlite");
@@ -81,15 +84,22 @@ test("query API ranks live SQLite evidence and graph edges for a free-form query
     ])
   );
   expect(body.queryId).toBeTruthy();
-  expect(body.graph.nodes).toEqual(expect.arrayContaining([expect.objectContaining({ id: "LOCAL_TEST_CNTL" })]));
+  expect(body.graph.nodes).toEqual(
+    expect.arrayContaining([
+      expect.objectContaining({ id: expect.stringContaining("LOCAL_TEST_CNTL"), kind: "register" }),
+      expect.objectContaining({ id: expect.stringContaining("program_local_register"), kind: "function" })
+    ])
+  );
   expect(body.graph.edges).toEqual(
     expect.arrayContaining([
       expect.objectContaining({
-        src: "LOCAL_TEST_CNTL",
-        dst: "ENABLE_LOCAL_FIELD"
+        src: expect.stringContaining("program_local_register"),
+        relation: "sets_field",
+        dst: expect.stringContaining("LOCAL_TEST_CNTL")
       })
     ])
   );
+  expect(body.graph.nodes.map((node) => node.id)).not.toContain("ENABLE_LOCAL_FIELD");
 });
 
 test("Web BFF and MCP agree for the same SQLite query, evidence row, and entity", async ({ request }) => {
@@ -189,7 +199,22 @@ test("acceptance API lists real qwen and gemma QA runs", async ({ request }) => 
 
   expect(response.ok()).toBe(true);
   const body = (await response.json()) as {
-    runs: Array<{ id: string; model: string; passed: number; failed: number; partial?: number; queryCount: number; artifactPath: string }>;
+    runs: Array<{
+      id: string;
+      model: string;
+      passed: number;
+      failed: number;
+      partial?: number;
+      queryCount: number;
+      artifactPath: string;
+      details?: Array<{
+        id: string;
+        providerChecks?: {
+          embedding?: { status?: string; provider?: string; model?: string };
+          semanticEdge?: { status?: string; provider?: string; model?: string };
+        };
+      }>;
+    }>;
   };
 
   expect(body.runs).toEqual(
@@ -235,6 +260,18 @@ test("acceptance API lists real qwen and gemma QA runs", async ({ request }) => 
       artifactPath: expect.stringMatching(/^docs\/qa\/2026-05-17-acceptance/)
     })
   );
+  const providerRun = body.runs.find((run) => run.id === "acceptance-clean-amd-qwen35-provider-current");
+  const aq09 = providerRun?.details?.find((detail) => detail.id === "AQ09");
+  expect(aq09?.providerChecks?.embedding).toMatchObject({
+    status: "pass",
+    provider: "ollama",
+    model: "nomic-embed-text:latest"
+  });
+  expect(aq09?.providerChecks?.semanticEdge).toMatchObject({
+    status: "pass",
+    provider: "ollama",
+    model: "qwen3.5:4b"
+  });
 });
 
 test("acceptance run API executes selected acceptance queries", async ({ request }) => {
@@ -337,7 +374,10 @@ test("acceptance run API exposes AQ09 provider provenance from configured edge a
 });
 
 test("graph API returns data-driven weighted edges for a selected seed", async ({ request }) => {
-  const response = await request.get("/api/workbench/graph?seed=GCVM_L2_CNTL");
+  const { dbPath } = await createIndexedRawFixture(request);
+  const response = await request.get(
+    `/api/workbench/graph?seed=GCVM_L2_CNTL&hops=2&dbPath=${encodeURIComponent(dbPath)}`
+  );
 
   expect(response.ok()).toBe(true);
   const body = (await response.json()) as {
@@ -349,26 +389,65 @@ test("graph API returns data-driven weighted edges for a selected seed", async (
   expect(body.queryId).toBe("GCVM_L2_CNTL");
   expect(body.nodes).toEqual(
     expect.arrayContaining([
-      expect.objectContaining({ id: "GCVM_L2_CNTL", kind: "register" }),
-      expect.objectContaining({ id: "ENABLE_L2_CACHE", kind: "field" })
+      expect.objectContaining({ id: expect.stringContaining("GCVM_L2_CNTL"), kind: "register" }),
+      expect.objectContaining({ id: expect.stringContaining("program_gcvml2_register"), kind: "function" })
     ])
   );
+  expect(body.nodes.map((node) => node.id)).not.toContain("ENABLE_L2_CACHE");
   expect(body.edges).toEqual(
     expect.arrayContaining([
       expect.objectContaining({
-        src: "GCVM_L2_CNTL",
+        src: expect.stringContaining("program_gcvml2_register"),
         relation: "sets_field",
-        dst: "ENABLE_L2_CACHE",
-        confidence: 0.9,
-        weight: 0.9
+        dst: expect.stringContaining("GCVM_L2_CNTL"),
+        confidence: 0.97,
+        weight: 0.97
+      }),
+      expect.objectContaining({
+        src: expect.stringContaining("program_gcvml2_register"),
+        relation: "reads",
+        dst: expect.stringContaining("GCVM_L2_CNTL")
       })
     ])
   );
 });
 
-test("graph API global view derives weighted edges from indexed evidence", async ({ request }) => {
+test("graph API rejects resolver operators as selected seed nodes", async ({ request }) => {
   const { dbPath } = await createIndexedRawFixture(request);
-  const response = await request.get(`/api/workbench/graph?dbPath=${encodeURIComponent(dbPath)}&limit=40`);
+  const response = await request.get(
+    `/api/workbench/graph?seed=REG_SET_FIELD&hops=2&dbPath=${encodeURIComponent(dbPath)}`
+  );
+
+  expect(response.ok()).toBe(true);
+  const body = (await response.json()) as { queryId: string; nodes: unknown[]; edges: unknown[]; empty_state?: string };
+
+  expect(body.queryId).toBe("REG_SET_FIELD");
+  expect(body.nodes).toEqual([]);
+  expect(body.edges).toEqual([]);
+  expect(body.empty_state).toContain("resolver operator");
+});
+
+test("workbench limits API exposes graph budgets from repo config", async ({ request }) => {
+  const response = await request.get("/api/workbench/limits");
+
+  expect(response.ok()).toBe(true);
+  const body = (await response.json()) as {
+    graph?: { edgeBudget?: number; visibleNodeBudget?: number; visibleEdgeBudget?: number };
+    semantic?: { batchCandidateLimit?: number; batchSize?: number };
+  };
+
+  expect(body.graph?.edgeBudget).toBeGreaterThan(0);
+  expect(body.graph?.visibleNodeBudget).toBeGreaterThan(0);
+  expect(body.graph?.visibleEdgeBudget).toBeGreaterThan(0);
+  expect(body.semantic?.batchCandidateLimit).toBeGreaterThan(0);
+  expect(body.semantic?.batchSize).toBeGreaterThan(0);
+});
+
+test("graph API global view can derive explicit evidence overlay from indexed evidence", async ({ request }) => {
+  const { dbPath } = await createIndexedRawFixture(request);
+  const response = await request.get(
+    `/api/workbench/graph?dbPath=${encodeURIComponent(dbPath)}&limit=120&includeEvidenceDerived=1`
+  );
 
   expect(response.ok()).toBe(true);
   const body = (await response.json()) as {
@@ -380,28 +459,18 @@ test("graph API global view derives weighted edges from indexed evidence", async
   expect(body.queryId).toBe("global");
   expect(body.nodes).toEqual(
     expect.arrayContaining([
-      expect.objectContaining({ id: "LOCAL_TEST_CNTL", kind: "register" }),
-      expect.objectContaining({ id: "ENABLE_LOCAL_FIELD", kind: "field" }),
-      expect.objectContaining({ id: "program_local_register", kind: "code" }),
-      expect.objectContaining({ id: "src/gfx.c", kind: "code" })
+      expect.objectContaining({ id: expect.stringContaining("LOCAL_TEST_CNTL"), kind: "register" }),
+      expect.objectContaining({ id: expect.stringContaining("program_local_register"), kind: "function" })
     ])
   );
+  expect(body.nodes.map((node) => node.kind)).not.toContain("field");
+  expect(body.nodes.map((node) => node.id)).not.toContain("src/gfx.c");
   expect(body.edges).toEqual(
     expect.arrayContaining([
       expect.objectContaining({
-        src: "LOCAL_TEST_CNTL",
-        relation: "co_occurs",
-        dst: "ENABLE_LOCAL_FIELD"
-      }),
-      expect.objectContaining({
-        src: "LOCAL_TEST_CNTL",
-        relation: "appears_in_code",
-        dst: "src/gfx.c"
-      }),
-      expect.objectContaining({
-        src: "program_local_register",
-        relation: "field_set",
-        dst: "ENABLE_LOCAL_FIELD"
+        src: expect.stringContaining("program_local_register"),
+        relation: "sets_field",
+        dst: expect.stringContaining("LOCAL_TEST_CNTL")
       })
     ])
   );
@@ -449,7 +518,10 @@ test("semantic edges API generates graph edges from a supplied DB", async ({ req
       edge_count: number;
       provider: string;
       model: string;
-      graph: { edges: Array<{ src: string; relation: string; dst: string; weight: number }> };
+      graph: {
+        nodes: Array<{ id: string; kind?: string; attr?: Record<string, unknown> }>;
+        edges: Array<{ src: string; relation: string; dst: string; weight: number }>;
+      };
     };
     expect(body).toMatchObject({
       source: "semantic_edge_job",
@@ -457,16 +529,16 @@ test("semantic edges API generates graph edges from a supplied DB", async ({ req
       provider: "ollama",
       model: "gemma4:e4b"
     });
-    expect(body.graph.edges).toEqual(
+    expect(body.graph.nodes).toEqual(
       expect.arrayContaining([
         expect.objectContaining({
-          src: "GCVM_L2_CNTL",
-          relation: "sets_field",
-          dst: "ENABLE_L2_CACHE",
-          weight: 0.91
+          id: expect.stringContaining("GCVM_L2_CNTL"),
+          kind: "register",
+          attr: expect.objectContaining({ fields: expect.arrayContaining(["ENABLE_L2_CACHE"]) })
         })
       ])
     );
+    expect(body.graph.edges).toEqual([]);
   } finally {
     await new Promise<void>((resolve, reject) => {
       edgeServer.server.close((error) => (error ? reject(error) : resolve()));
@@ -493,7 +565,8 @@ test("semantic edges API supports batch generation from indexed candidates", asy
         dbPath,
         mode: "batch",
         limit: 4,
-        batchSize: 2
+        batchSize: 2,
+        includeEvidenceDerived: true
       }
     });
 
@@ -521,9 +594,67 @@ test("semantic edges API supports batch generation from indexed candidates", asy
     expect(body.graph.edges).toEqual(
       expect.arrayContaining([
         expect.objectContaining({
-          src: "GCVM_L2_CNTL",
-          relation: "sets_field",
-          dst: "ENABLE_L2_CACHE"
+          src: "edge.md#programming-local-registers",
+          relation: "documents",
+          dst: expect.stringContaining("GCVM_L2_CNTL")
+        })
+      ])
+    );
+  } finally {
+    await new Promise<void>((resolve, reject) => {
+      edgeServer.server.close((error) => (error ? reject(error) : resolve()));
+    });
+  }
+});
+
+test("semantic edges API supports LLM document node extraction", async ({ request }) => {
+  const edgeServer = await startFakeOllamaEdgeServer();
+  const root = mkdtempSync(path.join(tmpdir(), "asip-doc-node-api-"));
+  const dbPath = path.join(root, "edges.db");
+  const corpusRoot = path.join(root, "docs");
+  mkdirSync(corpusRoot, { recursive: true });
+  writeFileSync(
+    path.join(corpusRoot, "edge.md"),
+    "# Programming local registers\nGCVM_L2_CNTL has field ENABLE_L2_CACHE in this doc node fixture.",
+    "utf8"
+  );
+  seedProviderAcceptanceDb(dbPath, corpusRoot, edgeServer.baseUrl);
+
+  try {
+    const response = await request.post("/api/workbench/semantic-edges", {
+      data: {
+        dbPath,
+        mode: "doc-nodes",
+        limit: 2,
+        batchSize: 1
+      }
+    });
+
+    expect(response.ok()).toBe(true);
+    const body = (await response.json()) as {
+      source: string;
+      box_count: number;
+      edge_count: number;
+      graph: { nodes: Array<{ id: string; kind: string; label?: string }>; edges: Array<{ src: string; relation: string; dst: string }> };
+    };
+    expect(body.source).toBe("doc_node_batch_job");
+    expect(body.box_count).toBe(1);
+    expect(body.edge_count).toBe(2);
+    expect(body.graph.nodes).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          id: "edge.md#box-l2-cache-control",
+          kind: "doc_box",
+          label: "L2 cache control"
+        })
+      ])
+    );
+    expect(body.graph.edges).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          src: "edge.md#programming-local-registers",
+          relation: "contains",
+          dst: "edge.md#box-l2-cache-control"
         })
       ])
     );
@@ -605,6 +736,11 @@ async function createIndexedRawFixture(request: APIRequestContext) {
       "  uint32_t tmp = 0;",
       "  tmp = REG_SET_FIELD(tmp, LOCAL_TEST_CNTL, ENABLE_LOCAL_FIELD, 1);",
       "  WREG32_SOC15(GC, 0, regLOCAL_TEST_CNTL, tmp);",
+      "}",
+      "void program_gcvml2_register(void) {",
+      "  uint32_t tmp = RREG32_SOC15(GC, 0, regGCVM_L2_CNTL);",
+      "  tmp = REG_SET_FIELD(tmp, GCVM_L2_CNTL, ENABLE_L2_CACHE, 1);",
+      "  WREG32_SOC15(GC, 0, regGCVM_L2_CNTL, tmp);",
       "}"
     ].join("\n"),
     "utf8"
@@ -633,7 +769,14 @@ async function createIndexedRawFixture(request: APIRequestContext) {
             corpus: "api-query-fixture",
             question: "Which local field is set before writing LOCAL_TEST_CNTL?",
             terms: ["regLOCAL_TEST_CNTL", "LOCAL_TEST_CNTL", "ENABLE_LOCAL_FIELD"],
-            expected_terms: ["regLOCAL_TEST_CNTL", "LOCAL_TEST_CNTL", "ENABLE_LOCAL_FIELD"],
+            expected_terms: [
+              "regLOCAL_TEST_CNTL",
+              "LOCAL_TEST_CNTL",
+              "ENABLE_LOCAL_FIELD",
+              "regGCVM_L2_CNTL",
+              "GCVM_L2_CNTL",
+              "ENABLE_L2_CACHE"
+            ],
             max_snippets: 1
           }
         ]
@@ -710,11 +853,41 @@ async function startFakeOllamaEdgeServer(): Promise<{ server: Server; baseUrl: s
       response.end(JSON.stringify({ error: "not found" }));
       return;
     }
-    response.writeHead(200, { "Content-Type": "application/json" });
-    response.end(
-      JSON.stringify({
-        message: {
-          content: JSON.stringify({
+    const chunks: Buffer[] = [];
+    request.on("data", (chunk) => chunks.push(Buffer.from(chunk)));
+    request.on("end", () => {
+      const body = JSON.parse(Buffer.concat(chunks).toString("utf8")) as { messages?: Array<{ content?: string }> };
+      const prompt = body.messages?.map((message) => message.content ?? "").join("\n") ?? "";
+      const content = prompt.includes("BoxMatrix")
+        ? {
+            documents: [
+              {
+                id: "edge.md#programming-local-registers",
+                boxes: [
+                  {
+                    id: "l2-cache-control",
+                    name: "L2 cache control",
+                    summary: "Documents GCVM_L2_CNTL and ENABLE_L2_CACHE.",
+                    inputs: ["GCVM_L2_CNTL"],
+                    outputs: ["ENABLE_L2_CACHE"],
+                    constraints: [],
+                    confidence: 0.92,
+                    evidence: "fixture"
+                  }
+                ],
+                relationships: [
+                  {
+                    src: "l2-cache-control",
+                    relation: "documents",
+                    dst: "GCVM_L2_CNTL",
+                    confidence: 0.9,
+                    evidence: "fixture"
+                  }
+                ]
+              }
+            ]
+          }
+        : {
             cases: [
               {
                 id: "workbench-query",
@@ -729,10 +902,10 @@ async function startFakeOllamaEdgeServer(): Promise<{ server: Server; baseUrl: s
                 ]
               }
             ]
-          })
-        }
-      })
-    );
+          };
+      response.writeHead(200, { "Content-Type": "application/json" });
+      response.end(JSON.stringify({ message: { content: JSON.stringify(content) } }));
+    });
   });
   await new Promise<void>((resolve, reject) => {
     server.once("error", reject);
@@ -787,7 +960,7 @@ test("resolver profiles API persists and validates user profiles", async ({ requ
   expect(create.ok()).toBe(true);
   const created = (await create.json()) as { id: string; wrappers: string[] };
   expect(created.id).toBe("initial");
-  expect(created.wrappers).toEqual(["RREG32"]);
+  expect(created.wrappers).toEqual(expect.arrayContaining(["RREG32", "WREG32_SOC15", "REG_SET_FIELD"]));
 
   const validate = await request.post("/api/workbench/resolver-profiles", {
     data: {
@@ -820,6 +993,7 @@ test("resolver profiles API rejects profiles without existing yaml config", asyn
 
 test("index API can target user-added corpora and record provider settings", async ({ request }) => {
   const root = mkdtempSync(path.join(tmpdir(), "asip-api-corpus-"));
+  const dbPath = path.join(root, "api-local-docs.db");
   mkdirSync(path.join(root, "docs"));
   writeFileSync(
     path.join(root, "docs", "note.md"),
@@ -829,6 +1003,7 @@ test("index API can target user-added corpora and record provider settings", asy
 
   const provider = await request.post("/api/workbench/providers/settings", {
     data: {
+      dbPath,
       edge: { provider: "ollama", base_url: "http://edge.local", model: "gemma4:e4b" },
       embedding: {
         provider: "ollama",
@@ -846,12 +1021,13 @@ test("index API can target user-added corpora and record provider settings", asy
       repo: "local",
       sourceRoot: root,
       include: ["**/*.md"],
-      type: "doc"
+      type: "doc",
+      dbPath
     }
   });
   expect(create.ok()).toBe(true);
 
-  const index = await request.post("/api/workbench/index", { data: { corpusIds: ["api-local-docs"] } });
+  const index = await request.post("/api/workbench/index", { data: { corpusIds: ["api-local-docs"], dbPath } });
   expect(index.ok()).toBe(true);
   const indexed = (await index.json()) as {
     source: string;
@@ -863,7 +1039,9 @@ test("index API can target user-added corpora and record provider settings", asy
   expect(indexed.providerSettings.edge?.model).toBe("gemma4:e4b");
   expect(indexed.providerSettings.embedding?.base_url).toBe("http://127.0.0.1:9");
 
-  const query = await request.get("/api/workbench/query?q=LOCAL_GRAPH_TEST_REGISTER");
+  const query = await request.get(
+    `/api/workbench/query?q=LOCAL_GRAPH_TEST_REGISTER&dbPath=${encodeURIComponent(dbPath)}`
+  );
   const body = (await query.json()) as { rows: Array<{ corpus_id: string; symbol: string }> };
   expect(body.rows).toEqual(
     expect.arrayContaining([

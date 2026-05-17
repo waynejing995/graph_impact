@@ -99,6 +99,47 @@ class WorkbenchQuerySchemaTests(unittest.TestCase):
             self.assertEqual(filtered["rows"][0]["ip_block"], "CP")
             self.assertEqual(filtered["rows"][0]["asic_or_generation"], "gfx1100")
 
+    def test_query_can_filter_evidence_by_source_type(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            db_path = Path(tmpdir) / "asip.db"
+            store = AsipStore.connect(str(db_path))
+            store.migrate()
+            code_document_id = store.add_document("fixture", "code", "driver.c")
+            doc_document_id = store.add_document("fixture", "doc", "docs/registers.md")
+            code_chunk = store.add_chunk(code_document_id, "LOCAL_TEST_CNTL code evidence", 1, 1)
+            doc_chunk = store.add_chunk(doc_document_id, "LOCAL_TEST_CNTL doc evidence", 1, 1)
+            store.add_evidence(
+                code_chunk,
+                "fixture",
+                "code",
+                "local",
+                "driver.c",
+                "LOCAL_TEST_CNTL",
+                "register",
+                "write",
+                0.95,
+                "LOCAL_TEST_CNTL code evidence",
+                "code -> LOCAL_TEST_CNTL",
+            )
+            store.add_evidence(
+                doc_chunk,
+                "fixture",
+                "doc",
+                "local",
+                "docs/registers.md",
+                "LOCAL_TEST_CNTL",
+                "register",
+                "mention",
+                0.95,
+                "LOCAL_TEST_CNTL doc evidence",
+                "doc -> LOCAL_TEST_CNTL",
+            )
+
+            filtered = query_evidence(db_path, "LOCAL_TEST_CNTL", source_types=["doc"])
+
+            self.assertEqual({row["source_type"] for row in filtered["rows"]}, {"doc"})
+            self.assertEqual(filtered["filters"]["source_types"], ["doc"])
+
     def test_query_evidence_merges_vector_backed_evidence_without_lexical_overlap(self):
         with tempfile.TemporaryDirectory() as tmpdir:
             db_path = Path(tmpdir) / "asip.db"

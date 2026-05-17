@@ -1,0 +1,29 @@
+id: amd-direct-mmio
+language: cpp
+context_vars: [adev, adapt]
+symbol_prefixes: [reg, mm, smn]
+wrappers:
+  WREG32:
+    symbol_arg: 0
+    access: write
+  RREG32:
+    symbol_arg: 0
+    access: read
+  WREG32_P:
+    symbol_arg: 0
+    access: write
+  RREG32_P:
+    symbol_arg: 0
+    access: read
+  WREG32_PCIE:
+    symbol_arg: 0
+    access: write
+  RREG32_PCIE:
+    symbol_arg: 0
+    access: read
+  WREG32_NBIO:
+    symbol_arg: 0
+    access: write
+  RREG32_NBIO:
+    symbol_arg: 0
+    access: read

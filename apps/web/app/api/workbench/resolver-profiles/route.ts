@@ -14,7 +14,7 @@ export function GET() {
       }
     }
     for (const profile of backend.profiles ?? []) {
-      if (resolverConfigExists(profile.path)) {
+      if (resolverConfigExists(profile.path) && !merged.has(profile.id)) {
         merged.set(profile.id, profile);
       }
     }

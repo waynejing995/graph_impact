@@ -1,6 +1,6 @@
 # G15 Performance Smoke And Deterministic Rebuild
 
-Status: Blocking
+Status: Partial; real graph rebuild benchmark exists, deterministic repeat/embedding timing still open
 
 ## Requirement
 
@@ -24,13 +24,29 @@ Real-corpus performance targets should be measured after the first full AMD inde
 - Clean AMD raw indexing against `/tmp/asip-mxgpu`, `/tmp/asip-linux-amdgpu`, and `docs/fixtures/amd-amdgpu-docs` produced `/tmp/asip-clean-amd-qwen35-2026-05-17.db` with `documents=124`, `chunks=21884`, `evidence=860543`, `edges=23`, and `files=1349`.
 - The provider DB `/tmp/asip-clean-amd-qwen35-provider-2026-05-17.db` reuses that clean index and records 961 provider-sourced embeddings. Serial per-chunk embedding indexing was stopped after it proved too slow; batch `/api/embed` backfill is now implemented but intentionally stopped as partial provider coverage for this QA pass.
 - Current free-query QA `docs/qa/2026-05-17-clean-amd-free-query-and-edge-qa.json` records six clean AMD query latencies and one global graph latency. All six queries returned rows; source types across the set were `code/doc/pdf/register`.
-- There is no dedicated performance smoke command, timing record, or deterministic rebuild report yet.
+- `docs/qa/2026-05-17-two-stage-graph-real-rebuild-qa.md` records a real mxgpu + linux-amdgpu Stage 1 graph rebuild after batched evidence/edge commits: `1340` files, `31353` chunks, `1300559` evidence rows, `37921` deterministic edges, and `7:00.02` elapsed. This is a first real graph rebuild benchmark, not a deterministic repeat pass.
+- Seven post-rebuild real queries were timed in the same QA doc, ranging from `1.597s` to `4.120s`.
+- 2026-05-17 final performance correction on the current dirty `data/asip.db`:
+  - `graph_rebuild --db data/asip.db`: 1,225 files, 10,108 deterministic edges, 39.610s elapsed.
+  - `query_evidence(data/asip.db, "doorbell interrupt disable")` before fix: 58.228s total, with `graph_for_rows` taking 58.717s in the diagnostic script.
+  - After empty-edge graph short path: 3.835s.
+  - After FTS chunk lookup, SQLite lookup indexes, and lazy deterministic graph metadata: 0.487s with 24 rows, 32 graph nodes, and 37 graph edges.
+  - `global_graph(data/asip.db, limit=3000)`: 2,144 nodes and 3,000 edges in 0.771s.
+- 2026-05-17 performance regressions now covered by tests:
+  - `test_networkx_graph_expansion_skips_function_metadata_scan_without_edges`
+  - `test_networkx_graph_expansion_skips_function_metadata_scan_for_deterministic_edges`
+  - `test_global_graph_skips_function_metadata_scan_for_deterministic_edges`
+  - `test_find_evidence_candidates_prefers_fts_chunk_lookup`
+  - `test_migrate_adds_evidence_chunk_lookup_index`
+  - `test_deleting_one_corpus_index_preserves_other_corpus_edges`
+  - `test_query_evidence_uses_configured_vector_limit`
+  - `test_semantic_batch_candidate_overfetch_multiplier_is_configurable`
 
 ## Remaining Gap
 
 The repo does not yet prove that the fixture index can be rebuilt from scratch quickly and deterministically, nor that query latency stays below the initial MVP smoke target.
 
-The real AMD corpus path also needs a first benchmark that records source roots, file counts, document/chunk/evidence/edge counts, elapsed time, and whether provider calls were live or deterministic fallback.
+The current dirty AMD corpus path now has a practical query latency fix and a graph rebuild benchmark. This gap is still not fully closed because clean-from-zero deterministic repeat timing and full provider embedding backfill timing remain open.
 
 ## Acceptance Criteria
 
@@ -48,4 +64,4 @@ The real AMD corpus path also needs a first benchmark that records source roots,
 
 ## Not Closed Until
 
-The final QA doc includes deterministic rebuild evidence and timing summaries for fixture query/index plus first real-corpus indexing measurements.
+The final QA doc includes deterministic rebuild evidence and timing summaries for fixture query/index plus first real-corpus indexing measurements. A continuation regression test now proves scoped deterministic graph rebuilds preserve other corpus edges when `--corpus-id` is used, preventing partial rebuilds from destroying unrelated graph state.

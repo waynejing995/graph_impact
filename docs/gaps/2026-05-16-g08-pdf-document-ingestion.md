@@ -29,6 +29,9 @@ After conversion to Markdown/text chunks, documents must also provide graph stru
 - `packages/core/tests/test_documents.py` now verifies that the reduced AMD PDF fixture is extractable and that ReportLab `/ASCII85Decode` + `/FlateDecode` PDF streams can be decoded by the fallback extractor when `pypdf`/MarkItDown are unavailable.
 - Clean AMD DB `/tmp/asip-clean-amd-qwen35-provider-2026-05-17.db` contains `documents` source count `pdf=1` and `evidence` source count `pdf=5`; AQ05 passes with `code`, `doc`, and `pdf` in `docs/qa/2026-05-17-acceptance-clean-amd-qwen35-provider-current.json`.
 - 2026-05-17 targeted graph tests now prove Markdown/document chunks create `doc_section` graph nodes and `section_mentions` edges. The graph renderer preserves `doc_section`/`pdf_section` node kinds, and batch semantic-edge QA proves document candidates can feed the LLM edge job.
+- 2026-05-17 semantic endpoint hardening now proves a Stage 2 provider can return a document-section endpoint such as `docs/guide.md#programming-local-registers`, and the default global graph preserves it as `kind=doc_section`.
+- 2026-05-17 PDF section provenance hardening now proves a PDF-derived graph node such as `docs/manual.pdf#page-3` carries `source_type=pdf`, `path`, `page`, `anchor`, and a user-facing label through the core graph payload.
+- 2026-05-17 BoxMatrix-style doc-node extraction now uses the configured LLM provider call to turn document chunks into self-contained `doc_box` nodes and relationships. This intentionally does not use a BoxMatrix skill; the provider prompt carries the box/matrix abstraction and stores provider/model/job provenance.
 
 ## Remaining Gap
 
@@ -38,7 +41,7 @@ MarkItDown remains optional; `pypdf` is the declared page-preserving converter f
 
 The Web inspector and E2E path still need to prove PDF page/source metadata is visible to users.
 
-Document graph extraction is implemented for converted document chunks and heading/line section ids. The residual G08 risk is narrower: browser proof for a real PDF-derived `pdf_section` node with page provenance is not yet separated from the existing indexed PDF evidence and Markdown section-node proof.
+Document graph extraction is implemented for converted document chunks, heading/line/page section ids, PDF section provenance, and LLM-extracted BoxMatrix-style doc boxes. The residual G08 risk is narrower: final browser proof still needs to isolate a real PDF-derived `pdf_section` node with page provenance from the final AMD corpus rather than only fixture-level core proof.
 
 ## Acceptance Criteria
 
@@ -48,6 +51,7 @@ Document graph extraction is implemented for converted document chunks and headi
 - Query results can return PDF evidence with page citation.
 - Web inspector displays PDF page/source metadata.
 - Converted Markdown/PDF sections create graph section nodes with stable ids, heading/page/source metadata, and section-to-symbol edges.
+- LLM doc-node extraction can create self-contained document concept boxes and relationships from indexed chunks without using a skill.
 - Batch semantic-edge generation can include document/PDF sections as candidates and persist section semantic edges with provider/model provenance.
 - The final QA doc records whether PDF evidence came from a real AMD PDF, a reduced fixture generated from one, or an explicitly accepted local fallback.
 
@@ -58,6 +62,7 @@ Document graph extraction is implemented for converted document chunks and headi
 - Integration test: PDF evidence appears in a query result.
 - Core graph test: Markdown/PDF headings or page sections become graph nodes with provenance and connect to mentioned symbols.
 - Semantic-edge test: a fake provider can generate an edge from a document section candidate and that edge appears in the global graph.
+- Semantic-edge test: a provider-returned Markdown/PDF section endpoint remains a section node in the default global graph.
 - Real AMD PDF smoke: text extraction succeeds on a small known AMD PDF or documented reduced fixture.
 - UI/E2E test: PDF evidence row and page metadata are visible.
 

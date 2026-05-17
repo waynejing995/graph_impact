@@ -1,0 +1,29 @@
+id: amdgv-mxgpu-context
+language: cpp
+context_vars: [adapt, adev]
+symbol_prefixes: [reg, mm, smn]
+wrappers:
+  amdgv_wreg32:
+    symbol_arg: 1
+    access: write
+  amdgv_rreg32:
+    symbol_arg: 1
+    access: read
+  amdgv_wreg32_field:
+    symbol_args: [1, 2]
+    access: field_write
+  amdgv_rreg32_field:
+    symbol_args: [1, 2]
+    access: field_read
+  amdgv_wait_for_register:
+    symbol_arg: 1
+    access: read
+  AMDGV_WRITE_REG:
+    symbol_arg: 1
+    access: write
+  AMDGV_READ_REG:
+    symbol_arg: 1
+    access: read
+  AMDGV_WAIT_REG:
+    symbol_arg: 1
+    access: read

@@ -15,6 +15,7 @@ from asip.workbench import (
     save_provider_settings,
     validate_resolver_profile,
 )
+from asip.storage import AsipStore
 
 
 class FakeEmbeddingTransport:
@@ -85,6 +86,56 @@ class WorkbenchBackendStateTests(unittest.TestCase):
                     path=str(Path(tmpdir) / "missing-yaml.yaml"),
                     enabled=True,
                 )
+
+    def test_resolver_profile_migrates_old_table_without_config_json(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            db_path = root / "asip.db"
+            profile_path = root / "legacy-c.yaml"
+            profile_path.write_text(
+                "\n".join(
+                    [
+                        "id: legacy-c",
+                        "language: cpp",
+                        "context_vars: []",
+                        "symbol_prefixes: [reg, mm]",
+                        "wrappers:",
+                        "  CUSTOM_WRITE:",
+                        "    symbol_arg: 0",
+                        "    access: write",
+                    ]
+                ),
+                encoding="utf-8",
+            )
+            con = sqlite3.connect(db_path)
+            con.execute(
+                """
+                create table resolver_profiles (
+                  id text primary key,
+                  language text not null,
+                  wrappers_json text not null,
+                  strategy text not null,
+                  path text not null,
+                  enabled integer not null default 1
+                )
+                """
+            )
+            con.commit()
+            con.close()
+
+            add_resolver_profile(
+                db_path,
+                profile_id="legacy-c",
+                language="cpp",
+                wrappers=["CUSTOM_WRITE"],
+                strategy="write",
+                path=str(profile_path),
+                enabled=True,
+            )
+            validation = validate_resolver_profile(db_path, "legacy-c", "CUSTOM_WRITE(regGCVM_L2_CNTL, 1);")
+
+            self.assertTrue(validation["valid"])
+            self.assertEqual(validation["symbols"][0]["symbol"], "GCVM_L2_CNTL")
 
     def test_provider_settings_persist_and_are_recorded_on_selected_corpus_index_job(self):
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -216,6 +267,62 @@ class WorkbenchBackendStateTests(unittest.TestCase):
             embedding = con.execute("select provider, model from embeddings").fetchone()
             self.assertEqual(embedding, ("ollama", "nomic-embed-text"))
 
+    def test_persisted_resolver_profile_keeps_configured_argument_positions(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            db_path = root / "asip.db"
+            corpus_root = root / "driver"
+            corpus_root.mkdir()
+            profile_path = root / "custom-field.yaml"
+            profile_path.write_text(
+                "\n".join(
+                    [
+                        "id: custom-field",
+                        "language: cpp",
+                        "context_vars: []",
+                        "symbol_prefixes: [reg, mm]",
+                        "wrappers:",
+                        "  CUSTOM_FIELD_SET:",
+                        "    symbol_args: [1, 2]",
+                        "    access: field_set",
+                    ]
+                ),
+                encoding="utf-8",
+            )
+            (corpus_root / "custom.c").write_text(
+                "void program(void) {\n"
+                "  CUSTOM_FIELD_SET(tmp, regGCVM_L2_CNTL, ENABLE_L2_CACHE, 1);\n"
+                "}\n",
+                encoding="utf-8",
+            )
+
+            add_resolver_profile(
+                db_path,
+                profile_id="custom-field",
+                language="cpp",
+                wrappers=["CUSTOM_FIELD_SET"],
+                strategy="field_set",
+                path=str(profile_path),
+                enabled=True,
+            )
+            add_corpus(
+                db_path,
+                corpus_id="custom-driver",
+                repo="local",
+                source_root=str(corpus_root),
+                include=["**/*.c"],
+                corpus_type="code",
+            )
+
+            index_registered_corpora(db_path, corpus_ids=["custom-driver"])
+            query = query_evidence(db_path, "GCVM_L2_CNTL ENABLE_L2_CACHE")
+            rows_by_symbol = {row["symbol"]: row for row in query["rows"]}
+
+            self.assertIn("GCVM_L2_CNTL", rows_by_symbol)
+            self.assertIn("ENABLE_L2_CACHE", rows_by_symbol)
+            self.assertEqual(rows_by_symbol["GCVM_L2_CNTL"]["access_type"], "field_set")
+            self.assertIn("CUSTOM_FIELD_SET", rows_by_symbol["GCVM_L2_CNTL"]["resolved_chain"])
+
     def test_indexing_calls_configured_embedding_provider_transport(self):
         with tempfile.TemporaryDirectory() as tmpdir:
             root = Path(tmpdir)
@@ -317,6 +424,41 @@ class WorkbenchBackendStateTests(unittest.TestCase):
             ).fetchone()
             self.assertEqual((provider, model), ("ollama", "nomic-embed-text"))
             self.assertEqual(json.loads(metadata_json)["source"], "provider")
+
+    def test_query_evidence_uses_configured_vector_limit(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            db_path = Path(tmpdir) / "asip.db"
+            store = AsipStore.connect(str(db_path))
+            store.migrate()
+            document_id = store.add_document("docs", "doc", "docs/vector.md")
+            chunk_id = store.add_chunk(document_id, "GCVM_L2_CNTL ENABLE_L2_CACHE", 1, 1)
+            store.add_evidence(
+                chunk_id=chunk_id,
+                corpus_id="docs",
+                source_type="doc",
+                repo="local",
+                path="docs/vector.md",
+                symbol="GCVM_L2_CNTL",
+                entity_type="register",
+                access_type="mention",
+                confidence=0.9,
+                snippet="GCVM_L2_CNTL ENABLE_L2_CACHE",
+                resolved_chain="doc -> GCVM_L2_CNTL",
+            )
+            observed_limits = []
+            original_search_vector = AsipStore.search_vector
+
+            def recording_search_vector(self, vector, limit):
+                observed_limits.append(limit)
+                return []
+
+            try:
+                AsipStore.search_vector = recording_search_vector
+                query_evidence(db_path, "GCVM_L2_CNTL")
+            finally:
+                AsipStore.search_vector = original_search_vector
+
+            self.assertEqual(observed_limits, [5])
 
 
 if __name__ == "__main__":

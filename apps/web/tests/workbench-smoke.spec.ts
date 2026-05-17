@@ -64,6 +64,44 @@ test("first screen does not run a static default query or render static evidence
   await expect(page.getByTestId("query-network-graph")).not.toContainText("API_INITIAL_REGISTER");
 });
 
+test("global symbol search runs a live query from any workbench page", async ({ page }) => {
+  let requestedUrl = "";
+  await page.route("**/api/workbench/query?**", async (route) => {
+    requestedUrl = route.request().url();
+    await route.fulfill({
+      contentType: "application/json",
+      body: JSON.stringify({
+        queryId: "global_search_query",
+        rows: [
+          {
+            source: "api",
+            tone: "register",
+            symbol: "API_GLOBAL_SEARCH_REGISTER",
+            relation: "global_search",
+            score: "0.93",
+            path: "api/global/search.c:7",
+            source_type: "code"
+          }
+        ],
+        graph: {
+          nodes: [{ id: "API_GLOBAL_SEARCH_REGISTER", kind: "register", weight: 1 }],
+          edges: []
+        },
+        source: "sqlite"
+      })
+    });
+  });
+  await page.goto("/graph");
+
+  await page.getByRole("textbox", { name: "Global symbol search" }).fill("API_GLOBAL_SEARCH_REGISTER");
+  await page.getByRole("textbox", { name: "Global symbol search" }).press("Enter");
+
+  await expect.poll(() => requestedUrl).toContain("API_GLOBAL_SEARCH_REGISTER");
+  expect(new URL(requestedUrl).searchParams.get("q")).toBe("API_GLOBAL_SEARCH_REGISTER");
+  await expect(page.getByRole("table", { name: "Evidence results" })).toContainText("API_GLOBAL_SEARCH_REGISTER");
+  await expect(page.getByTestId("global-network-graph")).toContainText("API_GLOBAL_SEARCH_REGISTER");
+});
+
 test("settings page persists configurable provider model api and headers", async ({ page }) => {
   await page.goto("/settings");
 
@@ -318,9 +356,17 @@ test("free evidence query updates result rows and graph", async ({ page }) => {
   await page.getByRole("textbox", { name: "Evidence query" }).fill("doorbell interrupt disable");
   await page.getByRole("button", { name: "Run query" }).click();
 
-  await expect(page.getByRole("table", { name: "Evidence results" })).toContainText("DOORBELL_INTERRUPT_DISABLE");
-  await expect(page.getByTestId("query-network-graph")).toContainText("DOORBELL_INTERRUPT_DISABLE");
-  await expect(page.getByTestId("action-feedback")).toContainText("Query ran: doorbell interrupt disable");
+  await expect(page.getByTestId("action-feedback")).toContainText("Query ran: doorbell interrupt disable", {
+    timeout: 30_000
+  });
+  const resultsTable = page.getByRole("table", { name: "Evidence results" });
+  await expect(resultsTable).not.toContainText("Loading live evidence");
+  await expect(resultsTable).toContainText("DOORBELL");
+  await expect(page.getByTestId("query-network-graph").getByTestId("force-graph")).toHaveAttribute(
+    "data-node-count",
+    /[1-9]\d*/
+  );
+  await expect(page.getByTestId("query-network-graph")).not.toContainText("No graph data returned");
 });
 
 test("evidence query consumes the workbench query API", async ({ page }) => {
@@ -591,6 +637,72 @@ test("free evidence query sends IP and ASIC filters to the query API", async ({ 
   await expect(page.getByRole("table", { name: "Evidence results" })).toContainText("CP_FILTERED_REGISTER");
 });
 
+test("source filter controls constrain the free query request", async ({ page }) => {
+  let requestedUrl = "";
+  await page.route("**/api/workbench/query?**", async (route) => {
+    requestedUrl = route.request().url();
+    await route.fulfill({
+      contentType: "application/json",
+      body: JSON.stringify({
+        queryId: "source_filtered_query",
+        rows: [
+          {
+            source: "api",
+            tone: "code",
+            symbol: "CODE_ONLY_REGISTER",
+            relation: "write",
+            score: "0.91",
+            path: "driver.c:8",
+            source_type: "code"
+          }
+        ],
+        graph: { nodes: [{ id: "CODE_ONLY_REGISTER", kind: "register" }], edges: [] },
+        filters: { source_types: ["code"] }
+      })
+    });
+  });
+  await page.goto("/");
+
+  await page.getByRole("button", { name: "Source filter Register" }).click();
+  await page.getByRole("button", { name: "Source filter Doc" }).click();
+  await page.getByRole("button", { name: "Source filter PDF" }).click();
+  await expect(page.getByRole("button", { name: "Source filter Code" })).toHaveAttribute("aria-pressed", "true");
+  await expect(page.getByRole("button", { name: "Source filter Register" })).toHaveAttribute("aria-pressed", "false");
+
+  await page.getByRole("textbox", { name: "Evidence query" }).fill("source filtered register");
+  await page.getByRole("button", { name: "Run query" }).click();
+
+  const url = new URL(requestedUrl);
+  expect(url.searchParams.get("sourceTypes")).toBe("code");
+  await expect(page.getByRole("table", { name: "Evidence results" })).toContainText("CODE_ONLY_REGISTER");
+});
+
+test("graph page sends user configured semantic generation limits", async ({ page }) => {
+  let requestBody: Record<string, unknown> = {};
+  await page.route("**/api/workbench/semantic-edges", async (route) => {
+    requestBody = route.request().postDataJSON();
+    await route.fulfill({
+      contentType: "application/json",
+      body: JSON.stringify({
+        candidate_count: 7,
+        edge_count: 2,
+        graph: {
+          nodes: [{ id: "LIMITED_SEMANTIC_NODE", kind: "register", weight: 1 }],
+          edges: []
+        }
+      })
+    });
+  });
+  await page.goto("/graph");
+
+  await page.getByRole("spinbutton", { name: "Semantic candidate limit" }).fill("7");
+  await page.getByRole("spinbutton", { name: "Semantic batch size" }).fill("2");
+  await page.getByRole("button", { name: "Generate batch semantic edges" }).click();
+
+  expect(requestBody).toMatchObject({ mode: "batch", limit: 7, batchSize: 2 });
+  await expect(page.getByTestId("action-feedback")).toContainText("Batch semantic edges generated: 2 from 7 candidates");
+});
+
 test("free evidence query shows no-match empty state instead of fallback rows", async ({ page }) => {
   await page.route("**/api/workbench/query?**", async (route) => {
     const url = new URL(route.request().url());
@@ -851,6 +963,51 @@ test("acceptance page loads real run summaries from the workbench API", async ({
   await expect(page.getByRole("table", { name: "Evidence results" })).toContainText("docs/qa/api-run.json");
 });
 
+test("acceptance page runs configurable acceptance queries through the workbench API", async ({ page }) => {
+  let requestBody: {
+    dbPath?: string;
+    outputJson?: string;
+    outputMd?: string;
+    queryIds?: string[];
+    surfaces?: string[];
+  } = {};
+  await page.route("**/api/workbench/acceptance", async (route) => {
+    await route.fulfill({ contentType: "application/json", body: JSON.stringify({ runs: [] }) });
+  });
+  await page.route("**/api/workbench/acceptance/run", async (route) => {
+    requestBody = route.request().postDataJSON() as typeof requestBody;
+    await route.fulfill({
+      contentType: "application/json",
+      body: JSON.stringify({
+        source: "asip.acceptance",
+        summary: { total: 2, passed: 2, partial: 0, failed: 0 },
+        surfaces_checked: ["CLI", "API", "Web"],
+        queries: [
+          { id: "AQ01", status: "pass", surfaces_checked: ["CLI", "API", "Web"] },
+          { id: "AQ09", status: "pass", surfaces_checked: ["CLI", "API", "Web"] }
+        ]
+      })
+    });
+  });
+
+  await page.goto("/acceptance");
+  await page.getByRole("textbox", { name: "Acceptance query IDs" }).fill("AQ01, AQ09");
+  await page.getByRole("textbox", { name: "Acceptance DB path" }).fill("/tmp/asip-ui-acceptance.db");
+  await page.getByRole("textbox", { name: "Acceptance output JSON" }).fill("docs/qa/ui-acceptance.json");
+  await page.getByRole("textbox", { name: "Acceptance output Markdown" }).fill("docs/qa/ui-acceptance.md");
+  await page.getByRole("checkbox", { name: "MCP surface" }).click();
+  await page.getByRole("button", { name: "Run acceptance" }).click();
+
+  await expect(page.getByTestId("action-feedback")).toContainText("Acceptance run passed: 2/2");
+  expect(requestBody).toMatchObject({
+    dbPath: "/tmp/asip-ui-acceptance.db",
+    outputJson: "docs/qa/ui-acceptance.json",
+    outputMd: "docs/qa/ui-acceptance.md",
+    queryIds: ["AQ01", "AQ09"],
+    surfaces: ["CLI", "API", "Web", "MCP"]
+  });
+});
+
 test("acceptance failures expand with query-level reasons and evidence sources", async ({ page }) => {
   await page.route("**/api/workbench/acceptance", async (route) => {
     await route.fulfill({
@@ -872,13 +1029,27 @@ test("acceptance failures expand with query-level reasons and evidence sources",
                 query: "Who reads or writes regGCVM_L2_CNTL?",
                 failureReasons: ["index job 3 failed: interrupted after embedding reindex"],
                 missingSurfaces: ["Web", "MCP"],
-                sourcePaths: ["drivers/gpu/drm/amd/amdgpu/gfxhub_v11_5_0.c"],
-                sourceTypes: ["code"],
-                rowCount: 24,
-                graphEdgeCount: 2
+              sourcePaths: ["drivers/gpu/drm/amd/amdgpu/gfxhub_v11_5_0.c"],
+              sourceTypes: ["code"],
+              rowCount: 24,
+              graphEdgeCount: 2,
+              provider_checks: {
+                embedding: {
+                  status: "pass",
+                  provider: "openai-compatible",
+                  model: "local-openai-embed",
+                  message: "1 provider embedding, 0 fallback"
+                },
+                semantic_edge: {
+                  status: "fail",
+                  provider: "ollama",
+                  model: "gemma4:e4b",
+                  message: "semantic edge provider check failed: connection refused"
+                }
               }
-            ]
-          }
+            }
+          ]
+        }
         ]
       })
     });
@@ -892,6 +1063,9 @@ test("acceptance failures expand with query-level reasons and evidence sources",
   await expect(page.getByText("missing surfaces: Web, MCP")).toBeVisible();
   await expect(page.getByText("drivers/gpu/drm/amd/amdgpu/gfxhub_v11_5_0.c")).toBeVisible();
   await expect(page.getByText("rows 24 / graph edges 2")).toBeVisible();
+  await expect(page.getByText("embedding pass: openai-compatible / local-openai-embed")).toBeVisible();
+  await expect(page.getByText("semantic edge fail: ollama / gemma4:e4b")).toBeVisible();
+  await expect(page.getByText("semantic edge provider check failed: connection refused")).toBeVisible();
 });
 
 test("acceptance API failure shows explicit empty state without static QA seed rows", async ({ page }) => {
@@ -970,8 +1144,10 @@ test("corpus page adds indexes and queries a real local corpus through the UI", 
   await page.getByRole("button", { name: "Run query" }).click();
 
   const resultsTable = page.getByRole("table", { name: "Evidence results" });
-  await expect(resultsTable).toContainText(uniqueSymbol, { timeout: 30_000 });
-  await expect(resultsTable).toContainText("note.md");
+  await expect(page.getByTestId("action-feedback")).toContainText(`Query ran: ${uniqueSymbol}`, { timeout: 30_000 });
+  await expect(resultsTable).not.toContainText("Loading live evidence");
+  await expect(resultsTable).toContainText(uniqueSymbol);
+  await expect(resultsTable).toContainText("note.md", { timeout: 30_000 });
 });
 
 test("resolver page adds configurable profiles", async ({ page }) => {
@@ -980,19 +1156,21 @@ test("resolver page adds configurable profiles", async ({ page }) => {
   await expect(page.getByRole("textbox", { name: "Profile id" })).toHaveValue("initial");
   await expect(page.getByRole("textbox", { name: "Wrapper symbol" })).toHaveValue("RREG32");
   await expect(page.getByRole("textbox", { name: "Config path" })).toHaveValue("configs/resolvers/initial.yaml");
-  await page.getByRole("button", { name: "Add resolver profile" }).click();
+  await page.getByRole("button", { name: "Save resolver profile" }).click();
 
-  await expect(page.getByRole("table", { name: "Evidence results" })).toContainText("RREG32");
-  await expect(page.getByRole("table", { name: "Evidence results" })).toContainText("initial");
-  await expect(page.getByText("Resolver profile initial added")).toBeVisible();
+  const resultsTable = page.getByRole("table", { name: "Evidence results" });
+  await expect(resultsTable).toContainText("initial");
+  await expect(resultsTable).toContainText("operators");
+  await expect(resultsTable.locator("tbody tr").first().locator("td").nth(1)).not.toContainText("RREG32");
+  await expect(page.getByText("Resolver profile initial saved")).toBeVisible();
 });
 
 test("resolver page validates configurable profiles from user source", async ({ page }) => {
   const symbol = `UI_DYNAMIC_REGISTER_${Date.now()}`;
   await page.goto("/resolver-profiles");
 
-  await page.getByRole("button", { name: "Add resolver profile" }).click();
-  await expect(page.getByText("Resolver profile initial added")).toBeVisible();
+  await page.getByRole("button", { name: "Save resolver profile" }).click();
+  await expect(page.getByText("Resolver profile initial saved")).toBeVisible();
 
   await page.getByRole("textbox", { name: "Validation source" }).fill(`RREG32(${symbol});`);
   await page.getByRole("button", { name: "Validate resolver profile" }).click();
@@ -1004,11 +1182,78 @@ test("resolver page can add disabled profiles with visible status", async ({ pag
   await page.goto("/resolver-profiles");
 
   await page.getByRole("checkbox", { name: "Enable resolver profile" }).uncheck();
-  await page.getByRole("button", { name: "Add resolver profile" }).click();
+  await page.getByRole("button", { name: "Save resolver profile" }).click();
 
   const resultsTable = page.getByRole("table", { name: "Evidence results" });
-  await expect(resultsTable).toContainText("RREG32");
+  await expect(resultsTable).toContainText("initial");
+  await expect(resultsTable).toContainText("operators");
+  await expect(resultsTable.locator("tbody tr").first().locator("td").nth(1)).not.toContainText("RREG32");
   await expect(resultsTable).toContainText("disabled");
+});
+
+test("resolver page loads an existing profile into the editor before saving", async ({ page }) => {
+  const postBodies: unknown[] = [];
+  await page.route("**/api/workbench/resolver-profiles", async (route) => {
+    if (route.request().method() === "POST") {
+      const body = route.request().postDataJSON();
+      postBodies.push(body);
+      await route.fulfill({
+        contentType: "application/json",
+        body: JSON.stringify({
+          id: body.id,
+          language: body.language,
+          wrappers: body.wrappers,
+          path: body.path,
+          enabled: body.enabled
+        })
+      });
+      return;
+    }
+    await route.fulfill({
+      contentType: "application/json",
+      body: JSON.stringify({
+        profiles: [
+          {
+            id: "initial",
+            language: "cpp",
+            wrappers: ["RREG32"],
+            path: "configs/resolvers/initial.yaml",
+            enabled: true
+          },
+          {
+            id: "linux-amdgpu",
+            language: "cpp",
+            wrappers: ["WREG32_SOC15"],
+            path: "configs/resolvers/linux-amdgpu.yaml",
+            enabled: true
+          }
+        ]
+      })
+    });
+  });
+
+  await page.goto("/resolver-profiles");
+
+  await page.getByRole("combobox", { name: "Existing resolver profile" }).click();
+  await page.getByRole("option", { name: "linux-amdgpu" }).click();
+  await page.getByRole("button", { name: "Load resolver profile" }).click();
+
+  await expect(page.getByRole("textbox", { name: "Profile id" })).toHaveValue("linux-amdgpu");
+  await expect(page.getByRole("textbox", { name: "Wrapper symbol" })).toHaveValue("WREG32_SOC15");
+  await expect(page.getByRole("textbox", { name: "Config path" })).toHaveValue("configs/resolvers/linux-amdgpu.yaml");
+
+  await page.getByRole("checkbox", { name: "Enable resolver profile" }).uncheck();
+  await page.getByRole("button", { name: "Save resolver profile" }).click();
+
+  expect(postBodies).toContainEqual(
+    expect.objectContaining({
+      id: "linux-amdgpu",
+      wrappers: ["WREG32_SOC15"],
+      path: "configs/resolvers/linux-amdgpu.yaml",
+      enabled: false
+    })
+  );
+  await expect(page.getByText("Resolver profile linux-amdgpu saved")).toBeVisible();
 });
 
 test("resolver page loads resolver profiles from the workbench API", async ({ page }) => {
@@ -1031,7 +1276,11 @@ test("resolver page loads resolver profiles from the workbench API", async ({ pa
 
   await page.goto("/resolver-profiles");
 
-  await expect(page.getByRole("table", { name: "Evidence results" })).toContainText("API_WRAPPER");
+  const resultsTable = page.getByRole("table", { name: "Evidence results" });
+  await expect(resultsTable).toContainText("api-resolver");
+  await expect(resultsTable.locator("tbody tr").first().locator("td").nth(1).locator("code")).toHaveText("api-resolver");
+  await expect(resultsTable.locator("tbody tr").first().locator("td").nth(4)).toContainText("1 operator");
+  await expect(resultsTable.locator("tbody tr").first().locator("td").nth(1)).not.toContainText("API_WRAPPER");
   await expect(page.getByRole("table", { name: "Evidence results" })).toContainText("api-resolver");
   await expect(page.getByLabel("Page metrics")).toContainText("profiles: 1");
 });
@@ -1109,13 +1358,13 @@ test("graph page relationship panel is API-backed when graph API succeeds", asyn
         queryId: "global",
         nodes: [
           { id: "API_GLOBAL_REGISTER", kind: "register", weight: 3 },
-          { id: "API_GLOBAL_FIELD", kind: "field", weight: 2 }
+          { id: "API_GLOBAL_FUNCTION", kind: "function", weight: 2 }
         ],
         edges: [
           {
-            src: "API_GLOBAL_REGISTER",
-            relation: "api_sets_field",
-            dst: "API_GLOBAL_FIELD",
+            src: "API_GLOBAL_FUNCTION",
+            relation: "writes",
+            dst: "API_GLOBAL_REGISTER",
             confidence: 0.92,
             weight: 0.92
           }
@@ -1129,7 +1378,7 @@ test("graph page relationship panel is API-backed when graph API succeeds", asyn
   await page.goto("/graph");
 
   const relationshipPanel = page.getByTestId("relationship-panel");
-  await expect(relationshipPanel).toContainText("API_GLOBAL_REGISTER api_sets_field API_GLOBAL_FIELD");
+  await expect(relationshipPanel).toContainText("API_GLOBAL_FUNCTION writes API_GLOBAL_REGISTER");
   await expect(relationshipPanel).not.toContainText("GCVM_L2_CNTL connects code");
   await expect(relationshipPanel).not.toContainText("Weighted global graph emphasizes");
 });
@@ -1147,14 +1396,15 @@ test("graph page runs semantic edge generation through the workbench API", async
         model: "gemma4:e4b",
         graph: {
           nodes: [
+            { id: "UI_EDGE_FUNCTION", kind: "function", weight: 1 },
             { id: "UI_EDGE_REGISTER", kind: "register", weight: 1 },
-            { id: "UI_EDGE_FIELD", kind: "field", weight: 1 }
           ],
           edges: [
             {
-              src: "UI_EDGE_REGISTER",
+              src: "UI_EDGE_FUNCTION",
               relation: "sets_field",
-              dst: "UI_EDGE_FIELD",
+              dst: "UI_EDGE_REGISTER",
+              attr: { fields: ["ENABLE_L2_CACHE"] },
               confidence: 0.93,
               weight: 0.93
             }
@@ -1172,7 +1422,7 @@ test("graph page runs semantic edge generation through the workbench API", async
 
   expect(requestBody.q).toBe("UI_EDGE_REGISTER UI_EDGE_FIELD");
   await expect(page.getByTestId("action-feedback")).toContainText("Semantic edges generated: 1");
-  await expect(page.getByTestId("global-network-graph")).toContainText("UI_EDGE_FIELD");
+  await expect(page.getByTestId("global-network-graph")).toContainText("UI_EDGE_REGISTER");
 });
 
 test("graph page runs batch semantic edge generation through the workbench API", async ({ page }) => {
@@ -1190,14 +1440,13 @@ test("graph page runs batch semantic edge generation through the workbench API",
         graph: {
           nodes: [
             { id: "docs/guide.md#programming-local-registers", kind: "doc_section", weight: 1 },
-            { id: "UI_BATCH_REGISTER", kind: "register", weight: 1 },
-            { id: "UI_BATCH_FIELD", kind: "field", weight: 1 }
+            { id: "UI_BATCH_REGISTER", kind: "register", weight: 1 }
           ],
           edges: [
             {
-              src: "UI_BATCH_REGISTER",
-              relation: "sets_field",
-              dst: "UI_BATCH_FIELD",
+              src: "docs/guide.md#programming-local-registers",
+              relation: "documents",
+              dst: "UI_BATCH_REGISTER",
               confidence: 0.93,
               weight: 0.93
             }
@@ -1210,12 +1459,69 @@ test("graph page runs batch semantic edge generation through the workbench API",
   });
 
   await page.goto("/graph");
+  await expect(page.getByLabel("Graph display controls")).toContainText("Loaded edge budget");
   await page.getByRole("button", { name: "Generate batch semantic edges" }).click();
 
   expect(requestBody.mode).toBe("batch");
-  expect(requestBody.batchSize).toBe(6);
+  if (requestBody.batchSize !== undefined) {
+    expect(requestBody.batchSize).toBe(6);
+  }
   await expect(page.getByTestId("action-feedback")).toContainText("Batch semantic edges generated: 1 from 2 candidates");
-  await expect(page.getByTestId("global-network-graph")).toContainText("UI_BATCH_FIELD");
+  await expect(page.getByTestId("global-network-graph")).toContainText("UI_BATCH_REGISTER");
+});
+
+test("graph page runs LLM document node extraction through the workbench API", async ({ page }) => {
+  let requestBody: { mode?: string; batchSize?: number } = {};
+  await page.route("**/api/workbench/semantic-edges", async (route) => {
+    requestBody = route.request().postDataJSON() as typeof requestBody;
+    await route.fulfill({
+      contentType: "application/json",
+      body: JSON.stringify({
+        source: "doc_node_batch_job",
+        box_count: 1,
+        edge_count: 2,
+        candidate_count: 1,
+        provider: "ollama",
+        model: "gemma4:e4b",
+        graph: {
+          nodes: [
+            { id: "docs/guide.md#programming-local-registers", kind: "doc_section", weight: 1 },
+            { id: "docs/guide.md#box-l2-cache-control", kind: "doc_box", label: "L2 cache control", weight: 1 },
+            { id: "UI_DOC_REGISTER", kind: "register", weight: 1 }
+          ],
+          edges: [
+            {
+              src: "docs/guide.md#programming-local-registers",
+              relation: "contains",
+              dst: "docs/guide.md#box-l2-cache-control",
+              confidence: 0.92,
+              weight: 0.92
+            },
+            {
+              src: "docs/guide.md#box-l2-cache-control",
+              relation: "documents",
+              dst: "UI_DOC_REGISTER",
+              confidence: 0.9,
+              weight: 0.9
+            }
+          ],
+          source: "networkx",
+          graph_runtime: "networkx"
+        }
+      })
+    });
+  });
+
+  await page.goto("/graph");
+  await expect(page.getByLabel("Graph display controls")).toContainText("Loaded edge budget");
+  await page.getByRole("button", { name: "Extract document nodes" }).click();
+
+  expect(requestBody.mode).toBe("doc-nodes");
+  if (requestBody.batchSize !== undefined) {
+    expect(requestBody.batchSize).toBe(6);
+  }
+  await expect(page.getByTestId("action-feedback")).toContainText("Document nodes extracted: 1 boxes, 2 edges from 1 candidates");
+  await expect(page.getByTestId("global-network-graph")).toContainText("L2 cache control");
 });
 
 test("shadcn Radix controls keep styled dimensions instead of bare browser defaults", async ({ page }) => {

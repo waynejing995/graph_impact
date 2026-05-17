@@ -1,9 +1,10 @@
 import { NextResponse } from "next/server";
 import { defaultDbPath, runAsipCli } from "@/lib/asip-cli";
 
-export function GET() {
+export function GET(request: Request) {
+  const dbPath = new URL(request.url).searchParams.get("dbPath")?.trim() || defaultDbPath;
   try {
-    return NextResponse.json(runAsipCli<Record<string, unknown>>(["provider-show", "--db", defaultDbPath]));
+    return NextResponse.json(runAsipCli<Record<string, unknown>>(["provider-show", "--db", dbPath]));
   } catch (error) {
     return NextResponse.json(
       { error: error instanceof Error ? error.message : "provider settings read failed" },
@@ -13,13 +14,15 @@ export function GET() {
 }
 
 export async function POST(request: Request) {
-  const settings = (await request.json().catch(() => ({}))) as Record<string, unknown>;
+  const body = (await request.json().catch(() => ({}))) as Record<string, unknown> & { dbPath?: string };
+  const { dbPath: requestedDbPath, ...settings } = body;
+  const dbPath = typeof requestedDbPath === "string" && requestedDbPath.trim() ? requestedDbPath.trim() : defaultDbPath;
   try {
     return NextResponse.json(
       runAsipCli<Record<string, unknown>>([
         "provider-save",
         "--db",
-        defaultDbPath,
+        dbPath,
         "--settings-json",
         JSON.stringify(settings)
       ])

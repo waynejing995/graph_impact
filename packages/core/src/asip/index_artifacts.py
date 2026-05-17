@@ -43,13 +43,14 @@ def index_full_corpus_run(run_path: Path, db_path: Path) -> Dict[str, int | str]
 
     for generated_case in payload.get("generated", {}).get("cases", []):
         for edge in generated_case.get("edges", []):
-            store.add_edge(
+            edge_id = store.add_edge(
                 src=str(edge["src"]),
                 dst=str(edge["dst"]),
                 relation=str(edge["relation"]),
                 confidence=float(edge.get("confidence", 0)),
             )
-            edge_count += 1
+            if edge_id:
+                edge_count += 1
 
     return {
         "db_path": str(db_path),

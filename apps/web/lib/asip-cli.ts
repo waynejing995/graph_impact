@@ -4,7 +4,7 @@ import { spawnSync } from "node:child_process";
 
 export const repoRoot = path.resolve(process.cwd(), "../..");
 export const defaultDbPath = path.join(repoRoot, "data/asip.db");
-export const defaultConfigPath = path.join(repoRoot, "configs/edge_cases/full-corpus-qwen35.json");
+export const defaultConfigPath = path.join(repoRoot, "configs/edge_cases/full-corpus-gemma4-e4b.json");
 
 export function runAsipCli<T>(args: string[]): T {
   const result = spawnSync("python3", ["-m", "asip.cli", ...args], {
@@ -14,7 +14,8 @@ export function runAsipCli<T>(args: string[]): T {
       PYTHONDONTWRITEBYTECODE: "1",
       PYTHONPATH: [path.join(repoRoot, "packages/core/src"), repoRoot].join(":")
     },
-    encoding: "utf8"
+    encoding: "utf8",
+    maxBuffer: 128 * 1024 * 1024
   });
 
   if (result.status !== 0) {

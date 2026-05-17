@@ -1,12 +1,30 @@
 id: amd-mxgpu
 language: cpp
 context_vars: [adapt]
-symbol_prefixes: [reg, mm]
+symbol_prefixes: [reg, mm, smn]
 wrappers:
   WREG32:
     symbol_arg: 0
     access: write
   RREG32:
+    symbol_arg: 0
+    access: read
+  WREG32_P:
+    symbol_arg: 0
+    access: write
+  RREG32_P:
+    symbol_arg: 0
+    access: read
+  WREG32_PCIE:
+    symbol_arg: 0
+    access: write
+  RREG32_PCIE:
+    symbol_arg: 0
+    access: read
+  WREG32_NBIO:
+    symbol_arg: 0
+    access: write
+  RREG32_NBIO:
     symbol_arg: 0
     access: read
   WREG32_SOC15:
@@ -15,9 +33,48 @@ wrappers:
   RREG32_SOC15:
     symbol_arg: 2
     access: read
+  WREG32_SOC15_OFFSET:
+    symbol_arg: 2
+    access: write
+  RREG32_SOC15_OFFSET:
+    symbol_arg: 2
+    access: read
+  SOC15_REG_OFFSET:
+    symbol_arg: 2
+    access: address
+  SOC15_REG_ENTRY:
+    symbol_arg: 2
+    access: address
+  WREG32_FIELD:
+    symbol_args: [0, 1]
+    access: field_write
+  RREG32_FIELD:
+    symbol_args: [0, 1]
+    access: field_read
+  WREG32_FIELD15:
+    symbol_args: [2, 3]
+    access: field_write
   REG_SET_FIELD:
-    symbol_arg: 1
+    symbol_args: [1, 2]
     access: field_set
   REG_GET_FIELD:
-    symbol_arg: 1
+    symbol_args: [1, 2]
     access: field_get
+  REG_FIELD_MASK:
+    symbol_args: [0, 1]
+    access: field_mask
+  REG_FIELD_VALUE:
+    symbol_args: [0, 1]
+    access: field_value
+  amdgv_wreg32:
+    symbol_arg: 1
+    access: write
+  amdgv_rreg32:
+    symbol_arg: 1
+    access: read
+  amdgv_wreg32_field:
+    symbol_args: [1, 2]
+    access: field_write
+  amdgv_wait_for_register:
+    symbol_arg: 1
+    access: read

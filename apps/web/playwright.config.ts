@@ -1,15 +1,24 @@
 import { defineConfig, devices } from "@playwright/test";
 
+const baseURL = process.env.PLAYWRIGHT_BASE_URL ?? "http://127.0.0.1:3100";
+const skipWebServer = process.env.PLAYWRIGHT_SKIP_WEB_SERVER === "1";
+const parsedUrl = new URL(baseURL);
+const hostname = parsedUrl.hostname || "127.0.0.1";
+const port = parsedUrl.port || "3100";
+
 export default defineConfig({
   testDir: "./tests",
-  webServer: {
-    command: "pnpm dev --hostname 127.0.0.1 --port 3100",
-    url: "http://127.0.0.1:3100",
-    reuseExistingServer: true,
-    timeout: 120_000
-  },
+  workers: 1,
+  webServer: skipWebServer
+    ? undefined
+    : {
+        command: `pnpm dev --hostname ${hostname} --port ${port}`,
+        url: baseURL,
+        reuseExistingServer: true,
+        timeout: 120_000
+      },
   use: {
-    baseURL: "http://127.0.0.1:3100",
+    baseURL,
     trace: "on-first-retry"
   },
   projects: [

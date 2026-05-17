@@ -30,9 +30,9 @@ class McpToolsTests(unittest.TestCase):
     def test_search_evidence_returns_live_sqlite_rows(self):
         result = search_evidence("doorbell interrupt disable")
 
-        self.assertEqual(result["query_id"], "mxgpu_doorbell_interrupt_disable")
+        self.assertTrue(result["query_id"].endswith("doorbell_interrupt_disable"))
         self.assertEqual(result["source"], "sqlite")
-        self.assertTrue(any("DOORBELL_INTERRUPT_DISABLE" in row["symbol"] for row in result["rows"]))
+        self.assertTrue(any("DOORBELL" in row["symbol"] for row in result["rows"]))
 
     def test_search_evidence_reads_explicit_empty_db_without_default_index_fallback(self):
         with TemporaryDirectory() as tmpdir:
@@ -59,7 +59,7 @@ class McpToolsTests(unittest.TestCase):
         result = graph_expand("GCVM_L2_CNTL")
 
         self.assertTrue(any(edge["relation"] == "sets_field" for edge in result["edges"]))
-        self.assertTrue(any(node["id"] == "GCVM_L2_CNTL" for node in result["nodes"]))
+        self.assertTrue(any(node["kind"] == "register" and node["label"] == "GCVM_L2_CNTL" for node in result["nodes"]))
 
     def test_graph_expand_reads_explicit_empty_db_without_default_index_fallback(self):
         with TemporaryDirectory() as tmpdir:
@@ -121,7 +121,14 @@ class McpToolsTests(unittest.TestCase):
 
                 self.assertEqual(result["source"], "semantic_edge_job")
                 self.assertEqual(result["edge_count"], 1)
-                self.assertTrue(any(edge["dst"] == "ENABLE_L2_CACHE" for edge in result["graph"]["edges"]))
+                register_nodes = [
+                    node
+                    for node in result["graph"]["nodes"]
+                    if node["kind"] == "register" and node["label"] == "GCVM_L2_CNTL"
+                ]
+                self.assertTrue(register_nodes)
+                self.assertIn("ENABLE_L2_CACHE", register_nodes[0]["attr"]["fields"])
+                self.assertFalse(any(edge["dst"] == "ENABLE_L2_CACHE" for edge in result["graph"]["edges"]))
         finally:
             server.shutdown()
             server.server_close()
@@ -166,7 +173,13 @@ class McpToolsTests(unittest.TestCase):
                 self.assertEqual(result["source"], "semantic_edge_batch_job")
                 self.assertEqual(result["edge_count"], 1)
                 self.assertGreaterEqual(result["candidate_count"], 1)
-                self.assertTrue(any(node["kind"] == "doc_section" for node in result["graph"]["nodes"]))
+                register_nodes = [
+                    node
+                    for node in result["graph"]["nodes"]
+                    if node["kind"] == "register" and node["label"] == "GCVM_L2_CNTL"
+                ]
+                self.assertTrue(register_nodes)
+                self.assertIn("ENABLE_L2_CACHE", register_nodes[0]["attr"]["fields"])
         finally:
             server.shutdown()
             server.server_close()

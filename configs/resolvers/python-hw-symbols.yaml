@@ -1,0 +1,6 @@
+id: python-hw-symbols
+language: python
+context_vars: []
+symbol_prefixes: []
+python_extractors: [gpu_register, register_ref, field_ref, ip_ref, asic_ref, schema_ref, config_key]
+wrappers: {}

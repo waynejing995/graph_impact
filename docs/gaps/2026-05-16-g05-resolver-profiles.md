@@ -10,6 +10,8 @@ Configurable fields include wrapper names, argument positions, prefixes, base-in
 
 Every resolver shown in the UI must correspond to a real YAML config file under `configs/resolvers/` or a backend-persisted profile that points to an existing YAML file. The UI must not show profile-like static rows that cannot be loaded or validated by the resolver engine.
 
+Resolver wrapper/extractor names are configuration and provenance, not graph entities. Profiles may define `WREG32`, `REG_SET_FIELD`, `SOC15_REG_OFFSET`, `amdgv_wreg32`, `gpu_register`, and similar operations, but those operation names must not become graph nodes.
+
 ## Current Evidence
 
 - `configs/resolvers/linux-amdgpu.yaml`, `configs/resolvers/amd-mxgpu.yaml`, and `configs/resolvers/toy-python.yaml` exist.
@@ -28,12 +30,24 @@ Every resolver shown in the UI must correspond to a real YAML config file under 
 - `apps/web/tests/workbench-smoke.spec.ts` verifies a user-created Python `gpu_register` profile can validate a dynamic source snippet from the UI.
 - `apps/web/tests/workbench-smoke.spec.ts` verifies a user-created disabled profile has visible disabled status.
 - 2026-05-17 user review clarified that all resolver profiles shown by the UI must be backed by real YAML config. A starter `initial.yaml` is required only if it is real and loadable, not a decorative default row.
+- 2026-05-17 resolver expansion pass doubled the committed resolver profile count and AMD wrapper coverage. The committed YAML set now includes `amd-direct-mmio.yaml`, `amd-soc15.yaml`, `amd-field-macros.yaml`, `amdgv-mxgpu-context.yaml`, `linux-amdgpu.yaml`, `amd-mxgpu.yaml`, `initial.yaml`, `toy-python.yaml`, and `python-hw-symbols.yaml`.
+- `linux-amdgpu.yaml` now covers W/R direct access, `_P`, SOC15, SOC15 IP, SOC15 offset, no-KIQ, RLC, RLC shadow, `SOC15_REG_OFFSET`, `SOC15_REG_ENTRY`, field read/write, `REG_FIELD_*`, `REG_SET_FIELD`, and `REG_GET_FIELD` patterns. `amd-mxgpu.yaml` now covers direct, `_P`, PCIe, NBIO, SOC15, SOC15 offset, field, `REG_FIELD_*`, and `amdgv_*` context-style wrappers.
+- The split profiles represent the specific resolver situations requested during brainstorming: direct read/write wrappers, SOC15 address/read/write wrappers, field macros that produce register plus field symbols, MxGPU/GIM `adapt`/`amdgv` context wrappers, and non-macro Python-style hardware symbol references.
+- `packages/core/src/asip/resolver_profiles.py` now resolves every configured wrapper call in a snippet, supports balanced nested calls, and supports `symbol_args: [...]` for macros that emit register and field symbols from one call.
+- `packages/core/src/asip/workbench.py` now persists and rehydrates full YAML resolver config, including argument positions and symbol prefixes, instead of reconstructing enabled profiles from wrapper names only.
+- `packages/core/src/asip/storage.py` migrates old `resolver_profiles` tables by adding `config_json`, so existing DBs can be upgraded instead of requiring a rebuild.
+- 2026-05-17 graph correction filters resolver wrapper/extractor names from deterministic graph endpoints, evidence-derived symbols, semantic-edge persistence, and NetworkX traversal output. Wrapper names remain visible in provenance/resolved chains.
+- 2026-05-17 UI correction: the Resolver Profiles table now treats the profile id as the row identity and summarizes wrapper/extractor count as operators, instead of presenting `WREG32`/`REG_SET_FIELD` as if they were symbol nodes.
+- 2026-05-17 backend correction: wrapper/extractor names are rejected as graph seeds, skipped from query `expected_terms`, and filtered from stale persisted evidence rows before query results can build graph fallback nodes.
+- 2026-05-17 API correction: committed YAML profiles are merged before backend DB rows and cannot be shadowed by stale local test state for the same profile id, so the built-in `initial`/AMD profiles stay truthful to the checked-in YAML.
+- 2026-05-17 prefix correction: every committed C/C++ resolver profile now carries `symbol_prefixes: [reg, mm, smn]`, and `packages/core/tests/test_resolver_profiles.py` proves both `mmGCVM_L2_CNTL` and `smnGCVM_L2_CNTL` canonicalize to the same `GCVM_L2_CNTL` register node instead of creating prefix-specific graph nodes.
+- 2026-05-17 continuation: the Resolver Profiles UI can now select an existing YAML-backed profile, load it into the editor, toggle enabled state, and save it through the same backend upsert path. Playwright covers loading `linux-amdgpu` into the editor and saving it disabled.
 
 ## Remaining Gap
 
-Resolver profiles are not yet a full product feature because only a minimal registered-corpus indexing path proves profile influence.
+Resolver profiles are closer to a real product feature because the backend now preserves YAML argument positions and resolves multiple symbols per configured wrapper call.
 
-The UI now supports add, validate, and enabled/disabled creation state. It still lacks edit-in-place, profile selection per indexing job, richer diagnostics, and broader C/C++ argument-position, multiline/nested macro, Linux/MxGPU-specific, and non-macro Python extraction semantics; those need either implementation or explicit MVP limits.
+The UI now supports add, validate, and enabled/disabled creation state. It still lacks edit-in-place, profile selection per indexing job, richer diagnostics, and broader language-specific non-macro strategies beyond configured Python-style call extractors; those need either implementation or explicit MVP limits.
 
 The next UI/backend pass must also remove any resolver rows that are not backed by a real YAML config, and seed only a truthful initial resolver profile.
 
@@ -45,14 +59,24 @@ The next UI/backend pass must also remove any resolver rows that are not backed 
 - Resolver validation calls core resolver logic and returns structured diagnostics.
 - Linux and MxGPU wrapper changes affect indexing/query without code changes.
 - Toy Python/non-macro extraction is represented as a real strategy interface, not only a fixture row.
+- Field macros can resolve more than one symbol from one configured call, for example register plus field from `REG_SET_FIELD`.
+- Persisted profiles keep YAML-configured `symbol_arg`, `symbol_args`, prefixes, and extractor lists through add/list/validate/index flows.
+- Resolver wrapper/extractor names never appear as graph endpoints; only the resolved register/field/context/document entities enter the graph.
 
 ## Required Tests
 
 - Core test: changing a resolver profile changes extracted evidence without editing code.
 - Core tests for multiline/nested wrapper calls or explicitly documented MVP limits.
+- Core tests for SOC15, field macro, Linux amdgpu, and MxGPU/GIM wrappers represented in real YAML.
+- Core regression test for common AMD register prefixes such as `reg*`, `mm*`, and `smn*` so prefix aliases do not fragment register nodes.
+- Core integration test for persisted profile argument positions during registered-corpus indexing.
+- Core migration test for old `resolver_profiles` tables without `config_json`.
 - API/E2E tests for add/edit/toggle/validate profile. Add, enabled/disabled creation, and validate are implemented; edit-in-place and per-job selection remain open.
 - MCP/API tests for add/list/validate profile against a temp DB.
 - Integration test proving selected profile is used during indexing.
+- Regression test: indexing/resolver graph output does not create mega-nodes for configured wrapper/extractor names.
+- Regression test: resolver profile UI rows show profile identity and operator count, not wrapper names in the symbol column.
+- Regression test: wrapper/extractor names are rejected as graph seeds and filtered out of stale evidence/query expected-term paths.
 
 ## Not Closed Until
 

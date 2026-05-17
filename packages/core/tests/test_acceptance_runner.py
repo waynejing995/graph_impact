@@ -3,6 +3,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
+import asip.acceptance as acceptance
 from asip.acceptance import DEFAULT_ACCEPTANCE_QUERIES, run_acceptance_queries
 from asip.storage import AsipStore
 from asip.workbench import (
@@ -129,6 +130,49 @@ class AcceptanceRunnerTests(unittest.TestCase):
             self.assertEqual(result["surfaces_checked"], ["CLI", "Web"])
             self.assertEqual(result["queries"][0]["surfaces_checked"], ["CLI", "Web"])
             self.assertEqual(result["queries"][0]["missing_surfaces"], [])
+
+    def test_runner_uses_workbench_configured_query_limit(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            db_path = Path(tmpdir) / "acceptance.db"
+            store = AsipStore.connect(str(db_path))
+            store.migrate()
+            store.upsert_corpus("fixture", "local", str(Path(tmpdir)), ["**/*.c"], status="indexed", file_count=1)
+            observed_limits = []
+            original_query_evidence = acceptance.query_evidence
+
+            def fake_query_evidence(db_path, query, limit=None):
+                observed_limits.append(limit)
+                return {
+                    "rows": [
+                        {
+                            "id": 1,
+                            "source_type": "code",
+                            "symbol": "GCVM_L2_CNTL",
+                            "path": "driver.c",
+                        }
+                    ],
+                    "graph": {"nodes": [{"id": "GCVM_L2_CNTL"}], "edges": []},
+                }
+
+            try:
+                acceptance.query_evidence = fake_query_evidence
+                result = run_acceptance_queries(
+                    db_path,
+                    queries=[
+                        {
+                            "id": "AQ-CONFIG-LIMIT",
+                            "query": "GCVM_L2_CNTL",
+                            "gap_ids": ["G10"],
+                            "required_surfaces": ["CLI"],
+                        }
+                    ],
+                    surfaces_checked=["CLI"],
+                )
+            finally:
+                acceptance.query_evidence = original_query_evidence
+
+            self.assertEqual(result["queries"][0]["status"], "pass")
+            self.assertEqual(observed_limits, [None])
 
     def test_runner_fails_when_required_source_types_are_missing(self):
         with tempfile.TemporaryDirectory() as tmpdir:

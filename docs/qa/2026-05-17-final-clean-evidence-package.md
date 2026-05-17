@@ -1,7 +1,7 @@
 # Final Clean Evidence Package
 
 Generated: 2026-05-17
-Status: Current completion evidence, pending commit and push
+Status: Current completion evidence, pending commit and push; latest live graph verification appended below
 
 ## Clean Database
 
@@ -65,6 +65,87 @@ Provider embeddings are partial by design for this QA pass: `ollama/nomic-embed-
 - `pnpm --filter web exec playwright test tests/workbench-smoke.spec.ts --reporter=list`: 35 passed
 - `pnpm --filter web exec playwright test tests/visual-anchor-routes.spec.ts --reporter=list`: 13 passed
 - `git diff --check`: passed
+
+## Latest Live Graph And E2E Verification
+
+This section supersedes the older automated counts above for the current working tree and the dirty local `data/asip.db` used by the live Web workbench.
+
+Current provider settings were restored after tests:
+
+```text
+edge: ollama / gemma4:e4b at http://localhost:11434/api/chat
+embedding: ollama / nomic-embed-text:latest at http://localhost:11434/api/embeddings
+extra headers: {}
+```
+
+Current graph jobs in `data/asip.db`:
+
+```text
+graph_rebuild job 42: 10108 deterministic edges from 1225 files
+semantic_edges job 43: gemma4:e4b, 6 raw semantic edges
+semantic_edges job 44: gemma4:e4b, 5 raw semantic edges
+doc_nodes_batch job 45: gemma4:e4b, 6 doc boxes and 11 doc semantic edges
+```
+
+Current product graph sample:
+
+```text
+global_graph(limit=1500)
+nodes=1123
+edges=1500
+node kinds: function=523, register=593, doc_box=6, doc_section=1
+visible semantic edges=15
+```
+
+Query performance regression evidence:
+
+```text
+query_evidence(data/asip.db, "doorbell interrupt disable")
+before final fixes: 58.228s
+after final fixes: 0.487s
+rows=24
+query graph nodes=32
+query graph edges=37
+```
+
+Fresh automated verification:
+
+```text
+PYTHONPATH=packages/core/src:packages/core/tests python3 -m unittest discover -s packages/core/tests
+Ran 141 tests in 6.054s
+OK (skipped=1)
+
+PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=packages/core/src:. python3 -m unittest \
+  apps.api.tests.test_app apps.api.tests.test_runtime apps.mcp.tests.test_tools apps.mcp.tests.test_server -v
+Ran 41 tests in 79.614s
+OK (skipped=1)
+
+pnpm --filter web exec tsc --noEmit
+passed
+
+pnpm --filter web run lint
+passed
+
+pnpm --filter web exec playwright test tests/workbench-api.spec.ts tests/workbench-smoke.spec.ts --reporter=list
+69 passed
+
+pnpm --filter web exec playwright test tests/visual-anchor-routes.spec.ts --reporter=list
+15 passed
+
+git diff --check
+passed
+```
+
+Continuation fixes verified in the same pass:
+
+- `graph-rebuild --corpus-id` now preserves deterministic edges from non-selected corpora instead of clearing every Stage 1 edge.
+- `/resolver-profiles` can load an existing YAML-backed profile into the editor before saving, so built-in profiles are editable through the UI path instead of being add-only rows.
+- Top-bar global search runs a real `/api/workbench/query` request from graph-capable pages.
+- Source-type filter controls are real query controls and send `sourceTypes` to the Web BFF/core query path.
+- `/graph` exposes semantic generation limit and batch-size overrides in the UI and sends them to `/api/workbench/semantic-edges`.
+- The graph header now displays layer provenance such as deterministic and semantic edge counts.
+
+Remaining evidence boundary: the clean AQ01-AQ09 package above still records the qwen3.5 provider artifact, while the current live graph/provider run uses `gemma4:e4b`. The two should not be mixed: the clean artifact proves acceptance-run shape and source diversity; the live graph section proves current function/register/doc/semantic graph behavior after the final implementation fixes.
 
 ## Architecture Review
 

@@ -1,12 +1,18 @@
 id: linux-amdgpu
 language: cpp
 context_vars: [adev]
-symbol_prefixes: [reg, mm]
+symbol_prefixes: [reg, mm, smn]
 wrappers:
   WREG32:
     symbol_arg: 0
     access: write
   RREG32:
+    symbol_arg: 0
+    access: read
+  WREG32_P:
+    symbol_arg: 0
+    access: write
+  RREG32_P:
     symbol_arg: 0
     access: read
   WREG32_SOC15:
@@ -15,21 +21,66 @@ wrappers:
   RREG32_SOC15:
     symbol_arg: 2
     access: read
+  WREG32_SOC15_IP:
+    symbol_arg: 2
+    access: write
+  RREG32_SOC15_IP:
+    symbol_arg: 2
+    access: read
   WREG32_SOC15_OFFSET:
     symbol_arg: 2
     access: write
   RREG32_SOC15_OFFSET:
     symbol_arg: 2
     access: read
+  WREG32_SOC15_NO_KIQ:
+    symbol_arg: 2
+    access: write
+  RREG32_SOC15_NO_KIQ:
+    symbol_arg: 2
+    access: read
+  WREG32_SOC15_RLC:
+    symbol_arg: 2
+    access: write
+  RREG32_SOC15_RLC:
+    symbol_arg: 2
+    access: read
+  WREG32_SOC15_RLC_SHADOW:
+    symbol_arg: 2
+    access: write
   SOC15_REG_OFFSET:
     symbol_arg: 2
     access: address
-  WREG32_FIELD15:
+  SOC15_REG_ENTRY:
     symbol_arg: 2
+    access: address
+  WREG32_FIELD15:
+    symbol_args: [2, 3]
     access: field_write
+  WREG32_FIELD15_PREREG:
+    symbol_args: [2, 3]
+    access: field_write
+  WREG32_FIELD15_OFFSET:
+    symbol_args: [2, 3]
+    access: field_write
+  WREG32_FIELD:
+    symbol_args: [0, 1]
+    access: field_write
+  RREG32_FIELD:
+    symbol_args: [0, 1]
+    access: field_read
+  REG_FIELD_MASK:
+    symbol_args: [0, 1]
+    access: field_mask
+  REG_FIELD_SHIFT:
+    symbol_args: [0, 1]
+    access: field_shift
+  REG_FIELD_VALUE:
+    symbol_args: [0, 1]
+    access: field_value
   REG_SET_FIELD:
-    symbol_arg: 1
+    symbol_args: [1, 2]
     access: field_set
   REG_GET_FIELD:
-    symbol_arg: 1
+    symbol_args: [1, 2]
     access: field_get

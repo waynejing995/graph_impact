@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { defaultDbPath, ensureWorkbenchIndex, runAsipCli } from "@/lib/asip-cli";
+import { configuredInt, readWorkbenchLimits } from "@/lib/workbench-limits";
 
 type SemanticEdgesRequest = {
   dbPath?: string;
@@ -8,17 +9,23 @@ type SemanticEdgesRequest = {
   mode?: string;
   limit?: number;
   batchSize?: number;
+  includeEvidenceDerived?: boolean;
+  evidenceRowCap?: number;
 };
 
 export async function POST(request: Request) {
   const body = (await request.json().catch(() => ({}))) as SemanticEdgesRequest;
+  const limits = readWorkbenchLimits();
   const dbPath = body.dbPath?.trim() || defaultDbPath;
   const query = (body.q ?? body.query ?? "").trim();
-  const limit = Math.max(1, Math.min(24, Number(body.limit ?? 8) || 8));
-  const batchSize = Math.max(1, Math.min(12, Number(body.batchSize ?? 6) || 6));
+  const limit = configuredInt(body.limit) ?? limits.semantic?.queryLimit;
+  const batchLimit = configuredInt(body.limit) ?? limits.semantic?.batchCandidateLimit;
+  const batchSize = configuredInt(body.batchSize) ?? limits.semantic?.batchSize;
   const mode = String(body.mode ?? "query").trim().toLowerCase();
+  const includeEvidenceDerived = body.includeEvidenceDerived === true;
+  const evidenceRowCap = configuredInt(body.evidenceRowCap) ?? limits.graph?.evidenceRowCap;
 
-  if (mode !== "batch" && !query) {
+  if (mode !== "batch" && mode !== "doc-nodes" && !query) {
     return NextResponse.json({ error: "semantic edge query is required" }, { status: 400 });
   }
 
@@ -32,10 +39,22 @@ export async function POST(request: Request) {
           "semantic-edges-batch",
           "--db",
           dbPath,
-          "--limit",
-          String(limit),
-          "--batch-size",
-          String(batchSize)
+          ...(batchLimit !== undefined ? ["--limit", String(batchLimit)] : []),
+          ...(batchSize !== undefined ? ["--batch-size", String(batchSize)] : []),
+          ...(includeEvidenceDerived
+            ? ["--include-evidence-derived", ...(evidenceRowCap !== undefined ? ["--evidence-row-cap", String(evidenceRowCap)] : [])]
+            : [])
+        ])
+      );
+    }
+    if (mode === "doc-nodes") {
+      return NextResponse.json(
+        runAsipCli<Record<string, unknown>>([
+          "doc-nodes-batch",
+          "--db",
+          dbPath,
+          ...(batchLimit !== undefined ? ["--limit", String(batchLimit)] : []),
+          ...(batchSize !== undefined ? ["--batch-size", String(batchSize)] : [])
         ])
       );
     }
@@ -46,8 +65,7 @@ export async function POST(request: Request) {
         dbPath,
         "--q",
         query,
-        "--limit",
-        String(limit)
+        ...(limit !== undefined ? ["--limit", String(limit)] : [])
       ])
     );
   } catch (error) {

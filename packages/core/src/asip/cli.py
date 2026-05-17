@@ -8,6 +8,7 @@ from pathlib import Path
 from typing import Dict, List, Optional
 
 from .acceptance import DEFAULT_ACCEPTANCE_QUERIES, run_acceptance_queries
+from .limits import DEFAULT_WORKBENCH_LIMITS_PATH, load_workbench_limits
 from .semantic_edges import run_full_corpus_generation, run_generation
 from .workbench import (
     add_corpus,
@@ -15,6 +16,7 @@ from .workbench import (
     backfill_provider_embeddings,
     expand_query_graph,
     explain_entity,
+    generate_doc_nodes_batch,
     generate_semantic_edges_batch,
     generate_semantic_edges_for_query,
     get_evidence_detail,
@@ -25,6 +27,7 @@ from .workbench import (
     list_resolver_profiles,
     load_provider_settings,
     query_evidence,
+    rebuild_deterministic_graph,
     save_provider_settings,
     validate_resolver_profile,
 )
@@ -75,7 +78,8 @@ def main(argv: Optional[List[str]] = None) -> int:
     edges_full.add_argument("--output-json", required=True)
     edges_full.add_argument("--output-md", required=True)
     edges_full.add_argument("--min-pass", type=int, default=6)
-    edges_full.add_argument("--batch-size", type=int, default=3)
+    edges_full.add_argument("--batch-size", type=int)
+    edges_full.add_argument("--limits-config", default=str(DEFAULT_WORKBENCH_LIMITS_PATH))
 
     index = subcommands.add_parser("index", help="Index configured raw corpora into the ASIP SQLite store")
     index.add_argument("--config", required=True)
@@ -93,19 +97,42 @@ def main(argv: Optional[List[str]] = None) -> int:
     query.add_argument("--q", required=True)
     query.add_argument("--ip-block", default="")
     query.add_argument("--asic", default="")
+    query.add_argument("--source-type", action="append", default=[])
+    query.add_argument("--limit", type=int)
+    query.add_argument("--limits-config", default=str(DEFAULT_WORKBENCH_LIMITS_PATH))
 
     semantic_edges = subcommands.add_parser("semantic-edges", help="Generate semantic edges from indexed evidence")
     semantic_edges.add_argument("--db", required=True)
     semantic_edges.add_argument("--q", required=True)
-    semantic_edges.add_argument("--limit", type=int, default=8)
+    semantic_edges.add_argument("--limit", type=int)
+    semantic_edges.add_argument("--limits-config", default=str(DEFAULT_WORKBENCH_LIMITS_PATH))
 
     semantic_edges_batch = subcommands.add_parser(
         "semantic-edges-batch",
         help="Generate semantic edges from indexed corpus candidates",
     )
     semantic_edges_batch.add_argument("--db", required=True)
-    semantic_edges_batch.add_argument("--limit", type=int, default=24)
-    semantic_edges_batch.add_argument("--batch-size", type=int, default=6)
+    semantic_edges_batch.add_argument("--limit", type=int)
+    semantic_edges_batch.add_argument("--batch-size", type=int)
+    semantic_edges_batch.add_argument("--include-evidence-derived", action="store_true")
+    semantic_edges_batch.add_argument("--evidence-row-cap", type=int)
+    semantic_edges_batch.add_argument("--limits-config", default=str(DEFAULT_WORKBENCH_LIMITS_PATH))
+
+    doc_nodes_batch = subcommands.add_parser(
+        "doc-nodes-batch",
+        help="Generate BoxMatrix-style document graph nodes with the configured LLM provider",
+    )
+    doc_nodes_batch.add_argument("--db", required=True)
+    doc_nodes_batch.add_argument("--limit", type=int)
+    doc_nodes_batch.add_argument("--batch-size", type=int)
+    doc_nodes_batch.add_argument("--limits-config", default=str(DEFAULT_WORKBENCH_LIMITS_PATH))
+
+    graph_rebuild = subcommands.add_parser(
+        "graph-rebuild",
+        help="Rebuild Stage 1 deterministic graph edges from registered corpora",
+    )
+    graph_rebuild.add_argument("--db", required=True)
+    graph_rebuild.add_argument("--corpus-id", action="append")
 
     evidence_detail = subcommands.add_parser("evidence-detail", help="Read a single evidence row by id")
     evidence_detail.add_argument("--db", required=True)
@@ -118,8 +145,12 @@ def main(argv: Optional[List[str]] = None) -> int:
     graph = subcommands.add_parser("graph", help="Expand a weighted relation graph from the ASIP SQLite store")
     graph.add_argument("--db", required=True)
     graph.add_argument("--seed")
-    graph.add_argument("--hops", type=int, default=1)
-    graph.add_argument("--limit", type=int, default=100)
+    graph.add_argument("--hops", type=int)
+    graph.add_argument("--limit", type=int)
+    graph.add_argument("--all", action="store_true", help="Return the full global graph without the configured edge budget")
+    graph.add_argument("--include-evidence-derived", action="store_true")
+    graph.add_argument("--evidence-row-cap", type=int)
+    graph.add_argument("--limits-config", "--budget-config", dest="limits_config", default=str(DEFAULT_WORKBENCH_LIMITS_PATH))
 
     acceptance = subcommands.add_parser("acceptance", help="Run ASIP MVP acceptance queries against a SQLite store")
     acceptance.add_argument("--db", required=True)
@@ -153,8 +184,9 @@ def main(argv: Optional[List[str]] = None) -> int:
         help="Backfill provider embeddings for existing indexed chunks using current settings",
     )
     provider_embeddings.add_argument("--db", required=True)
-    provider_embeddings.add_argument("--limit", type=int, default=0)
-    provider_embeddings.add_argument("--batch-size", type=int, default=64)
+    provider_embeddings.add_argument("--limit", type=int)
+    provider_embeddings.add_argument("--batch-size", type=int)
+    provider_embeddings.add_argument("--limits-config", default=str(DEFAULT_WORKBENCH_LIMITS_PATH))
 
     resolver_list = subcommands.add_parser("resolver-list", help="List resolver profiles from backend state")
     resolver_list.add_argument("--db", required=True)
@@ -185,13 +217,19 @@ def main(argv: Optional[List[str]] = None) -> int:
         print(json.dumps(result["summary"], indent=2))
         return 0
     if args.command == "edges-full":
+        limits = load_workbench_limits(Path(args.limits_config))
+        full_corpus_batch_size = (
+            args.batch_size
+            if args.batch_size is not None
+            else limits.int_value("semantic", "full_corpus_batch_size", minimum=1)
+        )
         result = run_full_corpus_generation(
             config_path=Path(args.config),
             source_roots=parse_source_roots(args.source_root),
             output_json=Path(args.output_json),
             output_md=Path(args.output_md),
             min_pass=args.min_pass,
-            batch_size=args.batch_size,
+            batch_size=full_corpus_batch_size,
         )
         print(json.dumps(result["summary"], indent=2))
         return 0
@@ -211,23 +249,62 @@ def main(argv: Optional[List[str]] = None) -> int:
             )
         return 0
     if args.command == "query":
+        limits = load_workbench_limits(Path(args.limits_config))
+        query_limit = args.limit if args.limit is not None else limits.int_value("retrieval", "result_limit", minimum=1)
         print(
             json.dumps(
-                query_evidence(Path(args.db), args.q, ip_block=args.ip_block, asic_or_generation=args.asic),
+                query_evidence(
+                    Path(args.db),
+                    args.q,
+                    limit=query_limit,
+                    ip_block=args.ip_block,
+                    asic_or_generation=args.asic,
+                    source_types=args.source_type,
+                ),
                 indent=2,
             )
         )
         return 0
     if args.command == "semantic-edges":
-        print(json.dumps(generate_semantic_edges_for_query(Path(args.db), args.q, limit=args.limit), indent=2))
+        limits = load_workbench_limits(Path(args.limits_config))
+        query_limit = args.limit if args.limit is not None else limits.int_value("semantic", "query_limit", minimum=1)
+        print(json.dumps(generate_semantic_edges_for_query(Path(args.db), args.q, limit=query_limit), indent=2))
         return 0
     if args.command == "semantic-edges-batch":
+        limits = load_workbench_limits(Path(args.limits_config))
+        batch_limit = args.limit if args.limit is not None else limits.int_value("semantic", "batch_candidate_limit", minimum=1)
+        batch_size = args.batch_size if args.batch_size is not None else limits.int_value("semantic", "batch_size", minimum=1)
+        evidence_row_cap = args.evidence_row_cap if args.evidence_row_cap is not None else limits.int_value("graph", "evidence_row_cap", minimum=0)
         print(
             json.dumps(
-                generate_semantic_edges_batch(Path(args.db), limit=args.limit, batch_size=args.batch_size),
+                generate_semantic_edges_batch(
+                    Path(args.db),
+                    limit=batch_limit,
+                    batch_size=batch_size,
+                    include_evidence_derived=args.include_evidence_derived,
+                    evidence_row_cap=evidence_row_cap,
+                ),
                 indent=2,
             )
         )
+        return 0
+    if args.command == "doc-nodes-batch":
+        limits = load_workbench_limits(Path(args.limits_config))
+        batch_limit = args.limit if args.limit is not None else limits.int_value("semantic", "batch_candidate_limit", minimum=1)
+        batch_size = args.batch_size if args.batch_size is not None else limits.int_value("semantic", "batch_size", minimum=1)
+        print(
+            json.dumps(
+                generate_doc_nodes_batch(
+                    Path(args.db),
+                    limit=batch_limit,
+                    batch_size=batch_size,
+                ),
+                indent=2,
+            )
+        )
+        return 0
+    if args.command == "graph-rebuild":
+        print(json.dumps(rebuild_deterministic_graph(Path(args.db), corpus_ids=args.corpus_id), indent=2))
         return 0
     if args.command == "evidence-detail":
         print(json.dumps(get_evidence_detail(Path(args.db), args.id), indent=2))
@@ -236,10 +313,25 @@ def main(argv: Optional[List[str]] = None) -> int:
         print(json.dumps(explain_entity(Path(args.db), args.symbol), indent=2))
         return 0
     if args.command == "graph":
+        limits = load_workbench_limits(Path(args.limits_config))
+        hops = args.hops if args.hops is not None else limits.int_value("graph", "default_hops", minimum=1)
+        edge_limit = args.limit if args.limit is not None else limits.int_value("graph", "edge_budget", minimum=1)
+        evidence_row_cap = args.evidence_row_cap if args.evidence_row_cap is not None else limits.int_value("graph", "evidence_row_cap", minimum=0)
         if args.seed:
-            print(json.dumps(expand_query_graph(Path(args.db), args.seed, hops=args.hops), indent=2))
+            print(json.dumps(expand_query_graph(Path(args.db), args.seed, hops=hops or 1), indent=2))
         else:
-            print(json.dumps(global_graph(Path(args.db), limit=args.limit), indent=2))
+            print(
+                json.dumps(
+                    global_graph(
+                        Path(args.db),
+                        limit=edge_limit,
+                        include_evidence_derived=args.include_evidence_derived,
+                        evidence_row_cap=evidence_row_cap,
+                        all_edges=args.all,
+                    ),
+                    indent=2,
+                )
+            )
         return 0
     if args.command == "acceptance":
         try:
@@ -285,9 +377,12 @@ def main(argv: Optional[List[str]] = None) -> int:
         print(json.dumps(load_provider_settings(Path(args.db)), indent=2))
         return 0
     if args.command == "provider-embeddings":
+        limits = load_workbench_limits(Path(args.limits_config))
+        embedding_limit = args.limit if args.limit is not None else limits.int_value("embedding", "backfill_limit", minimum=0)
+        embedding_batch_size = args.batch_size if args.batch_size is not None else limits.int_value("embedding", "batch_size", minimum=1)
         print(
             json.dumps(
-                backfill_provider_embeddings(Path(args.db), limit=args.limit, batch_size=args.batch_size),
+                backfill_provider_embeddings(Path(args.db), limit=embedding_limit, batch_size=embedding_batch_size),
                 indent=2,
             )
         )

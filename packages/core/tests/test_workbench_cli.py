@@ -9,6 +9,39 @@ from workbench_fixture import write_live_fixture
 
 
 class WorkbenchCliTests(unittest.TestCase):
+    def test_graph_command_uses_configured_budget_unless_user_requests_all(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            db_path = root / "asip.db"
+            budget_path = root / "graph-budget.json"
+            budget_path.write_text(json.dumps({"globalGraph": {"edgeBudget": 1, "evidenceRowCap": 0}}), encoding="utf-8")
+            common = [sys.executable, "-m", "asip.cli"]
+
+            setup = (
+                "from asip.storage import AsipStore;"
+                f"store=AsipStore.connect({str(db_path)!r});"
+                "store.migrate();"
+                "store.add_edge('program_a','GCVM_L2_CNTL','reads',0.99);"
+                "store.add_edge('program_b','CP_INT_CNTL_RING0','writes',0.98)"
+            )
+            subprocess.run([sys.executable, "-c", setup], check=True, capture_output=True, text=True)
+
+            configured = subprocess.run(
+                [*common, "graph", "--db", str(db_path), "--budget-config", str(budget_path)],
+                check=True,
+                capture_output=True,
+                text=True,
+            )
+            all_edges = subprocess.run(
+                [*common, "graph", "--db", str(db_path), "--budget-config", str(budget_path), "--all"],
+                check=True,
+                capture_output=True,
+                text=True,
+            )
+
+            self.assertEqual(len(json.loads(configured.stdout)["edges"]), 1)
+            self.assertEqual(len(json.loads(all_edges.stdout)["edges"]), 2)
+
     def test_index_query_and_graph_commands_use_live_sqlite_store(self):
         with tempfile.TemporaryDirectory() as tmpdir:
             root = Path(tmpdir)
@@ -29,7 +62,7 @@ class WorkbenchCliTests(unittest.TestCase):
                 text=True,
             )
             graph = subprocess.run(
-                [*common, "graph", "--db", str(db_path), "--seed", "DOORBELL_INTERRUPT_DISABLE", "--hops", "1"],
+                [*common, "graph", "--db", str(db_path), "--seed", "BIF_DOORBELL_INT_CNTL", "--hops", "1"],
                 check=True,
                 capture_output=True,
                 text=True,
@@ -42,7 +75,56 @@ class WorkbenchCliTests(unittest.TestCase):
             self.assertEqual(index_payload["source"], "raw_corpus")
             self.assertEqual(query_payload["source"], "sqlite")
             self.assertTrue(any(row["symbol"] == "DOORBELL_INTERRUPT_DISABLE" for row in query_payload["rows"]))
-            self.assertTrue(any(edge["dst"] == "DOORBELL_INTERRUPT_DISABLE" for edge in graph_payload["edges"]))
+            self.assertTrue(any(edge["dst"].endswith(":BIF_DOORBELL_INT_CNTL") for edge in graph_payload["edges"]))
+            self.assertTrue(
+                any("DOORBELL_INTERRUPT_DISABLE" in edge.get("attr", {}).get("fields", []) for edge in graph_payload["edges"])
+            )
+
+    def test_graph_rebuild_command_restores_stage1_edges(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            source_root = root / "mxgpu"
+            source_root.mkdir()
+            (source_root / "gfx.c").write_text(
+                "\n".join(
+                    [
+                        "typedef unsigned int uint32_t;",
+                        "static void cli_program_cache(uint32_t data) {",
+                        "  WREG32(regGCVM_L2_CNTL, data);",
+                        "}",
+                    ]
+                ),
+                encoding="utf-8",
+            )
+            db_path = root / "asip.db"
+            setup = (
+                "from asip.storage import AsipStore;"
+                f"store=AsipStore.connect({str(db_path)!r});"
+                "store.migrate();"
+                f"store.upsert_corpus('mxgpu','local',{str(source_root)!r},['**/*.c'],status='indexed',file_count=1)"
+            )
+            subprocess.run([sys.executable, "-c", setup], check=True, capture_output=True, text=True)
+
+            rebuild = subprocess.run(
+                [
+                    sys.executable,
+                    "-m",
+                    "asip.cli",
+                    "graph-rebuild",
+                    "--db",
+                    str(db_path),
+                    "--corpus-id",
+                    "mxgpu",
+                ],
+                check=True,
+                capture_output=True,
+                text=True,
+            )
+
+            payload = json.loads(rebuild.stdout)
+            self.assertEqual(payload["source"], "deterministic_graph_rebuild")
+            self.assertEqual(payload["files"], 1)
+            self.assertGreaterEqual(payload["edges"], 1)
 
     def test_index_command_accepts_explicit_source_root_override(self):
         with tempfile.TemporaryDirectory() as tmpdir:

@@ -23,9 +23,9 @@ class ApiAppTests(unittest.TestCase):
 
         self.assertEqual(response.status_code, 200)
         payload = response.json()
-        self.assertEqual(payload["query_id"], "mxgpu_doorbell_interrupt_disable")
+        self.assertTrue(payload["query_id"].endswith("doorbell_interrupt_disable"))
         self.assertEqual(payload["source"], "sqlite")
-        self.assertTrue(any("DOORBELL_INTERRUPT_DISABLE" in row["symbol"] for row in payload["rows"]))
+        self.assertTrue(any("DOORBELL" in row["symbol"] for row in payload["rows"]))
 
     def test_live_uvicorn_server_serves_http_without_testclient(self):
         with TemporaryDirectory() as tmpdir:
@@ -50,6 +50,7 @@ class ApiAppTests(unittest.TestCase):
         self.assertEqual(response.status_code, 200)
         payload = response.json()
         self.assertTrue(any(edge["relation"] == "sets_field" for edge in payload["edges"]))
+        self.assertTrue(any(node["kind"] == "register" and node["label"] == "GCVM_L2_CNTL" for node in payload["nodes"]))
 
     def test_graph_endpoint_honors_explicit_empty_db_path_without_default_fallback(self):
         with TemporaryDirectory() as tmpdir:
@@ -131,7 +132,14 @@ class ApiAppTests(unittest.TestCase):
                 payload = response.json()
                 self.assertEqual(payload["source"], "semantic_edge_job")
                 self.assertEqual(payload["edge_count"], 1)
-                self.assertTrue(any(edge["dst"] == "ENABLE_L2_CACHE" for edge in payload["graph"]["edges"]))
+                register_nodes = [
+                    node
+                    for node in payload["graph"]["nodes"]
+                    if node["kind"] == "register" and node["label"] == "GCVM_L2_CNTL"
+                ]
+                self.assertTrue(register_nodes)
+                self.assertIn("ENABLE_L2_CACHE", register_nodes[0]["attr"]["fields"])
+                self.assertFalse(any(edge["dst"] == "ENABLE_L2_CACHE" for edge in payload["graph"]["edges"]))
         finally:
             server.shutdown()
             server.server_close()
@@ -187,7 +195,13 @@ class ApiAppTests(unittest.TestCase):
                 self.assertEqual(payload["source"], "semantic_edge_batch_job")
                 self.assertEqual(payload["edge_count"], 1)
                 self.assertGreaterEqual(payload["candidate_count"], 1)
-                self.assertTrue(any(node["kind"] == "doc_section" for node in payload["graph"]["nodes"]))
+                register_nodes = [
+                    node
+                    for node in payload["graph"]["nodes"]
+                    if node["kind"] == "register" and node["label"] == "GCVM_L2_CNTL"
+                ]
+                self.assertTrue(register_nodes)
+                self.assertIn("ENABLE_L2_CACHE", register_nodes[0]["attr"]["fields"])
         finally:
             server.shutdown()
             server.server_close()

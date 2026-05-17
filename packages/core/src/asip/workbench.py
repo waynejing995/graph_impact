@@ -12,14 +12,19 @@ from dataclasses import dataclass
 from pathlib import Path, PurePosixPath
 from typing import Any, Dict, Iterable, List, Mapping, Optional
 
+from .code_graph import build_deterministic_code_graph
 from .documents import convert_pdf_to_chunks
+from .graph_filters import is_graph_entity_endpoint, is_resolver_wrapper_name
+from .limits import DEFAULT_WORKBENCH_LIMITS_PATH, load_workbench_limits
 from .providers import EmbeddingProviderConfig, EmbeddingTransport, create_embedding_provider
 from .resolver_profiles import (
     ResolverProfile,
-    WrapperRule,
     load_resolver_profile,
-    resolve_cpp_register_call,
+    load_resolver_profiles,
+    resolve_cpp_register_calls,
     resolve_python_symbol,
+    resolver_profile_from_config,
+    resolver_profile_to_config,
 )
 from .semantic_edges import (
     EdgeModelConfig,
@@ -34,8 +39,9 @@ from .storage import AsipStore
 
 
 SOURCE_EXTENSIONS = {".c", ".cc", ".cpp", ".h", ".hpp", ".md", ".rst", ".txt", ".pdf"}
-DEFAULT_CONFIG = Path("configs/edge_cases/full-corpus-qwen35.json")
+DEFAULT_CONFIG = Path("configs/edge_cases/full-corpus-gemma4-e4b.json")
 DEFAULT_DB = Path("data/asip.db")
+DEFAULT_RESOLVER_PROFILE_DIR = Path(__file__).resolve().parents[4] / "configs" / "resolvers"
 
 
 @dataclass(frozen=True)
@@ -163,9 +169,19 @@ def index_configured_corpora(
             for file_path in _iter_source_files(source_root, corpus.include):
                 display_path = _display_source_path(file_path, source_root, source_root)
                 key = (corpus.id, display_path)
+                source_type = _source_type_for_path(file_path)
+                if source_type == "code":
+                    edge_count += _index_deterministic_code_graph_edges(
+                        store,
+                        file_path,
+                        source_root,
+                        resolver_profiles,
+                        corpus_id=corpus.id,
+                        repo=corpus.repo,
+                    )
+                    continue
                 if key in indexed_paths:
                     continue
-                source_type = _source_type_for_path(file_path)
                 if source_type not in {"doc", "pdf", "register"}:
                     continue
                 chunks = _chunks_for_file(file_path, source_type)
@@ -231,10 +247,26 @@ def index_configured_corpora(
 def query_evidence(
     db_path: Path,
     query: str,
-    limit: int = 24,
+    limit: Optional[int] = None,
     ip_block: str = "",
     asic_or_generation: str = "",
+    source_types: Optional[Iterable[str]] = None,
 ) -> Dict[str, Any]:
+    limits = load_workbench_limits()
+    result_limit = limit if limit is not None else limits.int_value("retrieval", "result_limit", minimum=1)
+    if result_limit is None:
+        raise ValueError(f"retrieval.resultLimit is missing from {limits.path}")
+    candidate_multiplier = limits.int_value("retrieval", "candidate_multiplier", minimum=1)
+    candidate_floor = limits.int_value("retrieval", "candidate_floor", minimum=1)
+    max_query_tokens = limits.int_value("retrieval", "max_query_tokens", minimum=1)
+    vector_limit = limits.int_value("retrieval", "vector_limit", minimum=1)
+    if candidate_multiplier is None or candidate_floor is None or max_query_tokens is None or vector_limit is None:
+        raise ValueError(f"retrieval candidate limits are missing from {limits.path}")
+    source_type_filter = {
+        source_type.strip().lower()
+        for source_type in (source_types or [])
+        if source_type and source_type.strip()
+    }
     if not _sqlite_table_exists(db_path, "evidence"):
         return {
             "query": query,
@@ -243,7 +275,11 @@ def query_evidence(
             "graph": {"queryId": "", "nodes": [], "edges": [], "source": "sqlite"},
             "empty": True,
             "empty_state": f"No evidence matched query: {query}",
-            "filters": {"ip_block": ip_block, "asic_or_generation": asic_or_generation},
+            "filters": {
+                "ip_block": ip_block,
+                "asic_or_generation": asic_or_generation,
+                "source_types": sorted(source_type_filter),
+            },
             "source": "sqlite",
         }
     store = AsipStore.connect(str(db_path))
@@ -260,19 +296,32 @@ def query_evidence(
     vector_chunk_scores: Dict[int, float] = {}
     if query.strip():
         try:
-            for match in store.search_vector(_deterministic_embedding(query), limit=limit):
+            for match in store.search_vector(_deterministic_embedding(query), limit=vector_limit):
                 vector_score = float(match.get("score") or 0)
                 if vector_score >= 0.75:
                     vector_chunk_scores[int(match["chunk_id"])] = vector_score
         except Exception:
             vector_chunk_scores = {}
 
-    candidates = store.all_evidence()
+    candidates = (
+        store.find_evidence_candidates(
+            tokens,
+            fts_chunk_ids | set(vector_chunk_scores),
+            limit=max(result_limit * candidate_multiplier, candidate_floor),
+            max_query_tokens=max_query_tokens,
+        )
+        if tokens
+        else store.all_evidence()
+    )
     rows: List[Dict[str, Any]] = []
     for row in candidates:
+        if not is_graph_entity_endpoint(str(row.get("symbol") or "")):
+            continue
         if ip_filter and str(row.get("ip_block") or "").lower() != ip_filter:
             continue
         if asic_filter and str(row.get("asic_or_generation") or "").lower() != asic_filter:
+            continue
+        if source_type_filter and str(row.get("source_type") or "").lower() not in source_type_filter:
             continue
         score = _evidence_score(row, tokens, fts_chunk_ids)
         chunk_id = int(row.get("chunk_id") or 0)
@@ -297,18 +346,34 @@ def query_evidence(
         rows.append(result)
 
     rows.sort(key=lambda item: (-float(item["rank_score"]), str(item["symbol"]), int(item["id"])))
-    rows = _select_diverse_rows(_dedupe_rows(rows), limit)
+    rows = _select_diverse_rows(_dedupe_rows(rows), result_limit)
     graph = graph_for_rows(rows, db_path)
     return {
         "query": query,
-        "queryId": next((row.get("query_id", "") for row in rows if row.get("query_id")), "") if rows else "",
+        "queryId": _query_id_for_results(query, rows),
         "rows": rows,
         "graph": graph,
         "empty": not rows,
         "empty_state": f"No evidence matched query: {query}" if not rows else "",
-        "filters": {"ip_block": ip_block, "asic_or_generation": asic_or_generation},
+        "filters": {
+            "ip_block": ip_block,
+            "asic_or_generation": asic_or_generation,
+            "source_types": sorted(source_type_filter),
+        },
         "source": "sqlite",
     }
+
+
+def _query_id_for_results(query: str, rows: Iterable[Mapping[str, Any]]) -> str:
+    row_list = list(rows)
+    explicit = next((str(row.get("query_id") or "") for row in row_list if row.get("query_id")), "")
+    if explicit:
+        return explicit
+    if not row_list:
+        return ""
+    corpus_id = str(row_list[0].get("corpus_id") or "query").strip() or "query"
+    query_slug = re.sub(r"[^a-z0-9]+", "_", query.lower()).strip("_")
+    return f"{corpus_id}_{query_slug}" if query_slug else corpus_id
 
 
 def get_evidence_detail(db_path: Path, evidence_id: int) -> Dict[str, Any]:
@@ -337,6 +402,16 @@ def explain_entity(db_path: Path, symbol: str) -> Dict[str, Any]:
 
 
 def expand_query_graph(db_path: Path, symbol: str, hops: int = 1) -> Dict[str, Any]:
+    if not is_graph_entity_endpoint(symbol):
+        return {
+            "queryId": symbol,
+            "nodes": [],
+            "edges": [],
+            "source": "networkx",
+            "graph_runtime": "networkx",
+            "empty_state": f"{symbol} is a resolver operator, not a graph entity",
+        }
+    graph_seed = _canonical_graph_seed_symbol(symbol)
     if not _sqlite_table_exists(db_path, "edges"):
         return {
             "queryId": symbol,
@@ -346,17 +421,39 @@ def expand_query_graph(db_path: Path, symbol: str, hops: int = 1) -> Dict[str, A
             "graph_runtime": "networkx",
         }
     store = AsipStore.connect(str(db_path))
-    graph = store.expand_graph_networkx(symbol, hops=hops)
+    graph = store.expand_graph_networkx(graph_seed, hops=hops)
     return {
         "queryId": symbol,
-        "nodes": [_node_with_kind(node["id"]) for node in graph["nodes"]],
+        "nodes": [_graph_node_payload(node) for node in graph["nodes"]],
         "edges": [_edge_with_weight(edge) for edge in graph["edges"]],
         "source": "networkx",
         "graph_runtime": graph["graph_runtime"],
     }
 
 
-def global_graph(db_path: Path, limit: int = 100) -> Dict[str, Any]:
+def _canonical_graph_seed_symbol(symbol: str) -> str:
+    cleaned = symbol.strip()
+    for prefix in ("reg", "mm", "smn"):
+        if cleaned.startswith(prefix) and len(cleaned) > len(prefix) and cleaned[len(prefix)].isupper():
+            return cleaned[len(prefix) :]
+    return cleaned
+
+
+def global_graph(
+    db_path: Path,
+    limit: Optional[int] = None,
+    include_evidence_derived: bool = False,
+    evidence_row_cap: Optional[int] = None,
+    all_edges: bool = False,
+) -> Dict[str, Any]:
+    limits = load_workbench_limits()
+    edge_limit = None if all_edges else (limit if limit is not None else limits.int_value("graph", "edge_budget", minimum=1))
+    effective_evidence_cap = (
+        evidence_row_cap
+        if evidence_row_cap is not None
+        else limits.int_value("graph", "evidence_row_cap", minimum=0)
+    )
+    cooccurrence_limit = limits.int_value("graph", "cooccurrence_symbol_limit", minimum=0)
     if not _sqlite_table_exists(db_path, "edges"):
         return {
             "queryId": "global",
@@ -366,17 +463,15 @@ def global_graph(db_path: Path, limit: int = 100) -> Dict[str, Any]:
             "graph_runtime": "networkx",
         }
     store = AsipStore.connect(str(db_path))
-    graph = store.global_graph_networkx(limit=limit)
+    graph = store.global_graph_networkx(
+        limit=edge_limit,
+        include_evidence_derived=include_evidence_derived,
+        evidence_row_cap=effective_evidence_cap,
+        cooccurrence_symbol_limit=cooccurrence_limit,
+    )
     return {
         "queryId": "global",
-        "nodes": [
-            {
-                **_node_with_kind(str(node["id"])),
-                **({"kind": str(node["kind"])} if node.get("kind") else {}),
-                "weight": node.get("weight", 1),
-            }
-            for node in graph["nodes"]
-        ],
+        "nodes": [_graph_node_payload(node) for node in graph["nodes"]],
         "edges": [_edge_with_weight(edge) for edge in graph["edges"]],
         "source": "networkx",
         "graph_runtime": graph["graph_runtime"],
@@ -386,11 +481,38 @@ def global_graph(db_path: Path, limit: int = 100) -> Dict[str, Any]:
 def graph_for_rows(rows: List[Dict[str, Any]], db_path: Path) -> Dict[str, Any]:
     if not rows:
         return {"queryId": "", "nodes": [], "edges": [], "source": "sqlite"}
+    limits = load_workbench_limits()
+    query_seed_limit = limits.int_value("graph", "query_seed_limit", minimum=1)
+    if query_seed_limit is None:
+        raise ValueError(f"graph.querySeedLimit is missing from {limits.path}")
+    node_by_id: Dict[str, Dict[str, Any]] = {}
+    edge_by_key: Dict[tuple[str, str, str], Dict[str, Any]] = {}
+    seeds: List[str] = []
     for row in rows:
-        graph = expand_query_graph(db_path, str(row["symbol"]), hops=1)
-        if graph["edges"]:
-            return graph
-    return expand_query_graph(db_path, str(rows[0]["symbol"]), hops=1)
+        symbol = str(row["symbol"])
+        if symbol in seeds:
+            continue
+        seeds.append(symbol)
+        graph = expand_query_graph(db_path, symbol, hops=1)
+        for node in graph["nodes"]:
+            node_by_id.setdefault(str(node["id"]), node)
+        for edge in graph["edges"]:
+            key = (str(edge["src"]), str(edge["relation"]), str(edge["dst"]))
+            edge_by_key.setdefault(key, edge)
+        if len(seeds) >= query_seed_limit and edge_by_key:
+            break
+    if not edge_by_key:
+        return expand_query_graph(db_path, str(rows[0]["symbol"]), hops=1)
+    return {
+        "queryId": ", ".join(seeds),
+        "nodes": sorted(node_by_id.values(), key=lambda node: str(node["id"])),
+        "edges": sorted(
+            edge_by_key.values(),
+            key=lambda edge: (-float(edge.get("weight") or edge.get("confidence") or 0), str(edge["src"]), str(edge["dst"])),
+        ),
+        "source": "networkx",
+        "graph_runtime": "networkx",
+    }
 
 
 def list_indexed_corpora(db_path: Path, config_path: Optional[Path] = None) -> List[Dict[str, Any]]:
@@ -553,6 +675,15 @@ def index_registered_corpora(
                     _index_chunk_embedding(store, indexed, provider_settings, embedding_transport=embedding_transport)
                     evidence_count += _index_chunk_evidence(store, indexed, [], resolver_profiles)
                     edge_count += _index_chunk_edges(store, indexed, [])
+                if source_type == "code":
+                    edge_count += _index_deterministic_code_graph_edges(
+                        store,
+                        file_path,
+                        source_root,
+                        resolver_profiles,
+                        corpus_id=corpus_id,
+                        repo=str(corpus["repo"]),
+                    )
             store.upsert_corpus(
                 corpus_id=corpus_id,
                 repo=str(corpus["repo"]),
@@ -596,14 +727,93 @@ def load_provider_settings(db_path: Path) -> Dict[str, object]:
     return store.load_provider_settings()
 
 
+def rebuild_deterministic_graph(
+    db_path: Path,
+    corpus_ids: Optional[Iterable[str]] = None,
+) -> Dict[str, Any]:
+    """Rebuild Stage 1 deterministic graph edges from registered corpus source roots."""
+
+    if not _sqlite_table_exists(db_path, "corpora"):
+        raise ValueError("no registered corpora found")
+    store = AsipStore.connect(str(db_path))
+    store.migrate()
+    corpora = store.list_corpora()
+    selected_ids = list(corpus_ids or [str(corpus["id"]) for corpus in corpora if str(corpus.get("status") or "") == "indexed"])
+    known_ids = {str(corpus["id"]) for corpus in corpora}
+    unknown_ids = [corpus_id for corpus_id in selected_ids if corpus_id not in known_ids]
+    if unknown_ids:
+        raise ValueError(f"unknown corpus id(s): {', '.join(unknown_ids)}")
+    selected = [corpus for corpus in corpora if str(corpus["id"]) in selected_ids]
+    if not selected:
+        raise ValueError("no corpora selected for deterministic graph rebuild")
+
+    job_id = store.start_job(
+        "graph_rebuild",
+        f"Rebuilding deterministic graph for {', '.join(selected_ids)}",
+        metadata={"corpus_ids": selected_ids, "stage": "deterministic"},
+    )
+    file_count = 0
+    edge_count = 0
+    try:
+        if corpus_ids is None:
+            store.con.execute("delete from edges where stage = 'deterministic'")
+        else:
+            placeholders = ", ".join("?" for _ in selected_ids)
+            store.con.execute(
+                f"""
+                delete from edges
+                where stage = 'deterministic'
+                  and json_extract(provenance_json, '$.corpus_id') in ({placeholders})
+                """,
+                selected_ids,
+            )
+        store.con.commit()
+        resolver_profiles = _resolver_profiles_from_store(store)
+        for corpus in selected:
+            corpus_id = str(corpus["id"])
+            source_root = Path(str(corpus["source_root"])).expanduser()
+            include = [str(item) for item in corpus["include"]]
+            if not source_root.exists():
+                raise FileNotFoundError(f"source root not found: {source_root}")
+            for file_path in _iter_source_files(source_root, include):
+                if _source_type_for_path(file_path) != "code":
+                    continue
+                file_count += 1
+                edge_count += _index_deterministic_code_graph_edges(
+                    store,
+                    file_path,
+                    source_root,
+                    resolver_profiles,
+                    corpus_id=corpus_id,
+                    repo=str(corpus["repo"]),
+                )
+        store.finish_job(job_id, "rebuilt", f"Rebuilt {edge_count} deterministic graph edges from {file_count} files")
+    except Exception as exc:
+        store.finish_job(job_id, "failed", str(exc))
+        raise
+    return {
+        "source": "deterministic_graph_rebuild",
+        "db_path": str(db_path),
+        "corpus_ids": selected_ids,
+        "files": file_count,
+        "edges": edge_count,
+        "job_id": job_id,
+    }
+
+
 def backfill_provider_embeddings(
     db_path: Path,
-    limit: int = 0,
-    batch_size: int = 64,
+    limit: Optional[int] = None,
+    batch_size: Optional[int] = None,
     embedding_transport: Optional[EmbeddingTransport] = None,
 ) -> Dict[str, Any]:
     """Generate provider embeddings for already indexed chunks using current settings."""
 
+    limits = load_workbench_limits()
+    effective_limit = limit if limit is not None else limits.int_value("embedding", "backfill_limit", minimum=0)
+    effective_batch_size = batch_size if batch_size is not None else limits.int_value("embedding", "batch_size", minimum=1)
+    if effective_limit is None or effective_batch_size is None:
+        raise ValueError(f"embedding limits are missing from {limits.path}")
     db_path.parent.mkdir(parents=True, exist_ok=True)
     store = AsipStore.connect(str(db_path))
     store.migrate()
@@ -611,15 +821,15 @@ def backfill_provider_embeddings(
     config = _embedding_provider_config(provider_settings)
     if config is None:
         raise ValueError("embedding provider settings are missing")
-    batch_size = max(1, batch_size)
+    batch_size = max(1, effective_batch_size)
     job_id = store.start_job(
         "embedding_backfill",
         f"Backfilling provider embeddings with {config.provider}:{config.model}",
-        metadata={"provider_settings": provider_settings, "limit": limit, "batch_size": batch_size},
+        metadata={"provider_settings": provider_settings, "limit": effective_limit, "batch_size": batch_size},
     )
     embedded_chunks = 0
     try:
-        rows = _chunks_missing_provider_embedding(store, config.provider, config.model, limit=limit)
+        rows = _chunks_missing_provider_embedding(store, config.provider, config.model, limit=effective_limit)
         provider = create_embedding_provider(config)
         if embedding_transport is not None and hasattr(provider, "transport"):
             provider.transport = embedding_transport
@@ -654,11 +864,15 @@ def backfill_provider_embeddings(
 def generate_semantic_edges_for_query(
     db_path: Path,
     query: str,
-    limit: int = 8,
+    limit: Optional[int] = None,
     edge_provider: Optional[EdgeProvider] = None,
 ) -> Dict[str, Any]:
     """Generate semantic edges from indexed evidence rows and persist them to the graph store."""
 
+    limits = load_workbench_limits()
+    query_limit = limit if limit is not None else limits.int_value("semantic", "query_limit", minimum=1)
+    if query_limit is None:
+        raise ValueError(f"semantic.queryLimit is missing from {limits.path}")
     db_path.parent.mkdir(parents=True, exist_ok=True)
     store = AsipStore.connect(str(db_path))
     store.migrate()
@@ -675,32 +889,24 @@ def generate_semantic_edges_for_query(
         },
     )
     try:
-        evidence = query_evidence(db_path, query, limit=limit)
+        evidence = query_evidence(db_path, query, limit=query_limit)
         rows = list(evidence.get("rows", []))
         if not rows:
             raise ValueError(f"no evidence rows matched query: {query}")
         prompt = _semantic_edge_prompt(query, rows)
         provider = edge_provider or create_edge_provider(config)
         generated = normalize_generated_cases(provider.generate(prompt, config))
-        edge_count = 0
-        for case in generated.get("cases", []):
-            if not isinstance(case, Mapping):
-                continue
-            for edge in case.get("edges", []):
-                if not isinstance(edge, Mapping):
-                    continue
-                src = str(edge.get("src") or "").strip()
-                dst = str(edge.get("dst") or "").strip()
-                relation = str(edge.get("relation") or "mentions").strip()
-                if not src or not dst:
-                    continue
-                store.add_edge(
-                    src=src,
-                    dst=dst,
-                    relation=relation,
-                    confidence=float(edge.get("confidence") or 0.5),
-                )
-                edge_count += 1
+        edge_count = _persist_generated_edges(
+            store,
+            generated,
+            provenance={
+                "provider": config.provider,
+                "model": config.preferred,
+                "job_id": job_id,
+                "mode": "query",
+                "query": query,
+            },
+        )
         if edge_count <= 0:
             raise ValueError("semantic edge provider returned no persistable edges")
         store.finish_job(job_id, "generated", f"Generated {edge_count} semantic edges")
@@ -716,18 +922,27 @@ def generate_semantic_edges_for_query(
         "evidence_rows": len(rows),
         "edge_count": edge_count,
         "job_id": job_id,
-        "graph": graph_for_rows(rows, db_path),
+        "graph": global_graph(db_path, limit=limits.int_value("semantic", "post_batch_graph_edge_budget", minimum=1)),
     }
 
 
 def generate_semantic_edges_batch(
     db_path: Path,
-    limit: int = 24,
-    batch_size: int = 6,
+    limit: Optional[int] = None,
+    batch_size: Optional[int] = None,
     edge_provider: Optional[EdgeProvider] = None,
+    include_evidence_derived: bool = False,
+    evidence_row_cap: Optional[int] = None,
 ) -> Dict[str, Any]:
     """Generate semantic edges from indexed corpus candidates and persist them."""
 
+    limits = load_workbench_limits()
+    configured_candidate_limit = limits.int_value("semantic", "batch_candidate_limit", minimum=1)
+    configured_batch_size = limits.int_value("semantic", "batch_size", minimum=1)
+    configured_overfetch_multiplier = limits.int_value("semantic", "candidate_overfetch_multiplier", minimum=1)
+    post_batch_graph_limit = limits.int_value("semantic", "post_batch_graph_edge_budget", minimum=1)
+    if configured_candidate_limit is None or configured_batch_size is None or configured_overfetch_multiplier is None:
+        raise ValueError(f"semantic batch limits are missing from {limits.path}")
     db_path.parent.mkdir(parents=True, exist_ok=True)
     store = AsipStore.connect(str(db_path))
     store.migrate()
@@ -735,9 +950,13 @@ def generate_semantic_edges_batch(
     config = _edge_provider_config(provider_settings)
     if config is None:
         raise ValueError("edge provider settings are missing")
-    candidate_limit = max(1, int(limit))
-    batch_size = max(1, int(batch_size))
-    candidates = _semantic_edge_batch_candidates(store, limit=candidate_limit)
+    candidate_limit = max(1, int(limit if limit is not None else configured_candidate_limit))
+    batch_size = max(1, int(batch_size if batch_size is not None else configured_batch_size))
+    candidates = _semantic_edge_batch_candidates(
+        store,
+        limit=candidate_limit,
+        overfetch_multiplier=configured_overfetch_multiplier,
+    )
     if not candidates:
         raise ValueError("no indexed semantic edge candidates found")
     job_id = store.start_job(
@@ -747,6 +966,7 @@ def generate_semantic_edges_batch(
             "mode": "batch",
             "candidate_count": len(candidates),
             "batch_size": batch_size,
+            "candidate_overfetch_multiplier": configured_overfetch_multiplier,
             "provider_settings": provider_settings,
         },
     )
@@ -757,11 +977,23 @@ def generate_semantic_edges_batch(
             batch = candidates[start : start + batch_size]
             prompt = _semantic_edge_batch_prompt(batch)
             generated = normalize_generated_cases(provider.generate(prompt, config))
-            edge_count += _persist_generated_edges(store, generated)
+            edge_count += _persist_generated_edges(
+                store,
+                generated,
+                provenance={
+                    "provider": config.provider,
+                    "model": config.preferred,
+                    "job_id": job_id,
+                    "mode": "batch",
+                },
+                commit=False,
+            )
         if edge_count <= 0:
             raise ValueError("semantic edge provider returned no persistable edges")
+        store.con.commit()
         store.finish_job(job_id, "generated", f"Generated {edge_count} semantic edges from {len(candidates)} candidates")
     except Exception as exc:
+        store.con.rollback()
         store.finish_job(job_id, "failed", str(exc))
         raise
     return {
@@ -770,10 +1002,96 @@ def generate_semantic_edges_batch(
         "provider": config.provider,
         "model": config.preferred,
         "candidate_count": len(candidates),
+        "candidate_overfetch_multiplier": configured_overfetch_multiplier,
         "batch_size": batch_size,
         "edge_count": edge_count,
         "job_id": job_id,
-        "graph": global_graph(db_path, limit=400),
+        "graph": global_graph(
+            db_path,
+            limit=post_batch_graph_limit,
+            include_evidence_derived=include_evidence_derived,
+            evidence_row_cap=evidence_row_cap,
+        ),
+    }
+
+
+def generate_doc_nodes_batch(
+    db_path: Path,
+    limit: Optional[int] = None,
+    batch_size: Optional[int] = None,
+    edge_provider: Optional[EdgeProvider] = None,
+) -> Dict[str, Any]:
+    """Use the configured LLM provider to extract BoxMatrix-style doc nodes."""
+
+    limits = load_workbench_limits()
+    configured_candidate_limit = limits.int_value("semantic", "batch_candidate_limit", minimum=1)
+    configured_batch_size = limits.int_value("semantic", "batch_size", minimum=1)
+    post_batch_graph_limit = limits.int_value("semantic", "post_batch_graph_edge_budget", minimum=1)
+    if configured_candidate_limit is None or configured_batch_size is None:
+        raise ValueError(f"semantic batch limits are missing from {limits.path}")
+    db_path.parent.mkdir(parents=True, exist_ok=True)
+    store = AsipStore.connect(str(db_path))
+    store.migrate()
+    provider_settings = load_provider_settings(db_path)
+    config = _edge_provider_config(provider_settings)
+    if config is None:
+        raise ValueError("edge provider settings are missing")
+    candidate_limit = max(1, int(limit if limit is not None else configured_candidate_limit))
+    batch_size = max(1, int(batch_size if batch_size is not None else configured_batch_size))
+    candidates = _doc_node_candidates(store, limit=candidate_limit)
+    if not candidates:
+        raise ValueError("no indexed document candidates found")
+    candidate_by_id = {str(candidate["id"]): candidate for candidate in candidates}
+    job_id = store.start_job(
+        "doc_nodes_batch",
+        f"Extracting doc boxes from {len(candidates)} document candidates",
+        metadata={
+            "mode": "doc_nodes_batch",
+            "candidate_count": len(candidates),
+            "batch_size": batch_size,
+            "provider_settings": provider_settings,
+        },
+    )
+    provider = edge_provider or create_edge_provider(config)
+    box_count = 0
+    edge_count = 0
+    try:
+        for start in range(0, len(candidates), batch_size):
+            batch = candidates[start : start + batch_size]
+            prompt = _doc_node_batch_prompt(batch)
+            generated = provider.generate(prompt, config)
+            persisted = _persist_doc_nodes(
+                store,
+                generated,
+                candidate_by_id,
+                provenance={
+                    "provider": config.provider,
+                    "model": config.preferred,
+                    "job_id": job_id,
+                    "mode": "doc_nodes_batch",
+                },
+            )
+            box_count += persisted["boxes"]
+            edge_count += persisted["edges"]
+        if box_count <= 0 or edge_count <= 0:
+            raise ValueError("doc node provider returned no persistable boxes")
+        store.con.commit()
+        store.finish_job(job_id, "generated", f"Generated {box_count} doc boxes from {len(candidates)} candidates")
+    except Exception as exc:
+        store.con.rollback()
+        store.finish_job(job_id, "failed", str(exc))
+        raise
+    return {
+        "source": "doc_node_batch_job",
+        "db_path": str(db_path),
+        "provider": config.provider,
+        "model": config.preferred,
+        "candidate_count": len(candidates),
+        "batch_size": batch_size,
+        "box_count": box_count,
+        "edge_count": edge_count,
+        "job_id": job_id,
+        "graph": global_graph(db_path, limit=post_batch_graph_limit),
     }
 
 
@@ -795,11 +1113,19 @@ def add_resolver_profile(
     db_path.parent.mkdir(parents=True, exist_ok=True)
     store = AsipStore.connect(str(db_path))
     store.migrate()
-    wrapper_list = list(wrappers) or list(config_profile.wrappers) or list(config_profile.python_extractors)
-    store.upsert_resolver_profile(profile_id, language, wrapper_list, strategy, str(path), enabled)
+    wrapper_list = list(config_profile.wrappers) or list(config_profile.python_extractors) or list(wrappers)
+    store.upsert_resolver_profile(
+        profile_id,
+        config_profile.language or language,
+        wrapper_list,
+        strategy,
+        str(path),
+        enabled,
+        config=resolver_profile_to_config(config_profile),
+    )
     return {
         "id": profile_id,
-        "language": language,
+        "language": config_profile.language or language,
         "wrappers": wrapper_list,
         "strategy": strategy,
         "path": path,
@@ -828,15 +1154,18 @@ def validate_resolver_profile(db_path: Path, profile_id: str, source: str) -> Di
     profile_data = store.get_resolver_profile(profile_id)
     language = str(profile_data["language"])
     wrappers = [str(wrapper) for wrapper in profile_data["wrappers"]]
-    profile = ResolverProfile(
-        id=str(profile_data["id"]),
-        language=language,
-        wrappers={wrapper: WrapperRule(symbol_arg=0, access=str(profile_data["strategy"])) for wrapper in wrappers},
-        python_extractors=wrappers if language == "python" else [],
+    profile = resolver_profile_from_config(
+        profile_data.get("config", {}),
+        fallback_id=str(profile_data["id"]),
+        fallback_language=language,
+        fallback_wrappers=wrappers,
+        fallback_strategy=str(profile_data["strategy"]),
     )
-    resolved = resolve_python_symbol(source, profile) if language == "python" else resolve_cpp_register_call(source, profile)
+    resolved_items = (
+        [resolved] if (resolved := resolve_python_symbol(source, profile)) else []
+    ) if language == "python" else resolve_cpp_register_calls(source, profile)
     symbols = []
-    if resolved:
+    for resolved in resolved_items:
         symbols.append(
             {
                 "profile_id": resolved.profile_id,
@@ -935,7 +1264,10 @@ def _index_chunk_evidence(
             ip_block=_ip_block_for_symbol(symbol, chunk.path),
             asic_or_generation=_asic_for_path(chunk.path),
             query_id=query_id,
+            commit=False,
         )
+    if count:
+        store.con.commit()
     return count
 
 
@@ -1004,6 +1336,17 @@ def _edge_provider_config(provider_settings: Mapping[str, Any]) -> Optional[Edge
     headers = edge.get("extra_headers")
     if not isinstance(headers, Mapping):
         headers = {}
+    options = edge.get("options")
+    if not isinstance(options, Mapping):
+        options = {}
+
+    def option_value(name: str, default: object) -> object:
+        if name in edge and edge.get(name) not in (None, ""):
+            return edge.get(name)
+        if name in options and options.get(name) not in (None, ""):
+            return options.get(name)
+        return default
+
     return EdgeModelConfig(
         preferred=model,
         fallback=str(edge.get("fallback_model") or edge.get("fallback") or ""),
@@ -1012,9 +1355,9 @@ def _edge_provider_config(provider_settings: Mapping[str, Any]) -> Optional[Edge
         api_path=str(edge.get("api_path") or ""),
         extra_headers={str(key): str(value) for key, value in dict(headers).items()},
         format=str(edge.get("format") or "json"),
-        num_ctx=int(edge.get("num_ctx") or 2048),
-        num_predict=int(edge.get("num_predict") or 256),
-        temperature=float(edge.get("temperature") or 0),
+        num_ctx=int(option_value("num_ctx", 2048)),
+        num_predict=int(option_value("num_predict", 256)),
+        temperature=float(option_value("temperature", 0)),
         keep_alive=str(edge.get("keep_alive") or "0s"),
         think=bool(edge.get("think", False)),
         timeout_seconds=int(edge.get("timeout_seconds") or 60),
@@ -1025,7 +1368,7 @@ def _chunks_missing_provider_embedding(
     store: AsipStore,
     provider: str,
     model: str,
-    limit: int = 0,
+    limit: Optional[int] = None,
 ) -> List[Dict[str, Any]]:
     sql = """
         select chunks.id, chunks.text
@@ -1068,7 +1411,12 @@ def _semantic_edge_prompt(query: str, rows: Iterable[Mapping[str, Any]]) -> str:
     )
 
 
-def _semantic_edge_batch_candidates(store: AsipStore, limit: int) -> List[Dict[str, Any]]:
+def _semantic_edge_batch_candidates(
+    store: AsipStore,
+    limit: int,
+    overfetch_multiplier: int = 1,
+) -> List[Dict[str, Any]]:
+    row_limit = max(1, int(limit)) * max(1, int(overfetch_multiplier))
     rows = store.con.execute(
         """
         select
@@ -1089,7 +1437,7 @@ def _semantic_edge_batch_candidates(store: AsipStore, limit: int) -> List[Dict[s
         order by evidence.confidence desc, evidence.id asc
         limit ?
         """,
-        (max(1, int(limit)) * 8,),
+        (row_limit,),
     ).fetchall()
     candidates: Dict[str, Dict[str, Any]] = {}
     for row in rows:
@@ -1147,7 +1495,185 @@ def _semantic_edge_batch_prompt(candidates: Iterable[Mapping[str, Any]]) -> str:
     return "\n".join(lines)
 
 
-def _persist_generated_edges(store: AsipStore, generated: Mapping[str, Any]) -> int:
+def _doc_node_candidates(store: AsipStore, limit: int) -> List[Dict[str, Any]]:
+    rows = store.con.execute(
+        """
+        select
+          chunks.id as chunk_id,
+          documents.source_type,
+          documents.path,
+          chunks.line_start,
+          chunks.line_end,
+          chunks.page,
+          chunks.text as chunk_text
+        from chunks
+        join documents on documents.id = chunks.document_id
+        where documents.source_type in ('doc', 'pdf')
+        order by chunks.id asc
+        limit ?
+        """,
+        (max(1, int(limit)),),
+    ).fetchall()
+    candidates = []
+    for row in rows:
+        candidate = {
+            "chunk_id": row["chunk_id"],
+            "source_type": str(row["source_type"] or ""),
+            "path": str(row["path"] or ""),
+            "line_start": row["line_start"],
+            "line_end": row["line_end"],
+            "page": row["page"],
+            "chunk_text": str(row["chunk_text"] or ""),
+        }
+        candidate["id"] = _semantic_edge_candidate_id(candidate)
+        candidates.append(candidate)
+    return candidates
+
+
+def _doc_node_batch_prompt(candidates: Iterable[Mapping[str, Any]]) -> str:
+    lines = [
+        "Use an LLM call to extract ASIP document graph nodes. Do not use a skill.",
+        "Follow the BoxMatrix idea: a Box is a self-contained concept, requirement, register behavior, workflow, or constraint; the Matrix is the relationship network between boxes and indexed hardware symbols.",
+        "Return only JSON with documents, boxes, and relationships.",
+        "Schema: {\"documents\":[{\"id\":string,\"boxes\":[{\"id\":string,\"name\":string,\"summary\":string,\"inputs\":[string],\"outputs\":[string],\"constraints\":[string],\"confidence\":number,\"evidence\":string}],\"relationships\":[{\"src\":string,\"relation\":string,\"dst\":string,\"confidence\":number,\"evidence\":string}]}]}",
+        "Relationship src/dst may use a box id from the same document or an exact code/register/field symbol found in text.",
+    ]
+    for candidate in candidates:
+        candidate_id = str(candidate.get("id") or "document")
+        source = _semantic_edge_candidate_source(candidate)
+        lines.extend([f"DOCUMENT {candidate_id}", f"SOURCE: {source}", "TEXT:"])
+        text = str(candidate.get("chunk_text") or "").strip()
+        lines.append(text[:2400])
+    return "\n".join(lines)
+
+
+def _persist_doc_nodes(
+    store: AsipStore,
+    generated: Mapping[str, Any],
+    candidates_by_id: Mapping[str, Mapping[str, Any]],
+    provenance: Mapping[str, object],
+) -> Dict[str, int]:
+    box_count = 0
+    edge_count = 0
+    for document in generated.get("documents", []):
+        if not isinstance(document, Mapping):
+            continue
+        document_id = str(document.get("id") or "").strip()
+        if document_id not in candidates_by_id:
+            continue
+        candidate = candidates_by_id[document_id]
+        local_boxes: Dict[str, str] = {}
+        for box in document.get("boxes", []):
+            if not isinstance(box, Mapping):
+                continue
+            box_node_id = _doc_box_node_id(candidate, box)
+            if not box_node_id or not is_graph_entity_endpoint(box_node_id):
+                continue
+            local_id = str(box.get("id") or box.get("name") or "").strip()
+            if local_id:
+                local_boxes[local_id] = box_node_id
+            confidence = float(box.get("confidence") or 0.82)
+            edge_id = store.add_edge(
+                src=document_id,
+                dst=box_node_id,
+                relation="contains_box",
+                confidence=confidence,
+                stage="semantic",
+                source=str(provenance.get("provider") or "llm"),
+                path=str(candidate.get("path") or ""),
+                line_start=_optional_int(candidate.get("line_start")),
+                line_end=_optional_int(candidate.get("line_end")),
+                provenance={
+                    **dict(provenance),
+                    "extractor": "doc_nodes",
+                    "candidate_id": document_id,
+                    "box_node_id": box_node_id,
+                    "box_id": local_id,
+                    "box_name": str(box.get("name") or local_id),
+                    "summary": str(box.get("summary") or ""),
+                    "inputs": list(box.get("inputs") or []),
+                    "outputs": list(box.get("outputs") or []),
+                    "constraints": list(box.get("constraints") or []),
+                    "evidence": str(box.get("evidence") or ""),
+                },
+                commit=False,
+            )
+            if edge_id:
+                box_count += 1
+                edge_count += 1
+        for relationship in document.get("relationships", []):
+            if not isinstance(relationship, Mapping):
+                continue
+            src = _resolve_doc_node_endpoint(str(relationship.get("src") or ""), local_boxes)
+            dst = _resolve_doc_node_endpoint(str(relationship.get("dst") or ""), local_boxes)
+            if not src or not dst or src == dst:
+                continue
+            if not is_graph_entity_endpoint(src) or not is_graph_entity_endpoint(dst):
+                continue
+            box_node_id = src if src in local_boxes.values() else dst if dst in local_boxes.values() else ""
+            edge_id = store.add_edge(
+                src=src,
+                dst=dst,
+                relation=str(relationship.get("relation") or "relates_to"),
+                confidence=float(relationship.get("confidence") or 0.76),
+                stage="semantic",
+                source=str(provenance.get("provider") or "llm"),
+                path=str(candidate.get("path") or ""),
+                line_start=_optional_int(candidate.get("line_start")),
+                line_end=_optional_int(candidate.get("line_end")),
+                provenance={
+                    **dict(provenance),
+                    "extractor": "doc_nodes",
+                    "candidate_id": document_id,
+                    "box_node_id": box_node_id,
+                    "box_id": _local_box_id_for_node(local_boxes, box_node_id),
+                    "box_name": _box_name_from_node_id(box_node_id),
+                    "evidence": str(relationship.get("evidence") or ""),
+                },
+                commit=False,
+            )
+            if edge_id:
+                edge_count += 1
+    return {"boxes": box_count, "edges": edge_count}
+
+
+def _doc_box_node_id(candidate: Mapping[str, Any], box: Mapping[str, Any]) -> str:
+    path = str(candidate.get("path") or "").strip()
+    if not path:
+        return ""
+    name = str(box.get("id") or box.get("name") or "box")
+    return f"{path}#box-{_slug_for_semantic_candidate(name)}"
+
+
+def _resolve_doc_node_endpoint(value: str, local_boxes: Mapping[str, str]) -> str:
+    endpoint = value.strip()
+    return local_boxes.get(endpoint, endpoint)
+
+
+def _local_box_id_for_node(local_boxes: Mapping[str, str], node_id: str) -> str:
+    for local_id, mapped_node_id in local_boxes.items():
+        if mapped_node_id == node_id:
+            return local_id
+    return ""
+
+
+def _box_name_from_node_id(node_id: str) -> str:
+    anchor = node_id.partition("#")[2]
+    if anchor.startswith("box-"):
+        return anchor.removeprefix("box-").replace("-", " ").strip()
+    return ""
+
+
+def _optional_int(value: Any) -> Optional[int]:
+    return int(value) if value not in (None, "") else None
+
+
+def _persist_generated_edges(
+    store: AsipStore,
+    generated: Mapping[str, Any],
+    provenance: Optional[Mapping[str, object]] = None,
+    commit: bool = True,
+) -> int:
     edge_count = 0
     for case in generated.get("cases", []):
         if not isinstance(case, Mapping):
@@ -1160,13 +1686,27 @@ def _persist_generated_edges(store: AsipStore, generated: Mapping[str, Any]) -> 
             relation = str(edge.get("relation") or "mentions").strip()
             if not src or not dst:
                 continue
+            if src == dst:
+                continue
+            if not is_graph_entity_endpoint(src) or not is_graph_entity_endpoint(dst):
+                continue
             store.add_edge(
                 src=src,
                 dst=dst,
                 relation=relation,
                 confidence=float(edge.get("confidence") or 0.5),
+                stage="semantic",
+                source=str((provenance or {}).get("provider") or "llm"),
+                provenance={
+                    **dict(provenance or {}),
+                    "extractor": "semantic_edges",
+                    "evidence": str(edge.get("evidence") or ""),
+                },
+                commit=False,
             )
             edge_count += 1
+    if edge_count and commit:
+        store.con.commit()
     return edge_count
 
 
@@ -1212,15 +1752,69 @@ def _slug_for_semantic_candidate(heading: str) -> str:
     return slug or "section"
 
 
+def _index_deterministic_code_graph_edges(
+    store: AsipStore,
+    file_path: Path,
+    source_root: Path,
+    resolver_profiles: Iterable[ResolverProfile],
+    corpus_id: str = "",
+    repo: str = "",
+) -> int:
+    profiles = [profile for profile in resolver_profiles if profile.language in {"c", "cpp", "c++"}]
+    if not profiles:
+        return 0
+    try:
+        graph = build_deterministic_code_graph(file_path, source_root=source_root, resolver_profiles=profiles)
+    except Exception:
+        return 0
+    count = 0
+    for edge in graph.edges:
+        store.add_edge(
+            src=edge.src,
+            dst=edge.dst,
+            relation=edge.relation,
+            confidence=edge.confidence,
+            stage=edge.stage,
+            source=edge.source,
+            path=edge.path,
+            line_start=edge.line_start,
+            line_end=edge.line_end,
+            provenance={
+                **dict(edge.provenance),
+                **({"corpus_id": corpus_id} if corpus_id else {}),
+                **({"repo": repo} if repo else {}),
+            },
+            commit=False,
+        )
+        count += 1
+    if count:
+        store.con.commit()
+    return count
+
+
 def _index_chunk_edges(store: AsipStore, chunk: IndexedChunk, queries: Iterable[Any]) -> int:
     count = 0
     for query in queries:
-        terms = [term for term in query.expected_terms if term in chunk.text]
+        terms = [term for term in query.expected_terms if term in chunk.text and is_graph_entity_endpoint(str(term))]
         if len(terms) < 2:
             continue
         for src, dst in zip(terms, terms[1:]):
-            store.add_edge(src=src, dst=dst, relation=_relation_for_terms(chunk.text, src, dst), confidence=0.9)
+            store.add_edge(
+                src=src,
+                dst=dst,
+                relation=_relation_for_terms(chunk.text, src, dst),
+                confidence=0.9,
+                stage="evidence",
+                source="query_expected_terms",
+                path=chunk.path,
+                line_start=chunk.line_start,
+                line_end=chunk.line_end,
+                provenance={"extractor": "query_expected_terms", "query_config": True},
+                commit=False,
+            )
             count += 1
+    if count:
+        store.con.commit()
     return count
 
 
@@ -1232,12 +1826,24 @@ def _iter_source_files(root: Path, include: Iterable[str]) -> Iterable[Path]:
     for path in root.rglob("*"):
         if not path.is_file() or ".git" in path.parts:
             continue
+        if _is_low_signal_source_file(path):
+            continue
         if path.suffix.lower() not in SOURCE_EXTENSIONS:
             continue
         relative = path.relative_to(root).as_posix()
         if _matches_include(relative, patterns):
             files.append(path)
     return sorted(files)
+
+
+def _is_low_signal_source_file(path: Path) -> bool:
+    normalized = path.as_posix().lower()
+    name = path.name.lower()
+    if "/ucode/" in normalized and name.endswith(".h"):
+        return True
+    if "ucode" in name and name.endswith(("_signed.h", "_signed.c")):
+        return True
+    return False
 
 
 def _matches_include(relative_path: str, include: Iterable[str]) -> bool:
@@ -1270,14 +1876,18 @@ def _evidence_symbols_for_chunk(
     found: Dict[str, tuple[str, Optional[str], Optional[str]]] = {}
     for query in queries:
         for term in query.expected_terms:
-            if term in text:
+            if term in text and is_graph_entity_endpoint(str(term)):
                 found[term] = (query.id, None, None)
     for identifier in re.findall(r"\b[A-Za-z_][A-Za-z0-9_]*(?:->[A-Za-z_][A-Za-z0-9_]*)?\b", text):
         if _is_symbol_like(identifier):
             found.setdefault(identifier, ("", None, None))
     for profile in resolver_profiles:
-        resolved = resolve_python_symbol(text, profile) if profile.language == "python" else resolve_cpp_register_call(text, profile)
-        if resolved:
+        resolved_items = (
+            [resolved] if (resolved := resolve_python_symbol(text, profile)) else []
+        ) if profile.language == "python" else resolve_cpp_register_calls(text, profile)
+        for resolved in resolved_items:
+            if not is_graph_entity_endpoint(resolved.symbol):
+                continue
             found[resolved.symbol] = (
                 "",
                 resolved.access,
@@ -1287,22 +1897,36 @@ def _evidence_symbols_for_chunk(
 
 
 def _resolver_profiles_from_store(store: AsipStore) -> List[ResolverProfile]:
-    profiles = []
+    profiles_by_id: Dict[str, ResolverProfile] = {}
+    if DEFAULT_RESOLVER_PROFILE_DIR.exists():
+        profiles_by_id.update(load_resolver_profiles(DEFAULT_RESOLVER_PROFILE_DIR))
     for row in store.list_resolver_profiles():
         if not row.get("enabled", True):
             continue
         wrappers = [str(wrapper) for wrapper in row.get("wrappers", [])]
         language = str(row.get("language") or "cpp")
         access = str(row.get("strategy") or "reference")
-        profiles.append(
-            ResolverProfile(
-                id=str(row["id"]),
-                language=language,
-                wrappers={wrapper: WrapperRule(symbol_arg=0, access=access) for wrapper in wrappers},
-                python_extractors=wrappers if language == "python" else [],
+        config = row.get("config", {})
+        config_path = _resolve_resolver_config_path(str(row.get("path") or ""))
+        if isinstance(config, Mapping) and config:
+            profile = resolver_profile_from_config(
+                config,
+                fallback_id=str(row["id"]),
+                fallback_language=language,
+                fallback_wrappers=wrappers,
+                fallback_strategy=access,
             )
+        elif config_path.exists():
+            profile = load_resolver_profile(config_path)
+        else:
+            continue
+        profiles_by_id[profile.id] = profile
+    return list(
+        sorted(
+            profiles_by_id.values(),
+            key=lambda profile: ({"linux-amdgpu": 0, "amd-mxgpu": 1}.get(profile.id, 2), profile.id),
         )
-    return profiles
+    )
 
 
 def _deterministic_embedding(text: str) -> List[float]:
@@ -1326,6 +1950,8 @@ def _has_term(text: str, terms: Iterable[str]) -> bool:
 
 
 def _is_symbol_like(identifier: str) -> bool:
+    if is_resolver_wrapper_name(identifier):
+        return False
     if identifier in {"static", "void", "uint32_t", "return", "data"}:
         return False
     return "_" in identifier or identifier.startswith(("reg", "mm")) or identifier.isupper()
@@ -1513,6 +2139,15 @@ def _node_with_kind(node_id: str) -> Dict[str, Any]:
     return {"id": node_id, "kind": _entity_type_for_symbol(node_id), "weight": 1}
 
 
+def _graph_node_payload(node: Mapping[str, Any]) -> Dict[str, Any]:
+    node_id = str(node["id"])
+    payload = {**_node_with_kind(node_id), **dict(node)}
+    payload["id"] = node_id
+    payload["kind"] = str(node.get("kind") or payload["kind"])
+    payload["weight"] = node.get("weight", 1)
+    return payload
+
+
 def _tone_for_source(source_type: str, entity_type: str) -> str:
     if source_type == "pdf":
         return "pdf"
@@ -1583,8 +2218,10 @@ def main(argv: Optional[List[str]] = None) -> int:
     graph_parser = subparsers.add_parser("graph")
     graph_parser.add_argument("--db", default=str(DEFAULT_DB))
     graph_parser.add_argument("--symbol")
-    graph_parser.add_argument("--hops", type=int, default=1)
-    graph_parser.add_argument("--limit", type=int, default=100)
+    graph_parser.add_argument("--hops", type=int)
+    graph_parser.add_argument("--limit", type=int)
+    graph_parser.add_argument("--all", action="store_true")
+    graph_parser.add_argument("--limits-config", "--budget-config", dest="limits_config", default=str(DEFAULT_WORKBENCH_LIMITS_PATH))
 
     corpora_parser = subparsers.add_parser("corpora")
     corpora_parser.add_argument("--config", default=str(DEFAULT_CONFIG))
@@ -1604,7 +2241,14 @@ def main(argv: Optional[List[str]] = None) -> int:
     elif args.command == "query":
         payload = query_evidence(Path(args.db), args.q, ip_block=args.ip_block, asic_or_generation=args.asic)
     elif args.command == "graph":
-        payload = expand_query_graph(Path(args.db), args.symbol, hops=args.hops) if args.symbol else global_graph(Path(args.db), limit=args.limit)
+        limits = load_workbench_limits(Path(args.limits_config))
+        hops = args.hops if args.hops is not None else limits.int_value("graph", "default_hops", minimum=1)
+        edge_limit = args.limit if args.limit is not None else limits.int_value("graph", "edge_budget", minimum=1)
+        payload = (
+            expand_query_graph(Path(args.db), args.symbol, hops=hops or 1)
+            if args.symbol
+            else global_graph(Path(args.db), limit=edge_limit, all_edges=args.all)
+        )
     elif args.command == "corpora":
         payload = {"corpora": list_indexed_corpora(Path(args.db), Path(args.config))}
     elif args.command == "corpus-add":

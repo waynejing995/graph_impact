@@ -17,6 +17,9 @@ const pages = [
 test.describe("visual anchor route readiness", () => {
   for (const pageCase of pages) {
     test(`${pageCase.pageId} has a real page for anchor ${pageCase.anchor}`, async ({ page }) => {
+      if (pageCase.pageId === "graph-explorer") {
+        await mockGraphRoute(page);
+      }
       await page.goto(pageCase.route);
 
       await expect(page.getByTestId("asip-workbench")).toHaveAttribute("data-page-id", pageCase.pageId);
@@ -31,6 +34,9 @@ test.describe("visual anchor route readiness", () => {
         await expect(page.getByTestId("force-graph")).toBeVisible();
         await expect(page.getByTestId("force-graph")).toHaveAttribute("role", "img");
         await expect(page.getByText("weighted connections")).toBeVisible();
+        await expect(page.getByRole("slider", { name: "Minimum edge weight" })).toBeVisible();
+        await expect(page.getByRole("slider", { name: "Visible nodes" })).toBeVisible();
+        await expect(page.getByRole("slider", { name: "Visible edges" })).toBeVisible();
         await expect(page.getByTestId("force-graph")).toContainText(/edges \d+/);
         await expectForceGraphPainted(page);
       }
@@ -48,13 +54,13 @@ test("graph route renders API-backed weighted relation graph", async ({ page }) 
         queryId: "GCVM_L2_CNTL",
         source: "sqlite",
         nodes: [
+          { id: "API_GRAPH_FUNCTION", kind: "function", weight: 4 },
           { id: "API_GRAPH_REGISTER", kind: "register", weight: 3 },
-          { id: "API_GRAPH_FIELD", kind: "field", weight: 2 },
-          { id: "API_GRAPH_PDF", kind: "pdf", weight: 1 }
+          { id: "API_GRAPH_SECTION", kind: "doc_section", weight: 1 }
         ],
         edges: [
-          { src: "API_GRAPH_REGISTER", dst: "API_GRAPH_FIELD", relation: "api_sets_field", confidence: 0.91, weight: 0.91 },
-          { src: "API_GRAPH_REGISTER", dst: "API_GRAPH_PDF", relation: "api_relates", confidence: 0.28, weight: 0.28 }
+          { src: "API_GRAPH_FUNCTION", dst: "API_GRAPH_REGISTER", relation: "sets_field", confidence: 0.91, weight: 0.91, stage: "deterministic" },
+          { src: "API_GRAPH_SECTION", dst: "API_GRAPH_REGISTER", relation: "documents", confidence: 0.28, weight: 0.28, stage: "semantic" }
         ]
       })
     });
@@ -65,8 +71,9 @@ test("graph route renders API-backed weighted relation graph", async ({ page }) 
   const forceGraph = page.getByTestId("force-graph");
   await expect(forceGraph).toContainText("API_GRAPH_REGISTER");
   expect(graphApiRequested).toBe(true);
-  await expect(forceGraph).toContainText("api_sets_field / 0.91");
-  await expect(forceGraph).toContainText("api_relates / 0.28");
+  await expect(forceGraph).toContainText("sets_field / 0.91");
+  await expect(forceGraph).toContainText("documents / 0.28");
+  await expect(page.getByTestId("global-network-graph")).toContainText("layers deterministic: 1 semantic: 1");
   await expect(forceGraph).not.toContainText("maps_base / 0.68");
   await expect(forceGraph).toHaveAttribute("data-edge-count", "2");
   const strongEdgeWeight = await forceGraph.getAttribute("data-strongest-weight");
@@ -84,22 +91,22 @@ test("graph route requests global graph without a default seed and renders API_G
         source: "networkx",
         graph_runtime: "networkx",
         nodes: [
+          { id: "API_GLOBAL_FUNCTION", kind: "function", weight: 4 },
           { id: "API_GLOBAL_REGISTER", kind: "register", weight: 3 },
-          { id: "API_GLOBAL_FIELD", kind: "field", weight: 2 },
-          { id: "API_GLOBAL_DOC", kind: "pdf", weight: 1 }
+          { id: "API_GLOBAL_SECTION", kind: "doc_section", weight: 1 }
         ],
         edges: [
           {
-            src: "API_GLOBAL_REGISTER",
-            dst: "API_GLOBAL_FIELD",
-            relation: "api_global_sets_field",
+            src: "API_GLOBAL_FUNCTION",
+            dst: "API_GLOBAL_REGISTER",
+            relation: "sets_field",
             confidence: 0.94,
             weight: 0.94
           },
           {
-            src: "API_GLOBAL_REGISTER",
-            dst: "API_GLOBAL_DOC",
-            relation: "api_global_documented_by",
+            src: "API_GLOBAL_SECTION",
+            dst: "API_GLOBAL_REGISTER",
+            relation: "documents",
             confidence: 0.82,
             weight: 0.82
           }
@@ -120,22 +127,22 @@ test("graph route requests global graph without a default seed and renders API_G
   expect(requested.toString()).not.toContain("DOORBELL_INTERRUPT_DISABLE");
   const forceGraph = page.getByTestId("force-graph");
   await expect(forceGraph).toContainText("API_GLOBAL_REGISTER");
-  await expect(forceGraph).toContainText("API_GLOBAL_FIELD");
-  await expect(forceGraph).toContainText("API_GLOBAL_DOC");
+  await expect(forceGraph).toContainText("API_GLOBAL_SECTION");
   await expect(forceGraph).toHaveAttribute("data-edge-count", "2");
   await expectForceGraphPainted(page);
 });
 
 test("graph route keeps a global node set instead of collapsing to a tiny seed preview", async ({ page }) => {
+  const kinds = ["register", "function", "doc_section"] as const;
   const nodes = Array.from({ length: 18 }, (_, index) => ({
     id: `API_GLOBAL_NODE_${index + 1}`,
-    kind: index % 3 === 0 ? "register" : index % 3 === 1 ? "field" : "doc",
+    kind: kinds[index % kinds.length],
     weight: 18 - index
   }));
   const edges = nodes.slice(1).map((node, index) => ({
     src: nodes[index].id,
     dst: node.id,
-    relation: "api_global_link",
+    relation: "relates_to",
     confidence: 0.95 - index * 0.03,
     weight: 0.95 - index * 0.03
   }));
@@ -156,6 +163,42 @@ test("graph route keeps a global node set instead of collapsing to a tiny seed p
 
   await expect(page.getByTestId("force-graph")).toContainText("API_GLOBAL_NODE_18");
   await expect(page.getByTestId("force-graph")).toHaveAttribute("data-node-count", "18");
+  await expectForceGraphPainted(page);
+});
+
+test("graph route does not truncate large API graph payloads in the canvas layer", async ({ page }) => {
+  const kinds = ["register", "function", "doc_section", "pdf_section", "doc_box"] as const;
+  const nodes = Array.from({ length: 180 }, (_, index) => ({
+    id: `API_LARGE_GRAPH_NODE_${index + 1}`,
+    kind: kinds[index % kinds.length],
+    weight: 180 - index
+  }));
+  const edges = Array.from({ length: 320 }, (_, index) => ({
+    src: nodes[index % nodes.length].id,
+    dst: nodes[(index * 7 + 13) % nodes.length].id,
+    relation: "relates_to",
+    confidence: 0.7,
+    weight: 0.7
+  })).filter((edge) => edge.src !== edge.dst);
+  await page.route("**/api/workbench/graph**", async (route) => {
+    await route.fulfill({
+      contentType: "application/json",
+      body: JSON.stringify({
+        queryId: "global",
+        source: "networkx",
+        graph_runtime: "networkx",
+        nodes,
+        edges
+      })
+    });
+  });
+
+  await page.goto("/graph");
+
+  const forceGraph = page.getByTestId("force-graph");
+  await expect(forceGraph).toHaveAttribute("data-node-count", String(nodes.length));
+  await expect(forceGraph).toHaveAttribute("data-edge-count", String(edges.length));
+  await expect(forceGraph).toContainText("API_LARGE_GRAPH_NODE_180");
   await expectForceGraphPainted(page);
 });
 
@@ -235,6 +278,7 @@ test("all routes share the canonical anchor chrome baseline", async ({ page }) =
 });
 
 test("graph visualization stays visible in light and dark modes", async ({ page }) => {
+  await mockGraphRoute(page);
   await page.goto("/graph");
 
   const graph = page.getByTestId("global-network-graph");
@@ -252,9 +296,43 @@ test("graph visualization stays visible in light and dark modes", async ({ page 
   await expectForceGraphPainted(page);
 });
 
+async function mockGraphRoute(page: import("@playwright/test").Page) {
+  await page.route("**/api/workbench/graph**", async (route) => {
+    await route.fulfill({
+      contentType: "application/json",
+      body: JSON.stringify({
+        queryId: "global",
+        source: "networkx",
+        graph_runtime: "networkx",
+        nodes: [
+          { id: "MOCK_GRAPH_FUNCTION", kind: "function", weight: 4 },
+          { id: "MOCK_GRAPH_REGISTER", kind: "register", weight: 3 },
+          { id: "MOCK_GRAPH_SECTION", kind: "doc_section", weight: 1 }
+        ],
+        edges: [
+          {
+            src: "MOCK_GRAPH_FUNCTION",
+            dst: "MOCK_GRAPH_REGISTER",
+            relation: "reads",
+            confidence: 0.94,
+            weight: 0.94
+          },
+          {
+            src: "MOCK_GRAPH_SECTION",
+            dst: "MOCK_GRAPH_REGISTER",
+            relation: "documents",
+            confidence: 0.72,
+            weight: 0.72
+          }
+        ]
+      })
+    });
+  });
+}
+
 async function expectForceGraphPainted(page: import("@playwright/test").Page) {
   const canvas = page.getByTestId("force-graph").locator("canvas").first();
-  await expect(canvas).toBeVisible();
+  await expect(canvas).toBeVisible({ timeout: 15_000 });
   await expect
     .poll(
       async () =>

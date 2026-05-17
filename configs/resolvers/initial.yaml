@@ -1,7 +1,7 @@
 id: initial
 language: cpp
 context_vars: [adev]
-symbol_prefixes: [reg, mm]
+symbol_prefixes: [reg, mm, smn]
 wrappers:
   RREG32:
     symbol_arg: 0
@@ -9,9 +9,24 @@ wrappers:
   WREG32:
     symbol_arg: 0
     access: write
+  RREG32_SOC15:
+    symbol_arg: 2
+    access: read
+  WREG32_SOC15:
+    symbol_arg: 2
+    access: write
+  SOC15_REG_OFFSET:
+    symbol_arg: 2
+    access: address
+  WREG32_FIELD:
+    symbol_args: [0, 1]
+    access: field_write
+  RREG32_FIELD:
+    symbol_args: [0, 1]
+    access: field_read
   REG_SET_FIELD:
-    symbol_arg: 1
+    symbol_args: [1, 2]
     access: field_set
   REG_GET_FIELD:
-    symbol_arg: 1
+    symbol_args: [1, 2]
     access: field_get
