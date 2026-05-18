@@ -339,6 +339,198 @@ class WorkbenchQuerySchemaTests(unittest.TestCase):
             self.assertTrue("vector_score" in result["rows"][0] or "vector" in sources_text, result["rows"][0])
             self.assertIn(result["rows"][0].get("vector_runtime"), {"python-cosine", "sqlite-vec"})
 
+    def test_query_evidence_reranks_with_configured_provider_query_embedding(self):
+        class QueryEmbeddingTransport:
+            def __init__(self):
+                self.requests = []
+
+            def post_json(self, url, payload, headers, timeout):
+                self.requests.append({"url": url, "payload": payload, "headers": headers, "timeout": timeout})
+                return {"embeddings": [[1.0, 0.0]]}
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            db_path = Path(tmpdir) / "asip.db"
+            store = AsipStore.connect(str(db_path))
+            store.migrate()
+            store.save_provider_settings(
+                {
+                    "embedding": {
+                        "provider": "ollama",
+                        "model": "provider-rerank",
+                        "api_base_url": "http://localhost:11434",
+                        "api_path": "/api/embed",
+                    }
+                }
+            )
+            provider_doc = store.add_document("fixture", "doc", "docs/provider.md")
+            provider_chunk = store.add_chunk(provider_doc, "provider-only semantic relationship note", 4, 4)
+            store.add_evidence(
+                provider_chunk,
+                "fixture",
+                "doc",
+                "local",
+                "docs/provider.md",
+                "REG_PROVIDER_RERANK",
+                "register",
+                "mention",
+                0.71,
+                "provider-only semantic relationship note",
+                "provider vector -> REG_PROVIDER_RERANK",
+                line_start=4,
+                line_end=4,
+            )
+            store.add_embedding(
+                provider_chunk,
+                provider="ollama",
+                model="provider-rerank",
+                vector=[1.0, 0.0],
+                metadata={"source": "provider"},
+            )
+            stale_doc = store.add_document("fixture", "doc", "docs/stale.md")
+            stale_chunk = store.add_chunk(stale_doc, "stale vector from old provider", 5, 5)
+            store.add_evidence(
+                stale_chunk,
+                "fixture",
+                "doc",
+                "local",
+                "docs/stale.md",
+                "REG_STALE_VECTOR",
+                "register",
+                "mention",
+                0.99,
+                "stale vector from old provider",
+                "old vector -> REG_STALE_VECTOR",
+                line_start=5,
+                line_end=5,
+            )
+            store.add_embedding(
+                stale_chunk,
+                provider="ollama",
+                model="old-model",
+                vector=[1.0, 0.0],
+                metadata={"source": "provider"},
+            )
+
+            transport = QueryEmbeddingTransport()
+            result = query_evidence(
+                db_path,
+                "semantic nearest lookup",
+                limit=5,
+                embedding_transport=transport,
+            )
+
+            self.assertFalse(result["empty"])
+            self.assertEqual(result["rows"][0]["symbol"], "REG_PROVIDER_RERANK")
+            self.assertEqual([row["symbol"] for row in result["rows"]], ["REG_PROVIDER_RERANK"])
+            self.assertEqual(transport.requests[0]["payload"]["input"], ["semantic nearest lookup"])
+            self.assertIn("/api/embed", transport.requests[0]["url"])
+            self.assertIn("provider-vector", result["rows"][0]["retrieval_sources"])
+            self.assertEqual(result["rows"][0]["query_embedding_source"], "provider")
+            self.assertEqual(result["rows"][0]["vector_provider"], "ollama")
+            self.assertEqual(result["rows"][0]["vector_model"], "provider-rerank")
+
+    def test_query_evidence_reports_provider_query_embedding_fallback_metadata(self):
+        class FailingQueryEmbeddingTransport:
+            def post_json(self, url, payload, headers, timeout):
+                raise RuntimeError("embedding provider unavailable")
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            db_path = Path(tmpdir) / "asip.db"
+            store = AsipStore.connect(str(db_path))
+            store.migrate()
+            store.save_provider_settings(
+                {
+                    "embedding": {
+                        "provider": "ollama",
+                        "model": "provider-rerank",
+                        "api_base_url": "http://localhost:11434",
+                        "api_path": "/api/embed",
+                    }
+                }
+            )
+            document_id = store.add_document("fixture", "code", "driver.c")
+            chunk_id = store.add_chunk(document_id, "GCVM_L2_CNTL lexical fallback evidence", 1, 1)
+            store.add_evidence(
+                chunk_id,
+                "fixture",
+                "code",
+                "local",
+                "driver.c",
+                "GCVM_L2_CNTL",
+                "register",
+                "mention",
+                0.95,
+                "GCVM_L2_CNTL lexical fallback evidence",
+                "source mention -> GCVM_L2_CNTL",
+                line_start=1,
+                line_end=1,
+            )
+
+            result = query_evidence(
+                db_path,
+                "GCVM_L2_CNTL fallback",
+                embedding_transport=FailingQueryEmbeddingTransport(),
+            )
+
+            self.assertFalse(result["empty"])
+            self.assertEqual(result["query_embedding"]["source"], "deterministic-fallback")
+            self.assertIn("embedding provider unavailable", result["query_embedding"]["error"])
+
+    def test_query_evidence_does_not_compare_fallback_query_vector_to_provider_vectors(self):
+        class FailingQueryEmbeddingTransport:
+            def post_json(self, url, payload, headers, timeout):
+                raise RuntimeError("embedding provider unavailable")
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            db_path = Path(tmpdir) / "asip.db"
+            store = AsipStore.connect(str(db_path))
+            store.migrate()
+            store.save_provider_settings(
+                {
+                    "embedding": {
+                        "provider": "ollama",
+                        "model": "provider-rerank",
+                        "api_base_url": "http://localhost:11434",
+                        "api_path": "/api/embed",
+                    }
+                }
+            )
+            document_id = store.add_document("fixture", "doc", "docs/provider.md")
+            chunk_id = store.add_chunk(document_id, "provider-only vector row", 7, 7)
+            store.add_evidence(
+                chunk_id,
+                "fixture",
+                "doc",
+                "local",
+                "docs/provider.md",
+                "REG_PROVIDER_ONLY",
+                "register",
+                "mention",
+                0.71,
+                "provider-only vector row",
+                "provider vector -> REG_PROVIDER_ONLY",
+                line_start=7,
+                line_end=7,
+            )
+            store.add_embedding(
+                chunk_id,
+                provider="ollama",
+                model="provider-rerank",
+                vector=workbench._deterministic_embedding("semantic nearest lookup"),
+                metadata={"source": "provider"},
+            )
+
+            result = query_evidence(
+                db_path,
+                "semantic nearest lookup",
+                limit=5,
+                embedding_transport=FailingQueryEmbeddingTransport(),
+            )
+
+            self.assertTrue(result["empty"])
+            self.assertEqual(result["query_embedding"]["source"], "deterministic-fallback")
+            self.assertEqual(result["rows"], [])
+
     def test_documentation_queries_preserve_matching_doc_rows_when_code_scores_dominate(self):
         with tempfile.TemporaryDirectory() as tmpdir:
             db_path = Path(tmpdir) / "asip.db"

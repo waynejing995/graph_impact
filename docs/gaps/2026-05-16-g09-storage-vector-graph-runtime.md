@@ -16,7 +16,7 @@ MVP-1 is SQLite-first:
 - `packages/core/src/asip/storage.py` creates SQLite tables for corpora, jobs, documents, chunks, FTS5, edges, evidence, resolver profiles, provider settings, and embeddings.
 - `search_text()` uses FTS5, and `query_evidence()` uses FTS matches in ranking.
 - `search_vector()` stores vectors as JSON as the durable source of truth, tries a temp-table sqlite-vec native adapter when the runtime can load the extension, and falls back to Python cosine when sqlite-vec is unavailable.
-- `query_evidence()` now calls the vector adapter with a deterministic fallback query embedding and merges high-similarity chunk evidence into ranked results with `vector_score`, `vector_runtime`, and `retrieval_sources`.
+- `query_evidence()` calls the vector adapter with a configured provider query embedding when provider settings exist and the provider call succeeds; otherwise it falls back to the deterministic query embedding with explicit source metadata. It merges high-similarity chunk evidence into ranked results with `vector_score`, `vector_runtime`, `retrieval_sources`, `query_embedding_source`, `vector_provider`, `vector_model`, and `vector_embedding_source`.
 - Indexing can call a configured embedding provider transport and store returned vectors; failed live calls use deterministic fallback embeddings with explicit metadata.
 - `sqlite-vec` appears in requirements and an optional runtime smoke test. System Python 3.9 lacks `sqlite3.Connection.enable_load_extension`, so that runtime still skips the extension smoke, while the bundled Codex Python 3.12 runtime loads and executes the native sqlite-vec smoke successfully.
 - `to_networkx()` exists and has core test coverage.
@@ -28,12 +28,13 @@ MVP-1 is SQLite-first:
 - Native sqlite-vec extension proof: `/Users/chenjingwen/.cache/codex-runtimes/codex-primary-runtime/dependencies/python/bin/python3` reports Python 3.12.13, SQLite 3.50.4, `enable_load_extension=True`, `sqlite_vec` installed, and passes `packages.core.tests.test_storage_graph.StorageGraphTests.test_sqlite_vec_extension_can_run_when_runtime_supports_extensions`.
 - Native retrieval adapter proof: the same bundled runtime passes `packages.core.tests.test_storage_graph.StorageGraphTests.test_search_vector_uses_sqlite_vec_when_runtime_supports_extensions`, which verifies `AsipStore.search_vector()` returns `retrieval_runtime=sqlite-vec`, a native distance, and the same top semantic neighbor shape as the fallback path.
 - Fallback proof: system Python 3.9 lacks loadable extension support, so the core suite still exercises JSON + Python cosine fallback and query evidence now reports `vector_runtime=python-cosine` for vector-only retrieval rows.
+- Query-time provider rerank proof: `docs/qa/2026-05-18-g06-query-time-provider-rerank-qa.md` records RED/GREEN coverage for provider query embedding, same-provider/model vector filtering, `provider-vector` retrieval-source metadata, and a local Ollama smoke over a throwaway DB.
 
 ## Remaining Gap
 
 Storage pieces exist, graph expansion now uses NetworkX, and the product retrieval path now combines vector adapter matches into ranking.
 
-The deterministic fallback and provider embedding paths prove schema/provenance wiring and retrieval integration. The current clean AMD DB has partial provider embeddings, not full provider-vector coverage or semantic rerank quality proof. The bundled Python runtime proves the native sqlite-vec extension can load and the product `search_vector()` path can use it. The native adapter is intentionally temp-table based for now, with JSON vectors retained as source of truth; a persistent sqlite-vec sidecar/table-per-dimension remains a future performance improvement rather than an MVP requirement.
+The deterministic fallback and provider embedding paths prove schema/provenance wiring and retrieval integration. Query-time provider-vector wiring is now proven, and a temp-copy full local Ollama backfill proves one complete local coverage artifact; the current clean/default workbench DB may still have partial provider embeddings depending on the job history. Semantic rerank quality at scale remains a product-quality boundary. The bundled Python runtime proves the native sqlite-vec extension can load and the product `search_vector()` path can use it. The native adapter is intentionally temp-table based for now, with JSON vectors retained as source of truth; a persistent sqlite-vec sidecar/table-per-dimension remains a future performance improvement rather than an MVP requirement.
 
 ## Acceptance Criteria
 

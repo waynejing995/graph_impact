@@ -146,6 +146,7 @@ def build_deterministic_code_graph(
     known_table_field_aliases: Optional[Mapping[str, Iterable[str]]] = None,
     known_version_field_sinks: Optional[Mapping[str, Iterable[CodeGraphVersionFieldSink]]] = None,
     known_receiver_table_aliases: Optional[Mapping[str, Iterable[str]]] = None,
+    known_return_table_aliases: Optional[Mapping[str, Iterable[str]]] = None,
 ) -> DeterministicCodeGraph:
     source_path = source_path.expanduser()
     source_text = source_path.read_text(encoding="utf-8", errors="replace")
@@ -204,6 +205,10 @@ def build_deterministic_code_graph(
         known_version_field_sinks or {},
         _version_field_sinks_from_spans(source_text, spans),
     )
+    return_table_aliases = _merge_table_field_aliases(
+        known_return_table_aliases or {},
+        _return_table_aliases_from_spans(source_text, spans),
+    )
     receiver_table_aliases = _merge_table_field_aliases(
         known_receiver_table_aliases or {},
         _receiver_table_aliases_from_version_sink_calls(source_text, spans, version_field_sinks),
@@ -245,11 +250,12 @@ def build_deterministic_code_graph(
                     },
                 ),
             )
-        for receiver, slot, slot_offset, receiver_type, receiver_tables in _slot_calls_for_function(
+        for receiver, slot, slot_offset, receiver_type, receiver_tables, alias_type_flow in _slot_calls_for_function(
             function_text,
             table_field_aliases,
             version_field_sinks,
             receiver_table_aliases,
+            return_table_aliases,
         ):
             line_number = _line_number_for_offset(source_text, span.offset_start + slot_offset)
             ast_hint = _ast_slot_call_hint_for(
@@ -266,7 +272,7 @@ def build_deterministic_code_graph(
                     receiver=receiver,
                     receiver_type=ast_hint.receiver_type if ast_hint and ast_hint.receiver_type else receiver_type,
                     receiver_tables=receiver_tables,
-                    type_flow=ast_hint.type_flow if ast_hint else "",
+                    type_flow=ast_hint.type_flow if ast_hint else alias_type_flow,
                     path=display_path,
                     line_start=line_number,
                 )
@@ -418,6 +424,16 @@ def collect_code_graph_receiver_table_aliases(
         return {}
     spans = _function_spans_from_text(source_text)
     return _receiver_table_aliases_from_version_sink_calls(source_text, spans, known_version_field_sinks)
+
+
+def collect_code_graph_return_table_aliases(source_path: Path) -> Mapping[str, tuple[str, ...]]:
+    source_path = source_path.expanduser()
+    try:
+        source_text = source_path.read_text(encoding="utf-8", errors="replace")
+    except OSError:
+        return {}
+    spans = _function_spans_from_text(source_text)
+    return _return_table_aliases_from_spans(source_text, spans)
 
 
 def _merge_table_field_aliases(
@@ -1084,14 +1100,20 @@ def _slot_calls_for_function(
     table_field_aliases: Optional[Mapping[str, tuple[str, ...]]] = None,
     version_field_sinks: Optional[Mapping[str, Iterable[CodeGraphVersionFieldSink]]] = None,
     global_receiver_table_aliases: Optional[Mapping[str, Iterable[str]]] = None,
-) -> List[tuple[str, str, int, str, tuple[str, ...]]]:
-    slots: List[tuple[str, str, int, str, tuple[str, ...]]] = []
+    return_table_aliases: Optional[Mapping[str, Iterable[str]]] = None,
+) -> List[tuple[str, str, int, str, tuple[str, ...], str]]:
+    slots: List[tuple[str, str, int, str, tuple[str, ...], str]] = []
     seen: set[tuple[str, str]] = set()
     active_table_field_aliases = table_field_aliases or {}
     receiver_type_hints = _receiver_type_hints_for_function(function_text)
+    local_receiver_aliases, alias_type_flows = _receiver_table_aliases_for_function(
+        function_text,
+        version_field_sinks or {},
+        return_table_aliases or {},
+    )
     receiver_table_aliases = _merge_table_field_aliases(
         global_receiver_table_aliases or {},
-        _receiver_table_aliases_for_function(function_text, version_field_sinks or {}),
+        local_receiver_aliases,
     )
     receiver_part = r"[A-Za-z_]\w*(?:\s*\[[^\]]+\])?"
     for match in re.finditer(
@@ -1107,6 +1129,7 @@ def _slot_calls_for_function(
             receiver_tables = receiver_table_aliases.get(receiver)
             if receiver_tables is None:
                 receiver_tables = receiver_table_aliases.get(receiver_leaf, ())
+            alias_type_flow = alias_type_flows.get(receiver, "") or alias_type_flows.get(receiver_leaf, "")
             if not receiver_tables:
                 receiver_tables = _receiver_tables_from_table_field_alias(
                     receiver,
@@ -1119,6 +1142,7 @@ def _slot_calls_for_function(
                 match.start("slot"),
                 receiver_type_hints.get(receiver_leaf, ""),
                 tuple(receiver_tables),
+                alias_type_flow,
             ))
     return slots
 
@@ -1260,14 +1284,20 @@ def _normalize_receiver_path(receiver: str) -> str:
 def _receiver_table_aliases_for_function(
     function_text: str,
     version_field_sinks: Mapping[str, Iterable[CodeGraphVersionFieldSink]] = {},
-) -> dict[str, list[str]]:
+    return_table_aliases: Mapping[str, Iterable[str]] = {},
+) -> tuple[dict[str, list[str]], dict[str, str]]:
     aliases: dict[str, list[str]] = {}
+    type_flows: dict[str, str] = {}
     body_open = function_text.find("{")
     if body_open == -1:
-        return aliases
+        return aliases, type_flows
     table_alias = re.compile(
         r"\b(?P<receiver>[A-Za-z_]\w*(?:\s*(?:->|\.)\s*[A-Za-z_]\w*(?:\s*\[[^\]]+\])?)*)"
         r"\s*=\s*&?\s*(?P<table>[A-Za-z_]\w*)\s*(?:;|,)"
+    )
+    returned_table_alias = re.compile(
+        r"\b(?P<receiver>[A-Za-z_]\w*(?:\s*(?:->|\.)\s*[A-Za-z_]\w*(?:\s*\[[^\]]+\])?)*)"
+        r"\s*=\s*(?P<callee>[A-Za-z_]\w*)\s*\("
     )
     for line in function_text[body_open + 1 :].splitlines():
         if "=" not in line:
@@ -1282,8 +1312,55 @@ def _receiver_table_aliases_for_function(
             aliases.setdefault(receiver, [])
             if table not in aliases[receiver]:
                 aliases[receiver].append(table)
+        for match in returned_table_alias.finditer(line):
+            receiver = re.sub(r"\s+", "", match.group("receiver"))
+            callee = match.group("callee")
+            callee_tables = tuple(return_table_aliases.get(callee, ()))
+            if len(callee_tables) != 1:
+                continue
+            for table in callee_tables:
+                table_text = str(table)
+                if not (_looks_like_callback_table_name(table_text) or table_text.endswith("_ip_block")):
+                    continue
+                aliases.setdefault(receiver, [])
+                if table_text not in aliases[receiver]:
+                    aliases[receiver].append(table_text)
+                type_flows.setdefault(receiver, "source_return_table_alias")
     _collect_version_sink_call_aliases(function_text, version_field_sinks, aliases)
-    return aliases
+    return aliases, type_flows
+
+
+def _return_table_aliases_from_spans(
+    source_text: str,
+    spans: Iterable[_FunctionSpan],
+) -> dict[str, tuple[str, ...]]:
+    aliases: dict[str, list[str]] = {}
+    for span in spans:
+        function_text = source_text[span.offset_start : span.offset_end + 1]
+        body_open = function_text.find("{")
+        if body_open == -1:
+            continue
+        body = function_text[body_open + 1 :]
+        for match in re.finditer(r"\breturn\s*&?\s*(?P<table>[A-Za-z_]\w*)\s*;", body):
+            table = match.group("table")
+            if not (_looks_like_callback_table_name(table) or table.endswith("_ip_block")):
+                continue
+            aliases.setdefault(span.name, [])
+            if table not in aliases[span.name]:
+                aliases[span.name].append(table)
+    simple_return = re.compile(
+        r"\b(?P<function>[A-Za-z_]\w*)\s*\([^;{}]*\)\s*\{\s*return\s*&?\s*(?P<table>[A-Za-z_]\w*)\s*;",
+        re.DOTALL,
+    )
+    for match in simple_return.finditer(source_text):
+        table = match.group("table")
+        if not (_looks_like_callback_table_name(table) or table.endswith("_ip_block")):
+            continue
+        function = match.group("function")
+        aliases.setdefault(function, [])
+        if table not in aliases[function]:
+            aliases[function].append(table)
+    return {key: tuple(values) for key, values in aliases.items()}
 
 
 def _receiver_table_aliases_from_version_sink_calls(

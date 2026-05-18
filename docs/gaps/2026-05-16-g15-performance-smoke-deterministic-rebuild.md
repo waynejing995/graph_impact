@@ -1,6 +1,6 @@
 # G15 Performance Smoke And Deterministic Rebuild
 
-Status: Partial; fixture smoke, repeat real-corpus graph rebuild, query timing, and full local provider backfill timing exist; full raw re-index timing still open
+Status: Current performance pass with explicit residuals; fixture smoke, repeat real-corpus graph rebuild, query timing, full local provider backfill, and empty-DB raw re-index timing exist
 
 ## Requirement
 
@@ -48,12 +48,13 @@ Real-corpus performance targets should be measured after the first full AMD inde
   These timing/count checks include the current conservative `clang_callback` overlay and selective `type_flow=clang_ast_json` hints, but they measure deterministic rebuild stability, not full clangd/libclang callback correctness.
 - 2026-05-18 bounded provider backfill smoke is recorded in `docs/qa/2026-05-18-g06-provider-backfill-smoke.md` and `.json`. A temp DB copy ran `provider-embeddings --limit 128 --batch-size 8` through local Ollama `nomic-embed-text:latest`, embedded `128` chunks in `17.703s`, and ended with `160` provider embeddings in the temp DB. This is a bounded provider-path timing smoke, not full coverage.
 - 2026-05-18 full local temp-copy provider backfill timing is recorded in `docs/qa/2026-05-18-g06-full-provider-backfill-tempdb-qa.md` and `.json`. The resumed full job embedded `12572` remaining chunks in `2388.07s` with `batch_size=16`, and the temp DB ended with `21884 / 21884` chunks covered by `ollama/nomic-embed-text:latest`, `missing=0`, and `10770` long inputs marked as truncated. This measures local Ollama full-coverage backfill on a backup DB, not credentialed OpenAI-compatible throughput.
+- 2026-05-18 empty-DB raw corpus re-index timing is recorded in `docs/qa/2026-05-18-g15-empty-db-raw-corpus-reindex.md` and `.json`. Two fresh raw rebuilds from `/tmp/asip-mxgpu`, `/tmp/asip-linux-amdgpu`, and `docs/fixtures/amd-amdgpu-docs` completed in `506.75s` and `507.07s`, both with `documents=124`, `chunks=21884`, `evidence=860516`, and final SQLite graph edges `39199`. The same artifact records fixed `gemma4:e4b` Stage 2 reruns, 11 real query timings, and a graph endpoint audit with zero local/macro endpoints.
 
 ## Remaining Gap
 
 The repo now proves that a small fixture index can be rebuilt from scratch quickly with stable table counts across two empty-DB runs, and that five fixture queries stay below the initial one-second smoke target.
 
-The current AMD corpus path now has practical query latency fixes, real query timing over more than five ASIP queries, a repeat deterministic graph rebuild benchmark, bounded provider embedding smoke, and a full local Ollama provider embedding backfill timing on a temp DB. This gap is still not fully closed because full raw corpus re-index timing from an empty DB remains open.
+The current AMD corpus path now has practical query latency fixes, real query timing over more than five ASIP queries, a repeat deterministic graph rebuild benchmark, bounded provider embedding smoke, a full local Ollama provider embedding backfill timing on a temp DB, and two measured empty-DB raw re-index runs. Remaining performance risk is product-quality and scale: semantic ranking quality, local model latency, hosted-provider throughput, and the CLI summary/table edge-count delta remain explicit follow-ups.
 
 ## Acceptance Criteria
 
@@ -70,7 +71,7 @@ The current AMD corpus path now has practical query latency fixes, real query ti
 - Real dirty-DB query timing over more than five ASIP queries is recorded in `docs/qa/2026-05-18-query-graph-performance-qa.md`.
 - Repeat real-corpus deterministic graph rebuild timing/counts are recorded in `docs/qa/2026-05-18-g15-real-corpus-repeat-graph-rebuild.md`.
 - Bounded provider backfill timing is recorded in `docs/qa/2026-05-18-g06-provider-backfill-smoke.md`.
-- QA doc entry: real AMD indexing benchmark with source roots, counts, elapsed time, provider mode, and model names.
+- QA doc entry: real AMD indexing benchmark with source roots, counts, elapsed time, provider mode, and model names. Implemented in `docs/qa/2026-05-18-g15-empty-db-raw-corpus-reindex.md`.
 
 ## Not Closed Until
 
@@ -78,6 +79,6 @@ The final QA package includes both sides of the performance story:
 
 - repeatable fixture rebuild/query timing, now recorded in `docs/qa/2026-05-18-performance-smoke-fixture.md/json`;
 - repeat real-corpus deterministic graph rebuild timing, query latency budget review, bounded provider timing, and full local temp-copy provider embedding coverage timing are recorded;
-- full raw corpus re-index timing is either measured in a long-running benchmark or explicitly accepted as a residual boundary.
+- full raw corpus re-index timing is measured for the current selective raw path in `docs/qa/2026-05-18-g15-empty-db-raw-corpus-reindex.md`.
 
 The fixture smoke is a real product CLI path and regression test, but it must not be promoted to full AMD-corpus performance closure.

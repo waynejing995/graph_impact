@@ -636,6 +636,52 @@ class DeterministicCodeGraphTests(unittest.TestCase):
             self.assertEqual(dispatch_edge.provenance.get("receiver_tables"), ["gfx_v11_0_ip_funcs"])
             self.assertEqual(dispatch_edge.provenance.get("callback_table"), "gfx_v11_0_ip_funcs")
 
+    def test_stage1_returned_table_alias_limits_same_type_callbacks(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            source = root / "gfx.c"
+            source.write_text(
+                "\n".join(
+                    [
+                        "static int gfx_v11_0_hw_init(void *adev) {",
+                        "  return 0;",
+                        "}",
+                        "static int sdma_v5_0_hw_init(void *adev) {",
+                        "  return 0;",
+                        "}",
+                        "static const struct amd_ip_funcs gfx_v11_0_ip_funcs = {",
+                        "  .hw_init = gfx_v11_0_hw_init,",
+                        "};",
+                        "static const struct amd_ip_funcs sdma_v5_0_ip_funcs = {",
+                        "  .hw_init = sdma_v5_0_hw_init,",
+                        "};",
+                        "const struct amd_ip_funcs *select_gfx_funcs(void) {",
+                        "  return &gfx_v11_0_ip_funcs;",
+                        "}",
+                        "int common_hw_init(void) {",
+                        "  const struct amd_ip_funcs *funcs = select_gfx_funcs();",
+                        "  return funcs->hw_init(0);",
+                        "}",
+                    ]
+                ),
+                encoding="utf-8",
+            )
+
+            graph = build_deterministic_code_graph(source, source_root=root)
+
+            edge_triples = {(edge.src, edge.relation, edge.dst) for edge in graph.edges}
+            self.assertIn(("common_hw_init", "calls", "gfx_v11_0_hw_init"), edge_triples)
+            self.assertNotIn(("common_hw_init", "calls", "sdma_v5_0_hw_init"), edge_triples)
+            dispatch_edge = next(
+                edge
+                for edge in graph.edges
+                if (edge.src, edge.relation, edge.dst) == ("common_hw_init", "calls", "gfx_v11_0_hw_init")
+            )
+            self.assertEqual(dispatch_edge.provenance.get("call_kind"), "vtable_table_alias")
+            self.assertEqual(dispatch_edge.provenance.get("receiver_tables"), ["gfx_v11_0_ip_funcs"])
+            self.assertEqual(dispatch_edge.provenance.get("callback_table"), "gfx_v11_0_ip_funcs")
+            self.assertEqual(dispatch_edge.provenance.get("type_flow"), "source_return_table_alias")
+
     def test_stage1_field_path_table_alias_does_not_pollute_other_funcs_receivers(self):
         with tempfile.TemporaryDirectory() as tmpdir:
             root = Path(tmpdir)

@@ -34,7 +34,7 @@ Document source counts: `code=7`, `doc=20`, `pdf=1`, `register=96`.
 
 Evidence source counts: `code=126`, `doc=5664`, `pdf=5`, `register=854721`.
 
-Provider embeddings are partial by design for this QA pass: `ollama/nomic-embed-text:latest`, `metadata.source=provider`, count `32`, fallback count `0`. Full provider-vector coverage and query-time provider rerank remain G06/G09/G15 boundaries.
+Provider embeddings are partial by design for this QA pass: `ollama/nomic-embed-text:latest`, `metadata.source=provider`, count `32`, fallback count `0`. Later G06 QA proves query-time provider-vector rerank wiring and a full local temp-copy provider backfill artifact; current clean/default DB coverage and semantic ranking quality remain G06/G09/G15 boundaries.
 
 Bounded provider backfill smoke is recorded in
 `docs/qa/2026-05-18-g06-provider-backfill-smoke.md` and `.json`: a SQLite
@@ -51,8 +51,10 @@ covered by `ollama/nomic-embed-text:latest`, `missing_provider_embeddings=0`,
 and `10770` long chunks carrying truncation metadata. The resumed full job
 embedded `12572` remaining chunks in `2388.07s` after the previous failed job
 exposed Ollama context-limit handling. This proves the product path can achieve
-full local provider-vector coverage on a named temp DB; query-time provider
-rerank and credentialed OpenAI-compatible live QA remain residuals.
+full local provider-vector coverage on a named temp DB. Later
+`docs/qa/2026-05-18-g06-query-time-provider-rerank-qa.md` proves query-time
+provider-vector wiring; credentialed OpenAI-compatible live QA and broad
+semantic ranking quality remain residuals.
 
 Clean-final artifact edge-table source counts after the 2026-05-18 clean-final rebuild and Stage 2 jobs:
 
@@ -150,7 +152,7 @@ Stage 1 graph edges. The same artifact records a 3,000-edge global graph with
 
 ## Automated Verification
 
-- `PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=packages/core/src:packages/core/tests:. python3 -m unittest discover -s packages/core/tests -p 'test_*.py' -v`: 213 tests OK, 2 sqlite-vec optional skips
+- `PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=packages/core/src:packages/core/tests:. python3 -m unittest discover -s packages/core/tests -p 'test_*.py' -v`: 220 tests OK, 2 sqlite-vec optional skips
 - `PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=packages/core/src:packages/core/tests:. python3 -m unittest apps.api.tests.test_app apps.mcp.tests.test_tools apps.mcp.tests.test_server -v`: 47 tests OK, 1 optional MCP runtime skip under system Python 3.9
 - `PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=packages/core/src:. /Users/chenjingwen/.cache/codex-runtimes/codex-primary-runtime/dependencies/python/bin/python3 -m unittest apps.mcp.tests.test_tools apps.mcp.tests.test_server -v`: 29 tests OK, 0 skips with real `mcp 1.27.1` runtime
 - `pnpm --filter web run lint`: passed
@@ -159,6 +161,7 @@ Stage 1 graph edges. The same artifact records a 3,000-edge global graph with
 - `pnpm --filter web exec playwright test tests/visual-anchor-routes.spec.ts --reporter=list`: 15 passed
 - `pnpm --filter web exec playwright test tests/workbench-api.spec.ts tests/workbench-smoke.spec.ts tests/visual-anchor-routes.spec.ts --reporter=list`: 90 passed
 - `git diff --check`: passed
+- Latest continuation targeted slice covers semantic endpoint filtering, underscore local/macro endpoint rejection, ambiguous returned-table alias rejection, cross-file return-table alias, provider-vector query rerank, and provider fallback vector-space safety.
 - Follow-up G08 PDF-section slice: `packages.core.tests.test_workbench_query_schema` 13 tests OK, and `pnpm --filter web exec playwright test tests/workbench-api.spec.ts -g "PDF section" --reporter=list` 1 passed.
 - Follow-up G12 filter slice: `apps.api.tests.test_app.ApiAppTests.test_query_endpoint_applies_ip_and_asic_filters` and `apps.mcp.tests.test_tools.McpToolsTests.test_search_evidence_applies_ip_and_asic_filters` both passed after RED failures. Real clean-final QA shows `CP_INT_CNTL_RING0` changing from 20 mixed rows to 2 `CP/gfx_v10_0` rows with `ipBlock=CP`, 0 rows with `ipBlock=SDMA`, and browser evidence at 2048 x 1280. Details: `docs/qa/2026-05-18-g12-filter-surface-qa.md`; screenshot: `docs/qa/browser/g12-filter-cp-clean-final-3100-2k.png`.
 - Follow-up G04 clean corpus flow slice: `pnpm --filter web exec playwright test tests/workbench-api.spec.ts -g "clean named DB" --reporter=list` and `pnpm --filter web exec playwright test tests/workbench-smoke.spec.ts -g "corpus page adds indexes and queries" --reporter=list` both passed. The API test proves a clean named DB add/index/query graph payload for `g04-clean-docs`; the UI test proves graph and inspector evidence for a new local corpus while preserving default `data/asip.db` byte identity with `/tmp/asip-clean-amd-gemma4-final-current-2026-05-18.db` at the time of that QA. Later G03 typed-callback rebuilds intentionally changed the default live graph DB, so the named `/tmp/...final-current...db` remains the acceptance reference. Details: `docs/qa/2026-05-18-g04-clean-corpus-flow-qa.md`.
@@ -274,7 +277,7 @@ belong to the later live graph DB snapshot, not the named clean-final acceptance
 artifact edge table above. Full raw re-index timing from an empty DB remains an explicit
 long-running boundary.
 
-Fresh automated verification:
+Earlier automated verification from that historical dirty-dev graph pass:
 
 ```text
 PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=packages/core/src:packages/core/tests:. python3 -m unittest discover -s packages/core/tests -p 'test_*.py' -v
@@ -337,7 +340,7 @@ Continuation fixes verified in the same pass:
 - Source-type filter controls are real query controls and send `sourceTypes` to the Web BFF/core query path.
 - `/graph` exposes semantic generation limit and batch-size overrides in the UI and sends them to `/api/workbench/semantic-edges`.
 - The graph header now displays layer provenance such as deterministic and semantic edge counts.
-- G15 fixture performance smoke is now a product CLI path and core regression test; the QA artifact records matching empty-DB rebuild counts and five sub-second live queries. Real AMD repeat deterministic graph rebuild timing is now recorded with stable counts; bounded provider backfill timing is recorded. Full raw re-index and full provider-vector coverage remain explicit residuals.
+- G15 fixture performance smoke is now a product CLI path and core regression test; the QA artifact records matching empty-DB rebuild counts and five sub-second live queries. Real AMD repeat deterministic graph rebuild timing is recorded with stable counts; bounded provider backfill, full local temp-copy provider backfill, and two empty-DB raw re-index timings are recorded. Broader future all-file indexing scale, hosted-provider throughput, and semantic ranking quality remain explicit residuals.
 - G07 resolved-chain and parity follow-up is recorded in `docs/qa/2026-05-18-g07-resolved-chain-and-parity-qa.md`: evidence detail and entity explain now return deterministic structured `resolved_chain_explanation(s)`, and Web BFF/MCP parity covers query, evidence detail, entity, entity graph counts, and direct seed graph counts.
 - G07 real MCP runtime smoke is recorded in `docs/qa/2026-05-18-g07-real-mcp-runtime-smoke.md`: bundled Python 3.12 with `mcp 1.27.1` runs MCP tool/server tests with 29 OK and 0 skips.
 
@@ -350,12 +353,12 @@ Clean AQ01-AQ09 provider acceptance is now represented by the `gemma4:e4b` artif
 | Corpus registration/indexing | core, Web BFF, API, MCP | `asip.workbench`, `asip.cli index`, API/MCP/Web tests | Full all-code parser deferred; current path is query-focused code plus supplemental docs/register/PDF |
 | Document/PDF conversion | core | `asip.documents`, PDF tests, clean DB PDF counts | OCR/scanned PDF remains non-goal |
 | Resolver profiles | core plus UI/BFF/API/MCP | resolver profile tests and UI/API smoke | Rich edit-in-place/per-job profile selection remains future work |
-| Retrieval/evidence schema | core, thin app surfaces | clean AQ 9/9, six free queries, API/MCP/Web agreement tests, deterministic structured resolved-chain explanations | Provider-vector rerank and LLM-generated cross-evidence explanation remain boundaries |
-| SQLite/FTS/vector | core storage | FTS/vector tests, provider embedding provenance, native sqlite-vec extension smoke in bundled Python runtime, native `search_vector()` adapter test, fallback adapter test | JSON vectors remain the durable source of truth; full provider-vector coverage and semantic rerank quality remain open |
+| Retrieval/evidence schema | core, thin app surfaces | clean AQ 9/9, six free queries, API/MCP/Web agreement tests, deterministic structured resolved-chain explanations, query-time provider-vector wiring QA | Semantic ranking quality and LLM-generated cross-evidence explanation remain boundaries |
+| SQLite/FTS/vector | core storage | FTS/vector tests, provider embedding provenance, query-time provider-vector wiring QA, native sqlite-vec extension smoke in bundled Python runtime, native `search_vector()` adapter test, fallback adapter test | JSON vectors remain the durable source of truth; current-DB full provider-vector coverage and semantic rerank quality remain open |
 | NetworkX graph | core storage/workbench | graph tests, free-query/global graph QA, visual `/graph` QA | Browser design polish still reviewed in G16 |
-| Deterministic C graph/callgraph | core code graph plus storage/workbench | function-register operation tests, compile_commands macro test, direct helper call test, cross-file unique direct common-helper test, cross-file ops/vtable callback test, receiver type-hint callback test, Clang AST JSON typed receiver test, typed receiver over generic `funcs` fallback test, cross-file callback initializer test, same-slot overlink regression, real rebuild job 6 on default DB | Conservative source/span parser with selective Clang AST JSON receiver hints and cross-file unique callee/callback indexing, not full clangd/libclang callback coverage |
+| Deterministic C graph/callgraph | core code graph plus storage/workbench | function-register operation tests, compile_commands macro test, direct helper call test, cross-file unique direct common-helper test, cross-file ops/vtable callback test, receiver type-hint callback test, returned-table alias test, Clang AST JSON typed receiver test, typed receiver over generic `funcs` fallback test, cross-file callback initializer test, same-slot overlink regression, real rebuild job 6 on default DB | Conservative source/span parser with bounded return aliases, selective Clang AST JSON receiver hints, and cross-file unique callee/callback indexing, not full clangd/libclang callback coverage |
 | Semantic-edge generation | core plus CLI/Web/API/MCP | `gemma4:e4b` clean provider acceptance plus current live `gemma4:e4b` semantic/doc-node jobs and semantic-edge parity tests | Large prompts still need adequate `num_predict` and JSON robustness |
-| Provider settings | core plus Settings UI/BFF/API/MCP | AQ09, provider tests, settings UI tests, bounded 128-chunk Ollama backfill smoke | Credentialed OpenAI-compatible live QA and full provider-vector coverage require credentials/time or accepted local-compatible boundary |
+| Provider settings | core plus Settings UI/BFF/API/MCP | AQ09, provider tests, settings UI tests, bounded 128-chunk Ollama backfill smoke, full local temp-copy provider backfill, query-time provider-vector smoke | Credentialed OpenAI-compatible live QA and production-scale ranking quality require credentials/time or accepted local-compatible boundary |
 | FastAPI | `apps/api` thin over core | API tests and live Uvicorn smoke | Optional deployment packaging not in MVP |
 | MCP | `apps/mcp` thin over core | tool tests, server registration test, Web/MCP query/evidence/entity/graph parity, bundled-Python real MCP runtime smoke | External client interoperability beyond FastMCP construction/tool execution remains future deployment QA |
 | React UI and visual anchors | `apps/web` React UI | Playwright smoke/API/visual tests and visual QA screenshots | Recapture required after future UI-affecting changes |
@@ -364,7 +367,7 @@ Clean AQ01-AQ09 provider acceptance is now represented by the `gemma4:e4b` artif
 
 - Native sqlite-vec extension loading is skipped in system Python 3.9, and the bundled Python 3.12 runtime passes both the native sqlite-vec extension smoke and the native `search_vector()` adapter test. The adapter keeps JSON vectors as durable source of truth and falls back to Python cosine when sqlite-vec cannot load.
 - Credentialed OpenAI-compatible live provider QA is not performed without credentials; request shape, safe env-based extra-header expansion, local-compatible paths, and bounded local Ollama provider backfill are tested.
-- Stage 1 now connects direct helper calls, cross-file direct common-helper calls when the callee definition is unique, and conservative C ops/vtable callbacks, but it is not a full clangd/libclang callgraph implementation. Generic `funcs/ops/callbacks` and typed receivers such as `struct <type> *ops` emit lower-confidence dispatch-candidate edges, filtered by exact table name, callback table type, selective Clang AST JSON receiver type, or source-span alias hints where the extractor can prove them.
-- Provider embeddings are partial for the final clean/live DB; they prove provider provenance, AQ09, and bounded backfill behavior, not full semantic reranking or full vector coverage.
+- Stage 1 now connects direct helper calls, cross-file direct common-helper calls when the callee definition is unique, and conservative C ops/vtable callbacks, but it is not a full clangd/libclang callgraph implementation. Generic `funcs/ops/callbacks` and typed receivers such as `struct <type> *ops` emit lower-confidence dispatch-candidate edges, filtered by exact table name, callback table type, bounded returned-table alias, selective Clang AST JSON receiver type, or source-span alias hints where the extractor can prove them.
+- Provider embeddings are partial for the final clean/live DB; they prove provider provenance, AQ09, bounded backfill behavior, and later query-time provider-vector wiring, not broad semantic ranking quality or guaranteed current-DB full vector coverage.
 - The system Python 3.9 runtime cannot install the current `mcp` package because it requires Python 3.10+, but the bundled Python 3.12 runtime has `mcp 1.27.1` and passes MCP tool/server runtime smoke with 29 OK and 0 skips.
 - Git commit/push evidence is reported in the final assistant response after the G11 gate runs, because the commit hash is only known after this document is staged.

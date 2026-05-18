@@ -809,22 +809,40 @@ class AsipStore:
             return {}
         return json.loads(str(row["settings_json"]))
 
-    def search_vector(self, vector: List[float], limit: int) -> List[Dict[str, object]]:
+    def search_vector(
+        self,
+        vector: List[float],
+        limit: int,
+        provider: Optional[str] = None,
+        model: Optional[str] = None,
+    ) -> List[Dict[str, object]]:
+        filters = []
+        params: List[object] = []
+        if provider:
+            filters.append("embeddings.provider = ?")
+            params.append(provider)
+        if model:
+            filters.append("embeddings.model = ?")
+            params.append(model)
+        where_clause = f"where {' and '.join(filters)}" if filters else ""
         rows = [
             dict(row)
             for row in self.con.execute(
-                """
+                f"""
                 select
                   embeddings.chunk_id,
                   embeddings.provider,
                   embeddings.model,
                   embeddings.vector_json,
+                  embeddings.metadata_json,
                   chunks.text,
                   documents.path
                 from embeddings
                 join chunks on chunks.id = embeddings.chunk_id
                 join documents on documents.id = chunks.document_id
-                """
+                {where_clause}
+                """,
+                params,
             )
         ]
         native_matches = self._search_vector_sqlite_vec(vector, limit, rows)
@@ -846,6 +864,7 @@ class AsipStore:
                     "chunk_id": int(row["chunk_id"]),
                     "provider": row["provider"],
                     "model": row["model"],
+                    "metadata_json": row.get("metadata_json", "{}"),
                     "text": row["text"],
                     "path": row["path"],
                     "score": _cosine_similarity(vector, stored_vector),
@@ -928,6 +947,7 @@ class AsipStore:
                     "chunk_id": chunk_id,
                     "provider": row["provider"],
                     "model": row["model"],
+                    "metadata_json": row.get("metadata_json", "{}"),
                     "text": row["text"],
                     "path": row["path"],
                     "score": _cosine_similarity(vector, stored_vector),

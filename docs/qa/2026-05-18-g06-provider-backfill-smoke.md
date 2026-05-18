@@ -62,4 +62,4 @@ embedding_backfill succeeded Embedded 128 chunks
 
 - This proves the product CLI can run a bounded provider backfill through local Ollama.
 - This does not claim full provider-vector coverage for all `21884` chunks.
-- Credentialed live OpenAI-compatible provider QA and query-time provider reranking remain open boundaries.
+- Credentialed live OpenAI-compatible provider QA remains open. Query-time provider rerank wiring is covered by `docs/qa/2026-05-18-g06-query-time-provider-rerank-qa.md`.

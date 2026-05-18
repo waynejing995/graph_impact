@@ -18,6 +18,7 @@ from .code_graph import (
     build_deterministic_code_graph,
     collect_code_graph_function_locations,
     collect_code_graph_receiver_table_aliases,
+    collect_code_graph_return_table_aliases,
     collect_code_graph_table_field_aliases,
     collect_code_graph_version_field_sinks,
 )
@@ -298,6 +299,7 @@ def query_evidence(
     ip_block: str = "",
     asic_or_generation: str = "",
     source_types: Optional[Iterable[str]] = None,
+    embedding_transport: Optional[EmbeddingTransport] = None,
 ) -> Dict[str, Any]:
     limits = load_workbench_limits()
     result_limit = limit if limit is not None else limits.int_value("retrieval", "result_limit", minimum=1)
@@ -342,17 +344,41 @@ def query_evidence(
             fts_chunk_ids = set()
     vector_chunk_scores: Dict[int, float] = {}
     vector_chunk_runtimes: Dict[int, str] = {}
+    vector_chunk_providers: Dict[int, str] = {}
+    vector_chunk_models: Dict[int, str] = {}
+    vector_chunk_embedding_sources: Dict[int, str] = {}
+    query_vector: Dict[str, Any] = {"source": "not-run"}
     if query.strip():
+        query_vector = _query_vector_for_retrieval(db_path, query, embedding_transport=embedding_transport)
+        vector_kwargs = {}
+        if query_vector.get("source") == "provider":
+            vector_kwargs = {
+                "provider": str(query_vector["provider"]),
+                "model": str(query_vector["model"]),
+            }
         try:
-            for match in store.search_vector(_deterministic_embedding(query), limit=vector_limit):
+            for match in store.search_vector(
+                query_vector["vector"],
+                limit=vector_limit,
+                **vector_kwargs,
+            ):
+                metadata = _embedding_metadata_from_vector_match(match)
+                if not _vector_match_compatible_with_query(query_vector, metadata):
+                    continue
                 vector_score = float(match.get("score") or 0)
                 if vector_score >= 0.75:
                     chunk_id = int(match["chunk_id"])
                     vector_chunk_scores[chunk_id] = vector_score
                     vector_chunk_runtimes[chunk_id] = str(match.get("retrieval_runtime") or "unknown")
+                    vector_chunk_providers[chunk_id] = str(match.get("provider") or "")
+                    vector_chunk_models[chunk_id] = str(match.get("model") or "")
+                    vector_chunk_embedding_sources[chunk_id] = str(metadata.get("source") or "")
         except Exception:
             vector_chunk_scores = {}
             vector_chunk_runtimes = {}
+            vector_chunk_providers = {}
+            vector_chunk_models = {}
+            vector_chunk_embedding_sources = {}
 
     candidates = (
         store.find_evidence_candidates(
@@ -391,9 +417,25 @@ def query_evidence(
         if chunk_id in fts_chunk_ids:
             retrieval_sources.append("fts5")
         if vector_score > 0:
-            retrieval_sources.append("vector")
+            if (
+                query_vector.get("source") == "provider"
+                and vector_chunk_embedding_sources.get(chunk_id) == "provider"
+                and vector_chunk_providers.get(chunk_id)
+            ):
+                retrieval_sources.append("provider-vector")
+            else:
+                retrieval_sources.append("vector")
             result["vector_score"] = round(vector_score, 4)
             result["vector_runtime"] = vector_chunk_runtimes.get(chunk_id, "unknown")
+            result["query_embedding_source"] = query_vector.get("source", "unknown")
+            if query_vector.get("error"):
+                result["query_embedding_error"] = query_vector["error"]
+            if vector_chunk_providers.get(chunk_id):
+                result["vector_provider"] = vector_chunk_providers[chunk_id]
+            if vector_chunk_models.get(chunk_id):
+                result["vector_model"] = vector_chunk_models[chunk_id]
+            if vector_chunk_embedding_sources.get(chunk_id):
+                result["vector_embedding_source"] = vector_chunk_embedding_sources[chunk_id]
         result["retrieval_sources"] = retrieval_sources
         rows.append(result)
 
@@ -420,6 +462,9 @@ def query_evidence(
             "asic_or_generation": asic_or_generation,
             "source_types": sorted(source_type_filter),
         },
+        "query_embedding": {
+            key: value for key, value in query_vector.items() if key != "vector"
+        },
         "source": "sqlite",
     }
 
@@ -434,6 +479,56 @@ def _query_id_for_results(query: str, rows: Iterable[Mapping[str, Any]]) -> str:
     corpus_id = str(row_list[0].get("corpus_id") or "query").strip() or "query"
     query_slug = re.sub(r"[^a-z0-9]+", "_", query.lower()).strip("_")
     return f"{corpus_id}_{query_slug}" if query_slug else corpus_id
+
+
+def _query_vector_for_retrieval(
+    db_path: Path,
+    query: str,
+    embedding_transport: Optional[EmbeddingTransport] = None,
+) -> Dict[str, Any]:
+    provider_settings = load_provider_settings(db_path)
+    config = _embedding_provider_config(provider_settings)
+    if config is not None:
+        try:
+            provider = create_embedding_provider(config)
+            if embedding_transport is not None and hasattr(provider, "transport"):
+                provider.transport = embedding_transport
+            vector = provider.embed([query], config)[0]
+            return {
+                "vector": vector,
+                "source": "provider",
+                "provider": config.provider,
+                "model": config.model,
+            }
+        except Exception as exc:
+            return {
+                "vector": _deterministic_embedding(query),
+                "source": "deterministic-fallback",
+                "error": str(exc),
+            }
+    return {"vector": _deterministic_embedding(query), "source": "deterministic"}
+
+
+def _embedding_metadata_from_vector_match(match: Mapping[str, Any]) -> Dict[str, Any]:
+    raw = match.get("metadata_json")
+    if raw in (None, ""):
+        return {}
+    try:
+        value = json.loads(str(raw))
+    except (TypeError, json.JSONDecodeError):
+        return {}
+    return value if isinstance(value, dict) else {}
+
+
+def _vector_match_compatible_with_query(
+    query_vector: Mapping[str, Any],
+    embedding_metadata: Mapping[str, Any],
+) -> bool:
+    query_source = str(query_vector.get("source") or "")
+    embedding_source = str(embedding_metadata.get("source") or "")
+    if query_source == "deterministic-fallback":
+        return embedding_source in {"deterministic", "deterministic-fallback"}
+    return True
 
 
 def get_evidence_detail(db_path: Path, evidence_id: int) -> Dict[str, Any]:
@@ -1073,6 +1168,7 @@ def generate_semantic_edges_for_query(
         edge_count = _persist_generated_edges(
             store,
             generated,
+            allowed_endpoints=_semantic_edge_allowed_endpoints_from_rows(query, rows),
             provenance={
                 "provider": config.provider,
                 "model": config.preferred,
@@ -1154,6 +1250,7 @@ def generate_semantic_edges_batch(
             edge_count += _persist_generated_edges(
                 store,
                 generated,
+                allowed_endpoints=_semantic_edge_allowed_endpoints_from_candidates(batch),
                 provenance={
                     "provider": config.provider,
                     "model": config.preferred,
@@ -1565,8 +1662,12 @@ def _semantic_edge_prompt(query: str, rows: Iterable[Mapping[str, Any]]) -> str:
     row_list = list(rows)
     terms = _unique_ordered(
         [
-            *[token.upper() for token in _query_tokens(query) if "_" in token or token.isupper()],
-            *[str(row.get("symbol") or "") for row in row_list],
+            *[token.upper() for token in _query_tokens(query) if _is_semantic_graph_endpoint(token)],
+            *[
+                str(row.get("symbol") or "")
+                for row in row_list
+                if _is_semantic_graph_endpoint(str(row.get("symbol") or ""), str(row.get("entity_type") or ""))
+            ],
         ]
     )
     snippet_lines = []
@@ -1616,7 +1717,7 @@ def _semantic_edge_batch_candidates(
     candidates: Dict[str, Dict[str, Any]] = {}
     for row in rows:
         symbol = str(row["symbol"] or "").strip()
-        if not symbol or not _is_symbol_like(symbol):
+        if not symbol or not _is_semantic_graph_endpoint(symbol, str(row["entity_type"] or "")):
             continue
         candidate_id = _semantic_edge_candidate_id(row)
         candidate = candidates.setdefault(
@@ -1652,6 +1753,7 @@ def _semantic_edge_batch_prompt(candidates: Iterable[Mapping[str, Any]]) -> str:
         "Return JSON cases with edges containing src, relation, dst, confidence, and evidence.",
         "Return compact JSON only. Keep each evidence value under 140 characters and quote only the smallest supporting phrase, not whole source lines.",
         "Use only exact CASE ids, exact TERMS, or exact function/register/doc symbols shown in the prompt for src and dst.",
+        "Edges with endpoints outside CASE ids or TERMS are discarded.",
         "Do not create local-variable endpoints such as tmp, ret, data, value, reg, or ring.",
     ]
     for candidate in candidates:
@@ -1786,7 +1888,7 @@ def _persist_doc_nodes(
             dst = _resolve_doc_node_endpoint(str(relationship.get("dst") or ""), local_boxes)
             if not src or not dst or src == dst:
                 continue
-            if not is_graph_entity_endpoint(src) or not is_graph_entity_endpoint(dst):
+            if not _is_semantic_graph_endpoint(src) or not _is_semantic_graph_endpoint(dst):
                 continue
             box_node_id = src if src in local_boxes.values() else dst if dst in local_boxes.values() else ""
             edge_id = store.add_edge(
@@ -1851,6 +1953,7 @@ def _persist_generated_edges(
     generated: Mapping[str, Any],
     provenance: Optional[Mapping[str, object]] = None,
     commit: bool = True,
+    allowed_endpoints: Optional[set[str]] = None,
 ) -> int:
     edge_count = 0
     seen_edges: set[tuple[str, str, str]] = set()
@@ -1866,6 +1969,8 @@ def _persist_generated_edges(
             if not src or not dst:
                 continue
             if src == dst:
+                continue
+            if allowed_endpoints is not None and (src not in allowed_endpoints or dst not in allowed_endpoints):
                 continue
             if not is_graph_entity_endpoint(src) or not is_graph_entity_endpoint(dst):
                 continue
@@ -1891,6 +1996,73 @@ def _persist_generated_edges(
     if edge_count and commit:
         store.con.commit()
     return edge_count
+
+
+def _semantic_edge_allowed_endpoints_from_rows(query: str, rows: Iterable[Mapping[str, Any]]) -> set[str]:
+    row_list = list(rows)
+    return {
+        endpoint
+        for endpoint in _unique_ordered(
+            [
+                *[token for token in _query_tokens(query) if _is_semantic_graph_endpoint(token)],
+                *[
+                    str(row.get("symbol") or "")
+                    for row in row_list
+                    if _is_semantic_graph_endpoint(str(row.get("symbol") or ""), str(row.get("entity_type") or ""))
+                ],
+            ]
+        )
+        if endpoint and _is_semantic_graph_endpoint(endpoint)
+    }
+
+
+def _semantic_edge_allowed_endpoints_from_candidates(candidates: Iterable[Mapping[str, Any]]) -> set[str]:
+    endpoints: set[str] = set()
+    for candidate in candidates:
+        candidate_id = str(candidate.get("id") or "").strip()
+        if candidate_id and _is_semantic_graph_endpoint(candidate_id):
+            endpoints.add(candidate_id)
+        for term in candidate.get("terms", []) or []:
+            endpoint = str(term or "").strip()
+            if endpoint and _is_semantic_graph_endpoint(endpoint):
+                endpoints.add(endpoint)
+    return endpoints
+
+
+def _is_semantic_graph_endpoint(endpoint: str, entity_type: str = "") -> bool:
+    value = endpoint.strip()
+    if not value or not is_graph_entity_endpoint(value):
+        return False
+    kind = entity_type.strip().lower()
+    if kind:
+        return kind in {"function", "register", "field", "doc_section", "pdf_section", "doc_box"}
+    lower = value.lower()
+    if lower in {
+        "data",
+        "funcs",
+        "gc",
+        "init_func",
+        "ip_version",
+        "local",
+        "ops",
+        "reg",
+        "ret",
+        "ring",
+        "tmp",
+        "value",
+    }:
+        return False
+    if lower.startswith(("data_", "local_", "ret_", "tmp_", "value_")):
+        return False
+    if lower.endswith(("_func", "_funcs")) and not value.startswith(("reg", "mm", "smn")):
+        return False
+    if "#" in value or ":" in value:
+        return True
+    if value.startswith(("reg", "mm", "smn")) and len(value) > 3:
+        return True
+    if "_" in value and (value.upper() == value or any(char.isdigit() for char in value)):
+        return True
+    return False
 
 
 def _semantic_edge_candidate_id(row: Mapping[str, Any]) -> str:
@@ -1969,6 +2141,7 @@ def _index_deterministic_code_graph_files(
     table_field_aliases: Dict[str, List[str]] = {}
     version_field_sinks: Dict[str, List[CodeGraphVersionFieldSink]] = {}
     receiver_table_aliases: Dict[str, List[str]] = {}
+    return_table_aliases: Dict[str, List[str]] = {}
     for file_path in file_path_list:
         for location in collect_code_graph_function_locations(file_path, source_root=source_root):
             function_locations.setdefault(location.name, []).append(location)
@@ -1983,6 +2156,17 @@ def _index_deterministic_code_graph_files(
             for sink in sinks:
                 if sink not in version_field_sinks[str(sink_key)]:
                     version_field_sinks[str(sink_key)].append(sink)
+        for alias_key, alias_values in collect_code_graph_return_table_aliases(file_path).items():
+            return_table_aliases.setdefault(str(alias_key), [])
+            for alias_value in alias_values:
+                alias_text = str(alias_value)
+                if alias_text not in return_table_aliases[str(alias_key)]:
+                    return_table_aliases[str(alias_key)].append(alias_text)
+    return_table_aliases = {
+        alias_key: alias_values
+        for alias_key, alias_values in return_table_aliases.items()
+        if len(alias_values) == 1
+    }
     for file_path in file_path_list:
         for alias_key, alias_values in collect_code_graph_receiver_table_aliases(
             file_path,
@@ -2006,6 +2190,7 @@ def _index_deterministic_code_graph_files(
                 known_table_field_aliases=table_field_aliases,
                 known_version_field_sinks=version_field_sinks,
                 known_receiver_table_aliases=receiver_table_aliases,
+                known_return_table_aliases=return_table_aliases,
             )
         except Exception:
             continue

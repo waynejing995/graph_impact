@@ -2,7 +2,7 @@
 
 Date: 2026-05-18
 
-Status: pass for full local Ollama provider embedding coverage on a temp DB; query-time provider rerank and credentialed OpenAI-compatible QA remain residuals.
+Status: pass for full local Ollama provider embedding coverage on a temp DB; query-time provider rerank wiring is covered by `docs/qa/2026-05-18-g06-query-time-provider-rerank-qa.md`; credentialed OpenAI-compatible QA remains residual.
 
 JSON artifact: `docs/qa/2026-05-18-g06-full-provider-backfill-tempdb-qa.json`
 
@@ -138,5 +138,5 @@ OK
 ## Residuals
 
 - This proves full local Ollama provider embedding coverage on a temp copy, not credentialed live OpenAI-compatible coverage.
-- `query_evidence()` still uses deterministic query vectors plus FTS/lexical scoring; provider-vector query-time reranking remains open.
+- Query-time provider-vector rerank wiring and explicit provider query-embedding fallback metadata are now covered by `docs/qa/2026-05-18-g06-query-time-provider-rerank-qa.md` and the G15 empty-DB follow-up tests; production semantic ranking quality remains open.
 - Long chunks are intentionally truncated for local embedding context and carry explicit metadata.

@@ -73,7 +73,23 @@ pushes the change that includes this package.
 - 10 real CLI/core graph queries including exact function-node graph fallback;
 - in-app browser 2K screenshots for the default global graph and `gfx_v11_0_hw_init` graph query.
 
-These narrow previous provider/query/browser gaps, but they do not remove the G13 residuals for full clangd/libclang cross-TU type-flow, query-time provider rerank, credentialed OpenAI-compatible live QA, scanned-PDF OCR, or full empty-DB raw re-index timing.
+These narrowed previous provider/query/browser gaps, but at that point still did not remove the G13 residuals for full clangd/libclang cross-TU type-flow, query-time provider rerank wiring, credentialed OpenAI-compatible live QA, scanned-PDF OCR, or full empty-DB raw re-index timing.
+
+2026-05-18 continuation after the next goal resume:
+
+- query-time provider-vector rerank wiring is now proven in `docs/qa/2026-05-18-g06-query-time-provider-rerank-qa.md`, including fake-transport RED/GREEN coverage and a local Ollama/nomic throwaway-DB smoke with `retrieval_sources=["lexical", "fts5", "provider-vector"]`;
+- bounded return-to-vtable table alias extraction is now proven in `docs/qa/2026-05-18-g03-return-table-alias-qa.md`, including a cross-file persisted SQLite callback edge with `type_flow=source_return_table_alias`.
+
+These reduce the G06/G09 provider-rerank wiring boundary and one G03 vtable overlink case. They still do not remove the residuals for full clangd/libclang cross-TU type-flow, credentialed OpenAI-compatible live QA, production-scale semantic rerank quality, scanned-PDF OCR, or full empty-DB raw re-index timing.
+
+2026-05-18 continuation after empty-DB raw re-index:
+
+- empty-DB raw corpus re-index timing is now recorded in `docs/qa/2026-05-18-g15-empty-db-raw-corpus-reindex.md`, with two fresh `/tmp` DB rebuilds completing in `506.75s` and `507.07s` and matching `documents=124`, `chunks=21884`, `evidence=860516`, `edges=39199`;
+- semantic edge endpoint filtering now rejects local/IP/macro endpoints such as `tmp`, `adapt`, `GC`, `WREG32`, `RREG32`, `REG_SET_FIELD`, and `SOC15_REG_OFFSET`; fixed `gemma4:e4b` Stage 2 reruns leave zero such endpoints and a full graph export with only `function`, `register`, `doc_box`, and `doc_section` nodes;
+- ambiguous returned-table aliases are now skipped instead of overlinking duplicate selector names;
+- query embedding fallback metadata is now exposed at the top level of query responses.
+
+These remove the full empty-DB raw re-index residual for the current selective raw path and harden semantic endpoint/schema safety. They still do not remove residuals for full clangd/libclang cross-TU type-flow, credentialed OpenAI-compatible live QA, production-scale semantic ranking quality, scanned-PDF OCR, or future full all-file code indexing beyond the current selective parser scope.
 
 ## Closure Rule
 

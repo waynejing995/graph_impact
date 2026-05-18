@@ -1,6 +1,6 @@
 # G01 Real Ingestion And Indexing
 
-Status: Current clean-final pass verified; final gate and scale boundaries remain
+Status: Current clean-final pass and empty-DB raw re-index verified; final gate and scale boundaries remain
 
 ## Requirement
 
@@ -33,12 +33,13 @@ The index path must build ASIP evidence from raw inputs, not from an already gen
 - Synthetic multi-source fixture acceptance `docs/qa/2026-05-17-acceptance-multisource-fixture.json` and `.md` proves the current gate can pass when the index actually contains multiple source classes: `/tmp/asip-multisource-clean-2026-05-17.db` has `documents` counts `code=1`, `doc=1`, `pdf=1`, `register=2`, and `evidence` counts `code=23`, `doc=3`, `pdf=4`, `register=4`. AQ05 passes with `code`, `doc`, `pdf`, and `register`; AQ06 passes with `code` and `register`.
 - Clean-final AMD verification now exists at `/tmp/asip-clean-amd-gemma4-final-current-2026-05-18.db` with `documents=124`, `chunks=21884`, `evidence=860516`, `edges=41893`, and `embeddings=32`. Document source counts are `code=7`, `doc=20`, `pdf=1`, `register=96`; evidence source counts are `code=126`, `doc=5664`, `pdf=5`, `register=854721`.
 - Final current acceptance artifact `docs/qa/2026-05-18-acceptance-clean-amd-gemma4-final-current.json` and `.md` records AQ01-AQ09 as `9 passed, 0 partial, 0 failed` against that clean-final AMD DB with DB health pass and `gemma4:e4b` semantic-edge provider smoke. `docs/qa/2026-05-18-clean-final-stage2-and-macro-qa.md` records the current deterministic graph rebuild, real Stage 2 semantic/doc-node jobs, and macro endpoint audit.
+- Empty-DB raw re-index QA is recorded in `docs/qa/2026-05-18-g15-empty-db-raw-corpus-reindex.md` and `.json`: two fresh `/tmp` SQLite DBs rebuilt from `/tmp/asip-mxgpu`, `/tmp/asip-linux-amdgpu`, and `docs/fixtures/amd-amdgpu-docs` in `506.75s` and `507.07s`, both ending with `documents=124`, `chunks=21884`, `evidence=860516`, and final SQLite graph edges `39199`. The same artifact records real `gemma4:e4b` Stage 2 reruns, 11 real queries, and a graph endpoint audit with zero `tmp/adapt/GC/WREG32/RREG32/REG_SET_FIELD/SOC15_REG_OFFSET` nodes.
 
 ## Remaining Gap
 
 The first live slice now has real SQLite indexing for MxGPU/Linux snippets plus configured docs/PDF/register sources, and the clean AMD DB proves code, docs, generated register headers, and a reduced AMD amdgpu PDF fixture in one repeatable CLI/core path. The old clean provider AQ pass remains superseded because its recorded source diversity is code-only, while the new clean AMD provider artifact is the current acceptance evidence.
 
-The configured raw-corpus path deliberately remains query-focused for code sources and supplemental for docs/register/PDF to avoid unbounded symbol evidence explosions; full all-file code indexing still needs a more selective parser/indexer before it can close G15. Current clean-final Web/API/browser product-surface QA is recorded in the final evidence package, while G11 still owns final documentation review, commit, push, and explicit residual-boundary acceptance.
+The configured raw-corpus path deliberately remains query-focused for code sources and supplemental for docs/register/PDF to avoid unbounded symbol evidence explosions. Empty-DB raw re-index timing is now measured for the current selective raw path, while a future full all-file code indexer would still need a more selective parser before changing that scope. Current clean-final Web/API/browser product-surface QA is recorded in the final evidence package, while G11 still owns final documentation review, commit, push, and explicit residual-boundary acceptance.
 
 Final closure must link to [Final Clean Evidence Package Gate](2026-05-17-final-clean-evidence-package.md) and include real source roots, DB health, source-type counts, query evidence, graph counts, provider state, visual QA, and performance.
 

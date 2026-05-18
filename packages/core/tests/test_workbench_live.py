@@ -103,6 +103,62 @@ class FailingSecondBatchSemanticEdgeProvider:
         }
 
 
+class InvalidEndpointSemanticEdgeProvider:
+    def generate(self, prompt, model):
+        self.prompt = prompt
+        return {
+            "cases": [
+                {
+                    "id": "semantic-endpoint-filter",
+                    "edges": [
+                        {
+                            "src": "tmp",
+                            "relation": "writes",
+                            "dst": "GCVM_L2_CNTL",
+                            "confidence": 1.0,
+                            "evidence": "tmp = REG_SET_FIELD(tmp, GCVM_L2_CNTL, ENABLE_L2_CACHE, 1)",
+                        },
+                        {
+                            "src": "GC",
+                            "relation": "writes",
+                            "dst": "regGCVM_L2_CNTL",
+                            "confidence": 1.0,
+                            "evidence": "WREG32_SOC15(GC, 0, regGCVM_L2_CNTL, tmp)",
+                        },
+                        {
+                            "src": "IP_VERSION",
+                            "relation": "writes",
+                            "dst": "regGCVM_L2_CNTL",
+                            "confidence": 1.0,
+                            "evidence": "IP_VERSION is a macro-ish token, not an entity",
+                        },
+                        {
+                            "src": "tmp_value",
+                            "relation": "writes",
+                            "dst": "GCVM_L2_CNTL",
+                            "confidence": 1.0,
+                            "evidence": "tmp_value is a local variable",
+                        },
+                        {
+                            "src": "init_func",
+                            "relation": "calls",
+                            "dst": "GCVM_L2_CNTL",
+                            "confidence": 1.0,
+                            "evidence": "init_func is a local callback variable name",
+                        },
+                        {
+                            "src": "regGCVM_L2_CNTL",
+                            "relation": "reads",
+                            "dst": "GCVM_L2_CNTL",
+                            "confidence": 0.93,
+                            "evidence": "RREG32_SOC15(GC, 0, regGCVM_L2_CNTL)",
+                        },
+                    ],
+                }
+            ]
+        }
+
+
 class DocSectionSemanticEdgeProvider:
     def generate(self, prompt, model):
         self.prompt = prompt
@@ -929,6 +985,156 @@ class WorkbenchLiveTests(unittest.TestCase):
             self.assertEqual(alias_provenance["call_kind"], "vtable_table_alias")
             self.assertEqual(alias_provenance["receiver_tables"], ["gfx_v11_0_ip_funcs"])
             self.assertEqual(alias_provenance["callback_table"], "gfx_v11_0_ip_funcs")
+
+    def test_index_registered_corpus_uses_returned_table_alias_across_files(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            source_root = root / "corpus"
+            source_root.mkdir()
+            (source_root / "gfx.c").write_text(
+                "\n".join(
+                    [
+                        "static int gfx_v11_0_hw_init(void *adev) {",
+                        "  WREG32(mmGCVM_L2_CNTL, 1);",
+                        "  return 0;",
+                        "}",
+                        "static const struct amd_ip_funcs gfx_v11_0_ip_funcs = {",
+                        "  .hw_init = gfx_v11_0_hw_init,",
+                        "};",
+                        "const struct amd_ip_funcs *select_gfx_funcs(void) {",
+                        "  return &gfx_v11_0_ip_funcs;",
+                        "}",
+                    ]
+                ),
+                encoding="utf-8",
+            )
+            (source_root / "sdma.c").write_text(
+                "\n".join(
+                    [
+                        "static int sdma_v5_0_hw_init(void *adev) {",
+                        "  WREG32(mmSDMA0_RLC0_RB_CNTL, 1);",
+                        "  return 0;",
+                        "}",
+                        "static const struct amd_ip_funcs sdma_v5_0_ip_funcs = {",
+                        "  .hw_init = sdma_v5_0_hw_init,",
+                        "};",
+                    ]
+                ),
+                encoding="utf-8",
+            )
+            (source_root / "common.c").write_text(
+                "\n".join(
+                    [
+                        "int common_hw_init(void) {",
+                        "  const struct amd_ip_funcs *funcs = select_gfx_funcs();",
+                        "  return funcs->hw_init(0);",
+                        "}",
+                    ]
+                ),
+                encoding="utf-8",
+            )
+            db_path = root / "asip.db"
+            store = AsipStore.connect(str(db_path))
+            store.migrate()
+            store.upsert_corpus("linux-amdgpu", "https://github.com/torvalds/linux", str(source_root), ["**/*.c"])
+            store.upsert_resolver_profile(
+                "test-amd-return-alias",
+                "cpp",
+                ["WREG32"],
+                "reference",
+                "test.yaml",
+                config={
+                    "id": "test-amd-return-alias",
+                    "language": "cpp",
+                    "symbol_prefixes": ["reg", "mm"],
+                    "wrappers": {"WREG32": {"symbol_arg": 0, "access": "write"}},
+                },
+            )
+
+            workbench.index_registered_corpora(db_path, corpus_ids=["linux-amdgpu"])
+            rows = [
+                (row["src"], row["relation"], row["dst"], json.loads(str(row["provenance_json"])))
+                for row in AsipStore.connect(str(db_path)).con.execute(
+                    "select src, relation, dst, provenance_json from edges where relation = 'calls'"
+                )
+            ]
+            triples = {(src, relation, dst) for src, relation, dst, _provenance in rows}
+
+            self.assertIn(("common_hw_init", "calls", "gfx_v11_0_hw_init"), triples)
+            self.assertNotIn(("common_hw_init", "calls", "sdma_v5_0_hw_init"), triples)
+            alias_provenance = next(
+                provenance
+                for src, relation, dst, provenance in rows
+                if (src, relation, dst) == ("common_hw_init", "calls", "gfx_v11_0_hw_init")
+            )
+            self.assertEqual(alias_provenance["call_kind"], "vtable_table_alias")
+            self.assertEqual(alias_provenance["receiver_tables"], ["gfx_v11_0_ip_funcs"])
+            self.assertEqual(alias_provenance["callback_table"], "gfx_v11_0_ip_funcs")
+            self.assertEqual(alias_provenance["type_flow"], "source_return_table_alias")
+
+    def test_index_registered_corpus_skips_ambiguous_returned_table_aliases(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            source_root = root / "corpus"
+            source_root.mkdir()
+            (source_root / "gfx.c").write_text(
+                "\n".join(
+                    [
+                        "static int gfx_v11_0_hw_init(void *adev) {",
+                        "  return 0;",
+                        "}",
+                        "static const struct amd_ip_funcs gfx_v11_0_ip_funcs = {",
+                        "  .hw_init = gfx_v11_0_hw_init,",
+                        "};",
+                        "const struct amd_ip_funcs *select_funcs(void) {",
+                        "  return &gfx_v11_0_ip_funcs;",
+                        "}",
+                    ]
+                ),
+                encoding="utf-8",
+            )
+            (source_root / "sdma.c").write_text(
+                "\n".join(
+                    [
+                        "static int sdma_v5_0_hw_init(void *adev) {",
+                        "  return 0;",
+                        "}",
+                        "static const struct amd_ip_funcs sdma_v5_0_ip_funcs = {",
+                        "  .hw_init = sdma_v5_0_hw_init,",
+                        "};",
+                        "const struct amd_ip_funcs *select_funcs(void) {",
+                        "  return &sdma_v5_0_ip_funcs;",
+                        "}",
+                    ]
+                ),
+                encoding="utf-8",
+            )
+            (source_root / "common.c").write_text(
+                "\n".join(
+                    [
+                        "int common_hw_init(void) {",
+                        "  void *selected = select_funcs();",
+                        "  return selected->hw_init(0);",
+                        "}",
+                    ]
+                ),
+                encoding="utf-8",
+            )
+            db_path = root / "asip.db"
+            store = AsipStore.connect(str(db_path))
+            store.migrate()
+            store.upsert_corpus("linux-amdgpu", "https://github.com/torvalds/linux", str(source_root), ["**/*.c"])
+
+            workbench.index_registered_corpora(db_path, corpus_ids=["linux-amdgpu"])
+            triples = {
+                (row["src"], row["relation"], row["dst"])
+                for row in AsipStore.connect(str(db_path)).con.execute(
+                    "select src, relation, dst from edges where relation = 'calls'"
+                )
+            }
+
+            self.assertNotIn(("common_hw_init", "calls", "gfx_v11_0_hw_init"), triples)
+            self.assertNotIn(("common_hw_init", "calls", "sdma_v5_0_hw_init"), triples)
 
     def test_index_registered_corpus_field_path_alias_does_not_pollute_ip_funcs(self):
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -2632,6 +2838,82 @@ class WorkbenchLiveTests(unittest.TestCase):
             self.assertEqual(store_after.con.execute("select count(*) from edges").fetchone()[0], 0)
             job = store_after.con.execute("select status from jobs order by id desc limit 1").fetchone()
             self.assertEqual(job["status"], "failed")
+
+    def test_batch_semantic_edge_job_filters_provider_local_variable_endpoints(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            db_path = root / "asip.db"
+            store = AsipStore.connect(str(db_path))
+            store.migrate()
+            document_id = store.add_document("code", "code", "gfx.c")
+            chunk_id = store.add_chunk(
+                document_id,
+                "tmp = RREG32_SOC15(GC, 0, regGCVM_L2_CNTL);\n"
+                "tmp = REG_SET_FIELD(tmp, GCVM_L2_CNTL, ENABLE_L2_CACHE, 1);\n"
+                "WREG32_SOC15(GC, 0, regGCVM_L2_CNTL, tmp);",
+                1,
+                3,
+            )
+            for symbol, entity_type in [
+                ("GC", "context"),
+                ("IP_VERSION", "context"),
+                ("tmp_value", "context"),
+                ("init_func", "context"),
+                ("regGCVM_L2_CNTL", "register"),
+                ("GCVM_L2_CNTL", "register"),
+                ("ENABLE_L2_CACHE", "field"),
+            ]:
+                store.add_evidence(
+                    chunk_id=chunk_id,
+                    corpus_id="code",
+                    source_type="code",
+                    repo="local",
+                    path="gfx.c",
+                    line_start=1,
+                    line_end=3,
+                    symbol=symbol,
+                    entity_type=entity_type,
+                    access_type="mention",
+                    confidence=0.95,
+                    snippet="REG_SET_FIELD(tmp, GCVM_L2_CNTL, ENABLE_L2_CACHE, 1);",
+                    resolved_chain=f"code snippet -> {symbol}",
+                )
+            save_provider_settings(
+                db_path,
+                {
+                    "edge": {
+                        "provider": "ollama",
+                        "base_url": "http://edge.local",
+                        "api_path": "/api/chat",
+                        "model": "gemma4:e4b",
+                        "timeout_seconds": 2,
+                    }
+                },
+            )
+
+            provider = InvalidEndpointSemanticEdgeProvider()
+            summary = generate_semantic_edges_batch(
+                db_path,
+                limit=1,
+                batch_size=1,
+                edge_provider=provider,
+            )
+
+            rows = [
+                dict(row)
+                for row in AsipStore.connect(str(db_path)).con.execute(
+                    "select src, relation, dst from edges where stage = 'semantic' order by id"
+                )
+            ]
+            terms_line = next(line for line in provider.prompt.splitlines() if line.startswith("TERMS:"))
+            self.assertNotIn("GC,", terms_line)
+            self.assertNotIn("IP_VERSION", terms_line)
+            self.assertNotIn("tmp_value", terms_line)
+            self.assertNotIn("init_func", terms_line)
+            self.assertTrue(workbench._is_semantic_graph_endpoint("function_with_underscore", "function"))
+            self.assertTrue(workbench._is_semantic_graph_endpoint("docs/guide.md#programming-local-registers"))
+            self.assertEqual(summary["edge_count"], 1)
+            self.assertEqual(rows, [{"src": "regGCVM_L2_CNTL", "relation": "reads", "dst": "GCVM_L2_CNTL"}])
 
     def test_semantic_edge_job_generates_edges_from_indexed_evidence_and_provider_settings(self):
         with tempfile.TemporaryDirectory() as tmpdir:

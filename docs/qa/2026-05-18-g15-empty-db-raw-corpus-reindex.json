@@ -1,0 +1,104 @@
+{
+  "date": "2026-05-18",
+  "status": "pass_with_residuals",
+  "source_roots": {
+    "mxgpu": {
+      "path": "/tmp/asip-mxgpu",
+      "head": "f603f87"
+    },
+    "linux-amdgpu": {
+      "path": "/tmp/asip-linux-amdgpu",
+      "head": "6916d57",
+      "relative_root": "drivers/gpu/drm/amd/amdgpu"
+    },
+    "amd-amdgpu-docs": {
+      "path": "docs/fixtures/amd-amdgpu-docs"
+    }
+  },
+  "rebuilds": [
+    {
+      "db_path": "/tmp/asip-raw-reindex-20260518-161425/asip-1.db",
+      "elapsed_seconds": 506.75,
+      "documents": 124,
+      "chunks": 21884,
+      "evidence": 860516,
+      "sqlite_edges": 39199,
+      "cli_summary_edges": 39233,
+      "files": 1349
+    },
+    {
+      "db_path": "/tmp/asip-raw-reindex-20260518-161425/asip-2.db",
+      "elapsed_seconds": 507.07,
+      "documents": 124,
+      "chunks": 21884,
+      "evidence": 860516,
+      "sqlite_edges": 39199,
+      "cli_summary_edges": 39233,
+      "files": 1349
+    }
+  ],
+  "fixed_stage2": {
+    "db_path": "/tmp/asip-raw-reindex-20260518-161425/asip-2-filtered-rerun.db",
+    "provider": "ollama",
+    "model": "gemma4:e4b",
+    "query_semantic_edges": {
+      "job_id": 2,
+      "edge_count": 1,
+      "elapsed_seconds": 49.43
+    },
+    "doc_nodes_batch": {
+      "job_id": 4,
+      "box_count": 6,
+      "edge_count": 11,
+      "elapsed_seconds": 57.36
+    },
+    "semantic_edges_batch": {
+      "failed_before_prompt_term_filter": {
+        "job_id": 3,
+        "message": "semantic edge provider returned no persistable edges",
+        "elapsed_seconds": 78.13
+      },
+      "passed_after_prompt_term_filter": {
+        "job_id": 5,
+        "edge_count": 1,
+        "elapsed_seconds": 110.11
+      }
+    },
+    "bad_semantic_endpoints": 0,
+    "invalid_macro_or_local_endpoints": 0,
+    "graph_export": {
+      "nodes": 14404,
+      "edges": 31512,
+      "node_kinds": {
+        "function": 12255,
+        "register": 2142,
+        "doc_box": 6,
+        "doc_section": 1
+      },
+      "visible_stages": {
+        "deterministic": 31497,
+        "semantic": 11,
+        "evidence": 4
+      },
+      "elapsed_seconds": 6.34
+    }
+  },
+  "queries": {
+    "total": 11,
+    "strong": 8,
+    "weak_ranking": 3
+  },
+  "tests_added": [
+    "test_batch_semantic_edge_job_filters_provider_local_variable_endpoints",
+    "test_index_registered_corpus_skips_ambiguous_returned_table_aliases",
+    "test_query_evidence_reports_provider_query_embedding_fallback_metadata",
+    "test_query_evidence_does_not_compare_fallback_query_vector_to_provider_vectors"
+  ],
+  "residuals": [
+    "Full clangd/libclang cross-TU vtable/type-flow extraction is still not implemented.",
+    "Credentialed hosted OpenAI-compatible live QA is still not run.",
+    "Semantic ranking quality remains a product-quality boundary.",
+    "The CLI index summary/table edge-count delta should be cleaned up.",
+    "OCR for scanned PDFs remains outside this artifact."
+  ]
+}

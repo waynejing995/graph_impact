@@ -107,7 +107,7 @@
   ],
   "residuals": [
     "This proves full local Ollama provider embedding coverage on a temp copy, not credentialed live OpenAI-compatible coverage.",
-    "query_evidence still uses deterministic query vectors plus FTS/lexical scoring; provider-vector query-time reranking remains a named residual.",
+    "Query-time provider-vector rerank wiring and explicit provider query-embedding fallback metadata are covered by later G06/G15 QA; production semantic ranking quality remains a named residual.",
     "Long chunks are truncated to fit local embedding context and carry embedding_text_truncated metadata."
   ]
 }
