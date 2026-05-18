@@ -211,6 +211,7 @@ def build_deterministic_code_graph(
     )
     receiver_table_aliases = _merge_table_field_aliases(
         known_receiver_table_aliases or {},
+        _direct_receiver_table_aliases_from_text(source_text),
         _receiver_table_aliases_from_version_sink_calls(source_text, spans, version_field_sinks),
     )
     slot_calls: List[CodeGraphSlotCall] = []
@@ -423,7 +424,10 @@ def collect_code_graph_receiver_table_aliases(
     except OSError:
         return {}
     spans = _function_spans_from_text(source_text)
-    return _receiver_table_aliases_from_version_sink_calls(source_text, spans, known_version_field_sinks)
+    return _merge_table_field_aliases(
+        _direct_receiver_table_aliases_from_text(source_text),
+        _receiver_table_aliases_from_version_sink_calls(source_text, spans, known_version_field_sinks),
+    )
 
 
 def collect_code_graph_return_table_aliases(source_path: Path) -> Mapping[str, tuple[str, ...]]:
@@ -1110,6 +1114,7 @@ def _slot_calls_for_function(
         function_text,
         version_field_sinks or {},
         return_table_aliases or {},
+        global_receiver_table_aliases or {},
     )
     receiver_table_aliases = _merge_table_field_aliases(
         global_receiver_table_aliases or {},
@@ -1136,6 +1141,8 @@ def _slot_calls_for_function(
                     receiver_table_aliases,
                     active_table_field_aliases,
                 )
+            if not alias_type_flow:
+                alias_type_flow = _type_flow_for_receiver_alias(receiver, alias_type_flows)
             slots.append((
                 receiver,
                 slot,
@@ -1261,30 +1268,56 @@ def _receiver_tables_from_table_field_alias(
     receiver_table_aliases: Mapping[str, Iterable[str]],
     table_field_aliases: Mapping[str, tuple[str, ...]],
 ) -> tuple[str, ...]:
-    normalized_receiver = _normalize_receiver_path(receiver)
-    for alias_receiver, tables in receiver_table_aliases.items():
-        normalized_alias = _normalize_receiver_path(alias_receiver)
-        if normalized_receiver == normalized_alias:
-            continue
-        prefix = f"{normalized_alias}."
-        if not normalized_receiver.startswith(prefix):
-            continue
-        suffix = normalized_receiver[len(prefix) :]
-        for table in tables:
-            resolved = table_field_aliases.get(f"{table}.{suffix}")
-            if resolved:
-                return resolved
+    for receiver_key, key_fn in (
+        (_compact_receiver_path(receiver), _compact_receiver_path),
+        (_normalize_receiver_path(receiver), _normalize_receiver_path),
+    ):
+        resolved_tables: list[str] = []
+        for alias_receiver, tables in receiver_table_aliases.items():
+            alias_key = key_fn(alias_receiver)
+            if receiver_key == alias_key:
+                continue
+            prefix = f"{alias_key}."
+            if not receiver_key.startswith(prefix):
+                continue
+            suffix = receiver_key[len(prefix) :]
+            for table in tables:
+                resolved = table_field_aliases.get(f"{table}.{suffix}")
+                for resolved_table in resolved or ():
+                    if resolved_table not in resolved_tables:
+                        resolved_tables.append(resolved_table)
+        if resolved_tables:
+            return tuple(resolved_tables)
     return ()
 
 
+def _compact_receiver_path(receiver: str) -> str:
+    return re.sub(r"\s+", "", receiver).replace("->", ".")
+
+
 def _normalize_receiver_path(receiver: str) -> str:
-    return re.sub(r"\[[^\]]+\]", "", re.sub(r"\s+", "", receiver).replace("->", "."))
+    return re.sub(r"\[[^\]]+\]", "", _compact_receiver_path(receiver))
+
+
+def _unique_table_names(values: Iterable[object]) -> tuple[str, ...]:
+    unique: list[str] = []
+    for value in values:
+        table = str(value)
+        if table and table not in unique:
+            unique.append(table)
+    return tuple(unique)
+
+
+def _receiver_alias_type_flow(base: str, tables: Iterable[object]) -> str:
+    table_names = _unique_table_names(tables)
+    return f"{base}_ambiguous" if len(table_names) > 1 else base
 
 
 def _receiver_table_aliases_for_function(
     function_text: str,
     version_field_sinks: Mapping[str, Iterable[CodeGraphVersionFieldSink]] = {},
     return_table_aliases: Mapping[str, Iterable[str]] = {},
+    known_receiver_table_aliases: Mapping[str, Iterable[str]] = {},
 ) -> tuple[dict[str, list[str]], dict[str, str]]:
     aliases: dict[str, list[str]] = {}
     type_flows: dict[str, str] = {}
@@ -1298,6 +1331,11 @@ def _receiver_table_aliases_for_function(
     returned_table_alias = re.compile(
         r"\b(?P<receiver>[A-Za-z_]\w*(?:\s*(?:->|\.)\s*[A-Za-z_]\w*(?:\s*\[[^\]]+\])?)*)"
         r"\s*=\s*(?P<callee>[A-Za-z_]\w*)\s*\("
+    )
+    receiver_alias = re.compile(
+        r"\b(?P<receiver>[A-Za-z_]\w*)\s*=\s*&?"
+        r"(?P<source>[A-Za-z_]\w*(?:\s*(?:->|\.)\s*[A-Za-z_]\w*(?:\s*\[[^\]]+\])?)*)"
+        r"\s*(?:;|,)"
     )
     for line in function_text[body_open + 1 :].splitlines():
         if "=" not in line:
@@ -1326,8 +1364,133 @@ def _receiver_table_aliases_for_function(
                 if table_text not in aliases[receiver]:
                     aliases[receiver].append(table_text)
                 type_flows.setdefault(receiver, "source_return_table_alias")
+        visible_receiver_aliases = _merge_table_field_aliases(known_receiver_table_aliases, aliases)
+        for match in receiver_alias.finditer(line):
+            receiver = re.sub(r"\s+", "", match.group("receiver"))
+            source = re.sub(r"\s+", "", match.group("source"))
+            if receiver == source:
+                continue
+            source_tables = _tables_for_receiver_alias(source, visible_receiver_aliases)
+            if not source_tables:
+                for derived_receiver, derived_tables in _receiver_path_aliases_for_local(
+                    receiver,
+                    source,
+                    visible_receiver_aliases,
+                ).items():
+                    aliases.setdefault(derived_receiver, [])
+                    for table_text in derived_tables:
+                        if table_text not in aliases[derived_receiver]:
+                            aliases[derived_receiver].append(table_text)
+                    type_flows.setdefault(
+                        derived_receiver,
+                        _receiver_alias_type_flow("local_receiver_path_alias", derived_tables),
+                    )
+                continue
+            aliases.setdefault(receiver, [])
+            for table_text in source_tables:
+                if table_text not in aliases[receiver]:
+                    aliases[receiver].append(table_text)
+            type_flows.setdefault(
+                receiver,
+                _receiver_alias_type_flow("source_receiver_table_alias", source_tables),
+            )
     _collect_version_sink_call_aliases(function_text, version_field_sinks, aliases)
     return aliases, type_flows
+
+
+def _direct_receiver_table_aliases_from_text(source_text: str) -> dict[str, tuple[str, ...]]:
+    aliases: dict[str, list[str]] = {}
+    assignment = re.compile(
+        r"\b(?P<receiver>[A-Za-z_]\w*(?:\s*(?:->|\.)\s*[A-Za-z_]\w*(?:\s*\[[^\]]+\])?)*)"
+        r"\s*=\s*&?\s*(?P<table>[A-Za-z_]\w*)\s*(?:;|,)"
+    )
+    for line in source_text.splitlines():
+        if "=" not in line:
+            continue
+        for match in assignment.finditer(line):
+            receiver = re.sub(r"\s+", "", match.group("receiver"))
+            table = match.group("table")
+            if receiver == table:
+                continue
+            if not _is_global_receiver_table_alias(receiver):
+                continue
+            if not (_looks_like_callback_table_name(table) or table.endswith("_ip_block")):
+                continue
+            aliases.setdefault(receiver, [])
+            if table not in aliases[receiver]:
+                aliases[receiver].append(table)
+    return {key: tuple(values) for key, values in aliases.items()}
+
+
+def _is_global_receiver_table_alias(receiver: str) -> bool:
+    normalized = _normalize_receiver_path(receiver)
+    if "." not in normalized:
+        return False
+    root = normalized.split(".", 1)[0]
+    if root not in {"adev", "adapt"}:
+        return False
+    leaf = _receiver_leaf(receiver)
+    return _looks_like_callback_table_name(leaf)
+
+
+def _tables_for_receiver_alias(
+    receiver: str,
+    receiver_table_aliases: Mapping[str, Iterable[str]],
+) -> tuple[str, ...]:
+    for receiver_key, key_fn in (
+        (_compact_receiver_path(receiver), _compact_receiver_path),
+        (_normalize_receiver_path(receiver), _normalize_receiver_path),
+    ):
+        matched_tables: list[str] = []
+        for alias_receiver, tables in receiver_table_aliases.items():
+            if key_fn(alias_receiver) != receiver_key:
+                continue
+            for table in tables:
+                table_text = str(table)
+                if table_text and table_text not in matched_tables:
+                    matched_tables.append(table_text)
+        if matched_tables:
+            return tuple(matched_tables)
+    return ()
+
+
+def _receiver_path_aliases_for_local(
+    receiver: str,
+    source: str,
+    receiver_table_aliases: Mapping[str, Iterable[str]],
+) -> dict[str, tuple[str, ...]]:
+    aliases: dict[str, list[str]] = {}
+    for source_key, key_fn in (
+        (_compact_receiver_path(source), _compact_receiver_path),
+        (_normalize_receiver_path(source), _normalize_receiver_path),
+    ):
+        if not source_key:
+            continue
+        for alias_receiver, tables in receiver_table_aliases.items():
+            alias_key = key_fn(alias_receiver)
+            if not alias_key.startswith(f"{source_key}."):
+                continue
+            suffix = alias_key[len(source_key) :]
+            derived_receiver = f"{receiver}{suffix.replace('.', '->')}"
+            aliases.setdefault(derived_receiver, [])
+            for table in tables:
+                table_text = str(table)
+                if table_text and table_text not in aliases[derived_receiver]:
+                    aliases[derived_receiver].append(table_text)
+        if aliases:
+            break
+    return {key: tuple(values) for key, values in aliases.items()}
+
+
+def _type_flow_for_receiver_alias(receiver: str, type_flows: Mapping[str, str]) -> str:
+    normalized_receiver = _normalize_receiver_path(receiver)
+    for alias_receiver, type_flow in type_flows.items():
+        if not type_flow:
+            continue
+        normalized_alias = _normalize_receiver_path(alias_receiver)
+        if normalized_receiver == normalized_alias or normalized_receiver.startswith(f"{normalized_alias}."):
+            return str(type_flow)
+    return ""
 
 
 def _return_table_aliases_from_spans(
@@ -1481,8 +1644,11 @@ def _callback_call_kind(
     slot_call: CodeGraphSlotCall,
     callbacks: List[CodeGraphCallbackSlot],
 ) -> str:
-    if getattr(slot_call, "receiver_tables", ()):
+    receiver_tables = tuple(str(table) for table in getattr(slot_call, "receiver_tables", ()) if table)
+    if len(receiver_tables) == 1:
         return "vtable_table_alias"
+    if len(receiver_tables) > 1:
+        return "vtable_dispatch"
     receiver_leaf = _receiver_leaf(slot_call.receiver)
     if receiver_leaf in _GENERIC_CALLBACK_RECEIVERS:
         return "vtable_dispatch"

@@ -2299,8 +2299,11 @@ def _callbacks_for_code_graph_slot_call(
 
 
 def _code_graph_callback_call_kind(slot_call: Any, callbacks: List[Any]) -> str:
-    if getattr(slot_call, "receiver_tables", ()):
+    receiver_tables = tuple(str(table) for table in getattr(slot_call, "receiver_tables", ()) if table)
+    if len(receiver_tables) == 1:
         return "vtable_table_alias"
+    if len(receiver_tables) > 1:
+        return "vtable_dispatch"
     receiver_leaf = _code_graph_receiver_leaf(str(getattr(slot_call, "receiver", "") or ""))
     if receiver_leaf in GENERIC_CALLBACK_RECEIVERS:
         return "vtable_dispatch"

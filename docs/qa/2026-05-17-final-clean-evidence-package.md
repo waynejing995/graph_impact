@@ -152,7 +152,7 @@ Stage 1 graph edges. The same artifact records a 3,000-edge global graph with
 
 ## Automated Verification
 
-- `PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=packages/core/src:packages/core/tests:. python3 -m unittest discover -s packages/core/tests -p 'test_*.py' -v`: 224 tests OK, 2 sqlite-vec optional skips
+- `PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=packages/core/src:packages/core/tests:. python3 -m unittest discover -s packages/core/tests -p 'test_*.py' -v`: 234 tests OK, 2 sqlite-vec optional skips
 - `PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=packages/core/src:packages/core/tests:. python3 -m unittest apps.api.tests.test_app apps.mcp.tests.test_tools apps.mcp.tests.test_server -v`: 47 tests OK, 1 optional MCP runtime skip under system Python 3.9
 - `PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=packages/core/src:. /Users/chenjingwen/.cache/codex-runtimes/codex-primary-runtime/dependencies/python/bin/python3 -m unittest apps.mcp.tests.test_tools apps.mcp.tests.test_server -v`: 29 tests OK, 0 skips with real `mcp 1.27.1` runtime
 - `pnpm --filter web run lint`: passed

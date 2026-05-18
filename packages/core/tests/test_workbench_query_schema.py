@@ -64,8 +64,8 @@ class WorkbenchQuerySchemaTests(unittest.TestCase):
             self.assertEqual(
                 [node["id"] for node in graph["nodes"]],
                 [
-                    "register:unknown:unknown:unknown:MISSING_CNTL_A",
-                    "register:unknown:unknown:unknown:MISSING_CNTL_B",
+                    "register:unknown:unknown:MISSING_CNTL_A",
+                    "register:unknown:unknown:MISSING_CNTL_B",
                 ],
             )
 
@@ -112,7 +112,7 @@ class WorkbenchQuerySchemaTests(unittest.TestCase):
                     (
                         f"function:fixture:driver_{index}.c:writer_{index}",
                         "writes",
-                        f"register:unknown:unknown:fixture:TEST_REG_CNTL_{index}",
+                        f"register:unknown:unknown:TEST_REG_CNTL_{index}",
                     ),
                     edge_triples,
                 )
@@ -683,7 +683,7 @@ class WorkbenchQuerySchemaTests(unittest.TestCase):
             self.assertEqual(nodes["docs/manual.pdf#page-3"]["kind"], "pdf_section")
             self.assertEqual(nodes["docs/manual.pdf#page-3"]["attr"]["source"][0]["page"], 3)
             self.assertIn(
-                ("docs/manual.pdf#page-3", "documents", "register:GC:unknown:fixture:GCVM_L2_CNTL"),
+                ("docs/manual.pdf#page-3", "documents", "register:GC:unknown:GCVM_L2_CNTL"),
                 edges,
             )
 

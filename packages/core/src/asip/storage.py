@@ -1701,13 +1701,9 @@ def _multi_seed_graph(symbols: Iterable[str]) -> Dict[str, object]:
 def _register_graph_node(symbol: str, metadata: Mapping[str, object]) -> Dict[str, object]:
     register_symbol = _register_symbol_for_graph(str(metadata.get("symbol") or symbol))
     source = _source_records_for_graph(metadata)
-    scope = _source_scope_for_graph(source)
     ip = str(metadata.get("ip") or _ip_for_graph_symbol(register_symbol, source) or "unknown")
     ip_version = str(metadata.get("ip_version") or _ip_version_for_graph_source(source) or "unknown")
-    if ip_version == "unknown":
-        node_id = f"register:{ip}:{ip_version}:{scope}:{register_symbol}"
-    else:
-        node_id = f"register:{ip}:{ip_version}:{register_symbol}"
+    node_id = f"register:{ip}:{ip_version}:{register_symbol}"
     attr = {
         "source": source,
         "symbol": register_symbol,

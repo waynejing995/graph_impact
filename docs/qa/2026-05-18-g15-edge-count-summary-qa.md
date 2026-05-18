@@ -43,7 +43,7 @@ Full core:
 ```text
 PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=packages/core/src:packages/core/tests:. python3 -m unittest discover -s packages/core/tests -p 'test_*.py' -v
 
-Ran 224 tests in 23.515s
+Ran 234 tests in 23.762s
 OK (skipped=2)
 ```
 

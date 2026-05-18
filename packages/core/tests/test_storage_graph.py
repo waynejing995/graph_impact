@@ -190,8 +190,8 @@ class StorageGraphTests(unittest.TestCase):
         self.assertEqual(
             [node["id"] for node in graph["nodes"]],
             [
-                "register:GC:unknown:unknown:GCVM_L2_CNTL",
-                "register:SDMA:unknown:unknown:SDMA0_QUEUE0_RB_CNTL",
+                "register:GC:unknown:GCVM_L2_CNTL",
+                "register:SDMA:unknown:SDMA0_QUEUE0_RB_CNTL",
             ],
         )
 
@@ -266,7 +266,7 @@ class StorageGraphTests(unittest.TestCase):
             edge_triples,
         )
         self.assertIn(
-            ("function:unknown:unknown:gfx_v11_0_hw_init", "writes", "register:GC:unknown:unknown:GCVM_L2_CNTL"),
+            ("function:unknown:unknown:gfx_v11_0_hw_init", "writes", "register:GC:unknown:GCVM_L2_CNTL"),
             edge_triples,
         )
         self.assertLessEqual(len(graph["edges"]), 3)
@@ -424,8 +424,8 @@ class StorageGraphTests(unittest.TestCase):
         graph = store.global_graph_networkx(limit=20)
 
         node_by_id = {node["id"]: node for node in graph["nodes"]}
-        self.assertIn("register:unknown:unknown:linux-amdgpu:MP1_FIRMWARE_FLAGS", node_by_id)
-        register_node = node_by_id["register:unknown:unknown:linux-amdgpu:MP1_FIRMWARE_FLAGS"]
+        self.assertIn("register:unknown:unknown:MP1_FIRMWARE_FLAGS", node_by_id)
+        register_node = node_by_id["register:unknown:unknown:MP1_FIRMWARE_FLAGS"]
         self.assertEqual(register_node["kind"], "register")
         self.assertEqual(register_node["label"], "MP1_FIRMWARE_FLAGS")
         self.assertIn(
@@ -592,7 +592,7 @@ class StorageGraphTests(unittest.TestCase):
         self.assertNotIn("function:unknown:unknown:ih_ring_entry", node_ids)
         self.assertFalse(any(edge["dst"].endswith(":ih_ring_entry") for edge in graph["edges"]))
 
-    def test_register_nodes_merge_only_when_ip_version_matches(self):
+    def test_register_nodes_merge_by_symbol_ip_and_ip_version_across_sources(self):
         store = AsipStore.connect(":memory:")
         store.migrate()
         for corpus_id, repo, ip_version, function_name, path in [
@@ -618,13 +618,47 @@ class StorageGraphTests(unittest.TestCase):
                     "repo": repo,
                 },
             )
+        for corpus_id, repo, function_name, path in [
+            (
+                "mxgpu",
+                "https://github.com/amd/MxGPU-Virtualization",
+                "mxgpu_irq_init",
+                "libgv/core/hw/AI/mi200/mi200_irqmgr.c",
+            ),
+            (
+                "linux-amdgpu",
+                "https://github.com/torvalds/linux",
+                "linux_irq_init",
+                "drivers/gpu/drm/amd/amdgpu/cik_ih.c",
+            ),
+        ]:
+            store.add_edge(
+                function_name,
+                "IH_RB_CNTL",
+                "writes",
+                0.91,
+                stage="deterministic",
+                source="clang_ast",
+                path=path,
+                line_start=8,
+                provenance={
+                    "extractor": "code_graph",
+                    "function": function_name,
+                    "ip": "IH",
+                    "corpus_id": corpus_id,
+                    "repo": repo,
+                },
+            )
 
         graph = store.global_graph_networkx(limit=20)
 
         registers = [node for node in graph["nodes"] if node["kind"] == "register"]
         register_ids = {node["id"] for node in registers}
         edge_triples = {(edge["src"], edge["relation"], edge["dst"]) for edge in graph["edges"]}
-        self.assertEqual(register_ids, {"register:GC:11.0:GCVM_L2_CNTL", "register:GC:12.0:GCVM_L2_CNTL"})
+        self.assertEqual(
+            register_ids,
+            {"register:GC:11.0:GCVM_L2_CNTL", "register:GC:12.0:GCVM_L2_CNTL", "register:IH:unknown:IH_RB_CNTL"},
+        )
         self.assertIn(
             ("function:mxgpu:mxgpu/gfx.c:program_l2_cache", "writes", "register:GC:11.0:GCVM_L2_CNTL"),
             edge_triples,
@@ -641,6 +675,10 @@ class StorageGraphTests(unittest.TestCase):
             "source"
         ]
         self.assertEqual({source["corpus_id"] for source in merged_sources}, {"mxgpu", "linux-amdgpu"})
+        unknown_sources = next(node for node in registers if node["id"] == "register:IH:unknown:IH_RB_CNTL")["attr"][
+            "source"
+        ]
+        self.assertEqual({source["corpus_id"] for source in unknown_sources}, {"mxgpu", "linux-amdgpu"})
 
     def test_edges_record_graph_build_stage_and_provenance(self):
         store = AsipStore.connect(":memory:")
