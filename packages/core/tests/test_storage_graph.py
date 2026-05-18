@@ -271,6 +271,51 @@ class StorageGraphTests(unittest.TestCase):
         )
         self.assertLessEqual(len(graph["edges"]), 3)
 
+    def test_global_graph_budget_preserves_cross_repo_register_bridge_edges(self):
+        store = AsipStore.connect(":memory:")
+        store.migrate()
+        for index in range(20):
+            store.add_edge(
+                f"isolated_writer_{index}",
+                f"ISOLATED_CNTL_{index}",
+                "writes",
+                0.99 - index * 0.001,
+                stage="deterministic",
+                path=f"isolated/{index}.c",
+                provenance={
+                    "function": f"isolated_writer_{index}",
+                    "corpus_id": "linux-amdgpu",
+                    "ip": "GC",
+                },
+            )
+        for corpus_id, function_name, path in [
+            ("linux-amdgpu", "linux_irq_init", "drivers/gpu/drm/amd/amdgpu/cik_ih.c"),
+            ("mxgpu", "mxgpu_irq_init", "libgv/core/hw/AI/mi200/mi200_irqmgr.c"),
+        ]:
+            store.add_edge(
+                function_name,
+                "IH_RB_CNTL",
+                "writes",
+                0.61,
+                stage="deterministic",
+                path=path,
+                provenance={
+                    "function": function_name,
+                    "corpus_id": corpus_id,
+                    "ip": "IH",
+                },
+            )
+
+        graph = store.global_graph_networkx(limit=4)
+
+        edge_triples = {(edge["src"], edge["relation"], edge["dst"]) for edge in graph["edges"]}
+        register_id = "register:IH:unknown:IH_RB_CNTL"
+        self.assertIn(("function:linux-amdgpu:drivers/gpu/drm/amd/amdgpu/cik_ih.c:linux_irq_init", "writes", register_id), edge_triples)
+        self.assertIn(("function:mxgpu:libgv/core/hw/AI/mi200/mi200_irqmgr.c:mxgpu_irq_init", "writes", register_id), edge_triples)
+        register_node = next(node for node in graph["nodes"] if node["id"] == register_id)
+        self.assertEqual({source["corpus_id"] for source in register_node["attr"]["source"]}, {"linux-amdgpu", "mxgpu"})
+        self.assertLessEqual(len(graph["edges"]), 4)
+
     def test_global_graph_budget_preserves_largest_connected_backbone(self):
         store = AsipStore.connect(":memory:")
         store.migrate()

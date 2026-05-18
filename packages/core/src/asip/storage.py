@@ -2540,13 +2540,15 @@ def _select_global_graph_edges(edges: List[Dict[str, object]], edge_limit: int) 
         return []
     protected = [edge for edge in edges if _is_protected_global_edge(edge)]
     protected_budget = min(len(protected), limit)
-    remaining_budget = max(0, limit - protected_budget)
+    bridge_budget = max(0, limit - protected_budget)
+    shared_register_bridges = _shared_register_bridge_edges(edges, bridge_budget)
+    remaining_budget = max(0, limit - protected_budget - len(shared_register_bridges))
     call_backbone_budget = max(1, remaining_budget - max(0, remaining_budget // 5)) if remaining_budget else 0
     call_backbone = _largest_call_backbone_edges(edges, call_backbone_budget)
     operation_backbone = _operation_edges_adjacent_to_backbone(edges, call_backbone, remaining_budget - len(call_backbone))
     selected: List[Dict[str, object]] = []
     seen: set[tuple[str, str, str]] = set()
-    for edge in [*protected, *call_backbone, *operation_backbone, *edges]:
+    for edge in [*protected, *shared_register_bridges, *call_backbone, *operation_backbone, *edges]:
         key = (str(edge["src"]), str(edge["dst"]), str(edge["relation"]))
         if key in seen:
             continue
@@ -2554,6 +2556,61 @@ def _select_global_graph_edges(edges: List[Dict[str, object]], edge_limit: int) 
         selected.append(edge)
         if len(selected) >= limit:
             break
+    return selected
+
+
+def _shared_register_bridge_edges(edges: List[Dict[str, object]], budget: int) -> List[Dict[str, object]]:
+    if budget <= 1:
+        return []
+    candidate_budget = min(max(2, int(budget) // 10), int(budget))
+    operation_relations = {"reads", "writes", "sets_field", "maps_base"}
+    by_register: Dict[str, Dict[str, List[Dict[str, object]]]] = {}
+    for edge in edges:
+        if str(edge.get("relation") or "") not in operation_relations or _is_protected_global_edge(edge):
+            continue
+        src = str(edge.get("src") or "")
+        dst = str(edge.get("dst") or "")
+        register_id = src if _is_register_graph_node_id(src) else dst if _is_register_graph_node_id(dst) else ""
+        function_id = dst if register_id == src else src
+        function_scope = _function_scope_for_graph_node_id(function_id)
+        if not register_id or not function_scope:
+            continue
+        by_register.setdefault(register_id, {}).setdefault(function_scope, []).append(edge)
+
+    groups = [
+        (register_id, scoped_edges)
+        for register_id, scoped_edges in by_register.items()
+        if len(scoped_edges) > 1
+    ]
+    groups.sort(
+        key=lambda item: (
+            -len(item[1]),
+            -sum(int(edge.get("count") or 0) for edges_for_scope in item[1].values() for edge in edges_for_scope),
+            item[0],
+        )
+    )
+
+    selected: List[Dict[str, object]] = []
+    seen: set[tuple[str, str, str]] = set()
+    for _register_id, scoped_edges in groups:
+        for _scope, scope_edges in sorted(scoped_edges.items()):
+            best = sorted(
+                scope_edges,
+                key=lambda edge: (
+                    -float(edge.get("weight") or edge.get("confidence") or 0),
+                    -int(edge.get("count") or 0),
+                    str(edge.get("src") or ""),
+                    str(edge.get("dst") or ""),
+                    str(edge.get("relation") or ""),
+                ),
+            )[0]
+            key = (str(best.get("src") or ""), str(best.get("dst") or ""), str(best.get("relation") or ""))
+            if key in seen:
+                continue
+            selected.append(best)
+            seen.add(key)
+            if len(selected) >= candidate_budget:
+                return selected
     return selected
 
 
@@ -2687,6 +2744,17 @@ def _call_backbone_priority(edge: Mapping[str, object]) -> tuple[int, float, int
     sources = {str(source) for source in edge.get("sources", []) if source}
     source_priority = 0 if "clang_callback" in sources else 1
     return (source_priority, -float(edge.get("weight") or 0), -int(edge.get("count") or 0))
+
+
+def _is_register_graph_node_id(node_id: str) -> bool:
+    return node_id.startswith("register:")
+
+
+def _function_scope_for_graph_node_id(node_id: str) -> str:
+    if not node_id.startswith("function:"):
+        return ""
+    parts = node_id.split(":", 3)
+    return parts[1] if len(parts) > 1 else ""
 
 
 def _normalize_job_status(status: str) -> str:

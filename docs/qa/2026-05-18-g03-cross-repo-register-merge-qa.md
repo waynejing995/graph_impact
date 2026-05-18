@@ -2,8 +2,8 @@
 
 Date: 2026-05-18
 
-Status: pass for product graph register identity; known different
-`ip_version` values still remain separate nodes.
+Status: pass for product graph register identity and default graph visibility;
+known different `ip_version` values still remain separate nodes.
 
 ## Why This Was Failing
 
@@ -95,6 +95,75 @@ register:IH:6.1:IH_RB_CNTL ['linux-amdgpu'] 5
 register:IH:7.0:IH_RB_CNTL ['linux-amdgpu'] 5
 ```
 
+Default-budget product graph evidence through core:
+
+```text
+PYTHONPATH=packages/core/src python3 - <<'PY'
+from pathlib import Path
+from asip.workbench import global_graph
+for limit in (300, 1000, 3000, 8000):
+    g = global_graph(Path('data/asip.db'), limit=limit)
+    shared = []
+    for n in g['nodes']:
+        if n.get('kind') == 'register':
+            srcs = {s.get('corpus_id') for s in n.get('attr', {}).get('source') or []}
+            if 'linux-amdgpu' in srcs and 'mxgpu' in srcs:
+                shared.append(n)
+    ih = [n for n in shared if n['label'] == 'IH_RB_CNTL']
+    related = [e for e in g['edges'] if 'register:IH:unknown:IH_RB_CNTL' in (str(e.get('src')), str(e.get('dst')))]
+    print(f"limit={limit} nodes={len(g['nodes'])} edges={len(g['edges'])} shared_regs={len(shared)} ih={len(ih)} ih_edges={len(related)}")
+    for e in related[:2]:
+        print(" ", e['src'], e['relation'], e['dst'], e['weight'])
+PY
+
+limit=300 nodes=317 edges=300 shared_regs=19 ih=1 ih_edges=2
+  function:linux-amdgpu:drivers/gpu/drm/amd/amdgpu/cik_ih.c:cik_ih_disable_interrupts reads register:IH:unknown:IH_RB_CNTL 0.97
+  function:mxgpu:libgv/core/hw/AI/mi200/mi200_irqmgr.c:mi200_ih_get_wptr maps_base register:IH:unknown:IH_RB_CNTL 0.97
+limit=1000 nodes=1015 edges=1000 shared_regs=57 ih=1 ih_edges=2
+  function:linux-amdgpu:drivers/gpu/drm/amd/amdgpu/cik_ih.c:cik_ih_disable_interrupts reads register:IH:unknown:IH_RB_CNTL 0.97
+  function:mxgpu:libgv/core/hw/AI/mi200/mi200_irqmgr.c:mi200_ih_get_wptr maps_base register:IH:unknown:IH_RB_CNTL 0.97
+limit=3000 nodes=2813 edges=3000 shared_regs=150 ih=1 ih_edges=2
+  function:linux-amdgpu:drivers/gpu/drm/amd/amdgpu/cik_ih.c:cik_ih_disable_interrupts reads register:IH:unknown:IH_RB_CNTL 0.97
+  function:mxgpu:libgv/core/hw/AI/mi200/mi200_irqmgr.c:mi200_ih_get_wptr maps_base register:IH:unknown:IH_RB_CNTL 0.97
+limit=8000 nodes=7030 edges=8000 shared_regs=176 ih=1 ih_edges=14
+  function:linux-amdgpu:drivers/gpu/drm/amd/amdgpu/cik_ih.c:cik_ih_disable_interrupts reads register:IH:unknown:IH_RB_CNTL 0.97
+  function:mxgpu:libgv/core/hw/AI/mi200/mi200_irqmgr.c:mi200_ih_get_wptr maps_base register:IH:unknown:IH_RB_CNTL 0.97
+```
+
+Default-budget product graph evidence through the live Web BFF:
+
+```text
+curl -sS 'http://127.0.0.1:3100/api/workbench/graph?limit=3000' -o /tmp/asip-graph-3100-default.json
+python3 - <<'PY'
+import json
+g = json.load(open('/tmp/asip-graph-3100-default.json'))
+shared = []
+for n in g.get('nodes', []):
+    if n.get('kind') == 'register':
+        srcs = {s.get('corpus_id') for s in n.get('attr', {}).get('source') or []}
+        if 'linux-amdgpu' in srcs and 'mxgpu' in srcs:
+            shared.append(n)
+ih = [n for n in shared if n.get('label') == 'IH_RB_CNTL']
+related = [e for e in g.get('edges', []) if 'register:IH:unknown:IH_RB_CNTL' in (str(e.get('src')), str(e.get('dst')))]
+print('nodes', len(g.get('nodes', [])), 'edges', len(g.get('edges', [])))
+print('shared_regs', len(shared), 'ih', len(ih), 'ih_edges', len(related))
+for e in related[:2]:
+    print(e.get('src'), e.get('relation'), e.get('dst'), e.get('weight'))
+PY
+
+nodes 2813 edges 3000
+shared_regs 150 ih 1 ih_edges 2
+function:linux-amdgpu:drivers/gpu/drm/amd/amdgpu/cik_ih.c:cik_ih_disable_interrupts reads register:IH:unknown:IH_RB_CNTL 0.97
+function:mxgpu:libgv/core/hw/AI/mi200/mi200_irqmgr.c:mi200_ih_get_wptr maps_base register:IH:unknown:IH_RB_CNTL 0.97
+```
+
+Browser QA:
+
+- 2K `/graph` screenshot: `docs/qa/browser/graph-cross-repo-register-default-2k.png`
+- Page metrics: `graph edges: 3000`, loaded budget `3000 / 20000`,
+  visible `1000 / 2813` nodes and `3000 / 3000` loaded edges.
+- Layer header: `deterministic: 2989 semantic: 11`.
+
 ## Tests
 
 Targeted:
@@ -102,12 +171,25 @@ Targeted:
 ```text
 PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=packages/core/src:packages/core/tests:. python3 -m unittest \
   packages.core.tests.test_storage_graph.StorageGraphTests.test_register_nodes_merge_by_symbol_ip_and_ip_version_across_sources \
+  packages.core.tests.test_storage_graph.StorageGraphTests.test_global_graph_budget_preserves_cross_repo_register_bridge_edges \
   packages.core.tests.test_storage_graph.StorageGraphTests.test_global_graph_keeps_smn_prefixed_registers_without_keyword_hints \
   packages.core.tests.test_workbench_live.WorkbenchLiveTests.test_global_graph_returns_weighted_edges_without_seed \
   packages.core.tests.test_workbench_live.WorkbenchLiveTests.test_global_graph_links_code_functions_to_register_operations \
   packages.core.tests.test_workbench_live.WorkbenchLiveTests.test_global_graph_creates_document_section_nodes_from_indexed_chunks \
   -v
 
+OK
+```
+
+Focused rerun for the cross-repo bridge regression:
+
+```text
+PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=packages/core/src:packages/core/tests:. python3 -m unittest \
+  packages.core.tests.test_storage_graph.StorageGraphTests.test_global_graph_budget_preserves_cross_repo_register_bridge_edges \
+  packages.core.tests.test_storage_graph.StorageGraphTests.test_register_nodes_merge_by_symbol_ip_and_ip_version_across_sources \
+  -v
+
+Ran 2 tests in 0.011s
 OK
 ```
 
@@ -129,7 +211,7 @@ Full core:
 ```text
 PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=packages/core/src:packages/core/tests:. python3 -m unittest discover -s packages/core/tests -p 'test_*.py' -v
 
-Ran 234 tests in 23.762s
+Ran 235 tests in 23.821s
 OK (skipped=2)
 ```
 
@@ -138,13 +220,24 @@ API/MCP:
 ```text
 PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=packages/core/src:. python3 -m unittest apps.api.tests.test_app apps.mcp.tests.test_tools apps.mcp.tests.test_server -v
 
-Ran 47 tests in 39.889s
+Ran 47 tests in 41.089s
 OK (skipped=1)
 ```
 
-## Remaining UI Note
+Web route/visual:
 
-The default global graph budget can still hide a particular shared register if
-that register is outside the selected edge budget. That is a visibility/budget
-issue, not a node-identity split: requesting the full graph or querying the
-register now uses the shared register identity.
+```text
+pnpm --filter web exec tsc --noEmit
+pnpm --filter web run lint
+pnpm --filter web exec playwright test tests/visual-anchor-routes.spec.ts --reporter=list
+
+15 passed (30.9s)
+```
+
+## Visibility Note
+
+The default global graph selector now protects representative cross-repo
+register bridge edges before filling the rest of the graph budget. The UI can
+still show only a visible subset of nodes for legibility, but the loaded default
+graph no longer drops the key cross-repo bridge class that made the two repos
+look disconnected.
