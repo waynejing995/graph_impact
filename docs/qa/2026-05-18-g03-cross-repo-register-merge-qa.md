@@ -163,6 +163,19 @@ Browser QA:
 - Page metrics: `graph edges: 3000`, loaded budget `3000 / 20000`,
   visible `1000 / 2813` nodes and `3000 / 3000` loaded edges.
 - Layer header: `deterministic: 2989 semantic: 11`.
+- Follow-up UI clarity fix: the force graph now counts visible shared-register
+  nodes with `data-shared-register-count` and renders shared register nodes
+  with a double-ring marker. This addresses the user-visible problem where
+  the two corpora were connected in data but the bridge was hard to see in the
+  dense force layout.
+- Red/green evidence for that UI contract:
+
+```text
+pnpm --filter web exec playwright test tests/visual-anchor-routes.spec.ts -g "graph route renders API-backed weighted relation graph" --reporter=list
+
+RED: expected data-shared-register-count="1"; received null
+GREEN: 1 passed
+```
 
 ## Tests
 
@@ -211,7 +224,7 @@ Full core:
 ```text
 PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=packages/core/src:packages/core/tests:. python3 -m unittest discover -s packages/core/tests -p 'test_*.py' -v
 
-Ran 235 tests in 23.821s
+Ran 236 tests in 38.406s
 OK (skipped=2)
 ```
 
@@ -220,7 +233,7 @@ API/MCP:
 ```text
 PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=packages/core/src:. python3 -m unittest apps.api.tests.test_app apps.mcp.tests.test_tools apps.mcp.tests.test_server -v
 
-Ran 47 tests in 41.089s
+Ran 47 tests in 47.150s
 OK (skipped=1)
 ```
 
@@ -231,7 +244,7 @@ pnpm --filter web exec tsc --noEmit
 pnpm --filter web run lint
 pnpm --filter web exec playwright test tests/visual-anchor-routes.spec.ts --reporter=list
 
-15 passed (30.9s)
+15 passed (31.5s)
 ```
 
 ## Visibility Note

@@ -1,6 +1,7 @@
 # G11 Completion Gate And Documentation Review
 
-Status: Verification pass complete for current user-review blockers; final git gate remains open
+Status: Verification pass complete for current user-review blockers; residual
+acceptance and latest audit git gate remain open
 
 ## Requirement
 
@@ -12,18 +13,19 @@ Commit and push happen only after verification.
 
 - The active goal explicitly requires full implementation, E2E tests, design-doc review, visual QA, then commit/push.
 - Prior progress docs contain mixed old and new status, so this `docs/gaps/` ledger is the current source of truth.
-- The worktree currently contains many uncommitted implementation files; generated caches must be removed before staging.
+- The current branch has already pushed implementation commits through `eed0115 Preserve shared register bridges in default graph`; this documentation/visual-audit pass still needs its own artifact hygiene, verification, commit, and push before it can be counted in the gate.
 - Final-candidate evidence package now exists at `docs/qa/2026-05-17-final-clean-evidence-package.md`, linking the clean AMD DB, AQ01-AQ09 9/9 artifact, six free queries, semantic-edge jobs, visual QA, automated verification, and architecture review.
 - Current clean-final artifact is `/tmp/asip-clean-amd-gemma4-final-current-2026-05-18.db`, with `graph_rebuild`, `semantic_edges_batch`, and `doc_nodes_batch` jobs all succeeded, AQ01-AQ09 `9/9`, and macro/wrapper endpoint checks recorded in `docs/qa/2026-05-18-clean-final-stage2-and-macro-qa.md`.
-- Final automated rerun after the latest code/doc changes is green: core unittest 234 OK with 2 optional sqlite-vec skips; API/MCP unittest 47 OK with 1 optional MCP runtime skip under system Python; bundled-Python real MCP suite 29 OK with 0 skips; lint passed; TypeScript check passed; Web API+smoke Playwright 75 passed; visual route Playwright 15 passed; combined Web API+smoke+visual Playwright 90 passed; `git diff --check` passed. Clean-final/default browser QA is recorded in the current browser screenshots under `docs/qa/browser/`.
+- Final automated rerun after the latest implementation pass is green: core unittest 236 OK with 2 optional sqlite-vec skips; API/MCP unittest 47 OK with 1 optional MCP runtime skip under system Python; bundled-Python real MCP suite 29 OK with 0 skips from the previous G07 runtime pass; lint passed; TypeScript check passed; visual route Playwright 15 passed; combined Web API+smoke+visual Playwright 90 passed. Clean-final/default browser QA is recorded in the current browser screenshots under `docs/qa/browser/` and the current six-route dark/light pack under `docs/qa/visual-qa-2026-05-18-final-web-pack/`.
 - 2026-05-18 continuation after the user asked to continue added current QA for full local provider embedding coverage, function-node graph fallback, real 10-query graph checks, in-app browser 2K graph screenshots, hidden static graph fallback cleanup, and semantic-edge dedupe. Artifacts: `docs/qa/2026-05-18-g06-full-provider-backfill-tempdb-qa.md`, `docs/qa/2026-05-18-g03-real-query-graph-function-fallback-qa.md`, and `docs/qa/2026-05-18-g14-static-limit-cleanup-qa.md`.
+- 2026-05-18 design/visual audit continuation added `docs/qa/2026-05-18-design-review-closure-matrix.md` and `docs/qa/visual-qa-2026-05-18-final-web-pack/`, explicitly mapping MVP G1-G6 and AQ01-AQ09 to current evidence and capturing all six routes in dark/light at 2048 x 1280.
 - `git diff --check` passed after the current changes, and generated `apps/web/tsconfig.tsbuildinfo` plus the temporary root screenshot were removed from the worktree.
 - 2026-05-17 user review reopened the completion gate for UI: package-backed graph rendering, shadcn-native UI composition, static-data cleanup, and expandable acceptance detail QA. Those blockers now have implementation and test evidence in `docs/qa/2026-05-17-graph-function-section-batch-qa.md`.
 - Bundled Python 3.12 MCP runtime smoke is recorded in `docs/qa/2026-05-18-g07-real-mcp-runtime-smoke.md`; `apps.mcp.tests.test_tools` and `apps.mcp.tests.test_server` ran 29 tests with zero skips.
 
 ## Remaining Gap
 
-Completion evidence is now separated in the final-candidate QA package and the current graph/UI/acceptance-detail blocker pass is documented. The branch is not complete until the remaining final git gate is executed: artifact hygiene, final diff review, commit, push, and any user-accepted deferrals.
+Completion evidence is now separated in the final-candidate QA package and the current graph/UI/acceptance-detail/design-review blocker pass is documented. The branch is not complete until the remaining final gate is executed for the latest audit changes: artifact hygiene, final diff review, commit, push, and explicit acceptance of residual boundaries such as full clangd/libclang cross-TU type-flow and credentialed OpenAI-compatible live QA.
 
 The final branch must avoid staging generated local artifacts such as `data/asip.db`, `apps/web/tsconfig.tsbuildinfo`, Python `__pycache__`, and transient browser screenshots outside `docs/qa`.
 

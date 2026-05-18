@@ -1,0 +1,52 @@
+{
+  "generated_at": "2026-05-18T11:56:27.316Z",
+  "viewport": {
+    "width": 2048,
+    "height": 1280
+  },
+  "base_url": "http://127.0.0.1:3100",
+  "routes": [
+    {
+      "route": "/",
+      "page_id": "evidence-workbench",
+      "metrics": "matches: 0; graph edges: not returned; query: live",
+      "dark": "evidence-workbench-dark.png",
+      "light": "evidence-workbench-light.png"
+    },
+    {
+      "route": "/graph",
+      "page_id": "graph-explorer",
+      "metrics": "graph edges: 3000; force graph 1000 nodes / 1220 visible edges; shared registers: 149",
+      "dark": "graph-explorer-dark.png",
+      "light": "graph-explorer-light.png"
+    },
+    {
+      "route": "/corpus",
+      "page_id": "corpus",
+      "metrics": "corpora: 5; files: 1349; status: editable",
+      "dark": "corpus-dark.png",
+      "light": "corpus-light.png"
+    },
+    {
+      "route": "/resolver-profiles",
+      "page_id": "resolver-profiles",
+      "metrics": "profiles: 9; enabled: 9; strategy: config",
+      "dark": "resolver-profiles-dark.png",
+      "light": "resolver-profiles-light.png"
+    },
+    {
+      "route": "/acceptance",
+      "page_id": "acceptance-tests",
+      "metrics": "passed: 9; partial: 0; failed: 0; queries: 9",
+      "dark": "acceptance-tests-dark.png",
+      "light": "acceptance-tests-light.png"
+    },
+    {
+      "route": "/settings",
+      "page_id": "settings",
+      "metrics": "provider: unverified; edge model: gemma4:e4b; think: off; timeout: 900s",
+      "dark": "settings-dark.png",
+      "light": "settings-light.png"
+    }
+  ]
+}

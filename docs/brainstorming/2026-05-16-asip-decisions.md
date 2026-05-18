@@ -178,13 +178,14 @@ Each returned evidence item should include at least:
 
 ```text
 id
-source_type: code | doc | register
+source_type: code | doc | pdf | register
 repo
 path
 line_start
 line_end
+page
 symbol
-entity_type: function | register | field | macro | doc_section
+entity_type: function | register | field | macro | doc_section | pdf_section | doc_box
 ip_block
 asic_or_generation
 access_type: read | write | read_modify_write | field_set | field_get | mention
@@ -192,6 +193,15 @@ confidence
 snippet
 resolved_chain
 ```
+
+2026-05-18 implementation reconciliation: the original minimum schema above was
+expanded by the final graph/evidence implementation. `pdf` is now a first-class
+source type, and page-aware PDF evidence can surface as `pdf_section` nodes.
+LLM-extracted document boxes use `doc_box` nodes. Product graph entity nodes
+are intentionally narrower than raw evidence entities: visible graph nodes are
+`function`, `register`, `doc_section`, `pdf_section`, and `doc_box`; fields,
+macros, wrappers, source files, and callback slots are attributes/provenance,
+not graph nodes.
 
 `resolved_chain` is required because many useful register references are not direct symbols. It should explain how ASIP normalized a code reference into a hardware entity.
 

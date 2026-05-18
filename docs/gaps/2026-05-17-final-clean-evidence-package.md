@@ -61,7 +61,7 @@ The following artifacts are useful but not final closure:
 
 The current final-candidate package is `docs/qa/2026-05-17-final-clean-evidence-package.md`.
 It links the clean AMD DB, source roots, counts, AQ01-AQ09 9/9 artifact,
-six free-form queries, `gemma4:e4b` clean provider smoke and live semantic-edge jobs, visual QA screenshots,
+six free-form queries plus later 10-query graph QA, `gemma4:e4b` clean provider smoke and live semantic-edge jobs, visual QA screenshots,
 automated verification, architecture review, and a final git gate. Commit and
 push evidence remains pending until the G11 final gate stages, commits, and
 pushes the change that includes this package.
@@ -90,6 +90,17 @@ These reduce the G06/G09 provider-rerank wiring boundary and one G03 vtable over
 - query embedding fallback metadata is now exposed at the top level of query responses.
 
 These remove the full empty-DB raw re-index residual for the current selective raw path and harden semantic endpoint/schema safety. They still do not remove residuals for full clangd/libclang cross-TU type-flow, credentialed OpenAI-compatible live QA, production-scale semantic ranking quality, scanned-PDF OCR, or future full all-file code indexing beyond the current selective parser scope.
+
+2026-05-18 continuation after shared-register bridge and design/visual audit:
+
+- default graph budget now preserves representative cross-repo shared-register
+  bridge edges; `docs/qa/2026-05-18-g03-cross-repo-register-merge-qa.md`
+  proves `limit=3000` includes `150` shared linux-amdgpu/mxgpu register nodes
+  and both repos connected through `register:IH:unknown:IH_RB_CNTL`;
+- `docs/qa/2026-05-18-design-review-closure-matrix.md` explicitly maps MVP
+  G1-G6 and AQ01-AQ09 to current evidence and residual boundaries;
+- `docs/qa/visual-qa-2026-05-18-final-web-pack/` captures all six routes in
+  dark and light themes at `2048 x 1280` with per-page anchor references.
 
 ## Closure Rule
 

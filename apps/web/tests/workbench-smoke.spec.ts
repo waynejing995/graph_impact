@@ -1321,9 +1321,10 @@ test("corpus page adds indexes and queries a real local corpus through the UI", 
   await expect(resultsTable).toContainText("note.md", { timeout: 30_000 });
   await expect(page.getByLabel("Page metrics")).toContainText("graph edges: 1");
   const graph = page.getByTestId("force-graph");
-  await expect(graph).toHaveAttribute("data-node-count", "3");
+  await expect(graph).toHaveAttribute("data-node-count", "2");
   await expect(graph).toHaveAttribute("data-edge-count", "1");
   await expect(graph).toContainText("doc_section 1");
+  await expect(graph).toContainText("register 1");
   await expect(graph).toContainText(uniqueSymbol);
   await expect(page.getByRole("heading", { name: `Resolved Evidence: ${uniqueSymbol}` })).toBeVisible();
   await expect(page.getByRole("heading", { name: "Source Location" })).toBeVisible();

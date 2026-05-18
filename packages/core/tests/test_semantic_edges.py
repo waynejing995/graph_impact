@@ -92,6 +92,7 @@ class SemanticEdgeFeatureTests(unittest.TestCase):
 
         self.assertEqual(config.model.provider, "openai-compatible")
         self.assertEqual(config.model.api_path, "/v1/chat/completions")
+        self.assertEqual(config.model.extra_headers["Authorization"], "Bearer ${ENV:OPENAI_API_KEY}")
         self.assertEqual(config.model.fallback, "")
         self.assertIsInstance(create_edge_provider(config.model), OpenAICompatibleEdgeProvider)
 

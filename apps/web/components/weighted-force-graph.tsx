@@ -196,6 +196,10 @@ export function WeightedForceGraph({
     }
     return [...counts.entries()].sort((left, right) => left[0].localeCompare(right[0]));
   }, [graphData.nodes]);
+  const sharedRegisterCount = useMemo(
+    () => graphData.nodes.filter((node) => isSharedRegisterNode(node)).length,
+    [graphData.nodes]
+  );
 
   return (
     <div
@@ -208,6 +212,7 @@ export function WeightedForceGraph({
       data-max-nodes={maxNodes}
       data-min-edge-weight={minEdgeWeight.toFixed(2)}
       data-ready={ready ? "true" : "false"}
+      data-shared-register-count={sharedRegisterCount}
       data-strongest-weight={topLinks[0]?.weight.toFixed(2) ?? "0.00"}
       data-testid="force-graph"
       data-weakest-weight={topLinks.at(-1)?.weight.toFixed(2) ?? "0.00"}
@@ -258,6 +263,7 @@ export function WeightedForceGraph({
       <div className="graph-accessibility-summary" id={summaryId}>
         <span>nodes {graphData.nodes.length}</span>
         <span>edges {graphData.links.length}</span>
+        <span>shared registers {sharedRegisterCount}</span>
         {kindCounts.map(([kind, count]) => (
           <span key={`kind-${kind}`}>{kind} {count}</span>
         ))}
@@ -299,6 +305,21 @@ function drawNodeLabel(
   const fontSize = Math.max(8, 11 / globalScale);
   const x = Number(node.x ?? 0);
   const y = Number(node.y ?? 0);
+  if (isSharedRegisterNode(node)) {
+    const radius = Math.max(8, Math.sqrt(Math.max(1, node.weight)) * 4.2);
+    context.save();
+    context.lineWidth = Math.max(1.5, 2.5 / globalScale);
+    context.strokeStyle = palette.doc;
+    context.beginPath();
+    context.arc(x, y, radius, 0, Math.PI * 2);
+    context.stroke();
+    context.setLineDash([Math.max(3, 5 / globalScale), Math.max(2, 4 / globalScale)]);
+    context.strokeStyle = palette.register;
+    context.beginPath();
+    context.arc(x, y, radius + 4 / globalScale, 0, Math.PI * 2);
+    context.stroke();
+    context.restore();
+  }
   context.font = `700 ${fontSize}px ui-monospace, SFMono-Regular, Menlo, Consolas, monospace`;
   context.textAlign = "center";
   context.textBaseline = "middle";
@@ -366,4 +387,25 @@ function uniqueNodesForSummary(nodes: ForceNode[]) {
 
 function isPlainObject(value: unknown): value is Record<string, unknown> {
   return Boolean(value) && typeof value === "object" && !Array.isArray(value);
+}
+
+function isSharedRegisterNode(node: Pick<ForceNode, "kind" | "attr">) {
+  if (node.kind !== "register") {
+    return false;
+  }
+  const source = node.attr.source;
+  if (!Array.isArray(source)) {
+    return false;
+  }
+  const corpora = new Set<string>();
+  for (const item of source) {
+    if (!isPlainObject(item)) {
+      continue;
+    }
+    const corpus = String(item.corpus_id ?? item.repo ?? "").trim();
+    if (corpus) {
+      corpora.add(corpus);
+    }
+  }
+  return corpora.size > 1;
 }

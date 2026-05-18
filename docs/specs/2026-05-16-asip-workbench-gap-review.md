@@ -1,7 +1,8 @@
 # ASIP Workbench Gap Review
 
 Date: 2026-05-16
-Status: In progress implementation checklist
+Status: Historical implementation checklist; superseded by current gap and QA
+evidence
 
 > Current source of truth: this file is now superseded as the completion gate by
 > `docs/gaps/README.md` and the individual `docs/gaps/2026-05-16-g*.md`
@@ -12,6 +13,12 @@ Status: In progress implementation checklist
 > Do not use the verification counts or `PASS` language in this file as
 > completion evidence. Final completion evidence must come from
 > `docs/gaps/2026-05-17-final-clean-evidence-package.md` and the final QA docs.
+>
+> 2026-05-18 reconciliation: the auditable current design review is
+> `docs/qa/2026-05-18-design-review-closure-matrix.md`. The gap matrix and
+> workstream sections below intentionally remain as the early static-prototype
+> review snapshot; when they conflict with the current gap ledger, the current
+> gap ledger and design-review closure matrix win.
 
 ## Why This Exists
 

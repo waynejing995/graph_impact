@@ -126,16 +126,16 @@ This gap remains open because static/default data can still hide the truth:
 | `/settings` | Reads/saves provider settings through backend; supports separate edge/embedding provider/base URL/path/model/headers. | Provider status remains `unverified` until smoke/AQ pass; failed smoke is explicit. | Ollama detection is an action, not a hidden default; current default restored to `ollama/gemma4:e4b`. |
 | Web BFF/API/MCP read routes | Query/graph/evidence/entity/provider/resolver/corpora/acceptance reads honor explicit missing/empty DBs. | Missing/empty DBs return empty/not-found/fail payloads without creating default indexes. | Read routes do not auto-index default data. Indexing is a separate explicit action. |
 
-Fresh tests covering this truth audit:
+Fresh tests and browser evidence covering this truth audit:
 
 ```text
-Web API + smoke Playwright: 75 passed
 Visual route Playwright: 15 passed
 Combined Web API + smoke + visual Playwright: 90 passed
 FastAPI/MCP unittest: 47 OK, 1 optional MCP runtime skip
 Bundled-Python MCP runtime: 29 OK, 0 skips
-Core unittest discovery: 234 OK, 2 optional sqlite-vec skips
+Core unittest discovery: 236 OK, 2 optional sqlite-vec skips
 Lint and TypeScript: passed
+In-app browser final visual pack: six routes, dark/light, 2048 x 1280
 ```
 
 2026-05-17 continuation after subagent audit:

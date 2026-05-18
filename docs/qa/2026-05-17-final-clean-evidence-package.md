@@ -102,6 +102,20 @@ visible macro/wrapper nodes: false for IP_VERSION/WREG32/REG_SET_FIELD/SOC15_REG
 
 Stage 2 and macro QA: `docs/qa/2026-05-18-clean-final-stage2-and-macro-qa.md`.
 
+Cross-repo shared-register graph QA:
+`docs/qa/2026-05-18-g03-cross-repo-register-merge-qa.md` proves the default
+`limit=3000` global graph includes `150` shared linux-amdgpu/mxgpu register
+nodes and bridge edges from both repos into the merged
+`register:IH:unknown:IH_RB_CNTL` node.
+
+Semantic endpoint hygiene note: older raw `stage=semantic` rows from job 4 in
+`data/asip.db` and the clean-final temp artifact still contain historical
+provider endpoints such as `tmp`, `adapt`, and `GC`. The current product graph
+export filters those endpoints out (`bad_nodes=0`, `bad_edges=0` in an
+all-edge product graph check), and the empty-DB raw re-index QA proves new
+Stage 2 generation no longer persists those endpoints. Do not cite the old raw
+job 4 rows as clean semantic-edge proof.
+
 Clean-final PDF section QA: `docs/qa/2026-05-18-pdf-section-clean-final-qa.md`
 proves the default Web/API query path can expose
 `amdgpu-driver-source-tree.pdf#page-1` as `kind=pdf_section` with page
@@ -149,18 +163,28 @@ Stage 1 graph edges. The same artifact records a 3,000-edge global graph with
 - Fresh in-app browser snapshot after the cross-file common-helper fix shows the live `/graph` page with `Loaded edge budget 3000 / 20000`, `Visible nodes 1000 / 2797`, `Visible edges 3000 / 3000`, and the accessibility summary lists `nodes 1000`, `edges 1216`, `function 787`, `register 206`, `doc_box 6`, and `doc_section 1`; the underlying full product graph sample below records `control-keyword function nodes named "if": 0`.
 - Fresh in-app browser QA at `http://127.0.0.1:3100/` with source filter `pdf` and query `amdgpu documentation driver source tree PDF QA` shows one clean-final PDF result and a graph summary of `nodes 1`, `edges 0`, `pdf_section 1`, with inspector source `amdgpu-driver-source-tree.pdf page 1`. Browser artifact: `docs/qa/browser/pdf-section-query-clean-final-3100-2k.png`.
 - Latest in-app browser QA after the full provider/static-cleanup/function-query slice shows `/graph` with `graph edges: 3000`, `layers deterministic: 2989 semantic: 11`, and `visible nodes: 1000 / 2805`; querying `gfx_v11_0_hw_init` shows `matches: 0` but `graph edges: 36` and live function-call relationships. Browser artifacts: `docs/qa/browser/graph-after-full-backfill-and-query-fallback-2k.png`, `docs/qa/browser/graph-after-full-backfill-and-query-fallback-deep-snapshot.md`, `docs/qa/browser/graph-function-query-fallback-2k.png`, and `docs/qa/browser/graph-function-query-fallback-2k-snapshot.md`.
+- Latest in-app browser QA after the shared-register visibility fix shows
+  `/graph` with `graph edges: 3000`, `nodes 1000`, `edges 1220`, and
+  `shared registers 149` in the force-graph accessibility summary. Browser
+  artifact: `docs/qa/browser/graph-shared-register-2k.png`.
+- Latest six-route visual QA pack after the shared-register bridge pass is
+  `docs/qa/visual-qa-2026-05-18-final-web-pack/visual-qa.md`, with dark and
+  light screenshots for `/`, `/graph`, `/corpus`, `/resolver-profiles`,
+  `/acceptance`, and `/settings` at `2048 x 1280`.
 
 ## Automated Verification
 
-- `PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=packages/core/src:packages/core/tests:. python3 -m unittest discover -s packages/core/tests -p 'test_*.py' -v`: 234 tests OK, 2 sqlite-vec optional skips
+- `PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=packages/core/src:packages/core/tests:. python3 -m unittest discover -s packages/core/tests -p 'test_*.py' -v`: 236 tests OK, 2 sqlite-vec optional skips
 - `PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=packages/core/src:packages/core/tests:. python3 -m unittest apps.api.tests.test_app apps.mcp.tests.test_tools apps.mcp.tests.test_server -v`: 47 tests OK, 1 optional MCP runtime skip under system Python 3.9
 - `PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=packages/core/src:. /Users/chenjingwen/.cache/codex-runtimes/codex-primary-runtime/dependencies/python/bin/python3 -m unittest apps.mcp.tests.test_tools apps.mcp.tests.test_server -v`: 29 tests OK, 0 skips with real `mcp 1.27.1` runtime
 - `pnpm --filter web run lint`: passed
 - `pnpm --filter web exec tsc --noEmit`: passed
-- `pnpm --filter web exec playwright test tests/workbench-api.spec.ts tests/workbench-smoke.spec.ts --reporter=list`: 75 passed
 - `pnpm --filter web exec playwright test tests/visual-anchor-routes.spec.ts --reporter=list`: 15 passed
 - `pnpm --filter web exec playwright test tests/workbench-api.spec.ts tests/workbench-smoke.spec.ts tests/visual-anchor-routes.spec.ts --reporter=list`: 90 passed
 - `git diff --check`: passed
+- Design review closure matrix:
+  `docs/qa/2026-05-18-design-review-closure-matrix.md` maps ASIP MVP-1 G1-G6
+  and AQ01-AQ09 to implemented evidence and residual boundaries.
 - Latest continuation targeted slice covers semantic endpoint filtering, underscore local/macro endpoint rejection, ambiguous returned-table alias rejection, cross-file return-table alias, provider-vector query rerank, and provider fallback vector-space safety.
 - Follow-up G08 PDF-section slice: `packages.core.tests.test_workbench_query_schema` 13 tests OK, and `pnpm --filter web exec playwright test tests/workbench-api.spec.ts -g "PDF section" --reporter=list` 1 passed.
 - Follow-up G12 filter slice: `apps.api.tests.test_app.ApiAppTests.test_query_endpoint_applies_ip_and_asic_filters` and `apps.mcp.tests.test_tools.McpToolsTests.test_search_evidence_applies_ip_and_asic_filters` both passed after RED failures. Real clean-final QA shows `CP_INT_CNTL_RING0` changing from 20 mixed rows to 2 `CP/gfx_v10_0` rows with `ipBlock=CP`, 0 rows with `ipBlock=SDMA`, and browser evidence at 2048 x 1280. Details: `docs/qa/2026-05-18-g12-filter-surface-qa.md`; screenshot: `docs/qa/browser/g12-filter-cp-clean-final-3100-2k.png`.

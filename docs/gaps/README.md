@@ -1,7 +1,8 @@
 # ASIP Gap Documents Before More Code
 
 Date: 2026-05-16
-Status: Current user-review blocker pass verified; final G11/git gate remains
+Status: Current user-review blocker pass verified; final G11 residual
+acceptance/git gate remains
 
 ## Purpose
 
@@ -15,8 +16,8 @@ Current final-candidate evidence is recorded in
 `docs/qa/2026-05-17-final-clean-evidence-package.md`. Historical `PASS`,
 provider smoke, fixture acceptance, or older visual-anchor artifacts remain
 non-closing evidence unless they are linked from that package. The active goal
-is still not complete until the final git gate, commit, push, and any residual
-boundary acceptance are done.
+is still not complete until final residual-boundary acceptance and the latest
+audit changes are committed and pushed through G11.
 
 2026-05-17 update: the previous final-candidate UI evidence is not sufficient.
 The user rejected the hand-written graph renderer and custom-looking UI
@@ -33,8 +34,11 @@ and verification evidence in
 `react-force-graph-2d`, shadcn/Radix standard controls, expandable
 acceptance details, no static default query/graph rows, function-operation graph
 edges, document section graph nodes, batch semantic-edge jobs, real add-index-query
-UI loop, and fresh light/dark route QA. G11 remains the final gate for artifact
-hygiene, commit, push, and explicit deferrals.
+UI loop, and fresh light/dark route QA. The 2026-05-18 continuation adds the
+default-budget cross-repo register bridge proof, a six-route dark/light browser
+visual pack, and a design-review closure matrix. G11 remains the final gate for
+artifact hygiene, commit/push of the latest audit changes, and explicit
+residual-boundary acceptance.
 
 Supporting acceptance matrix:
 
@@ -42,7 +46,8 @@ Supporting acceptance matrix:
 - [MVP Acceptance Query Matrix](2026-05-16-mvp-acceptance-query-matrix.md): nine query-level closure rules for G10.
 - [Gap Inventory Before Code](2026-05-17-gap-inventory-before-code.md): one-page inventory of every gap document, current state, and the next evidence required before implementation resumes.
 - [Final Clean Evidence Package Gate](2026-05-17-final-clean-evidence-package.md): required final QA package that prevents fixture, historical, provider-only, or visual-only artifacts from being mistaken for completion.
-- [Final Clean Evidence Package](../qa/2026-05-17-final-clean-evidence-package.md): current final-candidate package with clean AMD DB counts, AQ01-AQ09 9/9, six free queries, semantic-edge jobs, visual QA, automated verification, and architecture review.
+- [Final Clean Evidence Package](../qa/2026-05-17-final-clean-evidence-package.md): current final-candidate package with clean AMD DB counts, AQ01-AQ09 9/9, six free queries plus later 10-query graph QA, semantic-edge jobs, visual QA, automated verification, and architecture review.
+- [Design Review Closure Matrix](../qa/2026-05-18-design-review-closure-matrix.md): explicit MVP G1-G6 and AQ01-AQ09 mapping to current evidence and residual boundaries.
 
 ## Gap Document Index
 
@@ -57,8 +62,8 @@ Supporting acceptance matrix:
 | G07 | [API And MCP Product Surfaces](2026-05-16-g07-api-mcp.md) | Deterministic product-surface and real MCP runtime pass verified | Query/graph, selected acceptance execution, corpus/resolver/provider control-plane slices, evidence/entity detail slices, deterministic structured resolved-chain explanations, semantic-edge FastAPI/MCP parity, key read-route no-mutation coverage, FastAPI live HTTP smoke including `pnpm dev:api`, MCP server tool-matrix registration, Web/MCP query/evidence/entity/graph agreement, and bundled-Python real MCP runtime smoke exist. |
 | G08 | [PDF And Document Ingestion](2026-05-16-g08-pdf-document-ingestion.md) | Current pass verified; content-depth boundary | PDF conversion/page evidence, Markdown/doc section graph nodes, and clean-final Web/API browser proof for a real PDF-derived `pdf_section` node are recorded. The remaining boundary is richer PDF corpus content depth, not page-aware product plumbing. |
 | G09 | [SQLite FTS5 Vector And NetworkX Runtime](2026-05-16-g09-storage-vector-graph-runtime.md) | Partial; provider-quality boundary open | FTS5, provider embeddings, query-time provider-vector rerank wiring, NetworkX graph, native sqlite-vec extension smoke, native `search_vector()` adapter path, and JSON/Python-cosine fallback are tested; full current-DB provider-vector coverage and semantic rerank quality remain boundaries. |
-| G10 | [Testing Acceptance And Visual QA](2026-05-16-g10-testing-acceptance-visual-qa.md) | Current clean-final acceptance, browser QA, and final rerun verified | Clean-final AQ01-AQ09 acceptance over `/tmp/asip-clean-amd-gemma4-final-current-2026-05-18.db` is DB health pass and `9/9`, with CLI/API/Web/MCP surface labels and `gemma4:e4b`/`nomic-embed-text:latest` provider checks. Latest verification records core 234 OK, API/MCP 47 OK, lint/tsc pass, and combined Web API+smoke+visual Playwright 90 passed. |
-| G11 | [Completion Gate And Documentation Review](2026-05-16-g11-completion-gate.md) | Final gate open | Current blocker pass is verified; completion still requires generated artifact cleanup, final diff review, commit, push, and explicit residual deferral acceptance. |
+| G10 | [Testing Acceptance And Visual QA](2026-05-16-g10-testing-acceptance-visual-qa.md) | Current clean-final acceptance, browser QA, and final rerun verified | Clean-final AQ01-AQ09 acceptance over `/tmp/asip-clean-amd-gemma4-final-current-2026-05-18.db` is DB health pass and `9/9`, with CLI/API/Web/MCP surface labels and `gemma4:e4b`/`nomic-embed-text:latest` provider checks. Latest verification records core 236 OK, API/MCP 47 OK, lint/tsc pass, visual routes 15 passed, combined Web 90 passed, and a current six-route dark/light 2K browser visual pack plus shared-register graph screenshot. |
+| G11 | [Completion Gate And Documentation Review](2026-05-16-g11-completion-gate.md) | Final gate open | Current blocker pass and latest design/visual evidence are verified; completion still requires latest audit changes to be committed/pushed and explicit residual-boundary acceptance. |
 | G12 | [ASIC And IP Metadata Filtering](2026-05-16-g12-asic-ip-metadata-filtering.md) | Current real AMD filter pass verified; heuristic boundary | Core, Web BFF/UI, FastAPI, and MCP filters now affect query behavior. Real clean-final QA proves representative `ipBlock=CP` and `ipBlock=SDMA` result-set changes; path/symbol heuristic inference limits remain documented as the MVP boundary. |
 | G13 | [MVP Boundary And Full-Spec Deferrals](2026-05-16-g13-mvp-boundary-deferrals.md) | Blocking | Long-range full-spec items must be explicitly deferred so they do not masquerade as silent failures. |
 | G14 | [Static Data And Truthful Empty States](2026-05-16-g14-static-data-and-truthful-empty-states.md) | Current pass verified; audit residual | Static default query/graph rows are removed from product paths, unused static artifact query/graph helpers were deleted, row-only graph fallback no longer fabricates graph data, query metrics no longer invent graph counts, and empty/error states have E2E/API coverage; broader route audit remains tracked for final review. |
@@ -226,12 +231,11 @@ per-page visual-anchor QA.
   - AQ05 passes with `code`, `doc`, `pdf`, and `register`; AQ06 passes with `code` and `register`; graph runtime is `networkx`.
   - This is fixture evidence only. It proves the multi-source path and source-diversity gate can work, but it does not close real AMD corpus ingestion, all AQ01-AQ09, live provider closure, browser visual QA, or performance.
 - Final verification already recorded before staging:
-  - Core unittest: 234 OK with 2 optional sqlite-vec skips.
+- Core unittest: 235 OK with 2 optional sqlite-vec skips.
   - API/MCP unittest: 47 OK with 1 optional MCP runtime skip.
   - Bundled-Python MCP runtime: 29 OK with 0 skips.
   - `pnpm --filter web run lint` passed.
   - `pnpm --filter web exec tsc --noEmit` passed.
-  - Web API+smoke Playwright: 75 passed.
   - Visual route Playwright: 15 passed.
   - Combined Web API+smoke+visual Playwright: 90 passed.
   - Browser/default-DB `/graph` QA and `git diff --check` passed.

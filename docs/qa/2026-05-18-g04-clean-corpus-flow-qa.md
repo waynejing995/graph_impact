@@ -82,9 +82,10 @@ Evidence Search:
   results include docs/note.md
   page metrics include graph edges: 1
   graph data-testid=force-graph:
-    data-node-count=3
+    data-node-count=2
     data-edge-count=1
     summary includes doc_section 1
+    summary includes register 1
     summary includes the unique symbol
   inspector:
     Resolved Evidence: UI_FULL_LOOP_REGISTER_*
@@ -92,6 +93,11 @@ Evidence Search:
     Source Preview visible
     source location body: doc function docs/note.md line 1
 ```
+
+The clean local doc-only graph intentionally has two nodes, not a fabricated
+third node: one `doc_section`, one `register`, and one `documents` edge. The
+query graph also preserves the register node source metadata from the matching
+doc row so the register does not fall back to `unknown` provenance.
 
 ## Clean-Default Guard
 

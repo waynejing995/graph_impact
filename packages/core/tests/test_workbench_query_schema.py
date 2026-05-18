@@ -29,6 +29,43 @@ REQUIRED_EVIDENCE_FIELDS = {
 
 
 class WorkbenchQuerySchemaTests(unittest.TestCase):
+    def test_graph_for_rows_merges_doc_overlay_source_into_seed_register(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            db_path = Path(tmpdir) / "asip.db"
+            store = AsipStore.connect(str(db_path))
+            store.migrate()
+            rows = [
+                {
+                    "symbol": "G04_CLEAN_FLOW_REGISTER",
+                    "source_type": "doc",
+                    "entity_type": "register",
+                    "corpus_id": "g04-clean-docs",
+                    "repo": "local",
+                    "path": "note.md",
+                    "line_start": 1,
+                    "line_end": 1,
+                    "confidence": 0.95,
+                    "snippet": "G04_CLEAN_FLOW_REGISTER sets a field.",
+                }
+            ]
+
+            graph = graph_for_rows(rows, db_path)
+
+            register_nodes = [
+                node
+                for node in graph["nodes"]
+                if node.get("kind") == "register" and node.get("label") == "G04_CLEAN_FLOW_REGISTER"
+            ]
+            self.assertEqual(len(register_nodes), 1)
+            self.assertIn(
+                {"corpus_id": "g04-clean-docs", "repo": "local", "path": "note.md", "line_start": 1, "line_end": 1},
+                register_nodes[0]["attr"]["source"],
+            )
+            self.assertIn(
+                ("note.md#lines-1", "documents", "register:unknown:unknown:G04_CLEAN_FLOW_REGISTER"),
+                {(edge["src"], edge["relation"], edge["dst"]) for edge in graph["edges"]},
+            )
+
     def test_graph_for_rows_returns_empty_multi_seed_graph_without_second_networkx_build(self):
         with tempfile.TemporaryDirectory() as tmpdir:
             db_path = Path(tmpdir) / "asip.db"

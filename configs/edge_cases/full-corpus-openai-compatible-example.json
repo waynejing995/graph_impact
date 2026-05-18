@@ -5,7 +5,7 @@
     "api_base_url": "https://api.openai.com",
     "api_path": "/v1/chat/completions",
     "extra_headers": {
-      "Authorization": "Bearer ${OPENAI_API_KEY}"
+      "Authorization": "Bearer ${ENV:OPENAI_API_KEY}"
     },
     "preferred": "gpt-4.1-mini",
     "fallback": "",

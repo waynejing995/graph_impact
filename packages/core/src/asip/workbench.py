@@ -668,14 +668,14 @@ def graph_for_rows(rows: List[Dict[str, Any]], db_path: Path) -> Dict[str, Any]:
         hops=query_hops,
     )
     for node in graph["nodes"]:
-        node_by_id.setdefault(str(node["id"]), _graph_node_payload(node))
+        _remember_graph_node_payload(node_by_id, node)
     for edge in graph["edges"]:
         ready_edge = _edge_with_weight(edge)
         key = (str(ready_edge["src"]), str(ready_edge["relation"]), str(ready_edge["dst"]))
         edge_by_key.setdefault(key, ready_edge)
     section_graph = section_overlay_graph_for_evidence_rows(rows)
     for node in section_graph["nodes"]:
-        node_by_id.setdefault(str(node["id"]), _graph_node_payload(node))
+        _remember_graph_node_payload(node_by_id, node)
     for edge in section_graph["edges"]:
         ready_edge = _edge_with_weight(edge)
         key = (str(ready_edge["src"]), str(ready_edge["relation"]), str(ready_edge["dst"]))
@@ -698,6 +698,104 @@ def graph_for_rows(rows: List[Dict[str, Any]], db_path: Path) -> Dict[str, Any]:
         "source": "networkx",
         "graph_runtime": "networkx",
     }
+
+
+def _remember_graph_node_payload(node_by_id: Dict[str, Dict[str, Any]], node: Mapping[str, Any]) -> None:
+    node_id = str(node["id"])
+    payload = _graph_node_payload(node)
+    existing = node_by_id.get(node_id)
+    if existing is None:
+        node_by_id[node_id] = payload
+        return
+    _merge_graph_node_payload(existing, payload)
+
+
+def _merge_graph_node_payload(existing: Dict[str, Any], incoming: Mapping[str, Any]) -> None:
+    for key in ("kind", "label"):
+        if not existing.get(key) and incoming.get(key):
+            existing[key] = incoming[key]
+    existing["weight"] = max(float(existing.get("weight") or 0), float(incoming.get("weight") or 0), 1.0)
+    for key in ("in", "out"):
+        existing[key] = _dedupe_graph_string_values(
+            [
+                *_list_graph_values(existing.get(key)),
+                *_list_graph_values(incoming.get(key)),
+            ]
+        )
+    existing_attr = existing.setdefault("attr", {})
+    if not isinstance(existing_attr, dict):
+        existing_attr = {}
+        existing["attr"] = existing_attr
+    incoming_attr = incoming.get("attr")
+    if isinstance(incoming_attr, Mapping):
+        _merge_graph_attr(existing_attr, incoming_attr)
+
+
+def _merge_graph_attr(existing: Dict[str, Any], incoming: Mapping[str, Any]) -> None:
+    for key, value in incoming.items():
+        if value in ("", None, 0):
+            continue
+        if key == "source":
+            existing[key] = _dedupe_graph_source_records(
+                [*_list_graph_values(existing.get(key)), *_list_graph_values(value)]
+            )
+            continue
+        if isinstance(value, list):
+            existing[key] = _dedupe_graph_string_values(
+                [*_list_graph_values(existing.get(key)), *_list_graph_values(value)]
+            )
+            continue
+        current = existing.get(key)
+        if current in ("", None, 0, "unknown"):
+            existing[key] = value
+
+
+def _dedupe_graph_source_records(values: Iterable[Any]) -> List[Dict[str, Any]]:
+    records: List[Dict[str, Any]] = []
+    seen: set[tuple[tuple[str, str], ...]] = set()
+    for value in values:
+        if not isinstance(value, Mapping):
+            continue
+        record = {str(key): item for key, item in value.items() if item not in ("", None, 0)}
+        if not record:
+            continue
+        marker = tuple(sorted((str(key), str(item)) for key, item in record.items()))
+        if marker in seen:
+            continue
+        seen.add(marker)
+        records.append(record)
+    concrete = [record for record in records if not _is_unknown_graph_source_record(record)]
+    return concrete or records
+
+
+def _is_unknown_graph_source_record(record: Mapping[str, Any]) -> bool:
+    return (
+        str(record.get("corpus_id") or "unknown") == "unknown"
+        and str(record.get("repo") or "unknown") == "unknown"
+        and str(record.get("path") or "") == ""
+    )
+
+
+def _list_graph_values(value: Any) -> List[Any]:
+    if value in ("", None, 0):
+        return []
+    if isinstance(value, list):
+        return value
+    return [value]
+
+
+def _dedupe_graph_string_values(values: Iterable[Any]) -> List[str]:
+    result: List[str] = []
+    seen: set[str] = set()
+    for value in values:
+        if value in ("", None, 0):
+            continue
+        text = str(value)
+        if text in seen:
+            continue
+        seen.add(text)
+        result.append(text)
+    return result
 
 
 def list_indexed_corpora(db_path: Path, config_path: Optional[Path] = None) -> List[Dict[str, Any]]:

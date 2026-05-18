@@ -55,7 +55,17 @@ test("graph route renders API-backed weighted relation graph", async ({ page }) 
         source: "sqlite",
         nodes: [
           { id: "API_GRAPH_FUNCTION", kind: "function", weight: 4 },
-          { id: "API_GRAPH_REGISTER", kind: "register", weight: 3 },
+          {
+            id: "API_GRAPH_REGISTER",
+            kind: "register",
+            weight: 3,
+            attr: {
+              source: [
+                { corpus_id: "linux-amdgpu", path: "drivers/gpu/drm/amd/amdgpu/gfx_v11_0.c" },
+                { corpus_id: "mxgpu", path: "libgv/core/hw/navi3/gfx_v11_0.c" }
+              ]
+            }
+          },
           { id: "API_GRAPH_SECTION", kind: "doc_section", weight: 1 }
         ],
         edges: [
@@ -76,6 +86,8 @@ test("graph route renders API-backed weighted relation graph", async ({ page }) 
   await expect(page.getByTestId("global-network-graph")).toContainText("layers deterministic: 1 semantic: 1");
   await expect(forceGraph).not.toContainText("maps_base / 0.68");
   await expect(forceGraph).toHaveAttribute("data-edge-count", "2");
+  await expect(forceGraph).toHaveAttribute("data-shared-register-count", "1");
+  await expect(forceGraph).toContainText("shared registers 1");
   const strongEdgeWeight = await forceGraph.getAttribute("data-strongest-weight");
   const weakEdgeWeight = await forceGraph.getAttribute("data-weakest-weight");
   expect(Number(strongEdgeWeight)).toBeGreaterThan(Number(weakEdgeWeight));
