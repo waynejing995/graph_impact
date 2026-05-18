@@ -1,6 +1,6 @@
 # G15 Performance Smoke And Deterministic Rebuild
 
-Status: Partial; real graph rebuild benchmark exists, deterministic repeat/embedding timing still open
+Status: Partial; fixture stable-count smoke and real graph rebuild benchmark exist, real-corpus repeat/provider timing still open
 
 ## Requirement
 
@@ -41,27 +41,36 @@ Real-corpus performance targets should be measured after the first full AMD inde
   - `test_deleting_one_corpus_index_preserves_other_corpus_edges`
   - `test_query_evidence_uses_configured_vector_limit`
   - `test_semantic_batch_candidate_overfetch_multiplier_is_configurable`
+- 2026-05-18 fixture performance smoke is now a product CLI path and core test, not just a hand-written benchmark. `asip.cli performance-smoke` rebuilds a small fixture from empty SQLite twice, compares table counts, and times live queries. `docs/qa/2026-05-18-performance-smoke-fixture.json` records two matching rebuilds over `docs/fixtures/performance-smoke`: `documents=2`, `chunks=2`, `evidence=19`, `edges=4`, with elapsed times `0.053971s` and `0.042888s`. Five fixture queries all returned rows and stayed under one second: `0.099421s`, `0.002901s`, `0.002733s`, `0.007449s`, and `0.005412s`.
+- 2026-05-18 query-graph performance correction is recorded in `docs/qa/2026-05-18-query-graph-performance-qa.md`. `graph_for_rows()` now expands multiple query seeds with one NetworkX build and reuses the multi-seed empty result instead of rebuilding through `expand_query_graph()`. The no-edge multi-seed storage path now returns seed nodes instead of raising `NameError`, and callable-symbol snippet checks no longer compile a regex per evidence row.
+- After that correction, six real queries over the dirty local `data/asip.db` returned rows and query graphs in `4.161s`, `3.845s`, `0.878s`, `2.135s`, `2.093s`, and `2.084s`. The two GCVM paths dropped from roughly 10 seconds to about 4 seconds. The Web Playwright acceptance route for AQ01 completed in `26.3s`, below the 30s e2e timeout.
 
 ## Remaining Gap
 
-The repo does not yet prove that the fixture index can be rebuilt from scratch quickly and deterministically, nor that query latency stays below the initial MVP smoke target.
+The repo now proves that a small fixture index can be rebuilt from scratch quickly with stable table counts across two empty-DB runs, and that five fixture queries stay below the initial one-second smoke target.
 
-The current dirty AMD corpus path now has a practical query latency fix and a graph rebuild benchmark. This gap is still not fully closed because clean-from-zero deterministic repeat timing and full provider embedding backfill timing remain open.
+The current dirty AMD corpus path now has practical query latency fixes, real query timing over six ASIP queries, and a graph rebuild benchmark. This gap is still not fully closed because repeat real-corpus indexing/rebuild timing and full provider embedding backfill timing remain open.
 
 ## Acceptance Criteria
 
-- A fixture rebuild starts from a deleted temp SQLite database and produces stable counts.
-- Fixture indexing elapsed time is recorded and is within the MVP smoke expectation.
-- At least five fixture/live queries record elapsed time; fixture query time is under one second on the development machine.
+- A fixture rebuild starts from a deleted temp SQLite database and produces stable counts. Implemented by `asip.cli performance-smoke`.
+- Fixture indexing elapsed time is recorded and is within the MVP smoke expectation. Implemented for `docs/fixtures/performance-smoke`.
+- At least five fixture/live queries record elapsed time; fixture query time is under one second on the development machine. Implemented for the fixture smoke.
 - Real AMD corpus indexing records elapsed time and counts without pretending that unmeasured performance targets have been met.
 - Provider-backed runs distinguish local deterministic fallback time from live Ollama/OpenAI-compatible provider time.
 
 ## Required Tests
 
-- Core smoke test or QA script: rebuild fixture SQLite from scratch and assert stable document/chunk/evidence/edge counts.
-- Core/API smoke: run at least five queries and record elapsed time plus result counts.
+- Core smoke test or QA script: rebuild fixture SQLite from scratch and assert stable document/chunk/evidence/edge counts. Implemented in `packages/core/tests/test_performance_smoke.py`.
+- Core/API smoke: run at least five queries and record elapsed time plus result counts. Implemented in the CLI QA artifact through `asip.cli performance-smoke`; the CLI unit test proves the subcommand path, while Web/API route timing remains part of final G11 review if required.
+- Real dirty-DB query timing over more than five ASIP queries is recorded in `docs/qa/2026-05-18-query-graph-performance-qa.md`.
 - QA doc entry: real AMD indexing benchmark with source roots, counts, elapsed time, provider mode, and model names.
 
 ## Not Closed Until
 
-The final QA doc includes deterministic rebuild evidence and timing summaries for fixture query/index plus first real-corpus indexing measurements. A continuation regression test now proves scoped deterministic graph rebuilds preserve other corpus edges when `--corpus-id` is used, preventing partial rebuilds from destroying unrelated graph state.
+The final QA package includes both sides of the performance story:
+
+- repeatable fixture rebuild/query timing, now recorded in `docs/qa/2026-05-18-performance-smoke-fixture.md/json`;
+- repeat real-corpus indexing/rebuild timing, query latency budget review, and provider embedding/backfill timing.
+
+The fixture smoke is a real product CLI path and regression test, but it must not be promoted to full AMD-corpus performance closure.

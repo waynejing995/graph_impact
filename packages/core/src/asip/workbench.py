@@ -12,7 +12,15 @@ from dataclasses import dataclass
 from pathlib import Path, PurePosixPath
 from typing import Any, Dict, Iterable, List, Mapping, Optional
 
-from .code_graph import build_deterministic_code_graph
+from .code_graph import (
+    CodeGraphFunctionLocation,
+    CodeGraphVersionFieldSink,
+    build_deterministic_code_graph,
+    collect_code_graph_function_locations,
+    collect_code_graph_receiver_table_aliases,
+    collect_code_graph_table_field_aliases,
+    collect_code_graph_version_field_sinks,
+)
 from .documents import convert_pdf_to_chunks
 from .graph_filters import is_graph_entity_endpoint, is_resolver_wrapper_name
 from .limits import DEFAULT_WORKBENCH_LIMITS_PATH, load_workbench_limits
@@ -42,6 +50,29 @@ SOURCE_EXTENSIONS = {".c", ".cc", ".cpp", ".h", ".hpp", ".md", ".rst", ".txt", "
 DEFAULT_CONFIG = Path("configs/edge_cases/full-corpus-gemma4-e4b.json")
 DEFAULT_DB = Path("data/asip.db")
 DEFAULT_RESOLVER_PROFILE_DIR = Path(__file__).resolve().parents[4] / "configs" / "resolvers"
+GENERIC_CALLBACK_RECEIVERS = {"funcs", "ops", "callbacks", "init_func", "init_funcs"}
+CALLBACK_TYPE_BY_RECEIVER = {
+    "funcs": "amd_ip_funcs",
+    "init_func": "amdgv_init_func",
+    "init_funcs": "amdgv_init_func",
+}
+CALLBACK_TYPE_BY_RECEIVER_SUFFIX = (
+    ("gfx.rlc.funcs", "amdgpu_rlc_funcs"),
+    ("rlc.funcs", "amdgpu_rlc_funcs"),
+    ("gfx.imu.funcs", "amdgpu_imu_funcs"),
+    ("imu.funcs", "amdgpu_imu_funcs"),
+    ("gfxhub.funcs", "amdgpu_gfxhub_funcs"),
+    ("mmhub.funcs", "amdgpu_mmhub_funcs"),
+    ("nbio.funcs", "amdgpu_nbio_funcs"),
+    ("df.funcs", "amdgpu_df_funcs"),
+    ("smuio.funcs", "amdgpu_smuio_funcs"),
+    ("umc.funcs", "amdgpu_umc_funcs"),
+    ("hdp.funcs", "amdgpu_hdp_funcs"),
+    ("sdma.funcs", "amdgpu_sdma_funcs"),
+    ("gfx.funcs", "amdgpu_gfx_funcs"),
+    ("version->funcs", "amd_ip_funcs"),
+    ("version.funcs", "amd_ip_funcs"),
+)
 
 
 @dataclass(frozen=True)
@@ -63,6 +94,7 @@ def index_configured_corpora(
     source_roots: Optional[Mapping[str, Path]] = None,
     rebuild: bool = True,
     embedding_transport: Optional[EmbeddingTransport] = None,
+    resolver_profile_ids: Optional[Iterable[str]] = None,
 ) -> Dict[str, Any]:
     """Index raw corpus files from a full-corpus config into SQLite."""
 
@@ -73,6 +105,7 @@ def index_configured_corpora(
     if rebuild:
         store.reset_index()
     provider_settings = load_provider_settings(db_path)
+    requested_resolver_profile_ids = _normal_resolver_profile_ids(resolver_profile_ids)
     job_id = store.start_job(
         "index",
         f"Indexing {config.name}",
@@ -80,9 +113,11 @@ def index_configured_corpora(
             "source": "raw_corpus",
             "config": str(config_path),
             "corpus_ids": [corpus.id for corpus in config.corpora],
+            "resolver_profile_ids": requested_resolver_profile_ids,
             "provider_settings": provider_settings,
         },
     )
+    store.update_job_status(job_id, "indexing", f"Indexing {config.name}")
 
     document_count = 0
     chunk_count = 0
@@ -90,6 +125,14 @@ def index_configured_corpora(
     edge_count = 0
 
     try:
+        resolver_profiles = _resolver_profiles_from_store(store, requested_resolver_profile_ids)
+        active_resolver_profile_ids = [profile.id for profile in resolver_profiles]
+        store.update_job_status(
+            job_id,
+            "indexing",
+            f"Indexing {config.name}",
+            metadata={"resolver_profile_ids": active_resolver_profile_ids},
+        )
         actual_source_roots = {
             corpus.id: resolve_corpus_root(corpus, config_path, source_roots or {})
             for corpus in config.corpora
@@ -159,11 +202,10 @@ def index_configured_corpora(
                 )
                 chunk_count += 1
                 _index_chunk_embedding(store, indexed, provider_settings, embedding_transport=embedding_transport)
-                evidence_count += _index_chunk_evidence(store, indexed, [query_config], _resolver_profiles_from_store(store))
+                evidence_count += _index_chunk_evidence(store, indexed, [query_config], resolver_profiles)
                 edge_count += _index_chunk_edges(store, indexed, [query_config])
 
         indexed_paths = set(document_ids.keys())
-        resolver_profiles = _resolver_profiles_from_store(store)
         for corpus in config.corpora:
             source_root = actual_source_roots[corpus.id]
             scan_root = source_root / corpus.relative_root if corpus.relative_root else source_root
@@ -243,6 +285,8 @@ def index_configured_corpora(
         "edges": edge_count,
         "files": int(scan["summary"]["total_files_scanned"]),
         "job_id": job_id,
+        "job_status": "succeeded",
+        "resolver_profile_ids": active_resolver_profile_ids,
         "provider_settings": provider_settings,
     }
 
@@ -297,14 +341,18 @@ def query_evidence(
         except Exception:
             fts_chunk_ids = set()
     vector_chunk_scores: Dict[int, float] = {}
+    vector_chunk_runtimes: Dict[int, str] = {}
     if query.strip():
         try:
             for match in store.search_vector(_deterministic_embedding(query), limit=vector_limit):
                 vector_score = float(match.get("score") or 0)
                 if vector_score >= 0.75:
-                    vector_chunk_scores[int(match["chunk_id"])] = vector_score
+                    chunk_id = int(match["chunk_id"])
+                    vector_chunk_scores[chunk_id] = vector_score
+                    vector_chunk_runtimes[chunk_id] = str(match.get("retrieval_runtime") or "unknown")
         except Exception:
             vector_chunk_scores = {}
+            vector_chunk_runtimes = {}
 
     candidates = (
         store.find_evidence_candidates(
@@ -345,6 +393,7 @@ def query_evidence(
         if vector_score > 0:
             retrieval_sources.append("vector")
             result["vector_score"] = round(vector_score, 4)
+            result["vector_runtime"] = vector_chunk_runtimes.get(chunk_id, "unknown")
         result["retrieval_sources"] = retrieval_sources
         rows.append(result)
 
@@ -488,6 +537,9 @@ def graph_for_rows(rows: List[Dict[str, Any]], db_path: Path) -> Dict[str, Any]:
     query_seed_limit = limits.int_value("graph", "query_seed_limit", minimum=1)
     if query_seed_limit is None:
         raise ValueError(f"graph.querySeedLimit is missing from {limits.path}")
+    query_hops = limits.int_value("graph", "default_hops", minimum=1)
+    if query_hops is None:
+        raise ValueError(f"graph.defaultHops is missing from {limits.path}")
     node_by_id: Dict[str, Dict[str, Any]] = {}
     edge_by_key: Dict[tuple[str, str, str], Dict[str, Any]] = {}
     seeds: List[str] = []
@@ -496,16 +548,29 @@ def graph_for_rows(rows: List[Dict[str, Any]], db_path: Path) -> Dict[str, Any]:
         if symbol in seeds:
             continue
         seeds.append(symbol)
-        graph = expand_query_graph(db_path, symbol, hops=1)
-        for node in graph["nodes"]:
-            node_by_id.setdefault(str(node["id"]), node)
-        for edge in graph["edges"]:
-            key = (str(edge["src"]), str(edge["relation"]), str(edge["dst"]))
-            edge_by_key.setdefault(key, edge)
-        if len(seeds) >= query_seed_limit and edge_by_key:
+        if len(seeds) >= query_seed_limit:
             break
+    if not _sqlite_table_exists(db_path, "edges"):
+        return expand_query_graph(db_path, str(rows[0]["symbol"]), hops=query_hops)
+    store = AsipStore.connect(str(db_path))
+    graph = store.expand_graph_networkx_many(
+        [_canonical_graph_seed_symbol(seed) for seed in seeds],
+        hops=query_hops,
+    )
+    for node in graph["nodes"]:
+        node_by_id.setdefault(str(node["id"]), _graph_node_payload(node))
+    for edge in graph["edges"]:
+        ready_edge = _edge_with_weight(edge)
+        key = (str(ready_edge["src"]), str(ready_edge["relation"]), str(ready_edge["dst"]))
+        edge_by_key.setdefault(key, ready_edge)
     if not edge_by_key:
-        return expand_query_graph(db_path, str(rows[0]["symbol"]), hops=1)
+        return {
+            "queryId": ", ".join(seeds),
+            "nodes": sorted(node_by_id.values(), key=lambda node: str(node["id"])),
+            "edges": [],
+            "source": "networkx",
+            "graph_runtime": graph["graph_runtime"],
+        }
     return {
         "queryId": ", ".join(seeds),
         "nodes": sorted(node_by_id.values(), key=lambda node: str(node["id"])),
@@ -554,6 +619,20 @@ def list_indexed_corpora(db_path: Path, config_path: Optional[Path] = None) -> L
     ]
 
 
+def list_jobs(db_path: Path, limit: int = 50) -> List[Dict[str, Any]]:
+    if not _sqlite_table_exists(db_path, "jobs"):
+        return []
+    store = AsipStore.connect(str(db_path))
+    return store.list_jobs(limit=limit)
+
+
+def get_job(db_path: Path, job_id: int) -> Dict[str, Any]:
+    if not _sqlite_table_exists(db_path, "jobs"):
+        raise KeyError(job_id)
+    store = AsipStore.connect(str(db_path))
+    return store.get_job(job_id)
+
+
 def add_corpus(
     db_path: Path,
     corpus_id: str,
@@ -589,6 +668,7 @@ def index_registered_corpora(
     db_path: Path,
     corpus_ids: Optional[Iterable[str]] = None,
     embedding_transport: Optional[EmbeddingTransport] = None,
+    resolver_profile_ids: Optional[Iterable[str]] = None,
 ) -> Dict[str, Any]:
     db_path.parent.mkdir(parents=True, exist_ok=True)
     store = AsipStore.connect(str(db_path))
@@ -599,15 +679,18 @@ def index_registered_corpora(
     known_ids = {str(corpus["id"]) for corpus in corpora}
     unknown_ids = [corpus_id for corpus_id in selected_ids if corpus_id not in known_ids]
     provider_settings = load_provider_settings(db_path)
+    requested_resolver_profile_ids = _normal_resolver_profile_ids(resolver_profile_ids)
     job_id = store.start_job(
         "index",
         f"Indexing registered corpora: {', '.join(selected_ids)}",
         metadata={
             "source": "registered_corpus",
             "corpus_ids": selected_ids,
+            "resolver_profile_ids": requested_resolver_profile_ids,
             "provider_settings": provider_settings,
         },
     )
+    store.update_job_status(job_id, "indexing", f"Indexing registered corpora: {', '.join(selected_ids)}")
 
     document_count = 0
     chunk_count = 0
@@ -620,7 +703,14 @@ def index_registered_corpora(
         if not selected:
             raise ValueError("no registered corpora selected for indexing")
         store.delete_index_for_corpora(selected_ids)
-        resolver_profiles = _resolver_profiles_from_store(store)
+        resolver_profiles = _resolver_profiles_from_store(store, requested_resolver_profile_ids)
+        active_resolver_profile_ids = [profile.id for profile in resolver_profiles]
+        store.update_job_status(
+            job_id,
+            "indexing",
+            f"Indexing registered corpora: {', '.join(selected_ids)}",
+            metadata={"resolver_profile_ids": active_resolver_profile_ids},
+        )
         for corpus in selected:
             corpus_id = str(corpus["id"])
             source_root = Path(str(corpus["source_root"])).expanduser()
@@ -713,6 +803,8 @@ def index_registered_corpora(
         "edges": edge_count,
         "files": file_count,
         "job_id": job_id,
+        "job_status": "succeeded",
+        "resolver_profile_ids": active_resolver_profile_ids,
         "provider_settings": provider_settings,
     }
 
@@ -735,6 +827,7 @@ def load_provider_settings(db_path: Path) -> Dict[str, object]:
 def rebuild_deterministic_graph(
     db_path: Path,
     corpus_ids: Optional[Iterable[str]] = None,
+    resolver_profile_ids: Optional[Iterable[str]] = None,
 ) -> Dict[str, Any]:
     """Rebuild Stage 1 deterministic graph edges from registered corpus source roots."""
 
@@ -751,11 +844,16 @@ def rebuild_deterministic_graph(
     selected = [corpus for corpus in corpora if str(corpus["id"]) in selected_ids]
     if not selected:
         raise ValueError("no corpora selected for deterministic graph rebuild")
+    requested_resolver_profile_ids = _normal_resolver_profile_ids(resolver_profile_ids)
 
     job_id = store.start_job(
         "graph_rebuild",
         f"Rebuilding deterministic graph for {', '.join(selected_ids)}",
-        metadata={"corpus_ids": selected_ids, "stage": "deterministic"},
+        metadata={
+            "corpus_ids": selected_ids,
+            "resolver_profile_ids": requested_resolver_profile_ids,
+            "stage": "deterministic",
+        },
     )
     file_count = 0
     edge_count = 0
@@ -773,7 +871,14 @@ def rebuild_deterministic_graph(
                 selected_ids,
             )
         store.con.commit()
-        resolver_profiles = _resolver_profiles_from_store(store)
+        resolver_profiles = _resolver_profiles_from_store(store, requested_resolver_profile_ids)
+        active_resolver_profile_ids = [profile.id for profile in resolver_profiles]
+        store.update_job_status(
+            job_id,
+            "indexing",
+            f"Rebuilding deterministic graph for {', '.join(selected_ids)}",
+            metadata={"resolver_profile_ids": active_resolver_profile_ids},
+        )
         for corpus in selected:
             corpus_id = str(corpus["id"])
             source_root = Path(str(corpus["source_root"])).expanduser()
@@ -805,6 +910,7 @@ def rebuild_deterministic_graph(
         "files": file_count,
         "edges": edge_count,
         "job_id": job_id,
+        "resolver_profile_ids": active_resolver_profile_ids,
     }
 
 
@@ -1483,6 +1589,9 @@ def _semantic_edge_batch_prompt(candidates: Iterable[Mapping[str, Any]]) -> str:
     lines = [
         "Generate potential ASIP semantic graph edges from indexed corpus candidates.",
         "Return JSON cases with edges containing src, relation, dst, confidence, and evidence.",
+        "Return compact JSON only. Keep each evidence value under 140 characters and quote only the smallest supporting phrase, not whole source lines.",
+        "Use only exact CASE ids, exact TERMS, or exact function/register/doc symbols shown in the prompt for src and dst.",
+        "Do not create local-variable endpoints such as tmp, ret, data, value, reg, or ring.",
     ]
     for candidate in candidates:
         candidate_id = str(candidate.get("id") or "candidate")
@@ -1543,6 +1652,7 @@ def _doc_node_batch_prompt(candidates: Iterable[Mapping[str, Any]]) -> str:
         "Follow the BoxMatrix idea: a Box is a self-contained concept, requirement, register behavior, workflow, or constraint; the Matrix is the relationship network between boxes and indexed hardware symbols.",
         "Return only JSON with documents, boxes, and relationships.",
         "Schema: {\"documents\":[{\"id\":string,\"boxes\":[{\"id\":string,\"name\":string,\"summary\":string,\"inputs\":[string],\"outputs\":[string],\"constraints\":[string],\"confidence\":number,\"evidence\":string}],\"relationships\":[{\"src\":string,\"relation\":string,\"dst\":string,\"confidence\":number,\"evidence\":string}]}]}",
+        "Keep summaries, inputs, outputs, constraints, and evidence compact. Each evidence value must stay under 140 characters.",
         "Relationship src/dst may use a box id from the same document or an exact code/register/field symbol found in text.",
     ]
     for candidate in candidates:
@@ -1788,12 +1898,49 @@ def _index_deterministic_code_graph_files(
     profiles = [profile for profile in resolver_profiles if profile.language in {"c", "cpp", "c++"}]
     if not profiles:
         return 0
+    file_path_list = list(file_paths)
+    function_locations: Dict[str, List[CodeGraphFunctionLocation]] = {}
+    table_field_aliases: Dict[str, List[str]] = {}
+    version_field_sinks: Dict[str, List[CodeGraphVersionFieldSink]] = {}
+    receiver_table_aliases: Dict[str, List[str]] = {}
+    for file_path in file_path_list:
+        for location in collect_code_graph_function_locations(file_path, source_root=source_root):
+            function_locations.setdefault(location.name, []).append(location)
+        for alias_key, alias_values in collect_code_graph_table_field_aliases(file_path).items():
+            table_field_aliases.setdefault(str(alias_key), [])
+            for alias_value in alias_values:
+                alias_text = str(alias_value)
+                if alias_text not in table_field_aliases[str(alias_key)]:
+                    table_field_aliases[str(alias_key)].append(alias_text)
+        for sink_key, sinks in collect_code_graph_version_field_sinks(file_path).items():
+            version_field_sinks.setdefault(str(sink_key), [])
+            for sink in sinks:
+                if sink not in version_field_sinks[str(sink_key)]:
+                    version_field_sinks[str(sink_key)].append(sink)
+    for file_path in file_path_list:
+        for alias_key, alias_values in collect_code_graph_receiver_table_aliases(
+            file_path,
+            version_field_sinks,
+        ).items():
+            receiver_table_aliases.setdefault(str(alias_key), [])
+            for alias_value in alias_values:
+                alias_text = str(alias_value)
+                if alias_text not in receiver_table_aliases[str(alias_key)]:
+                    receiver_table_aliases[str(alias_key)].append(alias_text)
     graphs = []
     count = 0
     seen: set[tuple[str, str, str, str, int, int]] = set()
-    for file_path in file_paths:
+    for file_path in file_path_list:
         try:
-            graph = build_deterministic_code_graph(file_path, source_root=source_root, resolver_profiles=profiles)
+            graph = build_deterministic_code_graph(
+                file_path,
+                source_root=source_root,
+                resolver_profiles=profiles,
+                known_function_locations=function_locations,
+                known_table_field_aliases=table_field_aliases,
+                known_version_field_sinks=version_field_sinks,
+                known_receiver_table_aliases=receiver_table_aliases,
+            )
         except Exception:
             continue
         graphs.append(graph)
@@ -1806,7 +1953,10 @@ def _index_deterministic_code_graph_files(
             callbacks_by_slot.setdefault(str(callback.slot), []).append(callback)
     for graph in graphs:
         for slot_call in graph.slot_calls:
-            for callback in _callbacks_for_code_graph_slot_call(slot_call, callbacks_by_slot):
+            callbacks = _callbacks_for_code_graph_slot_call(slot_call, callbacks_by_slot)
+            call_kind = _code_graph_callback_call_kind(slot_call, callbacks)
+            confidence = 0.72 if call_kind == "vtable_dispatch" else 0.82
+            for callback in callbacks:
                 if str(callback.function) == str(slot_call.caller):
                     continue
                 count += _persist_code_graph_edge(
@@ -1815,7 +1965,7 @@ def _index_deterministic_code_graph_files(
                         src=str(slot_call.caller),
                         dst=str(callback.function),
                         relation="calls",
-                        confidence=0.82,
+                        confidence=confidence,
                         stage="deterministic",
                         source="clang_callback",
                         path=str(slot_call.path),
@@ -1825,10 +1975,20 @@ def _index_deterministic_code_graph_files(
                             "extractor": "code_graph",
                             "function": str(slot_call.caller),
                             "callee": str(callback.function),
-                            "call_kind": "vtable_callback",
+                            "call_kind": call_kind,
                             "slot": str(slot_call.slot),
                             "receiver": str(getattr(slot_call, "receiver", "") or ""),
+                            "receiver_type": str(getattr(slot_call, "receiver_type", "") or ""),
+                            "receiver_tables": [
+                                str(table)
+                                for table in getattr(slot_call, "receiver_tables", ())
+                                if table
+                            ],
+                            "type_flow": str(getattr(slot_call, "type_flow", "") or ""),
                             "callback_table": str(callback.table),
+                            "callback_table_type": str(getattr(callback, "table_type", "") or ""),
+                            "callback_candidate_count": len(callbacks),
+                            "dispatch_scope": "generic_slot" if call_kind == "vtable_dispatch" else "matched_slot",
                             "callee_path": str(callback.path),
                             "callback_path": str(callback.path),
                             "callee_line": getattr(callback, "function_line_start", None),
@@ -1852,12 +2012,62 @@ def _callbacks_for_code_graph_slot_call(
     receiver = str(getattr(slot_call, "receiver", "") or "").strip()
     if not receiver:
         return callbacks
-    exact = [callback for callback in callbacks if str(callback.table) == receiver]
+    receiver_tables = tuple(str(table) for table in getattr(slot_call, "receiver_tables", ()) if table)
+    if receiver_tables:
+        exact_alias = [
+            callback
+            for callback in callbacks
+            if str(callback.table) in receiver_tables
+        ]
+        return exact_alias
+    receiver_leaf = _code_graph_receiver_leaf(receiver)
+    exact = [callback for callback in callbacks if str(callback.table) in {receiver, receiver_leaf}]
     if exact:
         return exact
-    if receiver in {"funcs", "ops", "callbacks"}:
-        return callbacks if len(callbacks) == 1 else []
+    receiver_type = str(getattr(slot_call, "receiver_type", "") or "").strip()
+    if receiver_type:
+        typed = [
+            callback
+            for callback in callbacks
+            if str(getattr(callback, "table_type", "") or "") == receiver_type
+        ]
+        return typed
+    expected_table_type = _code_graph_expected_callback_table_type(receiver)
+    if expected_table_type:
+        typed = [
+            callback
+            for callback in callbacks
+            if str(getattr(callback, "table_type", "") or "") == expected_table_type
+        ]
+        return typed
+    if receiver_leaf in GENERIC_CALLBACK_RECEIVERS:
+        return callbacks
     return []
+
+
+def _code_graph_callback_call_kind(slot_call: Any, callbacks: List[Any]) -> str:
+    if getattr(slot_call, "receiver_tables", ()):
+        return "vtable_table_alias"
+    receiver_leaf = _code_graph_receiver_leaf(str(getattr(slot_call, "receiver", "") or ""))
+    if receiver_leaf in GENERIC_CALLBACK_RECEIVERS:
+        return "vtable_dispatch"
+    if len(callbacks) > 1:
+        return "vtable_dispatch"
+    return "vtable_callback"
+
+
+def _code_graph_receiver_leaf(receiver: str) -> str:
+    parts = re.split(r"->|\.", receiver.strip())
+    leaf = parts[-1] if parts else receiver
+    return re.sub(r"\[[^\]]+\]", "", leaf).strip()
+
+
+def _code_graph_expected_callback_table_type(receiver: str) -> str:
+    normalized = re.sub(r"\s+", "", receiver.strip())
+    for suffix, table_type in CALLBACK_TYPE_BY_RECEIVER_SUFFIX:
+        if normalized.endswith(suffix):
+            return table_type
+    return CALLBACK_TYPE_BY_RECEIVER.get(_code_graph_receiver_leaf(receiver), "")
 
 
 @dataclass(frozen=True)
@@ -1988,6 +2198,12 @@ def _unique_ordered(items: Iterable[str]) -> List[str]:
     return result
 
 
+def _normal_resolver_profile_ids(profile_ids: Optional[Iterable[str]]) -> Optional[List[str]]:
+    if profile_ids is None:
+        return None
+    return _unique_ordered(str(profile_id).strip() for profile_id in profile_ids)
+
+
 def _evidence_symbols_for_chunk(
     text: str,
     queries: Iterable[Any],
@@ -2016,7 +2232,11 @@ def _evidence_symbols_for_chunk(
     return [(symbol, *values) for symbol, values in sorted(found.items())]
 
 
-def _resolver_profiles_from_store(store: AsipStore) -> List[ResolverProfile]:
+def _resolver_profiles_from_store(
+    store: AsipStore,
+    selected_profile_ids: Optional[Iterable[str]] = None,
+) -> List[ResolverProfile]:
+    selected_ids = _normal_resolver_profile_ids(selected_profile_ids)
     profiles_by_id: Dict[str, ResolverProfile] = {}
     if DEFAULT_RESOLVER_PROFILE_DIR.exists():
         profiles_by_id.update(load_resolver_profiles(DEFAULT_RESOLVER_PROFILE_DIR))
@@ -2041,6 +2261,11 @@ def _resolver_profiles_from_store(store: AsipStore) -> List[ResolverProfile]:
         else:
             continue
         profiles_by_id[profile.id] = profile
+    if selected_ids is not None:
+        unknown_ids = [profile_id for profile_id in selected_ids if profile_id not in profiles_by_id]
+        if unknown_ids:
+            raise ValueError(f"unknown resolver profile id(s): {', '.join(unknown_ids)}")
+        return [profiles_by_id[profile_id] for profile_id in selected_ids]
     return list(
         sorted(
             profiles_by_id.values(),

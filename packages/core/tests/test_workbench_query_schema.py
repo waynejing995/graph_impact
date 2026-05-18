@@ -1,10 +1,11 @@
 import tempfile
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 from asip import workbench
 from asip.storage import AsipStore
-from asip.workbench import index_configured_corpora, query_evidence
+from asip.workbench import graph_for_rows, index_configured_corpora, query_evidence
 
 from workbench_fixture import write_live_fixture
 
@@ -28,6 +29,158 @@ REQUIRED_EVIDENCE_FIELDS = {
 
 
 class WorkbenchQuerySchemaTests(unittest.TestCase):
+    def test_graph_for_rows_returns_empty_multi_seed_graph_without_second_networkx_build(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            db_path = Path(tmpdir) / "asip.db"
+            store = AsipStore.connect(str(db_path))
+            store.migrate()
+            store.add_edge(
+                "unrelated_writer",
+                "UNRELATED_CNTL",
+                "writes",
+                0.95,
+                stage="deterministic",
+                source="clang_text_spans",
+                path="driver.c",
+                line_start=10,
+                provenance={"extractor": "code_graph", "function": "unrelated_writer", "corpus_id": "fixture"},
+            )
+
+            calls = 0
+            original = AsipStore.to_networkx
+
+            def counting_to_networkx(instance, *args, **kwargs):
+                nonlocal calls
+                calls += 1
+                return original(instance, *args, **kwargs)
+
+            rows = [{"symbol": "MISSING_CNTL_A"}, {"symbol": "MISSING_CNTL_B"}]
+            with patch.object(AsipStore, "to_networkx", counting_to_networkx):
+                graph = graph_for_rows(rows, db_path)
+
+            self.assertEqual(calls, 1)
+            self.assertEqual(graph["queryId"], "MISSING_CNTL_A, MISSING_CNTL_B")
+            self.assertEqual(graph["edges"], [])
+            self.assertEqual(
+                [node["id"] for node in graph["nodes"]],
+                [
+                    "register:unknown:unknown:unknown:MISSING_CNTL_A",
+                    "register:unknown:unknown:unknown:MISSING_CNTL_B",
+                ],
+            )
+
+    def test_graph_for_rows_expands_multiple_query_seeds_with_single_networkx_build(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            db_path = Path(tmpdir) / "asip.db"
+            store = AsipStore.connect(str(db_path))
+            store.migrate()
+            for index in range(4):
+                register = f"TEST_REG_CNTL_{index}"
+                store.add_edge(
+                    f"writer_{index}",
+                    register,
+                    "writes",
+                    0.95,
+                    stage="deterministic",
+                    source="clang_text_spans",
+                    path=f"driver_{index}.c",
+                    line_start=10 + index,
+                    provenance={
+                        "extractor": "code_graph",
+                        "function": f"writer_{index}",
+                        "corpus_id": "fixture",
+                        "path": f"driver_{index}.c",
+                    },
+                )
+
+            calls = 0
+            original = AsipStore.to_networkx
+
+            def counting_to_networkx(instance, *args, **kwargs):
+                nonlocal calls
+                calls += 1
+                return original(instance, *args, **kwargs)
+
+            rows = [{"symbol": f"TEST_REG_CNTL_{index}"} for index in range(4)]
+            with patch.object(AsipStore, "to_networkx", counting_to_networkx):
+                graph = graph_for_rows(rows, db_path)
+
+            self.assertEqual(calls, 1)
+            edge_triples = {(edge["src"], edge["relation"], edge["dst"]) for edge in graph["edges"]}
+            for index in range(4):
+                self.assertIn(
+                    (
+                        f"function:fixture:driver_{index}.c:writer_{index}",
+                        "writes",
+                        f"register:unknown:unknown:fixture:TEST_REG_CNTL_{index}",
+                    ),
+                    edge_triples,
+                )
+
+    def test_register_query_graph_expands_to_common_callback_backbone(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            db_path = Path(tmpdir) / "asip.db"
+            store = AsipStore.connect(str(db_path))
+            store.migrate()
+            store.add_edge(
+                "amdgpu_device_init",
+                "gfx_v11_0_hw_init",
+                "calls",
+                0.72,
+                stage="deterministic",
+                source="clang_callback",
+                path="drivers/gpu/drm/amd/amdgpu/amdgpu_device.c",
+                line_start=20,
+                provenance={
+                    "extractor": "code_graph",
+                    "function": "amdgpu_device_init",
+                    "callee": "gfx_v11_0_hw_init",
+                    "call_kind": "vtable_dispatch",
+                    "corpus_id": "linux-amdgpu",
+                    "repo": "https://github.com/torvalds/linux",
+                    "callee_path": "drivers/gpu/drm/amd/amdgpu/gfx_v11_0.c",
+                    "callee_line": 4,
+                },
+            )
+            store.add_edge(
+                "gfx_v11_0_hw_init",
+                "GCVM_L2_CNTL",
+                "writes",
+                0.97,
+                stage="deterministic",
+                source="clang_text_spans",
+                path="drivers/gpu/drm/amd/amdgpu/gfx_v11_0.c",
+                line_start=6,
+                provenance={
+                    "extractor": "code_graph",
+                    "function": "gfx_v11_0_hw_init",
+                    "ip": "GC",
+                    "ip_version": "11.0",
+                    "corpus_id": "linux-amdgpu",
+                    "repo": "https://github.com/torvalds/linux",
+                },
+            )
+
+            graph = graph_for_rows([{"symbol": "GCVM_L2_CNTL"}], db_path)
+
+            edge_triples = {(edge["src"], edge["relation"], edge["dst"]) for edge in graph["edges"]}
+            self.assertIn(
+                (
+                    "function:linux-amdgpu:drivers/gpu/drm/amd/amdgpu/amdgpu_device.c:amdgpu_device_init",
+                    "calls",
+                    "function:linux-amdgpu:drivers/gpu/drm/amd/amdgpu/gfx_v11_0.c:gfx_v11_0_hw_init",
+                ),
+                edge_triples,
+            )
+            self.assertIn(
+                (
+                    "function:linux-amdgpu:drivers/gpu/drm/amd/amdgpu/gfx_v11_0.c:gfx_v11_0_hw_init",
+                    "writes",
+                    "register:GC:11.0:GCVM_L2_CNTL",
+                ),
+                edge_triples,
+            )
+
     def test_query_rows_include_mvp_evidence_schema_and_empty_state(self):
         with tempfile.TemporaryDirectory() as tmpdir:
             root = Path(tmpdir)
@@ -184,6 +337,7 @@ class WorkbenchQuerySchemaTests(unittest.TestCase):
                 else " ".join(str(source).lower() for source in sources)
             )
             self.assertTrue("vector_score" in result["rows"][0] or "vector" in sources_text, result["rows"][0])
+            self.assertIn(result["rows"][0].get("vector_runtime"), {"python-cosine", "sqlite-vec"})
 
     def test_documentation_queries_preserve_matching_doc_rows_when_code_scores_dominate(self):
         with tempfile.TemporaryDirectory() as tmpdir:

@@ -1,0 +1,67 @@
+- generic [active] [ref=e1] [box=0,0,2560,1236]:
+  - generic [ref=e2] [box=0,0,2560,1236]:
+    - banner [ref=e3] [box=0,0,2560,72]:
+      - generic [ref=e5] [box=64,26,171,20]: ASIP Evidence Workbench
+      - generic [ref=e6] [box=328,18,1632,36]:
+        - img [box=338,28,15,15]
+        - textbox "Global symbol search" [ref=e7] [box=328,18,1632,36]:
+          - /placeholder: Search indexed symbols
+      - generic "Workbench status" [ref=e8] [box=1976,24,443,24]:
+        - generic [ref=e9] [box=1976,24,150,24]: "Provider: unverified"
+        - generic [ref=e11] [box=2133,24,186,24]: "Edge: Ollama / gemma4:e4b"
+        - generic [ref=e12] [box=2327,24,92,24]: "Index: ready"
+      - button "Switch to dark theme" [ref=e107] [cursor=pointer] [box=2435,18,85,36]:
+        - img [box=2450,28,16,16]
+        - text: Dark
+    - main [ref=e14] [box=0,72,2560,1164]:
+      - navigation "ASIP sections" [ref=e15] [box=0,72,288,1164]:
+        - link "Evidence Search" [ref=e16] [cursor=pointer] [box=24,96,239,34]:
+          - /url: /
+        - link "Graph Explorer" [ref=e17] [cursor=pointer] [box=24,134,239,34]:
+          - /url: /graph
+        - link "Corpus" [ref=e18] [cursor=pointer] [box=24,172,239,34]:
+          - /url: /corpus
+        - link "Resolver Profiles" [ref=e19] [cursor=pointer] [box=24,210,239,34]:
+          - /url: /resolver-profiles
+        - link "Acceptance Tests" [ref=e20] [cursor=pointer] [box=24,248,239,34]:
+          - /url: /acceptance
+        - link "Settings" [ref=e21] [cursor=pointer] [box=24,286,239,34]:
+          - /url: /settings
+      - region "Graph relationship workspace" [ref=e22] [box=288,72,1760,1164]:
+        - generic [ref=e23] [box=312,96,1712,36]:
+          - generic [ref=e24] [box=312,96,1295,36]
+          - textbox "IP block filter" [ref=e27] [box=1617,96,120,36]:
+            - /placeholder: IP
+          - textbox "ASIC or generation filter" [ref=e29] [box=1747,96,170,36]:
+            - /placeholder: ASIC
+          - button "Run query" [ref=e30] [cursor=pointer] [box=1927,96,97,36]
+        - generic "Page metrics" [ref=e31] [box=312,144,1712,24]:
+          - generic [ref=e32] [box=312,144,85,24]: "matches: 0"
+          - generic [ref=e33] [box=405,144,108,24]: "graph edges: 0"
+          - generic [ref=e34] [box=520,144,80,24]: "query: live"
+        - generic "Evidence source filters" [ref=e35] [box=312,178,1712,36]:
+          - button "Source filter 1 hop" [ref=e36] [cursor=pointer] [box=312,178,89,36]
+          - button "Source filter 2 hops" [ref=e37] [cursor=pointer] [box=409,178,98,36]
+          - button "Source filter writes" [ref=e38] [cursor=pointer] [box=514,178,95,36]
+          - button "Source filter has_field" [ref=e39] [cursor=pointer] [box=617,178,114,36]
+        - generic [ref=e40] [box=312,226,1712,472]:
+          - generic [ref=e41] [box=325,239,1686,24]
+          - generic "Graph display controls" [ref=e44] [box=325,273,1686,102]
+          - status [ref=e65] [box=325,385,1686,300]
+        - table "Evidence results" [ref=e70] [box=313,735,1710,82]:
+          - rowgroup [ref=e71] [box=313,735,1710,40]
+          - rowgroup [ref=e79] [box=313,775,1710,41]
+      - complementary [ref=e90] [box=2048,72,488,1164]:
+        - generic [ref=e91] [box=2073,96,439,24]:
+          - heading "Global Graph" [level=2] [ref=e92] [box=2073,98,85,21]
+          - generic [ref=e93] [box=2416,96,96,24]
+        - heading "Relationship Panel" [level=3] [ref=e95] [box=2073,168,439,18]
+        - paragraph [ref=e97] [box=2084,205,417,19]:
+          - code [ref=e98] [box=2084,208,231,14]: No graph relationships returned.
+        - button "Generate semantic edges" [ref=e99] [cursor=pointer] [box=2073,251,439,36]
+        - button "Generate batch semantic edges" [ref=e100] [cursor=pointer] [box=2073,303,439,36]
+        - button "Extract document nodes" [ref=e101] [cursor=pointer] [box=2073,355,439,36]
+        - generic "Semantic generation controls" [ref=e102] [box=2073,391,439,120]:
+          - generic [ref=e103] [box=2073,393,439,49]
+          - generic [ref=e105] [box=2073,453,439,49]
+  - alert [ref=e119] [box=-1,1235,1,1]

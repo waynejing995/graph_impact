@@ -1,6 +1,6 @@
 # G04 Corpus Management
 
-Status: Partial; backend/API/MCP add/list/index, selected UI indexing, invalid-source failure, and UI add-index-query proof exist; final clean-DB closure remains blocking
+Status: Partial; backend/API/MCP add/list/index, selected UI indexing, invalid-source failure, durable job lifecycle visibility, and UI add-index-query proof exist; final clean-DB closure remains blocking
 
 ## Requirement
 
@@ -25,12 +25,17 @@ PDF corpus type must be represented.
 - `packages/core/tests/test_workbench_live.py` verifies configured raw-corpus indexing fails when the configured scan root is missing, writes a failed job, and marks that corpus `failed` instead of returning a zero-document success summary.
 - `apps/web/tests/workbench-smoke.spec.ts` verifies an index API `failed` response marks the selected Corpus UI row as `failed` and shows the backend error.
 - `apps/web/tests/workbench-smoke.spec.ts` now has a real UI full-loop test: create a temporary local Markdown corpus, add it through the Corpus page, select only that corpus, run index through `/api/workbench/index`, navigate to Evidence Search, and query a unique symbol from that indexed corpus.
+- 2026-05-17 durable job lifecycle slice: `jobs.status` is now canonical `queued/indexing/succeeded/failed`; successful result names such as `indexed` are preserved in `jobs.metadata.result_status`; `job_events` records the durable event chain.
+- Legacy job rows created before `job_events` existed now normalize at read time, so old `indexed`/`rebuilt` style rows do not leak non-lifecycle statuses into CLI/API/Web/MCP. The original result name is preserved as `metadata.result_status`, and a synthetic historical event is shown when no durable event rows exist.
+- Core exposes `get_job()` and `list_jobs()`, CLI exposes `asip jobs`, Next BFF exposes `GET /api/workbench/jobs` and `GET /api/workbench/jobs/{id}`, FastAPI exposes `GET /jobs` and `GET /jobs/{job_id}`, and MCP exposes `jobs_list()` and `job_detail()`.
+- Corpus UI now shows a recent Index Jobs panel with job id, terminal status, message, and event chain such as `queued -> indexing -> succeeded`.
+- QA evidence for this slice is recorded in `docs/qa/2026-05-17-g04-corpus-job-lifecycle-qa.md`.
 
 ## Remaining Gap
 
 The backend/API/MCP state path exists, and the Corpus UI now has explicit selection controls, selected-index status update, invalid-source failed-state proof, and a browser add-index-query proof for a temporary local corpus.
 
-The remaining G04 work is narrower but still blocking: final QA must repeat the flow against a clean named DB/corpus, long-running queued/indexing transitions are still not modeled as a durable job stream, and graph/inspector evidence for the newly indexed corpus remains part of the broader G02/G03/G10 closure.
+The remaining G04 work is narrower but still blocking: final QA must repeat the flow against a clean named DB/corpus, and graph/inspector evidence for the newly indexed corpus remains part of the broader G02/G03/G10 closure. The current lifecycle implementation is durable event history for synchronous local jobs; it is not a background worker, streaming progress channel, or cancellation system.
 
 Default and fallback corpora remain in the UI. They are acceptable as seed/fallback display only if product paths prefer backend state and failures are visible.
 
@@ -39,7 +44,7 @@ Default and fallback corpora remain in the UI. They are acceptable as seed/fallb
 - Backend route creates, lists, and indexes corpus entries.
 - Added corpus persists across reloads without relying only on browser localStorage.
 - UI can select which corpus entries to index. Implemented for selected index request construction, indexed status display, and the real UI add-index-query path.
-- Corpus status is truthful for `not_indexed`, `indexed`, and `failed`; durable `queued`/`indexing` job-stream UX remains open.
+- Corpus status is truthful for `not_indexed`, `indexed`, and `failed`; index job lifecycle is inspectable as durable `queued`/`indexing`/`succeeded`/`failed` events through core, CLI, Web BFF, FastAPI, MCP, and the Corpus page.
 - PDF and docs corpus types can be represented in the same UI/API shape.
 - Query results can include evidence from a user-added corpus after indexing.
 
@@ -50,6 +55,7 @@ Default and fallback corpora remain in the UI. They are acceptable as seed/fallb
 - MCP test: add/list/index corpus with a temp DB and query a unique symbol from it.
 - E2E test: selected corpus rows are the only ids sent to the index endpoint, and the selected row shows returned `indexed` status. Implemented.
 - E2E test: add corpus, run index, observe status transition, query new evidence. Implemented for a temporary local corpus through the Web UI; final clean DB acceptance repetition remains open.
+- E2E/API/MCP tests: durable job lifecycle events are exposed after index. Implemented for core, Web BFF, FastAPI, MCP, and Corpus UI.
 - Failure-state test: invalid source root returns a visible failed/error state. Implemented in core and Web UI smoke coverage.
 - Failure-state test: configured missing source roots and unknown selected corpus ids cannot return `indexed` with zero documents. Implemented in core coverage.
 

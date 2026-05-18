@@ -56,6 +56,84 @@ test("corpora API persists user-added corpus state", async ({ request }) => {
   );
 });
 
+test("index API passes selected resolver profiles into the indexing job", async ({ request }) => {
+  const root = mkdtempSync(path.join(tmpdir(), "asip-index-resolver-profile-"));
+  const corpusRoot = path.join(root, "corpus");
+  mkdirSync(corpusRoot, { recursive: true });
+  writeFileSync(
+    path.join(corpusRoot, "soc15.c"),
+    [
+      "void program_soc15_profile(void) {",
+      "  WREG32_SOC15(GC, 0, regSOC15_ONLY_CNTL, 1);",
+      "}",
+      "void program_direct_profile(void) {",
+      "  WREG32(mmDIRECT_ONLY_CNTL, 1);",
+      "}"
+    ].join("\n"),
+    "utf8"
+  );
+  const configPath = path.join(root, "config.json");
+  writeFileSync(
+    configPath,
+    JSON.stringify(
+      {
+        name: "resolver-profile-selection",
+        model: {
+          provider: "ollama",
+          preferred: "gemma4:e4b"
+        },
+        corpora: [
+          {
+            id: "resolver-profile-selection",
+            repo: "local",
+            default_source_root: corpusRoot,
+            include: ["**/*.c"]
+          }
+        ],
+        queries: []
+      },
+      null,
+      2
+    ),
+    "utf8"
+  );
+  const dbPath = path.join(root, "resolver.db");
+
+  const response = await request.post("/api/workbench/index", {
+    data: {
+      configPath,
+      dbPath,
+      resolverProfileIds: ["amd-soc15"]
+    }
+  });
+
+  expect(response.ok()).toBe(true);
+  const body = (await response.json()) as { resolverProfileIds?: string[]; edges?: number };
+  expect(body.resolverProfileIds).toEqual(["amd-soc15"]);
+  expect(body.edges ?? 0).toBeGreaterThan(0);
+
+  const soc15Graph = await request.get(
+    `/api/workbench/graph?seed=${encodeURIComponent("SOC15_ONLY_CNTL")}&dbPath=${encodeURIComponent(dbPath)}&hops=1`
+  );
+  expect(soc15Graph.ok()).toBe(true);
+  const soc15Body = (await soc15Graph.json()) as { edges: Array<{ dst: string; src: string; relation: string }> };
+  expect(soc15Body.edges).toEqual(
+    expect.arrayContaining([
+      expect.objectContaining({
+        relation: "writes",
+        dst: expect.stringContaining("SOC15_ONLY_CNTL")
+      })
+    ])
+  );
+
+  const directGraph = await request.get(
+    `/api/workbench/graph?seed=${encodeURIComponent("DIRECT_ONLY_CNTL")}&dbPath=${encodeURIComponent(dbPath)}&hops=1`
+  );
+  expect(directGraph.ok()).toBe(true);
+  const directBody = (await directGraph.json()) as { edges: Array<{ dst: string; src: string }> };
+  expect(directBody.edges).toHaveLength(0);
+});
+
 test("query API ranks live SQLite evidence and graph edges for a free-form query", async ({ request }) => {
   const { dbPath } = await createIndexedRawFixture(request);
   const response = await request.get(
@@ -251,16 +329,26 @@ test("acceptance API lists real qwen and gemma QA runs", async ({ request }) => 
         failed: 0,
         queryCount: 2,
         artifactPath: "docs/qa/2026-05-17-acceptance-multisource-fixture.json"
+      }),
+      expect.objectContaining({
+        id: "acceptance-clean-amd-gemma4-final-current",
+        model: "asip.acceptance",
+        passed: 9,
+        partial: 0,
+        failed: 0,
+        queryCount: 9,
+        artifactPath: "docs/qa/2026-05-18-acceptance-clean-amd-gemma4-final-current.json"
       })
     ])
   );
   expect(body.runs[0]).toEqual(
     expect.objectContaining({
+      id: "acceptance-clean-amd-gemma4-final-current",
       model: "asip.acceptance",
-      artifactPath: expect.stringMatching(/^docs\/qa\/2026-05-17-acceptance/)
+      artifactPath: "docs/qa/2026-05-18-acceptance-clean-amd-gemma4-final-current.json"
     })
   );
-  const providerRun = body.runs.find((run) => run.id === "acceptance-clean-amd-gemma4-provider-current");
+  const providerRun = body.runs.find((run) => run.id === "acceptance-clean-amd-gemma4-final-current");
   const aq09 = providerRun?.details?.find((detail) => detail.id === "AQ09");
   expect(aq09?.providerChecks?.embedding).toMatchObject({
     status: "pass",
@@ -1048,6 +1136,48 @@ test("index API can target user-added corpora and record provider settings", asy
       expect.objectContaining({ corpus_id: "api-local-docs", symbol: "LOCAL_GRAPH_TEST_REGISTER" })
     ])
   );
+});
+
+test("jobs API exposes durable index job lifecycle events", async ({ request }) => {
+  const root = mkdtempSync(path.join(tmpdir(), "asip-api-jobs-"));
+  const dbPath = path.join(root, "api-jobs.db");
+  mkdirSync(path.join(root, "docs"));
+  writeFileSync(path.join(root, "docs", "note.md"), "LOCAL_JOB_API_REGISTER appears in docs.", "utf8");
+
+  const create = await request.post("/api/workbench/corpora", {
+    data: {
+      id: "api-job-docs",
+      repo: "local",
+      sourceRoot: root,
+      include: ["**/*.md"],
+      type: "doc",
+      dbPath
+    }
+  });
+  expect(create.ok()).toBe(true);
+
+  const index = await request.post("/api/workbench/index", { data: { corpusIds: ["api-job-docs"], dbPath } });
+  expect(index.ok()).toBe(true);
+  const indexed = (await index.json()) as { jobId: number; jobStatus: string; status: string };
+  expect(indexed.status).toBe("indexed");
+  expect(indexed.jobStatus).toBe("succeeded");
+
+  const list = await request.get(`/api/workbench/jobs?dbPath=${encodeURIComponent(dbPath)}`);
+  expect(list.ok()).toBe(true);
+  const listBody = (await list.json()) as { jobs: Array<{ id: number; status: string; events: Array<{ status: string }> }> };
+  const listedJob = listBody.jobs.find((job) => job.id === indexed.jobId);
+  expect(listedJob).toBeTruthy();
+  expect(listedJob?.status).toBe("succeeded");
+  expect(listedJob?.events.map((event) => event.status)).toEqual(["queued", "indexing", "succeeded"]);
+
+  const detail = await request.get(
+    `/api/workbench/jobs/${indexed.jobId}?dbPath=${encodeURIComponent(dbPath)}`
+  );
+  expect(detail.ok()).toBe(true);
+  const detailBody = (await detail.json()) as { status: string; metadata: { result_status?: string }; events: Array<{ status: string }> };
+  expect(detailBody.status).toBe("succeeded");
+  expect(detailBody.metadata.result_status).toBe("indexed");
+  expect(detailBody.events.map((event) => event.status)).toEqual(["queued", "indexing", "succeeded"]);
 });
 
 test("provider smoke API makes a real Ollama status attempt", async ({ request }) => {

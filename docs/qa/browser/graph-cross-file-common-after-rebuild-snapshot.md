@@ -1,0 +1,32 @@
+- img "Global weighted network graph" [ref=e120] [box=325,385,1174,660]:
+  - generic [ref=e124] [box=326,1230,1172,101]:
+    - generic [ref=e125] [box=334,1239,66,17]: nodes 1000
+    - generic [ref=e126] [box=406,1239,66,17]: edges 1216
+    - generic [ref=e127] [box=478,1239,60,17]: doc_box 6
+    - generic [ref=e128] [box=544,1239,86,17]: doc_section 1
+    - generic [ref=e129] [box=636,1239,79,17]: function 787
+    - generic [ref=e130] [box=722,1239,79,17]: register 206
+    - generic [ref=e131] [box=807,1239,172,17]: aldebaran_mode2_restore_ip
+    - generic [ref=e132] [box=985,1239,179,17]: amdgpu_device_ip_early_init
+    - generic [ref=e133] [box=1170,1239,139,17]: amdgpu_device_ip_init
+    - generic [ref=e134] [box=1315,1239,139,17]: amdgpu_device_ip_fini
+    - generic [ref=e135] [box=334,1262,159,17]: amdgpu_device_fw_loading
+    - generic [ref=e136] [box=499,1262,152,17]: amdgpu_ip_block_hw_fini
+    - generic [ref=e137] [box=657,1262,152,17]: amdgpu_ip_block_suspend
+    - generic [ref=e138] [box=816,1262,179,17]: amdgpu_device_ip_soft_reset
+    - generic [ref=e139] [box=1000,1262,172,17]: kgd2kfd_teardown_processes
+    - generic [ref=e140] [box=1179,1262,180,17]: amdkfd_fence_enable_signaling
+    - generic [ref=e141] [box=334,1284,180,17]: amdgpu_amdkfd_gpuvm_dmaunmap_mem
+    - generic [ref=e142] [box=520,1284,180,17]: amdgpu_amdkfd_gpuvm_unmap_gtt_bo_from_kernel
+    - generic [ref=e143] [box=706,1284,180,17]: amdgpu_amdkfd_gpuvm_unpin_bo
+    - generic [ref=e144] [box=892,1284,180,17]: amdgpu_amdkfd_release_notify
+    - generic [ref=e145] [box=1078,1284,180,17]: amdgpu_amdkfd_remove_gws_from_process
+    - generic [ref=e146] [box=1264,1284,180,17]: confirm_valid_user_pages_locked
+    - generic [ref=e147] [box=334,1307,79,17]: reads / 1.00
+    - generic [ref=e148] [box=419,1307,79,17]: reads / 1.00
+    - generic [ref=e149] [box=505,1307,99,17]: contains / 1.00
+    - generic [ref=e150] [box=610,1307,79,17]: calls / 1.00
+    - generic [ref=e151] [box=696,1307,79,17]: calls / 1.00
+    - generic [ref=e152] [box=781,1307,79,17]: calls / 1.00
+    - generic [ref=e153] [box=867,1307,79,17]: calls / 1.00
+    - generic [ref=e154] [box=952,1307,79,17]: calls / 1.00

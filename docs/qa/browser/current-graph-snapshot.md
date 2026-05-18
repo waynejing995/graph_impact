@@ -1,0 +1,44 @@
+- generic [active] [ref=e1] [box=0,0,2048,1280]:
+  - alert [ref=e179] [box=-1,-1,1,1]: ASIP Evidence Workbench
+  - generic [ref=e180] [box=0,0,2048,1280]:
+    - banner [ref=e181] [box=0,0,2048,72]:
+      - generic [ref=e183] [box=64,26,171,20]: ASIP Evidence Workbench
+      - generic [ref=e184] [box=328,18,1120,36]:
+        - img [box=338,28,15,15]
+        - textbox "Global symbol search" [ref=e185] [box=328,18,1120,36]:
+          - /placeholder: Search indexed symbols
+      - generic "Workbench status" [ref=e186] [box=1464,24,443,24]:
+        - generic [ref=e187] [box=1464,24,150,24]: "Provider: unverified"
+        - generic [ref=e189] [box=1621,24,186,24]: "Edge: Ollama / gemma4:e4b"
+        - generic [ref=e190] [box=1815,24,92,24]: "Index: ready"
+      - button "Switch to dark theme" [ref=e191] [cursor=pointer] [box=1923,18,85,36]:
+        - img [box=1938,28,16,16]
+        - text: Dark
+    - main [ref=e192] [box=0,72,2048,1208]:
+      - navigation "ASIP sections" [ref=e193] [box=0,72,288,1208]:
+        - link "Evidence Search" [ref=e194] [cursor=pointer] [box=24,96,239,34]:
+          - /url: /
+        - link "Graph Explorer" [ref=e195] [cursor=pointer] [box=24,134,239,34]:
+          - /url: /graph
+        - link "Corpus" [ref=e196] [cursor=pointer] [box=24,172,239,34]:
+          - /url: /corpus
+        - link "Resolver Profiles" [ref=e197] [cursor=pointer] [box=24,210,239,34]:
+          - /url: /resolver-profiles
+        - link "Acceptance Tests" [ref=e198] [cursor=pointer] [box=24,248,239,34]:
+          - /url: /acceptance
+        - link "Settings" [ref=e199] [cursor=pointer] [box=24,286,239,34]:
+          - /url: /settings
+      - region "Graph relationship workspace" [ref=e200] [box=288,72,1248,1208]:
+        - generic [ref=e201] [box=312,96,1200,36]
+        - generic "Page metrics" [ref=e209] [box=312,144,1200,24]
+        - generic "Evidence source filters" [ref=e213] [box=312,178,1200,36]
+        - generic [ref=e218] [box=312,226,1200,832]
+        - table "Evidence results" [ref=e293] [box=313,1095,1198,82]
+      - complementary [ref=e313] [box=1536,72,488,1208]:
+        - generic [ref=e314] [box=1561,96,424,24]
+        - heading "Relationship Panel" [level=3] [ref=e318] [box=1561,168,424,18]
+        - generic [ref=e319] [box=1561,194,424,1017]
+        - button "Generate semantic edges" [ref=e344] [cursor=pointer] [box=1561,1227,424,36]
+        - button "Generate batch semantic edges" [ref=e345] [cursor=pointer] [box=1561,1279,424,36]
+        - button "Extract document nodes" [ref=e346] [cursor=pointer] [box=1561,1331,424,36]
+        - generic "Semantic generation controls" [ref=e347] [box=1561,1367,424,120]

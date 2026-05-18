@@ -256,16 +256,144 @@ class ApiAppTests(unittest.TestCase):
             )
             listed = self.client.get("/corpora", params={"db_path": db_path})
             indexed = self.client.post("/index", json={"db_path": db_path, "corpus_ids": ["api-local-docs"]})
+            jobs = self.client.get("/jobs", params={"db_path": db_path})
             queried = self.client.get("/query", params={"db_path": db_path, "q": "API_ENDPOINT_REGISTER"})
 
             self.assertEqual(create.status_code, 200)
             self.assertEqual(listed.status_code, 200)
             self.assertEqual(indexed.status_code, 200)
+            self.assertEqual(jobs.status_code, 200)
             self.assertEqual(queried.status_code, 200)
             self.assertTrue(any(corpus["id"] == "api-local-docs" for corpus in listed.json()["corpora"]))
             self.assertEqual(indexed.json()["source"], "registered_corpus")
             self.assertEqual(indexed.json()["corpus_ids"], ["api-local-docs"])
+            self.assertEqual(indexed.json()["job_status"], "succeeded")
+            job_id = indexed.json()["job_id"]
+            self.assertTrue(any(job["id"] == job_id and job["status"] == "succeeded" for job in jobs.json()["jobs"]))
+            detail = self.client.get(f"/jobs/{job_id}", params={"db_path": db_path})
+            self.assertEqual(detail.status_code, 200)
+            self.assertEqual(detail.json()["metadata"]["result_status"], "indexed")
+            event_statuses = [event["status"] for event in detail.json()["events"]]
+            self.assertEqual(event_statuses[0], "queued")
+            self.assertIn("indexing", event_statuses)
+            self.assertEqual(event_statuses[-1], "succeeded")
             self.assertTrue(any(row["symbol"] == "API_ENDPOINT_REGISTER" for row in queried.json()["rows"]))
+
+    def test_index_endpoint_passes_resolver_profile_ids_to_job_metadata(self):
+        with TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            corpus_root = root / "corpus"
+            corpus_root.mkdir()
+            (corpus_root / "driver.py").write_text('@gpu_register("API_PROFILE_REGISTER")\n', encoding="utf-8")
+            resolver_config = root / "api-profile.yaml"
+            resolver_config.write_text(
+                "\n".join(
+                    [
+                        "id: api-profile",
+                        "language: python",
+                        "context_vars: []",
+                        "symbol_prefixes: []",
+                        "python_extractors: [gpu_register]",
+                        "wrappers: {}",
+                    ]
+                ),
+                encoding="utf-8",
+            )
+            db_path = str(root / "asip.db")
+
+            self.client.post(
+                "/resolver-profiles",
+                json={
+                    "db_path": db_path,
+                    "id": "api-profile",
+                    "language": "python",
+                    "wrappers": ["gpu_register"],
+                    "strategy": "python-call",
+                    "path": str(resolver_config),
+                },
+            )
+            self.client.post(
+                "/corpora",
+                json={
+                    "db_path": db_path,
+                    "id": "api-profile-docs",
+                    "repo": "local",
+                    "source_root": str(corpus_root),
+                    "include": ["**/*.py"],
+                    "type": "code",
+                },
+            )
+
+            indexed = self.client.post(
+                "/index",
+                json={
+                    "db_path": db_path,
+                    "corpus_ids": ["api-profile-docs"],
+                    "resolverProfileIds": ["api-profile"],
+                },
+            )
+
+            self.assertEqual(indexed.status_code, 200)
+            self.assertEqual(indexed.json()["resolver_profile_ids"], ["api-profile"])
+            detail = self.client.get(f"/jobs/{indexed.json()['job_id']}", params={"db_path": db_path})
+            self.assertEqual(detail.json()["metadata"]["resolver_profile_ids"], ["api-profile"])
+
+    def test_graph_rebuild_endpoint_passes_resolver_profile_ids(self):
+        with TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            corpus_root = root / "corpus"
+            corpus_root.mkdir()
+            (corpus_root / "driver.py").write_text('@gpu_register("API_REBUILD_REGISTER")\n', encoding="utf-8")
+            resolver_config = root / "api-rebuild.yaml"
+            resolver_config.write_text(
+                "\n".join(
+                    [
+                        "id: api-rebuild",
+                        "language: python",
+                        "context_vars: []",
+                        "symbol_prefixes: []",
+                        "python_extractors: [gpu_register]",
+                        "wrappers: {}",
+                    ]
+                ),
+                encoding="utf-8",
+            )
+            db_path = str(root / "asip.db")
+            self.client.post(
+                "/resolver-profiles",
+                json={
+                    "db_path": db_path,
+                    "id": "api-rebuild",
+                    "language": "python",
+                    "wrappers": ["gpu_register"],
+                    "strategy": "python-call",
+                    "path": str(resolver_config),
+                },
+            )
+            self.client.post(
+                "/corpora",
+                json={
+                    "db_path": db_path,
+                    "id": "api-rebuild-docs",
+                    "repo": "local",
+                    "source_root": str(corpus_root),
+                    "include": ["**/*.py"],
+                    "type": "code",
+                },
+            )
+            self.client.post("/index", json={"db_path": db_path, "corpus_ids": ["api-rebuild-docs"]})
+
+            rebuilt = self.client.post(
+                "/graph-rebuild",
+                json={
+                    "db_path": db_path,
+                    "corpus_ids": ["api-rebuild-docs"],
+                    "resolverProfileIds": ["api-rebuild"],
+                },
+            )
+
+            self.assertEqual(rebuilt.status_code, 200)
+            self.assertEqual(rebuilt.json()["resolver_profile_ids"], ["api-rebuild"])
 
     def test_evidence_and_entity_endpoints_return_live_detail_and_resolved_chain(self):
         with TemporaryDirectory() as tmpdir:

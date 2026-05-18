@@ -1,0 +1,178 @@
+- generic [active] [ref=e1]:
+  - generic [ref=e2]:
+    - banner [ref=e3]:
+      - generic [ref=e5]: ASIP Evidence Workbench
+      - generic [ref=e6]:
+        - img
+        - textbox "Global symbol search" [ref=e7]:
+          - /placeholder: Search indexed symbols
+      - generic "Workbench status" [ref=e8]:
+        - generic [ref=e9]: "Provider: unverified"
+        - generic [ref=e11]: "Edge: Ollama / gemma4:e4b"
+        - generic [ref=e12]: "Index: ready"
+      - button "Switch to dark theme" [ref=e107] [cursor=pointer]:
+        - img
+        - text: Dark
+    - main [ref=e14]:
+      - navigation "ASIP sections" [ref=e15]:
+        - link "Evidence Search" [ref=e16] [cursor=pointer]:
+          - /url: /
+        - link "Graph Explorer" [ref=e17] [cursor=pointer]:
+          - /url: /graph
+        - link "Corpus" [ref=e18] [cursor=pointer]:
+          - /url: /corpus
+        - link "Resolver Profiles" [ref=e19] [cursor=pointer]:
+          - /url: /resolver-profiles
+        - link "Acceptance Tests" [ref=e20] [cursor=pointer]:
+          - /url: /acceptance
+        - link "Settings" [ref=e21] [cursor=pointer]:
+          - /url: /settings
+      - region "Graph relationship workspace" [ref=e22]:
+        - generic [ref=e23]:
+          - generic [ref=e24]:
+            - img
+            - textbox "Evidence query" [ref=e25]:
+              - /placeholder: Query live evidence
+          - textbox "IP block filter" [ref=e27]:
+            - /placeholder: IP
+          - textbox "ASIC or generation filter" [ref=e29]:
+            - /placeholder: ASIC
+          - button "Run query" [ref=e30] [cursor=pointer]
+        - generic "Page metrics" [ref=e31]:
+          - generic [ref=e32]: "matches: 0"
+          - generic [ref=e33]: "graph edges: 3000"
+          - generic [ref=e34]: "query: live"
+        - generic "Evidence source filters" [ref=e35]:
+          - button "Source filter 1 hop" [ref=e36] [cursor=pointer]:
+            - img
+            - text: 1 hop
+          - button "Source filter 2 hops" [ref=e37] [cursor=pointer]:
+            - img
+            - text: 2 hops
+          - button "Source filter writes" [ref=e38] [cursor=pointer]:
+            - img
+            - text: writes
+          - button "Source filter has_field" [ref=e39] [cursor=pointer]:
+            - img
+            - text: has_field
+        - generic [ref=e40]:
+          - generic [ref=e41]:
+            - generic [ref=e42]: Global Relation Graph
+            - generic [ref=e43]: weighted connections
+            - generic [ref=e108]: "layers deterministic: 2987 semantic: 13"
+          - generic "Graph display controls" [ref=e44]:
+            - generic [ref=e45]:
+              - generic [ref=e46]: Loaded edge budget
+              - strong [ref=e47]: 3000 / 20000
+              - generic "Loaded edge budget" [ref=e48]:
+                - slider "Loaded edge budget" [ref=e111]
+            - generic [ref=e50]:
+              - generic [ref=e51]: Minimum edge weight
+              - strong [ref=e52]: "0.00"
+              - generic "Minimum edge weight" [ref=e53]:
+                - slider "Minimum edge weight" [ref=e113]
+            - generic [ref=e55]:
+              - generic [ref=e56]: Visible nodes
+              - strong [ref=e57]: 1000 / 2885
+              - generic "Visible nodes" [ref=e58]:
+                - slider "Visible nodes" [ref=e116]
+            - generic [ref=e60]:
+              - generic [ref=e61]: Visible edges
+              - strong [ref=e62]: 3000 / 3000
+              - generic "Visible edges" [ref=e63]:
+                - slider "Visible edges" [ref=e119]
+          - img "Global weighted network graph" [ref=e120]:
+            - generic [ref=e124]:
+              - generic [ref=e125]: nodes 1000
+              - generic [ref=e126]: edges 1132
+              - generic [ref=e127]: doc_box 6
+              - generic [ref=e128]: doc_section 1
+              - generic [ref=e129]: function 834
+              - generic [ref=e130]: register 159
+              - generic [ref=e131]: amdgpu_irq_dispatch
+              - generic [ref=e132]: amdgpu_irq_update
+              - generic [ref=e133]: amdgpu_ip_block_resume
+              - generic [ref=e134]: amdgpu_device_ip_reinit_early_sriov
+              - generic [ref=e135]: amdgpu_ip_block_hw_fini
+              - generic [ref=e136]: amdgpu_ip_block_suspend
+              - generic [ref=e137]: amdgpu_device_ip_early_init
+              - generic [ref=e138]: amdgpu_amdkfd_set_compute_idle
+              - generic [ref=e139]: amdgpu_atomfirmware_query_firmware_capability
+              - generic [ref=e140]: amdgpu_atomfirmware_ras_rom_addr
+              - generic [ref=e141]: amdgpu_atomfirmware_scratch_regs_init
+              - generic [ref=e142]: amdgpu_benchmark_log_results
+              - generic [ref=e143]: amdgpu_atrm_call
+              - generic [ref=e144]: amdgpu_prefer_rom_resource
+              - generic [ref=e145]: amdgpu_read_bios
+              - generic [ref=e146]: amdgpu_read_bios_from_rom
+              - generic [ref=e147]: reads / 1.00
+              - generic [ref=e148]: reads / 1.00
+              - generic [ref=e149]: contains / 1.00
+              - generic [ref=e150]: calls / 1.00
+              - generic [ref=e151]: calls / 1.00
+              - generic [ref=e152]: calls / 1.00
+              - generic [ref=e153]: calls / 1.00
+              - generic [ref=e154]: calls / 1.00
+        - table "Evidence results" [ref=e70]:
+          - rowgroup [ref=e71]:
+            - row "Type Symbol Source Relation Score Location" [ref=e72]:
+              - columnheader "Type" [ref=e73]
+              - columnheader "Symbol" [ref=e74]
+              - columnheader "Source" [ref=e75]
+              - columnheader "Relation" [ref=e76]
+              - columnheader "Score" [ref=e77]
+              - columnheader "Location" [ref=e78]
+          - rowgroup [ref=e79]:
+            - row "No evidence matched this query. empty empty 0 live SQLite query returned no rows" [ref=e80]:
+              - cell [ref=e81]
+              - cell "No evidence matched this query." [ref=e82]:
+                - code [ref=e83]: No evidence matched this query.
+              - cell "empty" [ref=e84]:
+                - generic [ref=e85]: empty
+              - cell "empty" [ref=e86]:
+                - generic [ref=e87]: empty
+              - cell "0" [ref=e88]
+              - cell "live SQLite query returned no rows" [ref=e89]
+      - complementary [ref=e90]:
+        - generic [ref=e91]:
+          - heading "Global Graph" [level=2] [ref=e92]
+          - generic [ref=e93]:
+            - img
+            - text: live / run 1
+        - heading "Relationship Panel" [level=3] [ref=e95]
+        - generic [ref=e96]:
+          - paragraph [ref=e155]:
+            - code [ref=e156]: function:linux-amdgpu:drivers/gpu/drm/amd/amdgpu/gfx_v10_0.c:gfx_v10_0_reset_kcq calls function:linux-amdgpu:drivers/gpu/drm/amd/amdgpu/gfx_v10_0.c:gfx10_kiq_map_queues
+          - paragraph [ref=e157]:
+            - code [ref=e158]: function:linux-amdgpu:drivers/gpu/drm/amd/amdgpu/gfx_v10_0.c:gfx_v10_0_reset_kcq calls function:linux-amdgpu:drivers/gpu/drm/amd/amdgpu/gfx_v10_0.c:gfx10_kiq_unmap_queues
+          - paragraph [ref=e159]:
+            - code [ref=e160]: function:linux-amdgpu:drivers/gpu/drm/amd/amdgpu/gfx_v10_0.c:gfx_v10_0_reset_kgq calls function:linux-amdgpu:drivers/gpu/drm/amd/amdgpu/gfx_v10_0.c:gfx10_kiq_map_queues
+          - paragraph [ref=e161]:
+            - code [ref=e162]: function:linux-amdgpu:drivers/gpu/drm/amd/amdgpu/gfx_v10_0.c:gfx_v10_0_ring_preempt_ib calls function:linux-amdgpu:drivers/gpu/drm/amd/amdgpu/gfx_v10_0.c:gfx10_kiq_unmap_queues
+          - paragraph [ref=e163]:
+            - code [ref=e164]: function:linux-amdgpu:drivers/gpu/drm/amd/amdgpu/gfx_v11_0.c:gfx_v11_0_ring_preempt_ib calls function:linux-amdgpu:drivers/gpu/drm/amd/amdgpu/gfx_v11_0.c:gfx11_kiq_unmap_queues
+          - paragraph [ref=e165]:
+            - code [ref=e166]: function:linux-amdgpu:drivers/gpu/drm/amd/amdgpu/gfx_v12_0.c:gfx_v12_0_ring_preempt_ib calls function:linux-amdgpu:drivers/gpu/drm/amd/amdgpu/gfx_v12_0.c:gfx_v12_0_kiq_unmap_queues
+          - paragraph [ref=e167]:
+            - code [ref=e168]: function:linux-amdgpu:drivers/gpu/drm/amd/amdgpu/gfx_v9_0.c:gfx_v9_0_reset_kcq calls function:linux-amdgpu:drivers/gpu/drm/amd/amdgpu/gfx_v9_0.c:gfx_v9_0_kiq_map_queues
+          - paragraph [ref=e169]:
+            - code [ref=e170]: function:linux-amdgpu:drivers/gpu/drm/amd/amdgpu/gfx_v9_0.c:gfx_v9_0_reset_kcq calls function:linux-amdgpu:drivers/gpu/drm/amd/amdgpu/gfx_v9_0.c:gfx_v9_0_kiq_unmap_queues
+          - paragraph [ref=e171]:
+            - code [ref=e172]: function:linux-amdgpu:drivers/gpu/drm/amd/amdgpu/gfx_v9_0.c:gfx_v9_0_ring_preempt_ib calls function:linux-amdgpu:drivers/gpu/drm/amd/amdgpu/gfx_v9_0.c:gfx_v9_0_kiq_unmap_queues
+          - paragraph [ref=e173]:
+            - code [ref=e174]: function:linux-amdgpu:drivers/gpu/drm/amd/amdgpu/gfx_v9_4_3.c:gfx_v9_4_3_reset_kcq calls function:linux-amdgpu:drivers/gpu/drm/amd/amdgpu/gfx_v9_4_3.c:gfx_v9_4_3_kiq_map_queues
+          - paragraph [ref=e175]:
+            - code [ref=e176]: function:linux-amdgpu:drivers/gpu/drm/amd/amdgpu/gfx_v9_4_3.c:gfx_v9_4_3_reset_kcq calls function:linux-amdgpu:drivers/gpu/drm/amd/amdgpu/gfx_v9_4_3.c:gfx_v9_4_3_kiq_unmap_queues
+          - paragraph [ref=e177]:
+            - code [ref=e178]: function:linux-amdgpu:drivers/gpu/drm/amd/amdgpu/aldebaran.c:aldebaran_mode2_restore_ip calls function:linux-amdgpu:drivers/gpu/drm/amd/amdgpu/nv.c:nv_common_late_init
+        - button "Generate semantic edges" [ref=e99] [cursor=pointer]
+        - button "Generate batch semantic edges" [ref=e100] [cursor=pointer]
+        - button "Extract document nodes" [ref=e101] [cursor=pointer]
+        - generic "Semantic generation controls" [ref=e102]:
+          - generic [ref=e103]:
+            - text: Semantic candidate limit
+            - spinbutton "Semantic candidate limit" [ref=e104]
+          - generic [ref=e105]:
+            - text: Semantic batch size
+            - spinbutton "Semantic batch size" [ref=e106]
+  - alert [ref=e179]

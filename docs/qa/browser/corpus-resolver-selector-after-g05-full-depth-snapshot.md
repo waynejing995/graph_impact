@@ -1,0 +1,594 @@
+- generic [active] [ref=e1] [box=0,0,2048,1280]:
+  - generic [ref=e2] [box=0,0,2048,1280]:
+    - banner [ref=e3] [box=0,0,2048,72]:
+      - generic [ref=e5] [box=64,26,171,20]: ASIP Evidence Workbench
+      - generic [ref=e6] [box=328,18,1120,36]:
+        - img [box=338,28,15,15]
+        - textbox "Global symbol search" [ref=e7] [box=328,18,1120,36]:
+          - /placeholder: Search indexed symbols
+      - generic "Workbench status" [ref=e8] [box=1464,24,443,24]:
+        - generic [ref=e9] [box=1464,24,150,24]: "Provider: unverified"
+        - generic [ref=e11] [box=1621,24,186,24]: "Edge: Ollama / gemma4:e4b"
+        - generic [ref=e12] [box=1815,24,92,24]: "Index: ready"
+      - button "Switch to dark theme" [ref=e112] [cursor=pointer] [box=1923,18,85,36]:
+        - img [box=1938,28,16,16]
+        - text: Dark
+    - main [ref=e14] [box=0,72,2048,1208]:
+      - navigation "ASIP sections" [ref=e15] [box=0,72,288,1208]:
+        - link "Evidence Search" [ref=e16] [cursor=pointer] [box=24,96,239,34]:
+          - /url: /
+        - link "Graph Explorer" [ref=e17] [cursor=pointer] [box=24,134,239,34]:
+          - /url: /graph
+        - link "Corpus" [ref=e18] [cursor=pointer] [box=24,172,239,34]:
+          - /url: /corpus
+        - link "Resolver Profiles" [ref=e19] [cursor=pointer] [box=24,210,239,34]:
+          - /url: /resolver-profiles
+        - link "Acceptance Tests" [ref=e20] [cursor=pointer] [box=24,248,239,34]:
+          - /url: /acceptance
+        - link "Settings" [ref=e21] [cursor=pointer] [box=24,286,239,34]:
+          - /url: /settings
+      - region "Corpus management workspace" [ref=e22] [box=288,72,1248,1208]:
+        - generic [ref=e23] [box=312,96,1185,36]:
+          - generic [ref=e24] [box=312,96,768,36]:
+            - img [box=322,106,16,16]
+            - textbox "Evidence query" [ref=e25] [box=312,96,768,36]:
+              - /placeholder: Query live evidence
+          - textbox "IP block filter" [ref=e27] [box=1090,96,120,36]:
+            - /placeholder: IP
+          - textbox "ASIC or generation filter" [ref=e29] [box=1220,96,170,36]:
+            - /placeholder: ASIC
+          - button "Run query" [ref=e30] [cursor=pointer] [box=1400,96,97,36]
+        - generic "Page metrics" [ref=e31] [box=312,144,1185,24]:
+          - generic [ref=e32] [box=312,144,88,24]: "corpora: 33"
+          - generic [ref=e33] [box=408,144,81,24]: "files: 1369"
+          - generic [ref=e34] [box=497,144,111,24]: "status: editable"
+        - generic "Evidence source filters" [ref=e35] [box=312,178,1185,36]:
+          - button "Source filter code" [pressed] [ref=e36] [cursor=pointer] [box=312,178,86,36]:
+            - img [box=327,188,16,16]
+            - text: code
+          - button "Source filter registers" [ref=e37] [cursor=pointer] [box=406,178,113,36]:
+            - img [box=421,188,16,16]
+            - text: registers
+          - button "Source filter docs" [ref=e38] [cursor=pointer] [box=527,178,86,36]:
+            - img [box=542,188,16,16]
+            - text: docs
+          - button "Source filter pdf" [pressed] [ref=e39] [cursor=pointer] [box=620,178,76,36]:
+            - img [box=635,188,16,16]
+            - text: pdf
+        - generic "Corpus editor" [ref=e40] [box=312,226,1185,301]:
+          - generic [ref=e41] [box=313,251,1183,36]:
+            - generic [ref=e42] [box=337,251,476,36]:
+              - generic [ref=e43] [box=337,251,476,16]: Corpus Registry
+              - generic [ref=e44] [box=337,267,476,20]: Add local or remote corpora before indexing them into the evidence store.
+            - generic [ref=e45] [box=1406,251,66,24]: editable
+          - generic [ref=e46] [box=313,311,1183,191]:
+            - generic [ref=e47] [box=337,311,1135,141]:
+              - group [ref=e48] [box=337,311,370,65]:
+                - generic [ref=e49] [box=337,311,370,17]: Corpus id
+                - textbox "Corpus id" [ref=e50] [box=337,340,370,36]
+              - group [ref=e51] [box=719,311,370,65]:
+                - generic [ref=e52] [box=719,311,370,17]: Repository URL
+                - textbox "Repository URL" [ref=e53] [box=719,340,370,36]
+              - group [ref=e54] [box=1102,311,370,65]:
+                - generic [ref=e55] [box=1102,311,370,17]: Source root
+                - textbox "Source root" [ref=e56] [box=1102,340,370,36]
+              - group [ref=e57] [box=337,388,1135,65]:
+                - generic [ref=e58] [box=337,388,1135,17]: Include globs
+                - textbox "Include globs" [ref=e59] [box=337,416,1135,36]: "**/*.c, **/*.h"
+            - button "Add corpus" [ref=e61] [cursor=pointer] [box=337,466,105,36]
+        - generic "Index resolver profiles" [ref=e62] [box=312,539,1185,754]:
+          - generic [ref=e63] [box=313,564,1183,36]:
+            - generic [ref=e64] [box=337,564,413,36]:
+              - generic [ref=e65] [box=337,564,413,16]: Index Resolver Profiles
+              - generic [ref=e66] [box=337,580,413,20]: Select the YAML-backed resolvers for the next corpus index job.
+            - generic [ref=e67] [box=1395,564,77,24]: 9 enabled
+          - generic [ref=e113] [box=337,624,1135,644]:
+            - group [ref=e114] [box=337,624,1135,44]:
+              - checkbox "Use resolver profile amd-direct-mmio" [checked] [ref=e115] [box=337,625,16,16]:
+                - generic [box=338,626,14,14]
+              - generic [ref=e116] [box=365,624,1107,44]:
+                - generic [ref=e117] [box=365,624,116,19]: amd-direct-mmio
+                - paragraph [ref=e118] [box=365,649,1107,19]: cpp · WREG32, RREG32, WREG32_P, RREG32_P, WREG32_PCIE, RREG32_PCIE, WREG32_NBIO, RREG32_NBIO · configs/resolvers/amd-direct-mmio.yaml
+            - group [ref=e119] [box=337,680,1135,63]:
+              - checkbox "Use resolver profile amd-field-macros" [checked] [ref=e120] [box=337,681,16,16]:
+                - generic [box=338,682,14,14]
+              - generic [ref=e121] [box=365,680,1107,63]:
+                - generic [ref=e122] [box=365,680,119,19]: amd-field-macros
+                - paragraph [ref=e123] [box=365,705,1107,38]: cpp · REG_SET_FIELD, REG_GET_FIELD, REG_FIELD_MASK, REG_FIELD_SHIFT, REG_FIELD_VALUE, WREG32_FIELD, RREG32_FIELD, WREG32_FIELD15, WREG32_FIELD15_PREREG, WREG32_FIELD15_OFFSET · configs/resolvers/amd-field-macros.yaml
+            - group [ref=e124] [box=337,755,1135,82]:
+              - checkbox "Use resolver profile amd-mxgpu" [checked] [ref=e125] [box=337,756,16,16]:
+                - generic [box=338,757,14,14]
+              - generic [ref=e126] [box=365,755,1107,82]:
+                - generic [ref=e127] [box=365,755,80,19]: amd-mxgpu
+                - paragraph [ref=e128] [box=365,780,1107,57]: cpp · WREG32, RREG32, WREG32_P, RREG32_P, WREG32_PCIE, RREG32_PCIE, WREG32_NBIO, RREG32_NBIO, WREG32_SOC15, RREG32_SOC15, WREG32_SOC15_OFFSET, RREG32_SOC15_OFFSET, SOC15_REG_OFFSET, SOC15_REG_ENTRY, WREG32_FIELD, RREG32_FIELD, WREG32_FIELD15, REG_SET_FIELD, REG_GET_FIELD, REG_FIELD_MASK, REG_FIELD_VALUE, amdgv_wreg32, amdgv_rreg32, amdgv_wreg32_field, amdgv_wait_for_register · configs/resolvers/amd-mxgpu.yaml
+            - group [ref=e129] [box=337,849,1135,63]:
+              - checkbox "Use resolver profile amd-soc15" [checked] [ref=e130] [box=337,850,16,16]:
+                - generic [box=338,851,14,14]
+              - generic [ref=e131] [box=365,849,1107,63]:
+                - generic [ref=e132] [box=365,849,74,19]: amd-soc15
+                - paragraph [ref=e133] [box=365,874,1107,38]: cpp · SOC15_REG_OFFSET, SOC15_REG_ENTRY, WREG32_SOC15, RREG32_SOC15, WREG32_SOC15_IP, RREG32_SOC15_IP, WREG32_SOC15_OFFSET, RREG32_SOC15_OFFSET, WREG32_SOC15_NO_KIQ, RREG32_SOC15_NO_KIQ, WREG32_SOC15_RLC, RREG32_SOC15_RLC, WREG32_SOC15_RLC_SHADOW · configs/resolvers/amd-soc15.yaml
+            - group [ref=e134] [box=337,924,1135,63]:
+              - checkbox "Use resolver profile amdgv-mxgpu-context" [checked] [ref=e135] [box=337,925,16,16]:
+                - generic [box=338,926,14,14]
+              - generic [ref=e136] [box=365,924,1107,63]:
+                - generic [ref=e137] [box=365,924,152,19]: amdgv-mxgpu-context
+                - paragraph [ref=e138] [box=365,949,1107,38]: cpp · amdgv_wreg32, amdgv_rreg32, amdgv_wreg32_field, amdgv_rreg32_field, amdgv_wait_for_register, AMDGV_WRITE_REG, AMDGV_READ_REG, AMDGV_WAIT_REG · configs/resolvers/amdgv-mxgpu-context.yaml
+            - group [ref=e139] [box=337,999,1135,44]:
+              - checkbox "Use resolver profile initial" [checked] [ref=e140] [box=337,1000,16,16]:
+                - generic [box=338,1001,14,14]
+              - generic [ref=e141] [box=365,999,1107,44]:
+                - generic [ref=e142] [box=365,999,35,19]: initial
+                - paragraph [ref=e143] [box=365,1024,1107,19]: cpp · RREG32, WREG32, RREG32_SOC15, WREG32_SOC15, SOC15_REG_OFFSET, WREG32_FIELD, RREG32_FIELD, REG_SET_FIELD, REG_GET_FIELD · configs/resolvers/initial.yaml
+            - group [ref=e144] [box=337,1055,1135,101]:
+              - checkbox "Use resolver profile linux-amdgpu" [checked] [ref=e145] [box=337,1056,16,16]:
+                - generic [box=338,1057,14,14]
+              - generic [ref=e146] [box=365,1055,1107,101]:
+                - generic [ref=e147] [box=365,1055,91,19]: linux-amdgpu
+                - paragraph [ref=e148] [box=365,1080,1107,75]: cpp · WREG32, RREG32, WREG32_P, RREG32_P, WREG32_SOC15, RREG32_SOC15, WREG32_SOC15_IP, RREG32_SOC15_IP, WREG32_SOC15_OFFSET, RREG32_SOC15_OFFSET, WREG32_SOC15_NO_KIQ, RREG32_SOC15_NO_KIQ, WREG32_SOC15_RLC, RREG32_SOC15_RLC, WREG32_SOC15_RLC_SHADOW, SOC15_REG_OFFSET, SOC15_REG_ENTRY, WREG32_FIELD15, WREG32_FIELD15_PREREG, WREG32_FIELD15_OFFSET, WREG32_FIELD, RREG32_FIELD, REG_FIELD_MASK, REG_FIELD_SHIFT, REG_FIELD_VALUE, REG_SET_FIELD, REG_GET_FIELD · configs/resolvers/linux-amdgpu.yaml
+            - group [ref=e149] [box=337,1167,1135,44]:
+              - checkbox "Use resolver profile python-hw-symbols" [checked] [ref=e150] [box=337,1168,16,16]:
+                - generic [box=338,1169,14,14]
+              - generic [ref=e151] [box=365,1167,1107,44]:
+                - generic [ref=e152] [box=365,1167,133,19]: python-hw-symbols
+                - paragraph [ref=e153] [box=365,1193,1107,19]: python · gpu_register, register_ref, field_ref, ip_ref, asic_ref, schema_ref, config_key · configs/resolvers/python-hw-symbols.yaml
+            - group [ref=e154] [box=337,1224,1135,44]:
+              - checkbox "Use resolver profile toy-python" [checked] [ref=e155] [box=337,1225,16,16]:
+                - generic [box=338,1226,14,14]
+              - generic [ref=e156] [box=365,1224,1107,44]:
+                - generic [ref=e157] [box=365,1224,73,19]: toy-python
+                - paragraph [ref=e158] [box=365,1249,1107,19]: python · gpu_register, register_ref · configs/resolvers/toy-python.yaml
+        - table "Evidence results" [ref=e73] [box=313,1330,1183,1394]:
+          - rowgroup [ref=e74] [box=313,1330,1183,40]:
+            - row "Type Index Symbol Source Relation Score Location" [ref=e75] [box=313,1330,1183,40]:
+              - columnheader "Type" [ref=e76] [box=313,1330,50,40]
+              - columnheader "Index" [ref=e77] [box=363,1330,54,40]
+              - columnheader "Symbol" [ref=e78] [box=417,1330,239,40]
+              - columnheader "Source" [ref=e79] [box=656,1330,91,40]
+              - columnheader "Relation" [ref=e80] [box=748,1330,129,40]
+              - columnheader "Score" [ref=e81] [box=877,1330,64,40]
+              - columnheader "Location" [ref=e82] [box=941,1330,555,40]
+          - rowgroup [ref=e83] [box=313,1370,1183,1353]:
+            - row "Index amd-docs amd-docs corpus not_indexed 0 /data/amd-docs" [ref=e159] [box=313,1370,1183,41]:
+              - cell [ref=e160] [box=313,1370,50,41]
+              - cell "Index amd-docs" [ref=e161] [box=363,1370,54,41]:
+                - checkbox "Index amd-docs" [checked] [ref=e162] [box=373,1382,16,16]
+              - cell "amd-docs" [ref=e163] [box=417,1370,239,41]:
+                - code [ref=e164] [box=427,1384,58,14]: amd-docs
+              - cell "corpus" [ref=e165] [box=656,1370,91,41]:
+                - generic [ref=e166] [box=666,1378,59,24]: corpus
+              - cell "not_indexed" [ref=e167] [box=748,1370,129,41]:
+                - generic [ref=e168] [box=758,1378,92,24]: not_indexed
+              - cell "0" [ref=e169] [box=877,1370,64,41]
+              - cell "/data/amd-docs" [ref=e170] [box=941,1370,555,41]
+            - row "Index linux-amdgpu linux-amdgpu corpus indexed 728 /tmp/asip-linux-amdgpu" [ref=e171] [box=313,1411,1183,41]:
+              - cell [ref=e172] [box=313,1411,50,41]
+              - cell "Index linux-amdgpu" [ref=e173] [box=363,1411,54,41]:
+                - checkbox "Index linux-amdgpu" [checked] [ref=e174] [box=373,1423,16,16]
+              - cell "linux-amdgpu" [ref=e175] [box=417,1411,239,41]:
+                - code [ref=e176] [box=427,1425,87,14]: linux-amdgpu
+              - cell "corpus" [ref=e177] [box=656,1411,91,41]:
+                - generic [ref=e178] [box=666,1419,59,24]: corpus
+              - cell "indexed" [ref=e179] [box=748,1411,129,41]:
+                - generic [ref=e180] [box=758,1419,65,24]: indexed
+              - cell "728" [ref=e181] [box=877,1411,64,41]
+              - cell "/tmp/asip-linux-amdgpu" [ref=e182] [box=941,1411,555,41]
+            - row "Index local-amd-docs local-amd-docs corpus not_indexed 0 /docs/amd" [ref=e183] [box=313,1452,1183,41]:
+              - cell [ref=e184] [box=313,1452,50,41]
+              - cell "Index local-amd-docs" [ref=e185] [box=363,1452,54,41]:
+                - checkbox "Index local-amd-docs" [checked] [ref=e186] [box=373,1464,16,16]
+              - cell "local-amd-docs" [ref=e187] [box=417,1452,239,41]:
+                - code [ref=e188] [box=427,1466,101,14]: local-amd-docs
+              - cell "corpus" [ref=e189] [box=656,1452,91,41]:
+                - generic [ref=e190] [box=666,1460,59,24]: corpus
+              - cell "not_indexed" [ref=e191] [box=748,1452,129,41]:
+                - generic [ref=e192] [box=758,1460,92,24]: not_indexed
+              - cell "0" [ref=e193] [box=877,1452,64,41]
+              - cell "/docs/amd" [ref=e194] [box=941,1452,555,41]
+            - row "Index mxgpu mxgpu corpus indexed 612 /tmp/asip-mxgpu" [ref=e195] [box=313,1493,1183,41]:
+              - cell [ref=e196] [box=313,1493,50,41]
+              - cell "Index mxgpu" [ref=e197] [box=363,1493,54,41]:
+                - checkbox "Index mxgpu" [checked] [ref=e198] [box=373,1505,16,16]
+              - cell "mxgpu" [ref=e199] [box=417,1493,239,41]:
+                - code [ref=e200] [box=427,1507,36,14]: mxgpu
+              - cell "corpus" [ref=e201] [box=656,1493,91,41]:
+                - generic [ref=e202] [box=666,1501,59,24]: corpus
+              - cell "indexed" [ref=e203] [box=748,1493,129,41]:
+                - generic [ref=e204] [box=758,1501,65,24]: indexed
+              - cell "612" [ref=e205] [box=877,1493,64,41]
+              - cell "/tmp/asip-mxgpu" [ref=e206] [box=941,1493,555,41]
+            - row "Index ui-full-loop-1779004583633 ui-full-loop-1779004583633 corpus indexed 1 /var/folders/b6/q7tnsx1974gb0jhjkj023ltw0000gn/T/asip-ui-corpus-Y4gKlk" [ref=e207] [box=313,1534,1183,41]:
+              - cell [ref=e208] [box=313,1534,50,41]
+              - cell "Index ui-full-loop-1779004583633" [ref=e209] [box=363,1534,54,41]:
+                - checkbox "Index ui-full-loop-1779004583633" [checked] [ref=e210] [box=373,1546,16,16]
+              - cell "ui-full-loop-1779004583633" [ref=e211] [box=417,1534,239,41]:
+                - code [ref=e212] [box=427,1548,188,14]: ui-full-loop-1779004583633
+              - cell "corpus" [ref=e213] [box=656,1534,91,41]:
+                - generic [ref=e214] [box=666,1542,59,24]: corpus
+              - cell "indexed" [ref=e215] [box=748,1534,129,41]:
+                - generic [ref=e216] [box=758,1542,65,24]: indexed
+              - cell "1" [ref=e217] [box=877,1534,64,41]
+              - cell "/var/folders/b6/q7tnsx1974gb0jhjkj023ltw0000gn/T/asip-ui-corpus-Y4gKlk" [ref=e218] [box=941,1534,555,41]
+            - row "Index ui-full-loop-1779004775606 ui-full-loop-1779004775606 corpus indexed 1 /var/folders/b6/q7tnsx1974gb0jhjkj023ltw0000gn/T/asip-ui-corpus-F1OCpG" [ref=e219] [box=313,1575,1183,41]:
+              - cell [ref=e220] [box=313,1575,50,41]
+              - cell "Index ui-full-loop-1779004775606" [ref=e221] [box=363,1575,54,41]:
+                - checkbox "Index ui-full-loop-1779004775606" [checked] [ref=e222] [box=373,1587,16,16]
+              - cell "ui-full-loop-1779004775606" [ref=e223] [box=417,1575,239,41]:
+                - code [ref=e224] [box=427,1589,188,14]: ui-full-loop-1779004775606
+              - cell "corpus" [ref=e225] [box=656,1575,91,41]:
+                - generic [ref=e226] [box=666,1583,59,24]: corpus
+              - cell "indexed" [ref=e227] [box=748,1575,129,41]:
+                - generic [ref=e228] [box=758,1583,65,24]: indexed
+              - cell "1" [ref=e229] [box=877,1575,64,41]
+              - cell "/var/folders/b6/q7tnsx1974gb0jhjkj023ltw0000gn/T/asip-ui-corpus-F1OCpG" [ref=e230] [box=941,1575,555,41]
+            - row "Index ui-full-loop-1779005276505 ui-full-loop-1779005276505 corpus indexed 1 /var/folders/b6/q7tnsx1974gb0jhjkj023ltw0000gn/T/asip-ui-corpus-UHkqbw" [ref=e231] [box=313,1616,1183,41]:
+              - cell [ref=e232] [box=313,1616,50,41]
+              - cell "Index ui-full-loop-1779005276505" [ref=e233] [box=363,1616,54,41]:
+                - checkbox "Index ui-full-loop-1779005276505" [checked] [ref=e234] [box=373,1628,16,16]
+              - cell "ui-full-loop-1779005276505" [ref=e235] [box=417,1616,239,41]:
+                - code [ref=e236] [box=427,1630,188,14]: ui-full-loop-1779005276505
+              - cell "corpus" [ref=e237] [box=656,1616,91,41]:
+                - generic [ref=e238] [box=666,1624,59,24]: corpus
+              - cell "indexed" [ref=e239] [box=748,1616,129,41]:
+                - generic [ref=e240] [box=758,1624,65,24]: indexed
+              - cell "1" [ref=e241] [box=877,1616,64,41]
+              - cell "/var/folders/b6/q7tnsx1974gb0jhjkj023ltw0000gn/T/asip-ui-corpus-UHkqbw" [ref=e242] [box=941,1616,555,41]
+            - row "Index ui-full-loop-1779005643866 ui-full-loop-1779005643866 corpus indexed 1 /var/folders/b6/q7tnsx1974gb0jhjkj023ltw0000gn/T/asip-ui-corpus-j1cMXw" [ref=e243] [box=313,1657,1183,41]:
+              - cell [ref=e244] [box=313,1657,50,41]
+              - cell "Index ui-full-loop-1779005643866" [ref=e245] [box=363,1657,54,41]:
+                - checkbox "Index ui-full-loop-1779005643866" [checked] [ref=e246] [box=373,1669,16,16]
+              - cell "ui-full-loop-1779005643866" [ref=e247] [box=417,1657,239,41]:
+                - code [ref=e248] [box=427,1671,188,14]: ui-full-loop-1779005643866
+              - cell "corpus" [ref=e249] [box=656,1657,91,41]:
+                - generic [ref=e250] [box=666,1665,59,24]: corpus
+              - cell "indexed" [ref=e251] [box=748,1657,129,41]:
+                - generic [ref=e252] [box=758,1665,65,24]: indexed
+              - cell "1" [ref=e253] [box=877,1657,64,41]
+              - cell "/var/folders/b6/q7tnsx1974gb0jhjkj023ltw0000gn/T/asip-ui-corpus-j1cMXw" [ref=e254] [box=941,1657,555,41]
+            - row "Index ui-full-loop-1779006624993 ui-full-loop-1779006624993 corpus indexed 1 /var/folders/b6/q7tnsx1974gb0jhjkj023ltw0000gn/T/asip-ui-corpus-8q27Li" [ref=e255] [box=313,1698,1183,41]:
+              - cell [ref=e256] [box=313,1698,50,41]
+              - cell "Index ui-full-loop-1779006624993" [ref=e257] [box=363,1698,54,41]:
+                - checkbox "Index ui-full-loop-1779006624993" [checked] [ref=e258] [box=373,1710,16,16]
+              - cell "ui-full-loop-1779006624993" [ref=e259] [box=417,1698,239,41]:
+                - code [ref=e260] [box=427,1712,188,14]: ui-full-loop-1779006624993
+              - cell "corpus" [ref=e261] [box=656,1698,91,41]:
+                - generic [ref=e262] [box=666,1706,59,24]: corpus
+              - cell "indexed" [ref=e263] [box=748,1698,129,41]:
+                - generic [ref=e264] [box=758,1706,65,24]: indexed
+              - cell "1" [ref=e265] [box=877,1698,64,41]
+              - cell "/var/folders/b6/q7tnsx1974gb0jhjkj023ltw0000gn/T/asip-ui-corpus-8q27Li" [ref=e266] [box=941,1698,555,41]
+            - row "Index ui-full-loop-1779007662384 ui-full-loop-1779007662384 corpus indexed 1 /var/folders/b6/q7tnsx1974gb0jhjkj023ltw0000gn/T/asip-ui-corpus-KrA9KH" [ref=e267] [box=313,1739,1183,41]:
+              - cell [ref=e268] [box=313,1739,50,41]
+              - cell "Index ui-full-loop-1779007662384" [ref=e269] [box=363,1739,54,41]:
+                - checkbox "Index ui-full-loop-1779007662384" [checked] [ref=e270] [box=373,1751,16,16]
+              - cell "ui-full-loop-1779007662384" [ref=e271] [box=417,1739,239,41]:
+                - code [ref=e272] [box=427,1753,188,14]: ui-full-loop-1779007662384
+              - cell "corpus" [ref=e273] [box=656,1739,91,41]:
+                - generic [ref=e274] [box=666,1747,59,24]: corpus
+              - cell "indexed" [ref=e275] [box=748,1739,129,41]:
+                - generic [ref=e276] [box=758,1747,65,24]: indexed
+              - cell "1" [ref=e277] [box=877,1739,64,41]
+              - cell "/var/folders/b6/q7tnsx1974gb0jhjkj023ltw0000gn/T/asip-ui-corpus-KrA9KH" [ref=e278] [box=941,1739,555,41]
+            - row "Index ui-full-loop-1779007749151 ui-full-loop-1779007749151 corpus indexed 1 /var/folders/b6/q7tnsx1974gb0jhjkj023ltw0000gn/T/asip-ui-corpus-0bgg84" [ref=e279] [box=313,1780,1183,41]:
+              - cell [ref=e280] [box=313,1780,50,41]
+              - cell "Index ui-full-loop-1779007749151" [ref=e281] [box=363,1780,54,41]:
+                - checkbox "Index ui-full-loop-1779007749151" [checked] [ref=e282] [box=373,1792,16,16]
+              - cell "ui-full-loop-1779007749151" [ref=e283] [box=417,1780,239,41]:
+                - code [ref=e284] [box=427,1794,188,14]: ui-full-loop-1779007749151
+              - cell "corpus" [ref=e285] [box=656,1780,91,41]:
+                - generic [ref=e286] [box=666,1788,59,24]: corpus
+              - cell "indexed" [ref=e287] [box=748,1780,129,41]:
+                - generic [ref=e288] [box=758,1788,65,24]: indexed
+              - cell "1" [ref=e289] [box=877,1780,64,41]
+              - cell "/var/folders/b6/q7tnsx1974gb0jhjkj023ltw0000gn/T/asip-ui-corpus-0bgg84" [ref=e290] [box=941,1780,555,41]
+            - row "Index ui-full-loop-1779010239103 ui-full-loop-1779010239103 corpus indexed 1 /var/folders/b6/q7tnsx1974gb0jhjkj023ltw0000gn/T/asip-ui-corpus-oP01Ru" [ref=e291] [box=313,1821,1183,41]:
+              - cell [ref=e292] [box=313,1821,50,41]
+              - cell "Index ui-full-loop-1779010239103" [ref=e293] [box=363,1821,54,41]:
+                - checkbox "Index ui-full-loop-1779010239103" [checked] [ref=e294] [box=373,1833,16,16]
+              - cell "ui-full-loop-1779010239103" [ref=e295] [box=417,1821,239,41]:
+                - code [ref=e296] [box=427,1835,188,14]: ui-full-loop-1779010239103
+              - cell "corpus" [ref=e297] [box=656,1821,91,41]:
+                - generic [ref=e298] [box=666,1829,59,24]: corpus
+              - cell "indexed" [ref=e299] [box=748,1821,129,41]:
+                - generic [ref=e300] [box=758,1829,65,24]: indexed
+              - cell "1" [ref=e301] [box=877,1821,64,41]
+              - cell "/var/folders/b6/q7tnsx1974gb0jhjkj023ltw0000gn/T/asip-ui-corpus-oP01Ru" [ref=e302] [box=941,1821,555,41]
+            - row "Index ui-full-loop-1779010824559 ui-full-loop-1779010824559 corpus indexed 1 /var/folders/b6/q7tnsx1974gb0jhjkj023ltw0000gn/T/asip-ui-corpus-f2BMLB" [ref=e303] [box=313,1862,1183,41]:
+              - cell [ref=e304] [box=313,1862,50,41]
+              - cell "Index ui-full-loop-1779010824559" [ref=e305] [box=363,1862,54,41]:
+                - checkbox "Index ui-full-loop-1779010824559" [checked] [ref=e306] [box=373,1874,16,16]
+              - cell "ui-full-loop-1779010824559" [ref=e307] [box=417,1862,239,41]:
+                - code [ref=e308] [box=427,1876,188,14]: ui-full-loop-1779010824559
+              - cell "corpus" [ref=e309] [box=656,1862,91,41]:
+                - generic [ref=e310] [box=666,1870,59,24]: corpus
+              - cell "indexed" [ref=e311] [box=748,1862,129,41]:
+                - generic [ref=e312] [box=758,1870,65,24]: indexed
+              - cell "1" [ref=e313] [box=877,1862,64,41]
+              - cell "/var/folders/b6/q7tnsx1974gb0jhjkj023ltw0000gn/T/asip-ui-corpus-f2BMLB" [ref=e314] [box=941,1862,555,41]
+            - row "Index ui-full-loop-1779011147928 ui-full-loop-1779011147928 corpus indexed 1 /var/folders/b6/q7tnsx1974gb0jhjkj023ltw0000gn/T/asip-ui-corpus-Xnv7Qu" [ref=e315] [box=313,1903,1183,41]:
+              - cell [ref=e316] [box=313,1903,50,41]
+              - cell "Index ui-full-loop-1779011147928" [ref=e317] [box=363,1903,54,41]:
+                - checkbox "Index ui-full-loop-1779011147928" [checked] [ref=e318] [box=373,1915,16,16]
+              - cell "ui-full-loop-1779011147928" [ref=e319] [box=417,1903,239,41]:
+                - code [ref=e320] [box=427,1917,188,14]: ui-full-loop-1779011147928
+              - cell "corpus" [ref=e321] [box=656,1903,91,41]:
+                - generic [ref=e322] [box=666,1911,59,24]: corpus
+              - cell "indexed" [ref=e323] [box=748,1903,129,41]:
+                - generic [ref=e324] [box=758,1911,65,24]: indexed
+              - cell "1" [ref=e325] [box=877,1903,64,41]
+              - cell "/var/folders/b6/q7tnsx1974gb0jhjkj023ltw0000gn/T/asip-ui-corpus-Xnv7Qu" [ref=e326] [box=941,1903,555,41]
+            - row "Index ui-full-loop-1779019332173 ui-full-loop-1779019332173 corpus indexed 1 /var/folders/b6/q7tnsx1974gb0jhjkj023ltw0000gn/T/asip-ui-corpus-FQ8zuD" [ref=e327] [box=313,1944,1183,41]:
+              - cell [ref=e328] [box=313,1944,50,41]
+              - cell "Index ui-full-loop-1779019332173" [ref=e329] [box=363,1944,54,41]:
+                - checkbox "Index ui-full-loop-1779019332173" [checked] [ref=e330] [box=373,1956,16,16]
+              - cell "ui-full-loop-1779019332173" [ref=e331] [box=417,1944,239,41]:
+                - code [ref=e332] [box=427,1958,188,14]: ui-full-loop-1779019332173
+              - cell "corpus" [ref=e333] [box=656,1944,91,41]:
+                - generic [ref=e334] [box=666,1952,59,24]: corpus
+              - cell "indexed" [ref=e335] [box=748,1944,129,41]:
+                - generic [ref=e336] [box=758,1952,65,24]: indexed
+              - cell "1" [ref=e337] [box=877,1944,64,41]
+              - cell "/var/folders/b6/q7tnsx1974gb0jhjkj023ltw0000gn/T/asip-ui-corpus-FQ8zuD" [ref=e338] [box=941,1944,555,41]
+            - row "Index ui-full-loop-1779019941516 ui-full-loop-1779019941516 corpus indexed 1 /var/folders/b6/q7tnsx1974gb0jhjkj023ltw0000gn/T/asip-ui-corpus-wo9yC4" [ref=e339] [box=313,1985,1183,41]:
+              - cell [ref=e340] [box=313,1985,50,41]
+              - cell "Index ui-full-loop-1779019941516" [ref=e341] [box=363,1985,54,41]:
+                - checkbox "Index ui-full-loop-1779019941516" [checked] [ref=e342] [box=373,1997,16,16]
+              - cell "ui-full-loop-1779019941516" [ref=e343] [box=417,1985,239,41]:
+                - code [ref=e344] [box=427,1999,188,14]: ui-full-loop-1779019941516
+              - cell "corpus" [ref=e345] [box=656,1985,91,41]:
+                - generic [ref=e346] [box=666,1993,59,24]: corpus
+              - cell "indexed" [ref=e347] [box=748,1985,129,41]:
+                - generic [ref=e348] [box=758,1993,65,24]: indexed
+              - cell "1" [ref=e349] [box=877,1985,64,41]
+              - cell "/var/folders/b6/q7tnsx1974gb0jhjkj023ltw0000gn/T/asip-ui-corpus-wo9yC4" [ref=e350] [box=941,1985,555,41]
+            - row "Index ui-full-loop-1779021321974 ui-full-loop-1779021321974 corpus indexed 1 /var/folders/b6/q7tnsx1974gb0jhjkj023ltw0000gn/T/asip-ui-corpus-0UbrqB" [ref=e351] [box=313,2026,1183,41]:
+              - cell [ref=e352] [box=313,2026,50,41]
+              - cell "Index ui-full-loop-1779021321974" [ref=e353] [box=363,2026,54,41]:
+                - checkbox "Index ui-full-loop-1779021321974" [checked] [ref=e354] [box=373,2038,16,16]
+              - cell "ui-full-loop-1779021321974" [ref=e355] [box=417,2026,239,41]:
+                - code [ref=e356] [box=427,2040,188,14]: ui-full-loop-1779021321974
+              - cell "corpus" [ref=e357] [box=656,2026,91,41]:
+                - generic [ref=e358] [box=666,2034,59,24]: corpus
+              - cell "indexed" [ref=e359] [box=748,2026,129,41]:
+                - generic [ref=e360] [box=758,2034,65,24]: indexed
+              - cell "1" [ref=e361] [box=877,2026,64,41]
+              - cell "/var/folders/b6/q7tnsx1974gb0jhjkj023ltw0000gn/T/asip-ui-corpus-0UbrqB" [ref=e362] [box=941,2026,555,41]
+            - row "Index ui-full-loop-1779021587629 ui-full-loop-1779021587629 corpus indexed 1 /var/folders/b6/q7tnsx1974gb0jhjkj023ltw0000gn/T/asip-ui-corpus-QdhJfD" [ref=e363] [box=313,2067,1183,41]:
+              - cell [ref=e364] [box=313,2067,50,41]
+              - cell "Index ui-full-loop-1779021587629" [ref=e365] [box=363,2067,54,41]:
+                - checkbox "Index ui-full-loop-1779021587629" [checked] [ref=e366] [box=373,2079,16,16]
+              - cell "ui-full-loop-1779021587629" [ref=e367] [box=417,2067,239,41]:
+                - code [ref=e368] [box=427,2081,188,14]: ui-full-loop-1779021587629
+              - cell "corpus" [ref=e369] [box=656,2067,91,41]:
+                - generic [ref=e370] [box=666,2075,59,24]: corpus
+              - cell "indexed" [ref=e371] [box=748,2067,129,41]:
+                - generic [ref=e372] [box=758,2075,65,24]: indexed
+              - cell "1" [ref=e373] [box=877,2067,64,41]
+              - cell "/var/folders/b6/q7tnsx1974gb0jhjkj023ltw0000gn/T/asip-ui-corpus-QdhJfD" [ref=e374] [box=941,2067,555,41]
+            - row "Index ui-full-loop-1779023683776 ui-full-loop-1779023683776 corpus indexed 1 /var/folders/b6/q7tnsx1974gb0jhjkj023ltw0000gn/T/asip-ui-corpus-II5ioX" [ref=e375] [box=313,2108,1183,41]:
+              - cell [ref=e376] [box=313,2108,50,41]
+              - cell "Index ui-full-loop-1779023683776" [ref=e377] [box=363,2108,54,41]:
+                - checkbox "Index ui-full-loop-1779023683776" [checked] [ref=e378] [box=373,2120,16,16]
+              - cell "ui-full-loop-1779023683776" [ref=e379] [box=417,2108,239,41]:
+                - code [ref=e380] [box=427,2122,188,14]: ui-full-loop-1779023683776
+              - cell "corpus" [ref=e381] [box=656,2108,91,41]:
+                - generic [ref=e382] [box=666,2116,59,24]: corpus
+              - cell "indexed" [ref=e383] [box=748,2108,129,41]:
+                - generic [ref=e384] [box=758,2116,65,24]: indexed
+              - cell "1" [ref=e385] [box=877,2108,64,41]
+              - cell "/var/folders/b6/q7tnsx1974gb0jhjkj023ltw0000gn/T/asip-ui-corpus-II5ioX" [ref=e386] [box=941,2108,555,41]
+            - row "Index ui-full-loop-1779027401162 ui-full-loop-1779027401162 corpus indexed 1 /var/folders/b6/q7tnsx1974gb0jhjkj023ltw0000gn/T/asip-ui-corpus-J0CRVz" [ref=e387] [box=313,2149,1183,41]:
+              - cell [ref=e388] [box=313,2149,50,41]
+              - cell "Index ui-full-loop-1779027401162" [ref=e389] [box=363,2149,54,41]:
+                - checkbox "Index ui-full-loop-1779027401162" [checked] [ref=e390] [box=373,2161,16,16]
+              - cell "ui-full-loop-1779027401162" [ref=e391] [box=417,2149,239,41]:
+                - code [ref=e392] [box=427,2163,188,14]: ui-full-loop-1779027401162
+              - cell "corpus" [ref=e393] [box=656,2149,91,41]:
+                - generic [ref=e394] [box=666,2157,59,24]: corpus
+              - cell "indexed" [ref=e395] [box=748,2149,129,41]:
+                - generic [ref=e396] [box=758,2157,65,24]: indexed
+              - cell "1" [ref=e397] [box=877,2149,64,41]
+              - cell "/var/folders/b6/q7tnsx1974gb0jhjkj023ltw0000gn/T/asip-ui-corpus-J0CRVz" [ref=e398] [box=941,2149,555,41]
+            - row "Index ui-full-loop-1779029053000 ui-full-loop-1779029053000 corpus indexed 1 /var/folders/b6/q7tnsx1974gb0jhjkj023ltw0000gn/T/asip-ui-corpus-R9Z0Un" [ref=e399] [box=313,2190,1183,41]:
+              - cell [ref=e400] [box=313,2190,50,41]
+              - cell "Index ui-full-loop-1779029053000" [ref=e401] [box=363,2190,54,41]:
+                - checkbox "Index ui-full-loop-1779029053000" [checked] [ref=e402] [box=373,2202,16,16]
+              - cell "ui-full-loop-1779029053000" [ref=e403] [box=417,2190,239,41]:
+                - code [ref=e404] [box=427,2204,188,14]: ui-full-loop-1779029053000
+              - cell "corpus" [ref=e405] [box=656,2190,91,41]:
+                - generic [ref=e406] [box=666,2198,59,24]: corpus
+              - cell "indexed" [ref=e407] [box=748,2190,129,41]:
+                - generic [ref=e408] [box=758,2198,65,24]: indexed
+              - cell "1" [ref=e409] [box=877,2190,64,41]
+              - cell "/var/folders/b6/q7tnsx1974gb0jhjkj023ltw0000gn/T/asip-ui-corpus-R9Z0Un" [ref=e410] [box=941,2190,555,41]
+            - row "Index ui-full-loop-1779030010478 ui-full-loop-1779030010478 corpus indexed 1 /var/folders/b6/q7tnsx1974gb0jhjkj023ltw0000gn/T/asip-ui-corpus-LzS9sI" [ref=e411] [box=313,2231,1183,41]:
+              - cell [ref=e412] [box=313,2231,50,41]
+              - cell "Index ui-full-loop-1779030010478" [ref=e413] [box=363,2231,54,41]:
+                - checkbox "Index ui-full-loop-1779030010478" [checked] [ref=e414] [box=373,2243,16,16]
+              - cell "ui-full-loop-1779030010478" [ref=e415] [box=417,2231,239,41]:
+                - code [ref=e416] [box=427,2245,188,14]: ui-full-loop-1779030010478
+              - cell "corpus" [ref=e417] [box=656,2231,91,41]:
+                - generic [ref=e418] [box=666,2239,59,24]: corpus
+              - cell "indexed" [ref=e419] [box=748,2231,129,41]:
+                - generic [ref=e420] [box=758,2239,65,24]: indexed
+              - cell "1" [ref=e421] [box=877,2231,64,41]
+              - cell "/var/folders/b6/q7tnsx1974gb0jhjkj023ltw0000gn/T/asip-ui-corpus-LzS9sI" [ref=e422] [box=941,2231,555,41]
+            - row "Index ui-full-loop-1779030576028 ui-full-loop-1779030576028 corpus indexed 1 /var/folders/b6/q7tnsx1974gb0jhjkj023ltw0000gn/T/asip-ui-corpus-ieWdkr" [ref=e423] [box=313,2272,1183,41]:
+              - cell [ref=e424] [box=313,2272,50,41]
+              - cell "Index ui-full-loop-1779030576028" [ref=e425] [box=363,2272,54,41]:
+                - checkbox "Index ui-full-loop-1779030576028" [checked] [ref=e426] [box=373,2284,16,16]
+              - cell "ui-full-loop-1779030576028" [ref=e427] [box=417,2272,239,41]:
+                - code [ref=e428] [box=427,2286,188,14]: ui-full-loop-1779030576028
+              - cell "corpus" [ref=e429] [box=656,2272,91,41]:
+                - generic [ref=e430] [box=666,2280,59,24]: corpus
+              - cell "indexed" [ref=e431] [box=748,2272,129,41]:
+                - generic [ref=e432] [box=758,2280,65,24]: indexed
+              - cell "1" [ref=e433] [box=877,2272,64,41]
+              - cell "/var/folders/b6/q7tnsx1974gb0jhjkj023ltw0000gn/T/asip-ui-corpus-ieWdkr" [ref=e434] [box=941,2272,555,41]
+            - row "Index ui-full-loop-1779032226669 ui-full-loop-1779032226669 corpus indexed 1 /var/folders/b6/q7tnsx1974gb0jhjkj023ltw0000gn/T/asip-ui-corpus-YcEEU7" [ref=e435] [box=313,2313,1183,41]:
+              - cell [ref=e436] [box=313,2313,50,41]
+              - cell "Index ui-full-loop-1779032226669" [ref=e437] [box=363,2313,54,41]:
+                - checkbox "Index ui-full-loop-1779032226669" [checked] [ref=e438] [box=373,2325,16,16]
+              - cell "ui-full-loop-1779032226669" [ref=e439] [box=417,2313,239,41]:
+                - code [ref=e440] [box=427,2327,188,14]: ui-full-loop-1779032226669
+              - cell "corpus" [ref=e441] [box=656,2313,91,41]:
+                - generic [ref=e442] [box=666,2321,59,24]: corpus
+              - cell "indexed" [ref=e443] [box=748,2313,129,41]:
+                - generic [ref=e444] [box=758,2321,65,24]: indexed
+              - cell "1" [ref=e445] [box=877,2313,64,41]
+              - cell "/var/folders/b6/q7tnsx1974gb0jhjkj023ltw0000gn/T/asip-ui-corpus-YcEEU7" [ref=e446] [box=941,2313,555,41]
+            - row "Index ui-full-loop-1779034779043 ui-full-loop-1779034779043 corpus indexed 1 /var/folders/b6/q7tnsx1974gb0jhjkj023ltw0000gn/T/asip-ui-corpus-GRj8YF" [ref=e447] [box=313,2354,1183,41]:
+              - cell [ref=e448] [box=313,2354,50,41]
+              - cell "Index ui-full-loop-1779034779043" [ref=e449] [box=363,2354,54,41]:
+                - checkbox "Index ui-full-loop-1779034779043" [checked] [ref=e450] [box=373,2366,16,16]
+              - cell "ui-full-loop-1779034779043" [ref=e451] [box=417,2354,239,41]:
+                - code [ref=e452] [box=427,2368,188,14]: ui-full-loop-1779034779043
+              - cell "corpus" [ref=e453] [box=656,2354,91,41]:
+                - generic [ref=e454] [box=666,2362,59,24]: corpus
+              - cell "indexed" [ref=e455] [box=748,2354,129,41]:
+                - generic [ref=e456] [box=758,2362,65,24]: indexed
+              - cell "1" [ref=e457] [box=877,2354,64,41]
+              - cell "/var/folders/b6/q7tnsx1974gb0jhjkj023ltw0000gn/T/asip-ui-corpus-GRj8YF" [ref=e458] [box=941,2354,555,41]
+            - row "Index ui-full-loop-1779035310554 ui-full-loop-1779035310554 corpus indexed 1 /var/folders/b6/q7tnsx1974gb0jhjkj023ltw0000gn/T/asip-ui-corpus-46GjAF" [ref=e459] [box=313,2395,1183,41]:
+              - cell [ref=e460] [box=313,2395,50,41]
+              - cell "Index ui-full-loop-1779035310554" [ref=e461] [box=363,2395,54,41]:
+                - checkbox "Index ui-full-loop-1779035310554" [checked] [ref=e462] [box=373,2407,16,16]
+              - cell "ui-full-loop-1779035310554" [ref=e463] [box=417,2395,239,41]:
+                - code [ref=e464] [box=427,2409,188,14]: ui-full-loop-1779035310554
+              - cell "corpus" [ref=e465] [box=656,2395,91,41]:
+                - generic [ref=e466] [box=666,2403,59,24]: corpus
+              - cell "indexed" [ref=e467] [box=748,2395,129,41]:
+                - generic [ref=e468] [box=758,2403,65,24]: indexed
+              - cell "1" [ref=e469] [box=877,2395,64,41]
+              - cell "/var/folders/b6/q7tnsx1974gb0jhjkj023ltw0000gn/T/asip-ui-corpus-46GjAF" [ref=e470] [box=941,2395,555,41]
+            - row "Index ui-full-loop-1779037279282 ui-full-loop-1779037279282 corpus indexed 1 /var/folders/b6/q7tnsx1974gb0jhjkj023ltw0000gn/T/asip-ui-corpus-xY96bX" [ref=e471] [box=313,2436,1183,41]:
+              - cell [ref=e472] [box=313,2436,50,41]
+              - cell "Index ui-full-loop-1779037279282" [ref=e473] [box=363,2436,54,41]:
+                - checkbox "Index ui-full-loop-1779037279282" [checked] [ref=e474] [box=373,2448,16,16]
+              - cell "ui-full-loop-1779037279282" [ref=e475] [box=417,2436,239,41]:
+                - code [ref=e476] [box=427,2450,188,14]: ui-full-loop-1779037279282
+              - cell "corpus" [ref=e477] [box=656,2436,91,41]:
+                - generic [ref=e478] [box=666,2444,59,24]: corpus
+              - cell "indexed" [ref=e479] [box=748,2436,129,41]:
+                - generic [ref=e480] [box=758,2444,65,24]: indexed
+              - cell "1" [ref=e481] [box=877,2436,64,41]
+              - cell "/var/folders/b6/q7tnsx1974gb0jhjkj023ltw0000gn/T/asip-ui-corpus-xY96bX" [ref=e482] [box=941,2436,555,41]
+            - row "Index ui-full-loop-1779038905463 ui-full-loop-1779038905463 corpus indexed 1 /var/folders/b6/q7tnsx1974gb0jhjkj023ltw0000gn/T/asip-ui-corpus-lI6B1P" [ref=e483] [box=313,2477,1183,41]:
+              - cell [ref=e484] [box=313,2477,50,41]
+              - cell "Index ui-full-loop-1779038905463" [ref=e485] [box=363,2477,54,41]:
+                - checkbox "Index ui-full-loop-1779038905463" [checked] [ref=e486] [box=373,2489,16,16]
+              - cell "ui-full-loop-1779038905463" [ref=e487] [box=417,2477,239,41]:
+                - code [ref=e488] [box=427,2491,188,14]: ui-full-loop-1779038905463
+              - cell "corpus" [ref=e489] [box=656,2477,91,41]:
+                - generic [ref=e490] [box=666,2485,59,24]: corpus
+              - cell "indexed" [ref=e491] [box=748,2477,129,41]:
+                - generic [ref=e492] [box=758,2485,65,24]: indexed
+              - cell "1" [ref=e493] [box=877,2477,64,41]
+              - cell "/var/folders/b6/q7tnsx1974gb0jhjkj023ltw0000gn/T/asip-ui-corpus-lI6B1P" [ref=e494] [box=941,2477,555,41]
+            - row "Index ui-full-loop-1779039242300 ui-full-loop-1779039242300 corpus indexed 1 /var/folders/b6/q7tnsx1974gb0jhjkj023ltw0000gn/T/asip-ui-corpus-3omG3d" [ref=e495] [box=313,2518,1183,41]:
+              - cell [ref=e496] [box=313,2518,50,41]
+              - cell "Index ui-full-loop-1779039242300" [ref=e497] [box=363,2518,54,41]:
+                - checkbox "Index ui-full-loop-1779039242300" [checked] [ref=e498] [box=373,2530,16,16]
+              - cell "ui-full-loop-1779039242300" [ref=e499] [box=417,2518,239,41]:
+                - code [ref=e500] [box=427,2532,188,14]: ui-full-loop-1779039242300
+              - cell "corpus" [ref=e501] [box=656,2518,91,41]:
+                - generic [ref=e502] [box=666,2526,59,24]: corpus
+              - cell "indexed" [ref=e503] [box=748,2518,129,41]:
+                - generic [ref=e504] [box=758,2526,65,24]: indexed
+              - cell "1" [ref=e505] [box=877,2518,64,41]
+              - cell "/var/folders/b6/q7tnsx1974gb0jhjkj023ltw0000gn/T/asip-ui-corpus-3omG3d" [ref=e506] [box=941,2518,555,41]
+            - row "Index ui-full-loop-1779039343933 ui-full-loop-1779039343933 corpus indexed 1 /var/folders/b6/q7tnsx1974gb0jhjkj023ltw0000gn/T/asip-ui-corpus-CJWIDN" [ref=e507] [box=313,2559,1183,41]:
+              - cell [ref=e508] [box=313,2559,50,41]
+              - cell "Index ui-full-loop-1779039343933" [ref=e509] [box=363,2559,54,41]:
+                - checkbox "Index ui-full-loop-1779039343933" [checked] [ref=e510] [box=373,2571,16,16]
+              - cell "ui-full-loop-1779039343933" [ref=e511] [box=417,2559,239,41]:
+                - code [ref=e512] [box=427,2573,188,14]: ui-full-loop-1779039343933
+              - cell "corpus" [ref=e513] [box=656,2559,91,41]:
+                - generic [ref=e514] [box=666,2567,59,24]: corpus
+              - cell "indexed" [ref=e515] [box=748,2559,129,41]:
+                - generic [ref=e516] [box=758,2567,65,24]: indexed
+              - cell "1" [ref=e517] [box=877,2559,64,41]
+              - cell "/var/folders/b6/q7tnsx1974gb0jhjkj023ltw0000gn/T/asip-ui-corpus-CJWIDN" [ref=e518] [box=941,2559,555,41]
+            - row "Index ui-full-loop-1779040393681 ui-full-loop-1779040393681 corpus indexed 1 /var/folders/b6/q7tnsx1974gb0jhjkj023ltw0000gn/T/asip-ui-corpus-pnTIzY" [ref=e519] [box=313,2600,1183,41]:
+              - cell [ref=e520] [box=313,2600,50,41]
+              - cell "Index ui-full-loop-1779040393681" [ref=e521] [box=363,2600,54,41]:
+                - checkbox "Index ui-full-loop-1779040393681" [checked] [ref=e522] [box=373,2612,16,16]
+              - cell "ui-full-loop-1779040393681" [ref=e523] [box=417,2600,239,41]:
+                - code [ref=e524] [box=427,2614,188,14]: ui-full-loop-1779040393681
+              - cell "corpus" [ref=e525] [box=656,2600,91,41]:
+                - generic [ref=e526] [box=666,2608,59,24]: corpus
+              - cell "indexed" [ref=e527] [box=748,2600,129,41]:
+                - generic [ref=e528] [box=758,2608,65,24]: indexed
+              - cell "1" [ref=e529] [box=877,2600,64,41]
+              - cell "/var/folders/b6/q7tnsx1974gb0jhjkj023ltw0000gn/T/asip-ui-corpus-pnTIzY" [ref=e530] [box=941,2600,555,41]
+            - row "Index ui-full-loop-1779041406481 ui-full-loop-1779041406481 corpus indexed 1 /var/folders/b6/q7tnsx1974gb0jhjkj023ltw0000gn/T/asip-ui-corpus-eiTF4n" [ref=e531] [box=313,2641,1183,41]:
+              - cell [ref=e532] [box=313,2641,50,41]
+              - cell "Index ui-full-loop-1779041406481" [ref=e533] [box=363,2641,54,41]:
+                - checkbox "Index ui-full-loop-1779041406481" [checked] [ref=e534] [box=373,2653,16,16]
+              - cell "ui-full-loop-1779041406481" [ref=e535] [box=417,2641,239,41]:
+                - code [ref=e536] [box=427,2655,188,14]: ui-full-loop-1779041406481
+              - cell "corpus" [ref=e537] [box=656,2641,91,41]:
+                - generic [ref=e538] [box=666,2649,59,24]: corpus
+              - cell "indexed" [ref=e539] [box=748,2641,129,41]:
+                - generic [ref=e540] [box=758,2649,65,24]: indexed
+              - cell "1" [ref=e541] [box=877,2641,64,41]
+              - cell "/var/folders/b6/q7tnsx1974gb0jhjkj023ltw0000gn/T/asip-ui-corpus-eiTF4n" [ref=e542] [box=941,2641,555,41]
+            - row "Index ui-full-loop-1779043208931 ui-full-loop-1779043208931 corpus indexed 1 /var/folders/b6/q7tnsx1974gb0jhjkj023ltw0000gn/T/asip-ui-corpus-Zjq1Qg" [ref=e543] [box=313,2682,1183,41]:
+              - cell [ref=e544] [box=313,2682,50,41]
+              - cell "Index ui-full-loop-1779043208931" [ref=e545] [box=363,2682,54,41]:
+                - checkbox "Index ui-full-loop-1779043208931" [checked] [ref=e546] [box=373,2694,16,16]
+              - cell "ui-full-loop-1779043208931" [ref=e547] [box=417,2682,239,41]:
+                - code [ref=e548] [box=427,2696,188,14]: ui-full-loop-1779043208931
+              - cell "corpus" [ref=e549] [box=656,2682,91,41]:
+                - generic [ref=e550] [box=666,2690,59,24]: corpus
+              - cell "indexed" [ref=e551] [box=748,2682,129,41]:
+                - generic [ref=e552] [box=758,2690,65,24]: indexed
+              - cell "1" [ref=e553] [box=877,2682,64,41]
+              - cell "/var/folders/b6/q7tnsx1974gb0jhjkj023ltw0000gn/T/asip-ui-corpus-Zjq1Qg" [ref=e554] [box=941,2682,555,41]
+      - complementary [ref=e95] [box=1536,72,488,1208]:
+        - generic [ref=e96] [box=1561,96,439,24]:
+          - heading "Selected Corpus" [level=2] [ref=e97] [box=1561,98,108,21]
+          - generic [ref=e98] [box=1904,96,96,24]:
+            - img [box=1913,102,12,12]
+            - text: live / run 1
+        - heading "Relationship Panel" [level=3] [ref=e100] [box=1561,168,439,18]
+        - paragraph [ref=e102] [box=1572,205,417,19]:
+          - code [ref=e103] [box=1572,208,282,14]: No relationship data returned from API.
+        - button "Run index" [ref=e104] [cursor=pointer] [box=1561,251,439,36]
+        - generic [ref=e105] [box=1561,287,439,390]:
+          - generic [ref=e106] [box=1562,312,437,44]:
+            - generic [ref=e107] [box=1586,312,389,16]: Index Jobs
+            - generic [ref=e108] [box=1586,336,389,20]: Durable job lifecycle from the local SQLite store.
+          - generic [ref=e555] [box=1586,380,389,272]:
+            - generic [ref=e556] [box=1586,380,389,63]:
+              - generic [ref=e557] [box=1586,380,389,26]:
+                - strong [ref=e558] [box=1586,382,48,19]: job 70
+                - generic [ref=e559] [box=1634,381,83,24]: succeeded
+              - paragraph [ref=e560] [box=1586,405,389,19]:
+                - code [ref=e561] [box=1586,408,188,14]: "index: Indexed 1 documents"
+              - paragraph [ref=e562] [box=1586,424,389,19]:
+                - code [ref=e563] [box=1586,427,224,14]: queued -> indexing -> succeeded
+            - generic [ref=e564] [box=1586,443,389,82]:
+              - generic [ref=e565] [box=1586,443,389,26]:
+                - strong [ref=e566] [box=1586,446,49,19]: job 69
+                - generic [ref=e567] [box=1635,445,83,24]: succeeded
+              - paragraph [ref=e568] [box=1586,469,389,38]:
+                - code [ref=e569] [box=1586,472,347,33]: "graph_rebuild: Rebuilt 26334 deterministic graph edges from 1225 files"
+              - paragraph [ref=e570] [box=1586,506,389,19]:
+                - code [ref=e571] [box=1586,509,137,14]: queued -> succeeded
+            - generic [ref=e572] [box=1586,525,389,63]:
+              - generic [ref=e573] [box=1586,525,389,26]:
+                - strong [ref=e574] [box=1586,528,49,19]: job 68
+                - generic [ref=e575] [box=1635,527,83,24]: succeeded
+              - paragraph [ref=e576] [box=1586,551,389,19]:
+                - code [ref=e577] [box=1586,554,188,14]: "index: Indexed 1 documents"
+              - paragraph [ref=e578] [box=1586,570,389,19]:
+                - code [ref=e579] [box=1586,573,224,14]: queued -> indexing -> succeeded
+            - generic [ref=e580] [box=1586,589,389,63]:
+              - generic [ref=e581] [box=1586,589,389,26]:
+                - strong [ref=e582] [box=1586,591,48,19]: job 67
+                - generic [ref=e583] [box=1634,590,83,24]: succeeded
+              - paragraph [ref=e584] [box=1586,614,389,19]:
+                - code [ref=e585] [box=1586,617,188,14]: "index: Indexed 1 documents"
+              - paragraph [ref=e586] [box=1586,633,389,19]:
+                - code [ref=e587] [box=1586,636,224,14]: queued -> indexing -> succeeded
+  - alert [ref=e588] [box=-1,1279,1,1]

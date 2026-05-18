@@ -1,0 +1,78 @@
+- generic [active] [ref=e1]:
+  - generic [ref=e2]:
+    - banner [ref=e3]:
+      - generic [ref=e5]: ASIP Evidence Workbench
+      - generic [ref=e6]:
+        - img
+        - textbox "Global symbol search" [ref=e7]:
+          - /placeholder: Search indexed symbols
+      - generic "Workbench status" [ref=e8]:
+        - generic [ref=e9]: "Provider: unverified"
+        - generic [ref=e11]: "Edge: Ollama / gemma4:e4b"
+        - generic [ref=e12]: "Index: ready"
+      - button "Switch to dark theme" [ref=e107] [cursor=pointer]:
+        - img
+        - text: Dark
+    - main [ref=e14]:
+      - navigation "ASIP sections" [ref=e15]:
+        - link "Evidence Search" [ref=e16] [cursor=pointer]:
+          - /url: /
+        - link "Graph Explorer" [ref=e17] [cursor=pointer]:
+          - /url: /graph
+        - link "Corpus" [ref=e18] [cursor=pointer]:
+          - /url: /corpus
+        - link "Resolver Profiles" [ref=e19] [cursor=pointer]:
+          - /url: /resolver-profiles
+        - link "Acceptance Tests" [ref=e20] [cursor=pointer]:
+          - /url: /acceptance
+        - link "Settings" [ref=e21] [cursor=pointer]:
+          - /url: /settings
+      - region "Graph relationship workspace" [ref=e22]:
+        - generic [ref=e23]:
+          - generic [ref=e24]
+          - textbox "IP block filter" [ref=e27]:
+            - /placeholder: IP
+          - textbox "ASIC or generation filter" [ref=e29]:
+            - /placeholder: ASIC
+          - button "Run query" [ref=e30] [cursor=pointer]
+        - generic "Page metrics" [ref=e31]:
+          - generic [ref=e32]: "matches: 0"
+          - generic [ref=e33]: "graph edges: 3000"
+          - generic [ref=e34]: "query: live"
+        - generic "Evidence source filters" [ref=e35]:
+          - button "Source filter 1 hop" [ref=e36] [cursor=pointer]
+          - button "Source filter 2 hops" [ref=e37] [cursor=pointer]
+          - button "Source filter writes" [ref=e38] [cursor=pointer]
+          - button "Source filter has_field" [ref=e39] [cursor=pointer]
+        - generic [ref=e40]:
+          - generic [ref=e41]
+          - generic "Graph display controls" [ref=e44]
+          - img "Global weighted network graph" [ref=e120]
+        - table "Evidence results" [ref=e70]:
+          - rowgroup [ref=e71]
+          - rowgroup [ref=e79]
+      - complementary [ref=e90]:
+        - generic [ref=e91]:
+          - heading "Global Graph" [level=2] [ref=e92]
+          - generic [ref=e93]
+        - heading "Relationship Panel" [level=3] [ref=e95]
+        - generic [ref=e96]:
+          - paragraph [ref=e155]
+          - paragraph [ref=e157]
+          - paragraph [ref=e159]
+          - paragraph [ref=e161]
+          - paragraph [ref=e163]
+          - paragraph [ref=e165]
+          - paragraph [ref=e167]
+          - paragraph [ref=e169]
+          - paragraph [ref=e171]
+          - paragraph [ref=e173]
+          - paragraph [ref=e175]
+          - paragraph [ref=e177]
+        - button "Generate semantic edges" [ref=e99] [cursor=pointer]
+        - button "Generate batch semantic edges" [ref=e100] [cursor=pointer]
+        - button "Extract document nodes" [ref=e101] [cursor=pointer]
+        - generic "Semantic generation controls" [ref=e102]:
+          - generic [ref=e103]
+          - generic [ref=e105]
+  - alert [ref=e179]

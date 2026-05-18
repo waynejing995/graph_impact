@@ -1,0 +1,32 @@
+- img "Global weighted network graph" [ref=e255] [box=325,385,1174,660]:
+  - generic [ref=e259] [box=326,1230,1172,101]:
+    - generic [ref=e260] [box=334,1239,66,17]: nodes 1000
+    - generic [ref=e261] [box=406,1239,66,17]: edges 1274
+    - generic [ref=e262] [box=478,1239,60,17]: doc_box 6
+    - generic [ref=e263] [box=544,1239,86,17]: doc_section 1
+    - generic [ref=e264] [box=636,1239,79,17]: function 837
+    - generic [ref=e265] [box=722,1239,79,17]: register 156
+    - generic [ref=e266] [box=807,1239,172,17]: aldebaran_mode2_restore_ip
+    - generic [ref=e267] [box=985,1239,179,17]: amdgpu_device_ip_early_init
+    - generic [ref=e268] [box=1170,1239,159,17]: amdgpu_device_fw_loading
+    - generic [ref=e269] [box=1335,1239,152,17]: amdgpu_ip_block_hw_fini
+    - generic [ref=e270] [box=334,1262,152,17]: amdgpu_ip_block_suspend
+    - generic [ref=e271] [box=492,1262,139,17]: amdgpu_device_ip_init
+    - generic [ref=e272] [box=637,1262,139,17]: amdgpu_device_ip_fini
+    - generic [ref=e273] [box=782,1262,179,17]: amdgpu_device_ip_soft_reset
+    - generic [ref=e274] [box=967,1262,73,17]: CP_RB0_BASE
+    - generic [ref=e275] [box=1046,1262,93,17]: CP_RB0_BASE_HI
+    - generic [ref=e276] [box=1145,1262,73,17]: CP_RB1_BASE
+    - generic [ref=e277] [box=1224,1262,93,17]: CP_RB1_BASE_HI
+    - generic [ref=e278] [box=334,1284,172,17]: CP_RB_DOORBELL_RANGE_LOWER
+    - generic [ref=e279] [box=512,1284,172,17]: CP_RB_DOORBELL_RANGE_UPPER
+    - generic [ref=e280] [box=690,1284,66,17]: CP_RB_VMID
+    - generic [ref=e281] [box=763,1284,79,17]: CPC_INT_CNTL
+    - generic [ref=e282] [box=848,1284,79,17]: reads / 1.00
+    - generic [ref=e283] [box=934,1284,79,17]: reads / 1.00
+    - generic [ref=e284] [box=1019,1284,99,17]: contains / 1.00
+    - generic [ref=e285] [box=1124,1284,79,17]: calls / 1.00
+    - generic [ref=e286] [box=1210,1284,79,17]: calls / 1.00
+    - generic [ref=e287] [box=1295,1284,79,17]: calls / 1.00
+    - generic [ref=e288] [box=1381,1284,79,17]: calls / 1.00
+    - generic [ref=e289] [box=334,1307,79,17]: calls / 1.00

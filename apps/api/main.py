@@ -14,7 +14,10 @@ from apps.mcp.tools import (
     corpus_add,
     entity_explain,
     evidence_detail,
+    graph_rebuild,
     graph_expand,
+    job_detail,
+    jobs_list,
     provider_settings_save,
     provider_settings_show,
     ollama_models,
@@ -49,6 +52,15 @@ class CorpusRequest(BaseModel):
 
 class IndexRequest(BaseModel):
     corpus_ids: Optional[List[str]] = None
+    resolver_profile_ids: Optional[List[str]] = None
+    resolverProfileIds: Optional[List[str]] = None
+    db_path: Optional[str] = None
+
+
+class GraphRebuildRequest(BaseModel):
+    corpus_ids: Optional[List[str]] = None
+    resolver_profile_ids: Optional[List[str]] = None
+    resolverProfileIds: Optional[List[str]] = None
     db_path: Optional[str] = None
 
 
@@ -140,7 +152,36 @@ def create_corpus(request: CorpusRequest):
 
 @app.post("/index")
 def index(request: IndexRequest):
-    return corpora_index(db_path=request.db_path, corpus_ids=request.corpus_ids)
+    return corpora_index(
+        db_path=request.db_path,
+        corpus_ids=request.corpus_ids,
+        resolver_profile_ids=request.resolver_profile_ids or request.resolverProfileIds,
+    )
+
+
+@app.post("/graph-rebuild")
+def rebuild_graph(request: GraphRebuildRequest):
+    try:
+        return graph_rebuild(
+            db_path=request.db_path,
+            corpus_ids=request.corpus_ids,
+            resolver_profile_ids=request.resolver_profile_ids or request.resolverProfileIds,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@app.get("/jobs")
+def jobs(db_path: Optional[str] = None, limit: int = 50):
+    return jobs_list(db_path=db_path, limit=limit)
+
+
+@app.get("/jobs/{job_id}")
+def job(job_id: int, db_path: Optional[str] = None):
+    try:
+        return job_detail(job_id, db_path=db_path)
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail=f"job not found: {job_id}") from exc
 
 
 @app.get("/providers/settings")

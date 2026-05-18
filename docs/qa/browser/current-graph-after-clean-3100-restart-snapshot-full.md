@@ -1,0 +1,117 @@
+- generic [active] [ref=e1] [box=0,0,2560,1236]:
+  - generic [ref=e2] [box=0,0,2560,1236]:
+    - banner [ref=e3] [box=0,0,2560,72]:
+      - generic [ref=e5] [box=64,26,171,20]: ASIP Evidence Workbench
+      - generic [ref=e6] [box=328,18,1632,36]:
+        - img [box=338,28,15,15]
+        - textbox "Global symbol search" [ref=e7] [box=328,18,1632,36]:
+          - /placeholder: Search indexed symbols
+      - generic "Workbench status" [ref=e8] [box=1976,24,443,24]:
+        - generic [ref=e9] [box=1976,24,150,24]: "Provider: unverified"
+        - generic [ref=e11] [box=2133,24,186,24]: "Edge: Ollama / gemma4:e4b"
+        - generic [ref=e12] [box=2327,24,92,24]: "Index: ready"
+      - button "Switch to dark theme" [ref=e107] [cursor=pointer] [box=2435,18,85,36]:
+        - img [box=2450,28,16,16]
+        - text: Dark
+    - main [ref=e14] [box=0,72,2560,1164]:
+      - navigation "ASIP sections" [ref=e15] [box=0,72,288,1164]:
+        - link "Evidence Search" [ref=e16] [cursor=pointer] [box=24,96,239,34]:
+          - /url: /
+        - link "Graph Explorer" [ref=e17] [cursor=pointer] [box=24,134,239,34]:
+          - /url: /graph
+        - link "Corpus" [ref=e18] [cursor=pointer] [box=24,172,239,34]:
+          - /url: /corpus
+        - link "Resolver Profiles" [ref=e19] [cursor=pointer] [box=24,210,239,34]:
+          - /url: /resolver-profiles
+        - link "Acceptance Tests" [ref=e20] [cursor=pointer] [box=24,248,239,34]:
+          - /url: /acceptance
+        - link "Settings" [ref=e21] [cursor=pointer] [box=24,286,239,34]:
+          - /url: /settings
+      - region "Graph relationship workspace" [ref=e22] [box=288,72,1760,1164]:
+        - generic [ref=e23] [box=312,96,1697,36]:
+          - generic [ref=e24] [box=312,96,1280,36]:
+            - img [box=322,106,16,16]
+            - textbox "Evidence query" [ref=e25] [box=312,96,1280,36]:
+              - /placeholder: Query live evidence
+          - textbox "IP block filter" [ref=e27] [box=1602,96,120,36]:
+            - /placeholder: IP
+          - textbox "ASIC or generation filter" [ref=e29] [box=1732,96,170,36]:
+            - /placeholder: ASIC
+          - button "Run query" [ref=e30] [cursor=pointer] [box=1912,96,97,36]
+        - generic "Page metrics" [ref=e31] [box=312,144,1697,24]:
+          - generic [ref=e32] [box=312,144,85,24]: "matches: 0"
+          - generic [ref=e33] [box=405,144,132,24]: "graph edges: 3000"
+          - generic [ref=e34] [box=544,144,80,24]: "query: live"
+        - generic "Evidence source filters" [ref=e35] [box=312,178,1697,36]:
+          - button "Source filter 1 hop" [ref=e36] [cursor=pointer] [box=312,178,89,36]:
+            - img [box=327,188,16,16]
+            - text: 1 hop
+          - button "Source filter 2 hops" [ref=e37] [cursor=pointer] [box=409,178,98,36]:
+            - img [box=424,188,16,16]
+            - text: 2 hops
+          - button "Source filter writes" [ref=e38] [cursor=pointer] [box=514,178,95,36]:
+            - img [box=529,188,16,16]
+            - text: writes
+          - button "Source filter has_field" [ref=e39] [cursor=pointer] [box=617,178,114,36]:
+            - img [box=632,188,16,16]
+            - text: has_field
+        - generic [ref=e40] [box=312,226,1697,1112]:
+          - generic [ref=e41] [box=325,239,1671,24]:
+            - generic [ref=e42] [box=325,241,141,20]: Global Relation Graph
+            - generic [ref=e43] [box=1030,239,149,24]: weighted connections
+            - generic [ref=e108] [box=1743,239,253,24]: "layers deterministic: 2987 semantic: 13"
+          - generic "Graph display controls" [ref=e44] [box=325,273,1671,102]:
+            - generic [ref=e45] [box=336,284,542,34]
+            - generic [ref=e50] [box=890,284,542,34]
+            - generic [ref=e55] [box=1443,284,542,34]
+            - generic [ref=e60] [box=336,330,542,34]
+          - img "Global weighted network graph" [ref=e120] [box=325,385,1671,940]:
+            - generic [ref=e124] [box=326,1466,1669,79]
+        - table "Evidence results" [ref=e70] [box=313,1375,1695,82]:
+          - rowgroup [ref=e71] [box=313,1375,1695,40]:
+            - row "Type Symbol Source Relation Score Location" [ref=e72] [box=313,1375,1695,40]
+          - rowgroup [ref=e79] [box=313,1415,1695,41]:
+            - row "No evidence matched this query. empty empty 0 live SQLite query returned no rows" [ref=e80] [box=313,1415,1695,41]
+      - complementary [ref=e90] [box=2048,72,488,1164]:
+        - generic [ref=e91] [box=2073,96,424,24]:
+          - heading "Global Graph" [level=2] [ref=e92] [box=2073,98,85,21]
+          - generic [ref=e93] [box=2401,96,96,24]:
+            - img [box=2410,102,12,12]
+            - text: live / run 1
+        - heading "Relationship Panel" [level=3] [ref=e95] [box=2073,168,424,18]
+        - generic [ref=e96] [box=2073,194,424,1017]:
+          - paragraph [ref=e155] [box=2084,205,535,76]:
+            - code [ref=e156] [box=2084,208,513,71]: function:linux-amdgpu:drivers/gpu/drm/amd/amdgpu/gfx_v10_0.c:gfx_v10_0_reset_kcq calls function:linux-amdgpu:drivers/gpu/drm/amd/amdgpu/gfx_v10_0.c:gfx10_kiq_map_queues
+          - paragraph [ref=e157] [box=2084,289,535,76]:
+            - code [ref=e158] [box=2084,292,513,71]: function:linux-amdgpu:drivers/gpu/drm/amd/amdgpu/gfx_v10_0.c:gfx_v10_0_reset_kcq calls function:linux-amdgpu:drivers/gpu/drm/amd/amdgpu/gfx_v10_0.c:gfx10_kiq_unmap_queues
+          - paragraph [ref=e159] [box=2084,372,535,76]:
+            - code [ref=e160] [box=2084,375,513,71]: function:linux-amdgpu:drivers/gpu/drm/amd/amdgpu/gfx_v10_0.c:gfx_v10_0_reset_kgq calls function:linux-amdgpu:drivers/gpu/drm/amd/amdgpu/gfx_v10_0.c:gfx10_kiq_map_queues
+          - paragraph [ref=e161] [box=2084,456,535,76]:
+            - code [ref=e162] [box=2084,459,513,71]: function:linux-amdgpu:drivers/gpu/drm/amd/amdgpu/gfx_v10_0.c:gfx_v10_0_ring_preempt_ib calls function:linux-amdgpu:drivers/gpu/drm/amd/amdgpu/gfx_v10_0.c:gfx10_kiq_unmap_queues
+          - paragraph [ref=e163] [box=2084,539,535,76]:
+            - code [ref=e164] [box=2084,542,513,71]: function:linux-amdgpu:drivers/gpu/drm/amd/amdgpu/gfx_v11_0.c:gfx_v11_0_ring_preempt_ib calls function:linux-amdgpu:drivers/gpu/drm/amd/amdgpu/gfx_v11_0.c:gfx11_kiq_unmap_queues
+          - paragraph [ref=e165] [box=2084,623,535,76]:
+            - code [ref=e166] [box=2084,626,520,71]: function:linux-amdgpu:drivers/gpu/drm/amd/amdgpu/gfx_v12_0.c:gfx_v12_0_ring_preempt_ib calls function:linux-amdgpu:drivers/gpu/drm/amd/amdgpu/gfx_v12_0.c:gfx_v12_0_kiq_unmap_queues
+          - paragraph [ref=e167] [box=2084,707,535,76]:
+            - code [ref=e168] [box=2084,710,499,71]: function:linux-amdgpu:drivers/gpu/drm/amd/amdgpu/gfx_v9_0.c:gfx_v9_0_reset_kcq calls function:linux-amdgpu:drivers/gpu/drm/amd/amdgpu/gfx_v9_0.c:gfx_v9_0_kiq_map_queues
+          - paragraph [ref=e169] [box=2084,790,535,76]:
+            - code [ref=e170] [box=2084,793,506,71]: function:linux-amdgpu:drivers/gpu/drm/amd/amdgpu/gfx_v9_0.c:gfx_v9_0_reset_kcq calls function:linux-amdgpu:drivers/gpu/drm/amd/amdgpu/gfx_v9_0.c:gfx_v9_0_kiq_unmap_queues
+          - paragraph [ref=e171] [box=2084,874,535,76]:
+            - code [ref=e172] [box=2084,877,506,71]: function:linux-amdgpu:drivers/gpu/drm/amd/amdgpu/gfx_v9_0.c:gfx_v9_0_ring_preempt_ib calls function:linux-amdgpu:drivers/gpu/drm/amd/amdgpu/gfx_v9_0.c:gfx_v9_0_kiq_unmap_queues
+          - paragraph [ref=e173] [box=2084,957,535,76]:
+            - code [ref=e174] [box=2084,960,527,71]: function:linux-amdgpu:drivers/gpu/drm/amd/amdgpu/gfx_v9_4_3.c:gfx_v9_4_3_reset_kcq calls function:linux-amdgpu:drivers/gpu/drm/amd/amdgpu/gfx_v9_4_3.c:gfx_v9_4_3_kiq_map_queues
+          - paragraph [ref=e175] [box=2084,1041,535,76]:
+            - code [ref=e176] [box=2084,1044,535,71]: function:linux-amdgpu:drivers/gpu/drm/amd/amdgpu/gfx_v9_4_3.c:gfx_v9_4_3_reset_kcq calls function:linux-amdgpu:drivers/gpu/drm/amd/amdgpu/gfx_v9_4_3.c:gfx_v9_4_3_kiq_unmap_queues
+          - paragraph [ref=e177] [box=2084,1125,535,76]:
+            - code [ref=e178] [box=2084,1128,520,71]: function:linux-amdgpu:drivers/gpu/drm/amd/amdgpu/aldebaran.c:aldebaran_mode2_restore_ip calls function:linux-amdgpu:drivers/gpu/drm/amd/amdgpu/nv.c:nv_common_late_init
+        - button "Generate semantic edges" [ref=e99] [cursor=pointer] [box=2073,1227,424,36]
+        - button "Generate batch semantic edges" [ref=e100] [cursor=pointer] [box=2073,1279,424,36]
+        - button "Extract document nodes" [ref=e101] [cursor=pointer] [box=2073,1331,424,36]
+        - generic "Semantic generation controls" [ref=e102] [box=2073,1367,424,120]:
+          - generic [ref=e103] [box=2073,1370,424,49]:
+            - text: Semantic candidate limit
+            - spinbutton "Semantic candidate limit" [ref=e104] [box=2073,1391,424,36]
+          - generic [ref=e105] [box=2073,1430,424,49]:
+            - text: Semantic batch size
+            - spinbutton "Semantic batch size" [ref=e106] [box=2073,1451,424,36]
+  - alert [ref=e179] [box=-1,1235,1,1]

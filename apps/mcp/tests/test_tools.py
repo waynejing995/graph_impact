@@ -11,7 +11,10 @@ from apps.mcp.tools import (
     corpora_list,
     entity_explain,
     evidence_detail,
+    graph_rebuild,
     graph_expand,
+    job_detail,
+    jobs_list,
     ollama_models,
     provider_settings_save,
     provider_settings_show,
@@ -248,6 +251,137 @@ class McpToolsTests(unittest.TestCase):
             self.assertEqual(indexed["source"], "registered_corpus")
             self.assertEqual(indexed["corpus_ids"], ["mcp-local-docs"])
             self.assertTrue(any(row["symbol"] == "API_CONTROL_REGISTER" for row in queried["rows"]))
+
+    def test_corpora_index_passes_resolver_profile_ids_to_job_metadata(self):
+        with TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            corpus_root = root / "corpus"
+            corpus_root.mkdir()
+            (corpus_root / "driver.py").write_text('@gpu_register("MCP_PROFILE_REGISTER")\n', encoding="utf-8")
+            resolver_config = root / "mcp-profile.yaml"
+            resolver_config.write_text(
+                "\n".join(
+                    [
+                        "id: mcp-profile",
+                        "language: python",
+                        "context_vars: []",
+                        "symbol_prefixes: []",
+                        "python_extractors: [gpu_register]",
+                        "wrappers: {}",
+                    ]
+                ),
+                encoding="utf-8",
+            )
+            db_path = str(root / "asip.db")
+
+            resolver_profile_add(
+                db_path=db_path,
+                profile_id="mcp-profile",
+                language="python",
+                wrappers=["gpu_register"],
+                strategy="python-call",
+                path=str(resolver_config),
+                enabled=True,
+            )
+            corpus_add(
+                db_path=db_path,
+                corpus_id="mcp-profile-docs",
+                repo="local",
+                source_root=str(corpus_root),
+                include=["**/*.py"],
+                corpus_type="code",
+            )
+
+            indexed = corpora_index(
+                db_path=db_path,
+                corpus_ids=["mcp-profile-docs"],
+                resolverProfileIds=["mcp-profile"],
+            )
+            detail = job_detail(indexed["job_id"], db_path=db_path)
+
+            self.assertEqual(indexed["resolver_profile_ids"], ["mcp-profile"])
+            self.assertEqual(detail["metadata"]["resolver_profile_ids"], ["mcp-profile"])
+
+    def test_graph_rebuild_passes_resolver_profile_ids(self):
+        with TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            corpus_root = root / "corpus"
+            corpus_root.mkdir()
+            (corpus_root / "driver.py").write_text('@gpu_register("MCP_REBUILD_REGISTER")\n', encoding="utf-8")
+            resolver_config = root / "mcp-rebuild.yaml"
+            resolver_config.write_text(
+                "\n".join(
+                    [
+                        "id: mcp-rebuild",
+                        "language: python",
+                        "context_vars: []",
+                        "symbol_prefixes: []",
+                        "python_extractors: [gpu_register]",
+                        "wrappers: {}",
+                    ]
+                ),
+                encoding="utf-8",
+            )
+            db_path = str(root / "asip.db")
+            resolver_profile_add(
+                db_path=db_path,
+                profile_id="mcp-rebuild",
+                language="python",
+                wrappers=["gpu_register"],
+                strategy="python-call",
+                path=str(resolver_config),
+                enabled=True,
+            )
+            corpus_add(
+                db_path=db_path,
+                corpus_id="mcp-rebuild-docs",
+                repo="local",
+                source_root=str(corpus_root),
+                include=["**/*.py"],
+                corpus_type="code",
+            )
+            corpora_index(db_path=db_path, corpus_ids=["mcp-rebuild-docs"])
+
+            rebuilt = graph_rebuild(
+                db_path=db_path,
+                corpus_ids=["mcp-rebuild-docs"],
+                resolverProfileIds=["mcp-rebuild"],
+            )
+
+            self.assertEqual(rebuilt["source"], "deterministic_graph_rebuild")
+            self.assertEqual(rebuilt["resolver_profile_ids"], ["mcp-rebuild"])
+
+    def test_job_tools_expose_index_lifecycle_events(self):
+        with TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            corpus_root = root / "corpus"
+            corpus_root.mkdir()
+            (corpus_root / "note.md").write_text(
+                "MCP_JOB_REGISTER appears in durable job tests.",
+                encoding="utf-8",
+            )
+            db_path = str(root / "asip.db")
+
+            corpus_add(
+                db_path=db_path,
+                corpus_id="mcp-job-docs",
+                repo="local",
+                source_root=str(corpus_root),
+                include=["**/*.md"],
+                corpus_type="doc",
+            )
+            indexed = corpora_index(db_path=db_path, corpus_ids=["mcp-job-docs"])
+            listed = jobs_list(db_path=db_path)
+            detail = job_detail(indexed["job_id"], db_path=db_path)
+
+            self.assertEqual(indexed["job_status"], "succeeded")
+            self.assertEqual(detail["status"], "succeeded")
+            self.assertEqual(detail["metadata"]["result_status"], "indexed")
+            event_statuses = [event["status"] for event in detail["events"]]
+            self.assertEqual(event_statuses[0], "queued")
+            self.assertIn("indexing", event_statuses)
+            self.assertEqual(event_statuses[-1], "succeeded")
+            self.assertTrue(any(job["id"] == indexed["job_id"] for job in listed["jobs"]))
 
     def test_evidence_detail_and_entity_explain_use_live_sqlite_rows(self):
         with TemporaryDirectory() as tmpdir:

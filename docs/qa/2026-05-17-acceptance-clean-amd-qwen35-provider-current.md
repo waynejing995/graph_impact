@@ -1,5 +1,11 @@
 # ASIP Acceptance Query Run
 
+> Historical note: this qwen3.5 artifact is retained for comparison only. The
+> current clean-provider closure path is
+> `2026-05-17-acceptance-clean-amd-gemma4-provider-current.*`, and the final
+> evidence package must not treat this qwen3.5 file as current closure despite
+> the legacy filename.
+
 Generated: 2026-05-16T22:59:14+00:00
 DB: `/tmp/asip-clean-amd-qwen35-provider-2026-05-17.db`
 Surfaces checked: CLI, API, Web, MCP

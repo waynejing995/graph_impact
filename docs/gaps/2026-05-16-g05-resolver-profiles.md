@@ -1,6 +1,6 @@
 # G05 Resolver Profiles
 
-Status: Partial; validation and enable/disable UI exist, richer edit/selection semantics and final indexing proof remain blocking
+Status: Current pass verified; richer diagnostics and broader non-C strategies remain blocking
 
 ## Requirement
 
@@ -42,19 +42,22 @@ Resolver wrapper/extractor names are configuration and provenance, not graph ent
 - 2026-05-17 API correction: committed YAML profiles are merged before backend DB rows and cannot be shadowed by stale local test state for the same profile id, so the built-in `initial`/AMD profiles stay truthful to the checked-in YAML.
 - 2026-05-17 prefix correction: every committed C/C++ resolver profile now carries `symbol_prefixes: [reg, mm, smn]`, and `packages/core/tests/test_resolver_profiles.py` proves both `mmGCVM_L2_CNTL` and `smnGCVM_L2_CNTL` canonicalize to the same `GCVM_L2_CNTL` register node instead of creating prefix-specific graph nodes.
 - 2026-05-17 continuation: the Resolver Profiles UI can now select an existing YAML-backed profile, load it into the editor, toggle enabled state, and save it through the same backend upsert path. Playwright covers loading `linux-amdgpu` into the editor and saving it disabled.
+- 2026-05-18 per-job selection correction: core `index_configured_corpora`, `index_registered_corpora`, and `rebuild_deterministic_graph` accept selected resolver profile ids, filter against real YAML/backend profiles, record the active ids in job metadata, and reject unknown ids. CLI `index`/`graph-rebuild`, FastAPI `/index`/`/graph-rebuild`, MCP `corpora_index`/`graph_rebuild`, and the Next Web BFF all pass these ids through.
+- 2026-05-18 Corpus UI correction: the Corpus page now renders a shadcn/Radix checkbox list of enabled YAML-backed resolver profiles and sends `resolverProfileIds` with the next index job. The action feedback echoes the profiles used, and Playwright verifies an unchecked profile is omitted from the request body.
+- 2026-05-18 selection proof: Web API indexing with `resolverProfileIds: ["amd-soc15"]` indexes a `WREG32_SOC15` fixture while excluding `WREG32` direct-MMIO edges, proving selection changes graph output without resolver code edits.
 
 ## Remaining Gap
 
-Resolver profiles are closer to a real product feature because the backend now preserves YAML argument positions and resolves multiple symbols per configured wrapper call.
+Resolver profiles are a real product control path for the current C/C++ and Python-call MVP. The backend preserves YAML argument positions, resolves multiple symbols per configured wrapper call, and can restrict an index/rebuild job to user-selected profiles.
 
-The UI now supports add, validate, and enabled/disabled creation state. It still lacks edit-in-place, profile selection per indexing job, richer diagnostics, and broader language-specific non-macro strategies beyond configured Python-style call extractors; those need either implementation or explicit MVP limits.
+The UI now supports add, validate, enabled/disabled creation state, existing-profile editing through the selector, and per-index job selection. Remaining work is richer diagnostics for why a profile did or did not match a source span, and broader language-specific non-macro strategies beyond configured Python-style call extractors; those need either implementation or explicit MVP limits.
 
-The next UI/backend pass must also remove any resolver rows that are not backed by a real YAML config, and seed only a truthful initial resolver profile.
+The UI/backend path filters out resolver rows that are not backed by a real YAML config, and the starter `initial` profile is a truthful checked-in YAML file.
 
 ## Acceptance Criteria
 
 - Profiles are parsed with structured code, not ad hoc regex in Web product paths.
-- UI can add, enable/disable on creation, and validate profiles through backend state. Edit-in-place and per-job selection remain open.
+- UI can add, enable/disable on creation, validate profiles through backend state, edit existing profiles through the selector, and select profiles for a specific index job.
 - UI only lists resolver profiles that can be loaded from real YAML config or backend-persisted state with an existing config path.
 - Resolver validation calls core resolver logic and returns structured diagnostics.
 - Linux and MxGPU wrapper changes affect indexing/query without code changes.
@@ -71,7 +74,7 @@ The next UI/backend pass must also remove any resolver rows that are not backed 
 - Core regression test for common AMD register prefixes such as `reg*`, `mm*`, and `smn*` so prefix aliases do not fragment register nodes.
 - Core integration test for persisted profile argument positions during registered-corpus indexing.
 - Core migration test for old `resolver_profiles` tables without `config_json`.
-- API/E2E tests for add/edit/toggle/validate profile. Add, enabled/disabled creation, and validate are implemented; edit-in-place and per-job selection remain open.
+- API/E2E tests for add/edit/toggle/validate/profile selection. Add, enabled/disabled creation, validate, edit-in-place, and per-job selection are implemented for the current YAML-backed profile model.
 - MCP/API tests for add/list/validate profile against a temp DB.
 - Integration test proving selected profile is used during indexing.
 - Regression test: indexing/resolver graph output does not create mega-nodes for configured wrapper/extractor names.
@@ -80,4 +83,4 @@ The next UI/backend pass must also remove any resolver rows that are not backed 
 
 ## Not Closed Until
 
-The resolver profile selected in the UI/backend changes the evidence generated by the index/query pipeline.
+The final G11 gate reruns the resolver profile selection path together with the full graph/query/browser suite and explicitly accepts the remaining diagnostic and broader-language boundaries.

@@ -14,9 +14,11 @@ Commit and push happen only after verification.
 - Prior progress docs contain mixed old and new status, so this `docs/gaps/` ledger is the current source of truth.
 - The worktree currently contains many uncommitted implementation files; generated caches must be removed before staging.
 - Final-candidate evidence package now exists at `docs/qa/2026-05-17-final-clean-evidence-package.md`, linking the clean AMD DB, AQ01-AQ09 9/9 artifact, six free queries, semantic-edge jobs, visual QA, automated verification, and architecture review.
+- Current clean-final artifact is `/tmp/asip-clean-amd-gemma4-final-current-2026-05-18.db`, with `graph_rebuild`, `semantic_edges_batch`, and `doc_nodes_batch` jobs all succeeded, AQ01-AQ09 `9/9`, and macro/wrapper endpoint checks recorded in `docs/qa/2026-05-18-clean-final-stage2-and-macro-qa.md`.
+- Final automated rerun after the latest code/doc changes is green: core unittest 202 OK with 2 optional sqlite-vec skips; API/MCP unittest 45 OK with 1 optional MCP runtime skip; TypeScript check passed; lint passed; Web API+smoke Playwright 73 passed; visual route Playwright 15 passed; `git diff --check` passed. Clean-final default browser QA is recorded in `docs/qa/browser/graph-clean-final-default-3100-2k.png` and `.json`.
 - `git diff --check` passed after the current changes, and generated `apps/web/tsconfig.tsbuildinfo` plus the temporary root screenshot were removed from the worktree.
 - 2026-05-17 user review reopened the completion gate for UI: package-backed graph rendering, shadcn-native UI composition, static-data cleanup, and expandable acceptance detail QA. Those blockers now have implementation and test evidence in `docs/qa/2026-05-17-graph-function-section-batch-qa.md`.
-- Latest verification after the user-review blocker pass: core unittest 90 OK with 1 sqlite-vec skip; API/MCP unittest 41 OK with 1 optional MCP runtime skip; Web API Playwright 21 passed; Web smoke Playwright 39 passed; visual route Playwright 14 passed; lint/build/tsc/diff checks passed.
+- Latest verification after the receiver type-hint graph pass: core unittest 172 OK with 2 optional sqlite-vec skips; API/MCP unittest 42 OK with 1 optional MCP runtime skip; Web API Playwright 25 passed; Web smoke Playwright 46 passed; visual route Playwright 15 passed; lint/tsc/diff checks passed.
 
 ## Remaining Gap
 

@@ -53,6 +53,11 @@ type ForceLink = LinkObject<
   }
 >;
 
+type ForceGraphMethods = {
+  d3Force?: (forceName: string) => unknown;
+  zoomToFit?: (durationMs?: number, padding?: number) => void;
+};
+
 type GraphPalette = {
   function: string;
   register: string;
@@ -65,7 +70,7 @@ type GraphPalette = {
 
 const ForceGraph2D = dynamic(() => import("react-force-graph-2d"), {
   ssr: false
-}) as ComponentType<ForceGraphProps<ForceNode, ForceLink>>;
+}) as ComponentType<ForceGraphProps<ForceNode, ForceLink> & { ref?: (instance: ForceGraphMethods | null) => void }>;
 
 const fallbackPalette: GraphPalette = {
   function: "#7dd3fc",
@@ -94,6 +99,8 @@ export function WeightedForceGraph({
 }) {
   const summaryId = useId();
   const containerRef = useRef<HTMLDivElement | null>(null);
+  const graphRef = useRef<ForceGraphMethods | null>(null);
+  const fitPendingRef = useRef(true);
   const [size, setSize] = useState({ width: 1280, height: 720 });
   const [ready, setReady] = useState(false);
   const [palette, setPalette] = useState<GraphPalette>(fallbackPalette);
@@ -105,7 +112,7 @@ export function WeightedForceGraph({
     }
     const observer = new ResizeObserver(([entry]) => {
       const width = Math.max(320, Math.round(entry.contentRect.width));
-      const height = Math.max(560, Math.round(Math.min(920, width * 0.62)));
+      const height = Math.max(680, Math.round(Math.min(1080, width * 0.72)));
       setSize({ width, height });
     });
     observer.observe(element);
@@ -164,6 +171,12 @@ export function WeightedForceGraph({
     return { nodes, links };
   }, [graph, maxEdges, maxNodes, minEdgeWeight]);
 
+  useEffect(() => {
+    fitPendingRef.current = true;
+    setReady(false);
+    configureForceLayout(graphRef.current);
+  }, [graphData.nodes.length, graphData.links.length]);
+
   const topNodes = useMemo(
     () => [...graphData.nodes].sort((left, right) => right.weight - left.weight).slice(0, summaryLimit),
     [graphData.nodes, summaryLimit]
@@ -206,9 +219,9 @@ export function WeightedForceGraph({
       <ForceGraph2D
         autoPauseRedraw={false}
         backgroundColor="rgba(0,0,0,0)"
-        cooldownTicks={90}
-        d3AlphaDecay={0.035}
-        d3VelocityDecay={0.28}
+        cooldownTicks={140}
+        d3AlphaDecay={0.025}
+        d3VelocityDecay={0.22}
         enableNodeDrag
         enablePanInteraction
         enablePointerInteraction
@@ -228,8 +241,18 @@ export function WeightedForceGraph({
         nodeLabel={(node) => `${node.label} (${node.kind}, weight ${node.weight})`}
         nodeRelSize={4}
         nodeVal={(node) => Math.max(2, node.weight)}
-        onEngineStop={() => setReady(true)}
-        warmupTicks={60}
+        onEngineStop={() => {
+          if (fitPendingRef.current) {
+            graphRef.current?.zoomToFit?.(450, 72);
+            fitPendingRef.current = false;
+          }
+          setReady(true);
+        }}
+        ref={(instance) => {
+          graphRef.current = instance;
+          configureForceLayout(instance);
+        }}
+        warmupTicks={90}
         width={size.width}
       />
       <div className="graph-accessibility-summary" id={summaryId}>
@@ -247,6 +270,20 @@ export function WeightedForceGraph({
       </div>
     </div>
   );
+}
+
+function configureForceLayout(instance: ForceGraphMethods | null) {
+  if (!instance?.d3Force) {
+    return;
+  }
+  const charge = instance.d3Force("charge") as { strength?: (value: number) => void } | undefined;
+  charge?.strength?.(-120);
+  const link = instance.d3Force("link") as {
+    distance?: (value: number | ((link: ForceLink) => number)) => void;
+    strength?: (value: number | ((link: ForceLink) => number)) => void;
+  } | undefined;
+  link?.distance?.((link: ForceLink) => 42 + (1 - link.weight) * 96);
+  link?.strength?.((link: ForceLink) => 0.12 + link.weight * 0.38);
 }
 
 function drawNodeLabel(

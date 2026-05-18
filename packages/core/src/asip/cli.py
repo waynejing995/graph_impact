@@ -9,6 +9,7 @@ from typing import Dict, List, Optional
 
 from .acceptance import DEFAULT_ACCEPTANCE_QUERIES, run_acceptance_queries
 from .limits import DEFAULT_WORKBENCH_LIMITS_PATH, load_workbench_limits
+from .performance_smoke import run_fixture_performance_smoke
 from .semantic_edges import run_full_corpus_generation, run_generation
 from .workbench import (
     add_corpus,
@@ -20,10 +21,12 @@ from .workbench import (
     generate_semantic_edges_batch,
     generate_semantic_edges_for_query,
     get_evidence_detail,
+    get_job,
     global_graph,
     index_configured_corpora,
     index_registered_corpora,
     list_indexed_corpora,
+    list_jobs,
     list_resolver_profiles,
     load_provider_settings,
     query_evidence,
@@ -85,6 +88,7 @@ def main(argv: Optional[List[str]] = None) -> int:
     index.add_argument("--config", required=True)
     index.add_argument("--db", required=True)
     index.add_argument("--corpus-id", action="append", default=[])
+    index.add_argument("--resolver-profile-id", action="append", default=[])
     index.add_argument(
         "--source-root",
         action="append",
@@ -133,6 +137,19 @@ def main(argv: Optional[List[str]] = None) -> int:
     )
     graph_rebuild.add_argument("--db", required=True)
     graph_rebuild.add_argument("--corpus-id", action="append")
+    graph_rebuild.add_argument("--resolver-profile-id", action="append", default=[])
+
+    performance_smoke = subcommands.add_parser(
+        "performance-smoke",
+        help="Rebuild a small fixture twice from empty SQLite DBs and time live queries",
+    )
+    performance_smoke.add_argument("--db", required=True)
+    performance_smoke.add_argument("--source-root", required=True)
+    performance_smoke.add_argument("--query", action="append", default=[])
+    performance_smoke.add_argument("--corpus-id", default="fixture-performance")
+    performance_smoke.add_argument("--limit", type=int, default=8)
+    performance_smoke.add_argument("--max-query-seconds", type=float, default=1.0)
+    performance_smoke.add_argument("--output-json")
 
     evidence_detail = subcommands.add_parser("evidence-detail", help="Read a single evidence row by id")
     evidence_detail.add_argument("--db", required=True)
@@ -163,6 +180,11 @@ def main(argv: Optional[List[str]] = None) -> int:
     corpora = subcommands.add_parser("corpora", help="List indexed corpora from the ASIP SQLite store")
     corpora.add_argument("--db", required=True)
     corpora.add_argument("--config")
+
+    jobs = subcommands.add_parser("jobs", help="List or inspect durable ASIP jobs")
+    jobs.add_argument("--db", required=True)
+    jobs.add_argument("--id", type=int)
+    jobs.add_argument("--limit", type=int, default=50)
 
     corpus_add = subcommands.add_parser("corpus-add", help="Add a corpus entry to the ASIP SQLite store")
     corpus_add.add_argument("--db", required=True)
@@ -235,7 +257,16 @@ def main(argv: Optional[List[str]] = None) -> int:
         return 0
     if args.command == "index":
         if args.corpus_id:
-            print(json.dumps(index_registered_corpora(Path(args.db), corpus_ids=args.corpus_id), indent=2))
+            print(
+                json.dumps(
+                    index_registered_corpora(
+                        Path(args.db),
+                        corpus_ids=args.corpus_id,
+                        resolver_profile_ids=args.resolver_profile_id or None,
+                    ),
+                    indent=2,
+                )
+            )
         else:
             print(
                 json.dumps(
@@ -243,6 +274,7 @@ def main(argv: Optional[List[str]] = None) -> int:
                         Path(args.config),
                         Path(args.db),
                         source_roots=parse_source_roots(args.source_root),
+                        resolver_profile_ids=args.resolver_profile_id or None,
                     ),
                     indent=2,
                 )
@@ -304,7 +336,30 @@ def main(argv: Optional[List[str]] = None) -> int:
         )
         return 0
     if args.command == "graph-rebuild":
-        print(json.dumps(rebuild_deterministic_graph(Path(args.db), corpus_ids=args.corpus_id), indent=2))
+        print(
+            json.dumps(
+                rebuild_deterministic_graph(
+                    Path(args.db),
+                    corpus_ids=args.corpus_id,
+                    resolver_profile_ids=args.resolver_profile_id or None,
+                ),
+                indent=2,
+            )
+        )
+        return 0
+    if args.command == "performance-smoke":
+        result = run_fixture_performance_smoke(
+            Path(args.db),
+            source_root=Path(args.source_root),
+            queries=args.query or None,
+            corpus_id=args.corpus_id,
+            query_limit=args.limit,
+            max_query_seconds=args.max_query_seconds,
+        )
+        if args.output_json:
+            Path(args.output_json).parent.mkdir(parents=True, exist_ok=True)
+            Path(args.output_json).write_text(json.dumps(result, indent=2), encoding="utf-8")
+        print(json.dumps(result, indent=2))
         return 0
     if args.command == "evidence-detail":
         print(json.dumps(get_evidence_detail(Path(args.db), args.id), indent=2))
@@ -354,6 +409,12 @@ def main(argv: Optional[List[str]] = None) -> int:
                 indent=2,
             )
         )
+        return 0
+    if args.command == "jobs":
+        if args.id is not None:
+            print(json.dumps(get_job(Path(args.db), args.id), indent=2))
+        else:
+            print(json.dumps({"jobs": list_jobs(Path(args.db), limit=args.limit)}, indent=2))
         return 0
     if args.command == "corpus-add":
         print(

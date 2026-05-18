@@ -1,0 +1,171 @@
+- generic [active] [ref=e1] [box=0,0,2048,1280]:
+  - generic [ref=e2] [box=0,0,2048,1280]:
+    - banner [ref=e3] [box=0,0,2048,72]:
+      - generic [ref=e5] [box=64,26,171,20]: ASIP Evidence Workbench
+      - generic [ref=e6] [box=328,18,1120,36]:
+        - img [box=338,28,15,15]
+        - textbox "Global symbol search" [ref=e7] [box=328,18,1120,36]:
+          - /placeholder: Search indexed symbols
+      - generic "Workbench status" [ref=e8] [box=1464,24,443,24]:
+        - generic [ref=e9] [box=1464,24,150,24]: "Provider: unverified"
+        - generic [ref=e11] [box=1621,24,186,24]: "Edge: Ollama / gemma4:e4b"
+        - generic [ref=e12] [box=1815,24,92,24]: "Index: ready"
+      - button "Switch to dark theme" [ref=e107] [cursor=pointer] [box=1923,18,85,36]:
+        - img [box=1938,28,16,16]
+        - text: Dark
+    - main [ref=e14] [box=0,72,2048,1208]:
+      - navigation "ASIP sections" [ref=e15] [box=0,72,288,1208]:
+        - link "Evidence Search" [ref=e16] [cursor=pointer] [box=24,96,239,34]:
+          - /url: /
+        - link "Graph Explorer" [ref=e17] [cursor=pointer] [box=24,134,239,34]:
+          - /url: /graph
+        - link "Corpus" [ref=e18] [cursor=pointer] [box=24,172,239,34]:
+          - /url: /corpus
+        - link "Resolver Profiles" [ref=e19] [cursor=pointer] [box=24,210,239,34]:
+          - /url: /resolver-profiles
+        - link "Acceptance Tests" [ref=e20] [cursor=pointer] [box=24,248,239,34]:
+          - /url: /acceptance
+        - link "Settings" [ref=e21] [cursor=pointer] [box=24,286,239,34]:
+          - /url: /settings
+      - region "Graph relationship workspace" [ref=e22] [box=288,72,1248,1208]:
+        - generic [ref=e23] [box=312,96,1200,36]:
+          - generic [ref=e24] [box=312,96,783,36]:
+            - img [box=322,106,16,16]
+            - textbox "Evidence query" [ref=e25] [box=312,96,783,36]:
+              - /placeholder: Query live evidence
+          - textbox "IP block filter" [ref=e27] [box=1105,96,120,36]:
+            - /placeholder: IP
+          - textbox "ASIC or generation filter" [ref=e29] [box=1235,96,170,36]:
+            - /placeholder: ASIC
+          - button "Run query" [ref=e30] [cursor=pointer] [box=1415,96,97,36]
+        - generic "Page metrics" [ref=e31] [box=312,144,1200,24]:
+          - generic [ref=e32] [box=312,144,85,24]: "matches: 0"
+          - generic [ref=e33] [box=405,144,132,24]: "graph edges: 3000"
+          - generic [ref=e34] [box=544,144,80,24]: "query: live"
+        - generic "Evidence source filters" [ref=e35] [box=312,178,1200,36]:
+          - button "Source filter 1 hop" [ref=e36] [cursor=pointer] [box=312,178,89,36]:
+            - img [box=327,188,16,16]
+            - text: 1 hop
+          - button "Source filter 2 hops" [ref=e37] [cursor=pointer] [box=409,178,98,36]:
+            - img [box=424,188,16,16]
+            - text: 2 hops
+          - button "Source filter writes" [ref=e38] [cursor=pointer] [box=514,178,95,36]:
+            - img [box=529,188,16,16]
+            - text: writes
+          - button "Source filter has_field" [ref=e39] [cursor=pointer] [box=617,178,114,36]:
+            - img [box=632,188,16,16]
+            - text: has_field
+        - generic [ref=e40] [box=312,226,1200,832]:
+          - generic [ref=e41] [box=325,239,1174,24]:
+            - generic [ref=e42] [box=325,241,141,20]: Global Relation Graph
+            - generic [ref=e43] [box=781,239,149,24]: weighted connections
+            - generic [ref=e108] [box=1246,239,253,24]: "layers deterministic: 2987 semantic: 13"
+          - generic "Graph display controls" [ref=e44] [box=325,273,1174,102]:
+            - generic [ref=e45] [box=336,284,376,34]:
+              - generic [ref=e46] [box=336,284,282,18]: Loaded edge budget
+              - strong [ref=e47] [box=628,284,84,18]: 3000 / 20000
+              - generic "Loaded edge budget" [ref=e48] [box=336,310,376,8]
+            - generic [ref=e50] [box=724,284,376,34]:
+              - generic [ref=e51] [box=724,284,338,18]: Minimum edge weight
+              - strong [ref=e52] [box=1072,284,28,18]: "0.00"
+              - generic "Minimum edge weight" [ref=e53] [box=724,310,376,8]
+            - generic [ref=e55] [box=1112,284,376,34]:
+              - generic [ref=e56] [box=1112,284,294,18]: Visible nodes
+              - strong [ref=e57] [box=1416,284,72,18]: 1000 / 2737
+              - generic "Visible nodes" [ref=e58] [box=1112,310,376,8]
+            - generic [ref=e60] [box=336,330,376,34]:
+              - generic [ref=e61] [box=336,330,290,18]: Visible edges
+              - strong [ref=e62] [box=636,330,76,18]: 3000 / 3000
+              - generic "Visible edges" [ref=e63] [box=336,356,376,8]
+          - img "Global weighted network graph" [ref=e120] [box=325,385,1174,660]:
+            - generic [ref=e124] [box=326,1230,1172,101]:
+              - generic [ref=e125] [box=334,1239,66,17]: nodes 1000
+              - generic [ref=e126] [box=406,1239,66,17]: edges 1273
+              - generic [ref=e127] [box=478,1239,60,17]: doc_box 6
+              - generic [ref=e128] [box=544,1239,86,17]: doc_section 1
+              - generic [ref=e129] [box=636,1239,79,17]: function 787
+              - generic [ref=e130] [box=722,1239,79,17]: register 206
+              - generic [ref=e131] [box=807,1239,179,17]: amdgpu_device_ip_early_init
+              - generic [ref=e132] [box=992,1239,139,17]: amdgpu_device_ip_init
+              - generic [ref=e133] [box=1137,1239,139,17]: amdgpu_device_ip_fini
+              - generic [ref=e134] [box=1282,1239,159,17]: amdgpu_device_fw_loading
+              - generic [ref=e135] [box=334,1262,152,17]: amdgpu_ip_block_hw_fini
+              - generic [ref=e136] [box=492,1262,146,17]: amdgpu_ip_block_resume
+              - generic [ref=e137] [box=644,1262,152,17]: amdgpu_ip_block_suspend
+              - generic [ref=e138] [box=802,1262,172,17]: aldebaran_mode2_restore_ip
+              - generic [ref=e139] [box=981,1262,146,17]: aca_bank_should_update
+              - generic [ref=e140] [box=1132,1262,146,17]: aca_log_aca_error_data
+              - generic [ref=e141] [box=1284,1262,106,17]: aca_manager_init
+              - generic [ref=e142] [box=334,1284,106,17]: amdgpu_aca_reset
+              - generic [ref=e143] [box=446,1284,180,17]: amdgpu_aca_smu_debug_mode_set
+              - generic [ref=e144] [box=632,1284,179,17]: amdgpu_aca_smu_debugfs_init
+              - generic [ref=e145] [box=817,1284,180,17]: amdgpu_aca_smu_set_debug_mode
+              - generic [ref=e146] [box=1003,1284,106,17]: remove_aca_sysfs
+              - generic [ref=e147] [box=1115,1284,79,17]: reads / 1.00
+              - generic [ref=e148] [box=1200,1284,79,17]: reads / 1.00
+              - generic [ref=e149] [box=1286,1284,99,17]: contains / 1.00
+              - generic [ref=e150] [box=1391,1284,79,17]: calls / 1.00
+              - generic [ref=e151] [box=334,1307,79,17]: calls / 1.00
+              - generic [ref=e152] [box=419,1307,79,17]: calls / 1.00
+              - generic [ref=e153] [box=505,1307,79,17]: calls / 1.00
+              - generic [ref=e154] [box=590,1307,79,17]: calls / 1.00
+        - table "Evidence results" [ref=e70] [box=313,1095,1198,82]:
+          - rowgroup [ref=e71] [box=313,1095,1198,40]:
+            - row "Type Symbol Source Relation Score Location" [ref=e72] [box=313,1095,1198,40]:
+              - columnheader "Type" [ref=e73] [box=313,1095,50,40]
+              - columnheader "Symbol" [ref=e74] [box=363,1095,411,40]
+              - columnheader "Source" [ref=e75] [box=775,1095,128,40]
+              - columnheader "Relation" [ref=e76] [box=903,1095,128,40]
+              - columnheader "Score" [ref=e77] [box=1030,1095,94,40]
+              - columnheader "Location" [ref=e78] [box=1125,1095,386,40]
+          - rowgroup [ref=e79] [box=313,1135,1198,41]:
+            - row "No evidence matched this query. empty empty 0 live SQLite query returned no rows" [ref=e80] [box=313,1135,1198,41]:
+              - cell [ref=e81] [box=313,1135,50,41]
+              - cell "No evidence matched this query." [ref=e82] [box=363,1135,411,41]
+              - cell "empty" [ref=e84] [box=775,1135,128,41]
+              - cell "empty" [ref=e86] [box=903,1135,128,41]
+              - cell "0" [ref=e88] [box=1030,1135,94,41]
+              - cell "live SQLite query returned no rows" [ref=e89] [box=1125,1135,386,41]
+      - complementary [ref=e90] [box=1536,72,488,1208]:
+        - generic [ref=e91] [box=1561,96,424,24]:
+          - heading "Global Graph" [level=2] [ref=e92] [box=1561,98,85,21]
+          - generic [ref=e93] [box=1889,96,96,24]:
+            - img [box=1898,102,12,12]
+            - text: live / run 1
+        - heading "Relationship Panel" [level=3] [ref=e95] [box=1561,168,424,18]
+        - generic [ref=e96] [box=1561,194,424,847]:
+          - paragraph [ref=e155] [box=1572,205,600,76]:
+            - code [ref=e156] [box=1572,208,600,71]: function:linux-amdgpu:drivers/gpu/drm/amd/amdgpu/amdgpu_discovery.c:amdgpu_discovery_set_ip_blocks calls function:linux-amdgpu:drivers/gpu/drm/amd/amdgpu/smuio_v13_0.c:smuio_v13_0_get_pkg_type
+          - paragraph [ref=e157] [box=1572,289,600,76]:
+            - code [ref=e158] [box=1572,292,600,71]: function:linux-amdgpu:drivers/gpu/drm/amd/amdgpu/amdgpu_discovery.c:amdgpu_discovery_set_ip_blocks calls function:linux-amdgpu:drivers/gpu/drm/amd/amdgpu/smuio_v13_0_3.c:smuio_v13_0_3_get_pkg_type
+          - paragraph [ref=e159] [box=1572,372,600,76]:
+            - code [ref=e160] [box=1572,375,600,71]: function:linux-amdgpu:drivers/gpu/drm/amd/amdgpu/amdgpu_discovery.c:amdgpu_discovery_set_ip_blocks calls function:linux-amdgpu:drivers/gpu/drm/amd/amdgpu/smuio_v15_0_8.c:smuio_v15_0_8_get_pkg_type
+          - paragraph [ref=e161] [box=1572,456,600,57]:
+            - code [ref=e162] [box=1572,459,564,52]: function:linux-amdgpu:drivers/gpu/drm/amd/amdgpu/amdgpu_userq.c:amdgpu_userq_post_reset calls function:linux-amdgpu:drivers/gpu/drm/amd/amdgpu/mes_userqueue.c:mes_userq_map
+          - paragraph [ref=e163] [box=1572,520,600,57]:
+            - code [ref=e164] [box=1572,523,578,52]: function:linux-amdgpu:drivers/gpu/drm/amd/amdgpu/amdgpu_userq.c:amdgpu_userq_pre_reset calls function:linux-amdgpu:drivers/gpu/drm/amd/amdgpu/mes_userqueue.c:mes_userq_unmap
+          - paragraph [ref=e165] [box=1572,585,600,38]:
+            - code [ref=e166] [box=1572,588,600,33]: function:linux-amdgpu:drivers/gpu/drm/drm_crtc_helper.c:drm_helper_encoder_dpms calls function:linux-amdgpu:drivers/gpu/drm/amd/amdgpu/dce_v6_0.c:dce_v6_0_ext_dpms
+          - paragraph [ref=e167] [box=1572,631,600,76]:
+            - code [ref=e168] [box=1572,634,564,71]: function:linux-amdgpu:drivers/gpu/drm/amd/amdgpu/aldebaran.c:aldebaran_mode2_restore_ip calls function:linux-amdgpu:drivers/gpu/drm/amd/amdgpu/amdgpu_umsch_mm.c:umsch_mm_late_init
+          - paragraph [ref=e169] [box=1572,715,600,57]:
+            - code [ref=e170] [box=1572,718,578,52]: function:linux-amdgpu:drivers/gpu/drm/amd/amdgpu/aldebaran.c:aldebaran_mode2_restore_ip calls function:linux-amdgpu:drivers/gpu/drm/amd/amdgpu/gfx_v10_0.c:gfx_v10_0_late_init
+          - paragraph [ref=e171] [box=1572,779,600,57]:
+            - code [ref=e172] [box=1572,782,585,52]: function:linux-amdgpu:drivers/gpu/drm/amd/amdgpu/aldebaran.c:aldebaran_mode2_restore_ip calls function:linux-amdgpu:drivers/gpu/drm/amd/amdgpu/gfx_v10_0.c:gfx_v10_0_rlc_resume
+          - paragraph [ref=e173] [box=1572,844,600,57]:
+            - code [ref=e174] [box=1572,847,578,52]: function:linux-amdgpu:drivers/gpu/drm/amd/amdgpu/aldebaran.c:aldebaran_mode2_restore_ip calls function:linux-amdgpu:drivers/gpu/drm/amd/amdgpu/gfx_v11_0.c:gfx_v11_0_late_init
+          - paragraph [ref=e175] [box=1572,909,600,57]:
+            - code [ref=e176] [box=1572,912,585,52]: function:linux-amdgpu:drivers/gpu/drm/amd/amdgpu/aldebaran.c:aldebaran_mode2_restore_ip calls function:linux-amdgpu:drivers/gpu/drm/amd/amdgpu/gfx_v11_0.c:gfx_v11_0_rlc_resume
+          - paragraph [ref=e177] [box=1572,973,600,57]:
+            - code [ref=e178] [box=1572,976,578,52]: function:linux-amdgpu:drivers/gpu/drm/amd/amdgpu/aldebaran.c:aldebaran_mode2_restore_ip calls function:linux-amdgpu:drivers/gpu/drm/amd/amdgpu/gfx_v12_0.c:gfx_v12_0_late_init
+        - button "Generate semantic edges" [ref=e99] [cursor=pointer] [box=1561,1057,424,36]
+        - button "Generate batch semantic edges" [ref=e100] [cursor=pointer] [box=1561,1109,424,36]
+        - button "Extract document nodes" [ref=e101] [cursor=pointer] [box=1561,1161,424,36]
+        - generic "Semantic generation controls" [ref=e102] [box=1561,1197,424,120]:
+          - generic [ref=e103] [box=1561,1200,424,49]:
+            - text: Semantic candidate limit
+            - spinbutton "Semantic candidate limit" [ref=e104] [box=1561,1221,424,36]
+          - generic [ref=e105] [box=1561,1260,424,49]:
+            - text: Semantic batch size
+            - spinbutton "Semantic batch size" [ref=e106] [box=1561,1281,424,36]
+  - alert [ref=e179] [box=-1,1279,1,1]

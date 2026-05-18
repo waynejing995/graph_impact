@@ -4,12 +4,19 @@ import importlib.util
 import tempfile
 from pathlib import Path
 import unittest
+from unittest.mock import patch
 
 from asip.index_artifacts import index_full_corpus_run
-from asip.storage import AsipStore
+from asip.storage import AsipStore, _snippet_has_callable_symbol
 
 
 class StorageGraphTests(unittest.TestCase):
+    def test_callable_symbol_scan_avoids_regex_compile_hot_path(self):
+        with patch("asip.storage.re.search", side_effect=AssertionError("regex search should not run")):
+            self.assertTrue(_snippet_has_callable_symbol("status = gfx_v11_0_hw_init (adev);", "gfx_v11_0_hw_init"))
+            self.assertFalse(_snippet_has_callable_symbol("status = gfx_v11_0_hw_init_extra(adev);", "gfx_v11_0_hw_init"))
+            self.assertFalse(_snippet_has_callable_symbol("status = gfx_v11_0_hw_init;", "gfx_v11_0_hw_init"))
+
     def test_sqlite_fts5_indexes_and_queries_evidence_chunks(self):
         store = AsipStore.connect(":memory:")
         store.migrate()
@@ -173,6 +180,21 @@ class StorageGraphTests(unittest.TestCase):
         self.assertEqual(len(graph["nodes"]), 1)
         self.assertEqual(graph["nodes"][0]["label"], "GCVM_L2_CNTL")
 
+    def test_networkx_multi_seed_expansion_without_edges_returns_seed_nodes(self):
+        store = AsipStore.connect(":memory:")
+        store.migrate()
+
+        graph = store.expand_graph_networkx_many(["GCVM_L2_CNTL", "SDMA0_QUEUE0_RB_CNTL"], hops=1)
+
+        self.assertEqual(graph["edges"], [])
+        self.assertEqual(
+            [node["id"] for node in graph["nodes"]],
+            [
+                "register:GC:unknown:unknown:GCVM_L2_CNTL",
+                "register:SDMA:unknown:unknown:SDMA0_QUEUE0_RB_CNTL",
+            ],
+        )
+
     def test_networkx_graph_expansion_skips_function_metadata_scan_for_deterministic_edges(self):
         store = AsipStore.connect(":memory:")
         store.migrate()
@@ -213,6 +235,35 @@ class StorageGraphTests(unittest.TestCase):
         node_kinds = {node["id"]: node["kind"] for node in graph["nodes"]}
         self.assertIn(("docs/guide.md#overview", "contains", "docs/guide.md#box-cache-policy"), edge_triples)
         self.assertEqual(node_kinds["docs/guide.md#box-cache-policy"], "doc_box")
+
+    def test_global_graph_budget_preserves_function_call_backbone_edges(self):
+        store = AsipStore.connect(":memory:")
+        store.migrate()
+        for index in range(10):
+            store.add_edge(f"program_{index}", f"GCVM_L2_CNTL_{index}", "writes", 0.99 - index * 0.01)
+        for index in range(3):
+            store.add_edge(f"common_dispatch_{index}", f"callback_{index}", "calls", 0.72)
+
+        graph = store.global_graph_networkx(limit=4)
+
+        relations = [edge["relation"] for edge in graph["edges"]]
+        self.assertIn("calls", relations)
+        self.assertLessEqual(len(graph["edges"]), 4)
+
+    def test_global_graph_budget_preserves_largest_connected_backbone(self):
+        store = AsipStore.connect(":memory:")
+        store.migrate()
+        for index in range(20):
+            store.add_edge(f"isolated_writer_{index}", f"ISOLATED_CNTL_{index}", "writes", 0.99 - index * 0.001)
+        for index in range(8):
+            store.add_edge(f"common_dispatch_{index}", f"common_dispatch_{index + 1}", "calls", 0.62)
+
+        graph = store.global_graph_networkx(limit=6)
+
+        relations = [edge["relation"] for edge in graph["edges"]]
+        self.assertGreaterEqual(relations.count("calls"), 5)
+        self.assertGreaterEqual(_largest_component_size(graph), 6)
+        self.assertLessEqual(len(graph["edges"]), 6)
 
     def test_global_graph_skips_function_metadata_scan_for_deterministic_edges(self):
         store = AsipStore.connect(":memory:")
@@ -551,7 +602,20 @@ class StorageGraphTests(unittest.TestCase):
 
         registers = [node for node in graph["nodes"] if node["kind"] == "register"]
         register_ids = {node["id"] for node in registers}
+        edge_triples = {(edge["src"], edge["relation"], edge["dst"]) for edge in graph["edges"]}
         self.assertEqual(register_ids, {"register:GC:11.0:GCVM_L2_CNTL", "register:GC:12.0:GCVM_L2_CNTL"})
+        self.assertIn(
+            ("function:mxgpu:mxgpu/gfx.c:program_l2_cache", "writes", "register:GC:11.0:GCVM_L2_CNTL"),
+            edge_triples,
+        )
+        self.assertIn(
+            ("function:linux-amdgpu:linux/gmc_v11.c:gmc_v11_0_init", "writes", "register:GC:11.0:GCVM_L2_CNTL"),
+            edge_triples,
+        )
+        self.assertIn(
+            ("function:linux-amdgpu:linux/gmc_v12.c:gmc_v12_0_init", "writes", "register:GC:12.0:GCVM_L2_CNTL"),
+            edge_triples,
+        )
         merged_sources = next(node for node in registers if node["id"] == "register:GC:11.0:GCVM_L2_CNTL")["attr"][
             "source"
         ]
@@ -748,6 +812,56 @@ class StorageGraphTests(unittest.TestCase):
         )
 
         self.assertEqual(rows, [(1,)])
+
+    def test_search_vector_uses_sqlite_vec_when_runtime_supports_extensions(self):
+        if importlib.util.find_spec("sqlite_vec") is None:
+            self.skipTest("sqlite_vec package is not installed in this Python runtime")
+        con = sqlite3.connect(":memory:")
+        if not hasattr(con, "enable_load_extension"):
+            self.skipTest("this sqlite3 build cannot load extensions")
+        con.close()
+
+        store = AsipStore.connect(":memory:")
+        store.migrate()
+        document_id = store.add_document("docs", "doc", "Documentation/gpu/amdgpu.rst")
+        gc_chunk = store.add_chunk(document_id, "GCVM_L2_CNTL enables L2 cache", 10, 10)
+        sdma_chunk = store.add_chunk(document_id, "SDMA queue ring buffer control", 20, 20)
+        store.add_embedding(gc_chunk, provider="ollama", model="nomic-embed-text", vector=[1.0, 0.0, 0.0])
+        store.add_embedding(sdma_chunk, provider="ollama", model="nomic-embed-text", vector=[0.0, 1.0, 0.0])
+
+        matches = store.search_vector([0.9, 0.1, 0.0], limit=1)
+
+        self.assertEqual(matches[0]["chunk_id"], gc_chunk)
+        self.assertEqual(matches[0]["retrieval_runtime"], "sqlite-vec")
+        self.assertGreater(matches[0]["score"], 0.9)
+        self.assertIn("distance", matches[0])
+
+
+def _largest_component_size(graph):
+    adjacency = {}
+    for edge in graph["edges"]:
+        src = edge["src"]
+        dst = edge["dst"]
+        adjacency.setdefault(src, set()).add(dst)
+        adjacency.setdefault(dst, set()).add(src)
+    node_ids = {node["id"] for node in graph["nodes"]}
+    seen = set()
+    largest = 0
+    for node_id in node_ids:
+        if node_id in seen:
+            continue
+        stack = [node_id]
+        seen.add(node_id)
+        size = 0
+        while stack:
+            current = stack.pop()
+            size += 1
+            for neighbor in adjacency.get(current, ()):
+                if neighbor not in seen:
+                    seen.add(neighbor)
+                    stack.append(neighbor)
+        largest = max(largest, size)
+    return largest
 
 
 if __name__ == "__main__":

@@ -1,0 +1,44 @@
+- generic [active] [ref=e1]:
+  - alert [ref=e179]
+  - generic [ref=e180]:
+    - banner [ref=e181]:
+      - generic [ref=e183]: ASIP Evidence Workbench
+      - generic [ref=e184]:
+        - img
+        - textbox "Global symbol search" [ref=e185]:
+          - /placeholder: Search indexed symbols
+      - generic "Workbench status" [ref=e186]:
+        - generic [ref=e187]: "Provider: unverified"
+        - generic [ref=e189]: "Edge: Ollama / gemma4:e4b"
+        - generic [ref=e190]: "Index: ready"
+      - button "Switch to dark theme" [ref=e191] [cursor=pointer]:
+        - img
+        - text: Dark
+    - main [ref=e192]:
+      - navigation "ASIP sections" [ref=e193]:
+        - link "Evidence Search" [ref=e194] [cursor=pointer]:
+          - /url: /
+        - link "Graph Explorer" [ref=e195] [cursor=pointer]:
+          - /url: /graph
+        - link "Corpus" [ref=e196] [cursor=pointer]:
+          - /url: /corpus
+        - link "Resolver Profiles" [ref=e197] [cursor=pointer]:
+          - /url: /resolver-profiles
+        - link "Acceptance Tests" [ref=e198] [cursor=pointer]:
+          - /url: /acceptance
+        - link "Settings" [ref=e199] [cursor=pointer]:
+          - /url: /settings
+      - region "Graph relationship workspace" [ref=e200]:
+        - generic [ref=e201]
+        - generic "Page metrics" [ref=e209]
+        - generic "Evidence source filters" [ref=e213]
+        - generic [ref=e218]
+        - table "Evidence results" [ref=e293]
+      - complementary [ref=e313]:
+        - generic [ref=e314]
+        - heading "Relationship Panel" [level=3] [ref=e318]
+        - generic [ref=e319]
+        - button "Generate semantic edges" [ref=e344] [cursor=pointer]
+        - button "Generate batch semantic edges" [ref=e345] [cursor=pointer]
+        - button "Extract document nodes" [ref=e346] [cursor=pointer]
+        - generic "Semantic generation controls" [ref=e347]

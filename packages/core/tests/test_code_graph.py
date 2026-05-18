@@ -42,7 +42,8 @@ class DeterministicCodeGraphTests(unittest.TestCase):
             graph = build_deterministic_code_graph(source, source_root=root, resolver_profiles=[profile])
 
             self.assertEqual(graph.stage, "deterministic")
-            self.assertIn(graph.analysis_mode, {"clang_ast", "clang_preprocess"})
+            self.assertIn(graph.analysis_mode, {"clang_text_spans", "clang_preprocess"})
+            self.assertNotEqual(graph.analysis_mode, "clang_ast")
             edge_triples = {(edge.src, edge.relation, edge.dst) for edge in graph.edges}
             graph_node_ids = {edge.src for edge in graph.edges} | {edge.dst for edge in graph.edges}
             self.assertIn(("program_local_register", "reads", "GCVM_L2_CNTL"), edge_triples)
@@ -188,13 +189,55 @@ class DeterministicCodeGraphTests(unittest.TestCase):
                 for edge in graph.edges
                 if (edge.src, edge.relation, edge.dst) == ("amdgpu_common_hw_init", "calls", "gfx_v11_0_hw_init")
             )
-            self.assertEqual(callback_edge.provenance.get("call_kind"), "vtable_callback")
+            self.assertEqual(callback_edge.provenance.get("call_kind"), "vtable_dispatch")
             self.assertEqual(callback_edge.provenance.get("slot"), "hw_init")
+            self.assertEqual(callback_edge.provenance.get("callback_candidate_count"), 1)
             self.assertEqual(callback_edge.provenance.get("callee_line"), 4)
             self.assertEqual(callback_edge.provenance.get("callback_line"), 9)
             graph_node_ids = {edge.src for edge in graph.edges} | {edge.dst for edge in graph.edges}
             self.assertNotIn("hw_init", graph_node_ids)
             self.assertNotIn("gfx_v11_0_ip_funcs", graph_node_ids)
+
+    def test_stage1_records_clang_ast_json_type_flow_for_nested_vtable_receiver(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            source = root / "gfx.c"
+            source.write_text(
+                "\n".join(
+                    [
+                        "struct amd_ip_funcs {",
+                        "  int (*hw_init)(void *);",
+                        "};",
+                        "struct amdgpu_ip_block_version {",
+                        "  const struct amd_ip_funcs *funcs;",
+                        "};",
+                        "struct amdgpu_ip_block {",
+                        "  const struct amdgpu_ip_block_version *version;",
+                        "};",
+                        "static int gfx_v11_0_hw_init(void *block) {",
+                        "  return 0;",
+                        "}",
+                        "static const struct amd_ip_funcs gfx_v11_0_ip_funcs = {",
+                        "  .hw_init = gfx_v11_0_hw_init,",
+                        "};",
+                        "int amdgpu_common_hw_init(struct amdgpu_ip_block *block) {",
+                        "  return block->version->funcs->hw_init(block);",
+                        "}",
+                    ]
+                ),
+                encoding="utf-8",
+            )
+
+            graph = build_deterministic_code_graph(source, source_root=root)
+
+            callback_edge = next(
+                edge
+                for edge in graph.edges
+                if (edge.src, edge.relation, edge.dst) == ("amdgpu_common_hw_init", "calls", "gfx_v11_0_hw_init")
+            )
+            self.assertEqual(callback_edge.provenance.get("receiver"), "block->version->funcs")
+            self.assertEqual(callback_edge.provenance.get("receiver_type"), "amd_ip_funcs")
+            self.assertEqual(callback_edge.provenance.get("type_flow"), "clang_ast_json")
 
     def test_text_fallback_does_not_promote_control_keywords_to_functions(self):
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -244,7 +287,64 @@ class DeterministicCodeGraphTests(unittest.TestCase):
 
         self.assertNotIn("if", {span.name for span in spans})
 
-    def test_stage1_generic_slot_call_does_not_connect_unbounded_callbacks(self):
+    def test_text_span_parser_does_not_promote_all_caps_macros_to_functions(self):
+        source_text = "\n".join(
+            [
+                "static int helper(void) {",
+                "  return 0;",
+                "}",
+                "static int outer(int version) {",
+                "  switch (version) {",
+                "  case IP_VERSION(4, 0, 6):",
+                "    if (helper()) {",
+                "      return helper();",
+                "    }",
+                "    break;",
+                "  }",
+                "  return 0;",
+                "}",
+            ]
+        )
+
+        spans = _function_spans_from_text(source_text)
+
+        self.assertIn("outer", {span.name for span in spans})
+        self.assertIn("helper", {span.name for span in spans})
+        self.assertNotIn("IP_VERSION", {span.name for span in spans})
+
+    def test_stage1_does_not_link_all_caps_macros_as_call_nodes(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            source = root / "macro.c"
+            source.write_text(
+                "\n".join(
+                    [
+                        "static int helper(void) {",
+                        "  return 0;",
+                        "}",
+                        "static int outer(int version) {",
+                        "  switch (version) {",
+                        "  case IP_VERSION(4, 0, 6):",
+                        "    if (helper()) {",
+                        "      return helper();",
+                        "    }",
+                        "    break;",
+                        "  }",
+                        "  return 0;",
+                        "}",
+                    ]
+                ),
+                encoding="utf-8",
+            )
+
+            graph = build_deterministic_code_graph(source, source_root=root)
+
+            edge_triples = {(edge.src, edge.relation, edge.dst) for edge in graph.edges}
+            self.assertIn(("outer", "calls", "helper"), edge_triples)
+            self.assertNotIn(("IP_VERSION", "calls", "helper"), edge_triples)
+            self.assertNotIn(("outer", "calls", "IP_VERSION"), edge_triples)
+
+    def test_stage1_generic_slot_call_links_common_dispatch_to_callbacks(self):
         with tempfile.TemporaryDirectory() as tmpdir:
             root = Path(tmpdir)
             source = root / "gfx.c"
@@ -274,8 +374,528 @@ class DeterministicCodeGraphTests(unittest.TestCase):
             graph = build_deterministic_code_graph(source)
 
             edge_triples = {(edge.src, edge.relation, edge.dst) for edge in graph.edges}
-            self.assertNotIn(("amdgpu_common_hw_init", "calls", "gfx_v11_0_hw_init"), edge_triples)
-            self.assertNotIn(("amdgpu_common_hw_init", "calls", "sdma_v5_0_hw_init"), edge_triples)
+            self.assertIn(("amdgpu_common_hw_init", "calls", "gfx_v11_0_hw_init"), edge_triples)
+            self.assertIn(("amdgpu_common_hw_init", "calls", "sdma_v5_0_hw_init"), edge_triples)
+            dispatch_edges = [
+                edge
+                for edge in graph.edges
+                if edge.src == "amdgpu_common_hw_init" and edge.relation == "calls"
+            ]
+            self.assertEqual({edge.provenance.get("call_kind") for edge in dispatch_edges}, {"vtable_dispatch"})
+            self.assertTrue(all(edge.confidence < 0.84 for edge in dispatch_edges))
+
+    def test_stage1_table_alias_limits_generic_slot_dispatch_to_assigned_table(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            source = root / "gfx.c"
+            source.write_text(
+                "\n".join(
+                    [
+                        "static int gfx_v11_0_hw_init(void *adev) {",
+                        "  WREG32(mmGCVM_L2_CNTL, 1);",
+                        "  return 0;",
+                        "}",
+                        "static int sdma_v5_0_hw_init(void *adev) {",
+                        "  WREG32(mmSDMA0_RLC0_RB_CNTL, 1);",
+                        "  return 0;",
+                        "}",
+                        "static const struct amd_ip_funcs gfx_v11_0_ip_funcs = {",
+                        "  .hw_init = gfx_v11_0_hw_init,",
+                        "};",
+                        "static const struct amd_ip_funcs sdma_v5_0_ip_funcs = {",
+                        "  .hw_init = sdma_v5_0_hw_init,",
+                        "};",
+                        "int exact_table_hw_init(void) {",
+                        "  const struct amd_ip_funcs *funcs = &gfx_v11_0_ip_funcs;",
+                        "  return funcs->hw_init(0);",
+                        "}",
+                    ]
+                ),
+                encoding="utf-8",
+            )
+            profile = ResolverProfile(
+                id="test-amd-alias",
+                language="cpp",
+                symbol_prefixes=["mm", "reg"],
+                wrappers={"WREG32": WrapperRule(symbol_arg=0, access="write")},
+            )
+
+            graph = build_deterministic_code_graph(source, source_root=root, resolver_profiles=[profile])
+
+            edge_triples = {(edge.src, edge.relation, edge.dst) for edge in graph.edges}
+            self.assertIn(("exact_table_hw_init", "calls", "gfx_v11_0_hw_init"), edge_triples)
+            self.assertNotIn(("exact_table_hw_init", "calls", "sdma_v5_0_hw_init"), edge_triples)
+            dispatch_edge = next(
+                edge
+                for edge in graph.edges
+                if (edge.src, edge.relation, edge.dst) == ("exact_table_hw_init", "calls", "gfx_v11_0_hw_init")
+            )
+            self.assertEqual(dispatch_edge.provenance.get("call_kind"), "vtable_table_alias")
+            self.assertEqual(dispatch_edge.provenance.get("receiver_tables"), ["gfx_v11_0_ip_funcs"])
+            self.assertEqual(dispatch_edge.provenance.get("callback_table"), "gfx_v11_0_ip_funcs")
+
+    def test_stage1_field_path_table_alias_does_not_pollute_other_funcs_receivers(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            source = root / "gfx.c"
+            source.write_text(
+                "\n".join(
+                    [
+                        "static int gfx_rlc_resume(void *adev) {",
+                        "  WREG32(mmCP_RLC_CNTL, 1);",
+                        "  return 0;",
+                        "}",
+                        "static int gfx_ip_resume(void *adev) {",
+                        "  WREG32(mmGCVM_L2_CNTL, 1);",
+                        "  return 0;",
+                        "}",
+                        "static const struct amdgpu_rlc_funcs gfx_rlc_funcs = {",
+                        "  .resume = gfx_rlc_resume,",
+                        "};",
+                        "static const struct amd_ip_funcs gfx_ip_funcs = {",
+                        "  .resume = gfx_ip_resume,",
+                        "};",
+                        "int mixed_resume(struct amdgpu_device *adev, struct amd_ip_block *block) {",
+                        "  adev->gfx.rlc.funcs = &gfx_rlc_funcs;",
+                        "  adev->gfx.rlc.funcs->resume(adev);",
+                        "  block->version->funcs->resume(block);",
+                        "  return 0;",
+                        "}",
+                    ]
+                ),
+                encoding="utf-8",
+            )
+            profile = ResolverProfile(
+                id="test-amd-field-alias",
+                language="cpp",
+                symbol_prefixes=["mm", "reg"],
+                wrappers={"WREG32": WrapperRule(symbol_arg=0, access="write")},
+            )
+
+            graph = build_deterministic_code_graph(source, source_root=root, resolver_profiles=[profile])
+
+            rlc_edges = [
+                edge
+                for edge in graph.edges
+                if (edge.src, edge.relation, edge.dst) == ("mixed_resume", "calls", "gfx_rlc_resume")
+            ]
+            ip_edges = [
+                edge
+                for edge in graph.edges
+                if (edge.src, edge.relation, edge.dst) == ("mixed_resume", "calls", "gfx_ip_resume")
+            ]
+            self.assertEqual(len(rlc_edges), 1)
+            self.assertEqual(len(ip_edges), 1)
+            self.assertEqual(rlc_edges[0].provenance.get("receiver"), "adev->gfx.rlc.funcs")
+            self.assertEqual(rlc_edges[0].provenance.get("receiver_tables"), ["gfx_rlc_funcs"])
+            self.assertEqual(rlc_edges[0].provenance.get("call_kind"), "vtable_table_alias")
+            self.assertEqual(ip_edges[0].provenance.get("receiver"), "block->version->funcs")
+            self.assertEqual(ip_edges[0].provenance.get("callback_table"), "gfx_ip_funcs")
+            self.assertNotEqual(ip_edges[0].provenance.get("receiver_tables"), ["gfx_rlc_funcs"])
+
+    def test_stage1_field_path_type_hint_maps_rlc_funcs_without_local_assignment(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            source = root / "gfx.c"
+            source.write_text(
+                "\n".join(
+                    [
+                        "static int gfx_rlc_resume(void *adev) {",
+                        "  WREG32(mmCP_RLC_CNTL, 1);",
+                        "  return 0;",
+                        "}",
+                        "static int gfx_ip_resume(void *adev) {",
+                        "  WREG32(mmGCVM_L2_CNTL, 1);",
+                        "  return 0;",
+                        "}",
+                        "static const struct amdgpu_rlc_funcs gfx_rlc_funcs = {",
+                        "  .resume = gfx_rlc_resume,",
+                        "};",
+                        "static const struct amd_ip_funcs gfx_ip_funcs = {",
+                        "  .resume = gfx_ip_resume,",
+                        "};",
+                        "int resume_rlc_only(struct amdgpu_device *adev) {",
+                        "  return adev->gfx.rlc.funcs->resume(adev);",
+                        "}",
+                    ]
+                ),
+                encoding="utf-8",
+            )
+            profile = ResolverProfile(
+                id="test-amd-rlc-path",
+                language="cpp",
+                symbol_prefixes=["mm", "reg"],
+                wrappers={"WREG32": WrapperRule(symbol_arg=0, access="write")},
+            )
+
+            graph = build_deterministic_code_graph(source, source_root=root, resolver_profiles=[profile])
+
+            edge_triples = {(edge.src, edge.relation, edge.dst) for edge in graph.edges}
+            self.assertIn(("resume_rlc_only", "calls", "gfx_rlc_resume"), edge_triples)
+            self.assertNotIn(("resume_rlc_only", "calls", "gfx_ip_resume"), edge_triples)
+            rlc_edge = next(
+                edge
+                for edge in graph.edges
+                if (edge.src, edge.relation, edge.dst) == ("resume_rlc_only", "calls", "gfx_rlc_resume")
+            )
+            self.assertEqual(rlc_edge.provenance.get("receiver"), "adev->gfx.rlc.funcs")
+            self.assertEqual(rlc_edge.provenance.get("callback_table_type"), "amdgpu_rlc_funcs")
+
+    def test_stage1_known_field_path_does_not_fallback_to_unrelated_slot_when_type_has_no_match(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            source = root / "gfx.c"
+            source.write_text(
+                "\n".join(
+                    [
+                        "static int gfx_ip_get_clockgating_state(void *adev) {",
+                        "  return 0;",
+                        "}",
+                        "static const struct amd_ip_funcs gfx_ip_funcs = {",
+                        "  .get_clockgating_state = gfx_ip_get_clockgating_state,",
+                        "};",
+                        "static const struct amdgpu_df_funcs df_funcs = {",
+                        "  .sw_init = gfx_ip_get_clockgating_state,",
+                        "};",
+                        "int read_df_clockgating(struct amdgpu_device *adev) {",
+                        "  return adev->df.funcs->get_clockgating_state(adev);",
+                        "}",
+                    ]
+                ),
+                encoding="utf-8",
+            )
+
+            graph = build_deterministic_code_graph(source, source_root=root)
+
+            edge_triples = {(edge.src, edge.relation, edge.dst) for edge in graph.edges}
+            self.assertNotIn(("read_df_clockgating", "calls", "gfx_ip_get_clockgating_state"), edge_triples)
+
+    def test_stage1_ip_block_version_funcs_alias_resolves_nested_dispatch(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            source = root / "gfx.c"
+            source.write_text(
+                "\n".join(
+                    [
+                        "static int gfx_v11_0_hw_init(void *block) {",
+                        "  WREG32(mmGCVM_L2_CNTL, 1);",
+                        "  return 0;",
+                        "}",
+                        "static int sdma_v5_0_hw_init(void *block) {",
+                        "  WREG32(mmSDMA0_RLC0_RB_CNTL, 1);",
+                        "  return 0;",
+                        "}",
+                        "static const struct amd_ip_funcs gfx_v11_0_ip_funcs = {",
+                        "  .hw_init = gfx_v11_0_hw_init,",
+                        "};",
+                        "static const struct amd_ip_funcs sdma_v5_0_ip_funcs = {",
+                        "  .hw_init = sdma_v5_0_hw_init,",
+                        "};",
+                        "static const struct amdgpu_ip_block_version gfx_v11_0_ip_block = {",
+                        "  .funcs = &gfx_v11_0_ip_funcs,",
+                        "};",
+                        "int exact_ip_block_init(struct amd_ip_block *block) {",
+                        "  block->version = &gfx_v11_0_ip_block;",
+                        "  return block->version->funcs->hw_init(block);",
+                        "}",
+                    ]
+                ),
+                encoding="utf-8",
+            )
+            profile = ResolverProfile(
+                id="test-amd-ip-block",
+                language="cpp",
+                symbol_prefixes=["mm", "reg"],
+                wrappers={"WREG32": WrapperRule(symbol_arg=0, access="write")},
+            )
+
+            graph = build_deterministic_code_graph(source, source_root=root, resolver_profiles=[profile])
+
+            edge_triples = {(edge.src, edge.relation, edge.dst) for edge in graph.edges}
+            self.assertIn(("exact_ip_block_init", "calls", "gfx_v11_0_hw_init"), edge_triples)
+            self.assertNotIn(("exact_ip_block_init", "calls", "sdma_v5_0_hw_init"), edge_triples)
+            dispatch_edge = next(
+                edge
+                for edge in graph.edges
+                if (edge.src, edge.relation, edge.dst) == ("exact_ip_block_init", "calls", "gfx_v11_0_hw_init")
+            )
+            self.assertEqual(dispatch_edge.provenance.get("call_kind"), "vtable_table_alias")
+            self.assertEqual(dispatch_edge.provenance.get("receiver"), "block->version->funcs")
+            self.assertEqual(dispatch_edge.provenance.get("receiver_tables"), ["gfx_v11_0_ip_funcs"])
+            self.assertEqual(dispatch_edge.provenance.get("callback_table"), "gfx_v11_0_ip_funcs")
+
+    def test_stage1_ip_block_add_argument_flow_resolves_registered_version_funcs(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            source = root / "gfx.c"
+            source.write_text(
+                "\n".join(
+                    [
+                        "static int gfx_v11_0_hw_init(void *block) {",
+                        "  WREG32(mmGCVM_L2_CNTL, 1);",
+                        "  return 0;",
+                        "}",
+                        "static int sdma_v5_0_hw_init(void *block) {",
+                        "  WREG32(mmSDMA0_RLC0_RB_CNTL, 1);",
+                        "  return 0;",
+                        "}",
+                        "static const struct amd_ip_funcs gfx_v11_0_ip_funcs = {",
+                        "  .hw_init = gfx_v11_0_hw_init,",
+                        "};",
+                        "static const struct amd_ip_funcs sdma_v5_0_ip_funcs = {",
+                        "  .hw_init = sdma_v5_0_hw_init,",
+                        "};",
+                        "static const struct amdgpu_ip_block_version gfx_v11_0_ip_block = {",
+                        "  .funcs = &gfx_v11_0_ip_funcs,",
+                        "};",
+                        "int amdgpu_device_ip_block_add(struct amdgpu_device *adev,",
+                        "                               const struct amdgpu_ip_block_version *ip_block_version) {",
+                        "  adev->ip_blocks[adev->num_ip_blocks++].version = ip_block_version;",
+                        "  return 0;",
+                        "}",
+                        "int setup_and_hw_init(struct amdgpu_device *adev) {",
+                        "  amdgpu_device_ip_block_add(adev, &gfx_v11_0_ip_block);",
+                        "  return adev->ip_blocks[0].version->funcs->hw_init(&adev->ip_blocks[0]);",
+                        "}",
+                    ]
+                ),
+                encoding="utf-8",
+            )
+            profile = ResolverProfile(
+                id="test-amd-ip-block-add",
+                language="cpp",
+                symbol_prefixes=["mm", "reg"],
+                wrappers={"WREG32": WrapperRule(symbol_arg=0, access="write")},
+            )
+
+            graph = build_deterministic_code_graph(source, source_root=root, resolver_profiles=[profile])
+
+            edge_triples = {(edge.src, edge.relation, edge.dst) for edge in graph.edges}
+            self.assertIn(("setup_and_hw_init", "calls", "amdgpu_device_ip_block_add"), edge_triples)
+            self.assertIn(("setup_and_hw_init", "calls", "gfx_v11_0_hw_init"), edge_triples)
+            self.assertNotIn(("setup_and_hw_init", "calls", "sdma_v5_0_hw_init"), edge_triples)
+            dispatch_edge = next(
+                edge
+                for edge in graph.edges
+                if (edge.src, edge.relation, edge.dst) == ("setup_and_hw_init", "calls", "gfx_v11_0_hw_init")
+            )
+            self.assertEqual(dispatch_edge.provenance.get("call_kind"), "vtable_table_alias")
+            self.assertEqual(dispatch_edge.provenance.get("receiver"), "adev->ip_blocks[0].version->funcs")
+            self.assertEqual(dispatch_edge.provenance.get("receiver_tables"), ["gfx_v11_0_ip_funcs"])
+            self.assertEqual(dispatch_edge.provenance.get("callback_table"), "gfx_v11_0_ip_funcs")
+
+    def test_stage1_ip_block_add_registration_flow_resolves_common_loop_dispatch(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            source = root / "amdgpu_device.c"
+            source.write_text(
+                "\n".join(
+                    [
+                        "static int gfx_v11_0_hw_init(void *block) {",
+                        "  WREG32(mmGCVM_L2_CNTL, 1);",
+                        "  return 0;",
+                        "}",
+                        "static int sdma_v5_0_hw_init(void *block) {",
+                        "  WREG32(mmSDMA0_RLC0_RB_CNTL, 1);",
+                        "  return 0;",
+                        "}",
+                        "static const struct amd_ip_funcs gfx_v11_0_ip_funcs = {",
+                        "  .hw_init = gfx_v11_0_hw_init,",
+                        "};",
+                        "static const struct amd_ip_funcs sdma_v5_0_ip_funcs = {",
+                        "  .hw_init = sdma_v5_0_hw_init,",
+                        "};",
+                        "static const struct amdgpu_ip_block_version gfx_v11_0_ip_block = {",
+                        "  .funcs = &gfx_v11_0_ip_funcs,",
+                        "};",
+                        "int amdgpu_device_ip_block_add(struct amdgpu_device *adev,",
+                        "                               const struct amdgpu_ip_block_version *ip_block_version) {",
+                        "  adev->ip_blocks[adev->num_ip_blocks++].version = ip_block_version;",
+                        "  return 0;",
+                        "}",
+                        "int setup_registered_blocks(struct amdgpu_device *adev) {",
+                        "  amdgpu_device_ip_block_add(adev, &gfx_v11_0_ip_block);",
+                        "  return 0;",
+                        "}",
+                        "int amdgpu_device_hw_init(struct amdgpu_device *adev) {",
+                        "  return adev->ip_blocks[0].version->funcs->hw_init(&adev->ip_blocks[0]);",
+                        "}",
+                    ]
+                ),
+                encoding="utf-8",
+            )
+            profile = ResolverProfile(
+                id="test-amd-ip-block-registration",
+                language="cpp",
+                symbol_prefixes=["mm", "reg"],
+                wrappers={"WREG32": WrapperRule(symbol_arg=0, access="write")},
+            )
+
+            graph = build_deterministic_code_graph(source, source_root=root, resolver_profiles=[profile])
+
+            edge_triples = {(edge.src, edge.relation, edge.dst) for edge in graph.edges}
+            self.assertIn(("setup_registered_blocks", "calls", "amdgpu_device_ip_block_add"), edge_triples)
+            self.assertIn(("amdgpu_device_hw_init", "calls", "gfx_v11_0_hw_init"), edge_triples)
+            self.assertNotIn(("amdgpu_device_hw_init", "calls", "sdma_v5_0_hw_init"), edge_triples)
+            dispatch_edge = next(
+                edge
+                for edge in graph.edges
+                if (edge.src, edge.relation, edge.dst) == ("amdgpu_device_hw_init", "calls", "gfx_v11_0_hw_init")
+            )
+            self.assertEqual(dispatch_edge.provenance.get("call_kind"), "vtable_table_alias")
+            self.assertEqual(dispatch_edge.provenance.get("receiver_tables"), ["gfx_v11_0_ip_funcs"])
+            self.assertEqual(dispatch_edge.provenance.get("callback_table"), "gfx_v11_0_ip_funcs")
+
+    def test_stage1_exact_ip_block_registration_does_not_fallback_when_slot_is_absent(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            source = root / "amdgpu_device.c"
+            source.write_text(
+                "\n".join(
+                    [
+                        "static int gfx_v11_0_hw_init(void *block) {",
+                        "  WREG32(mmGCVM_L2_CNTL, 1);",
+                        "  return 0;",
+                        "}",
+                        "static int sdma_v5_0_sw_fini(void *block) {",
+                        "  WREG32(mmSDMA0_RLC0_RB_CNTL, 1);",
+                        "  return 0;",
+                        "}",
+                        "static const struct amd_ip_funcs gfx_v11_0_ip_funcs = {",
+                        "  .hw_init = gfx_v11_0_hw_init,",
+                        "};",
+                        "static const struct amd_ip_funcs sdma_v5_0_ip_funcs = {",
+                        "  .sw_fini = sdma_v5_0_sw_fini,",
+                        "};",
+                        "static const struct amdgpu_ip_block_version gfx_v11_0_ip_block = {",
+                        "  .funcs = &gfx_v11_0_ip_funcs,",
+                        "};",
+                        "int amdgpu_device_ip_block_add(struct amdgpu_device *adev,",
+                        "                               const struct amdgpu_ip_block_version *ip_block_version) {",
+                        "  adev->ip_blocks[adev->num_ip_blocks++].version = ip_block_version;",
+                        "  return 0;",
+                        "}",
+                        "int setup_registered_blocks(struct amdgpu_device *adev) {",
+                        "  amdgpu_device_ip_block_add(adev, &gfx_v11_0_ip_block);",
+                        "  return 0;",
+                        "}",
+                        "int amdgpu_device_sw_fini(struct amdgpu_device *adev) {",
+                        "  return adev->ip_blocks[0].version->funcs->sw_fini(&adev->ip_blocks[0]);",
+                        "}",
+                    ]
+                ),
+                encoding="utf-8",
+            )
+            profile = ResolverProfile(
+                id="test-amd-ip-block-registration",
+                language="cpp",
+                symbol_prefixes=["mm", "reg"],
+                wrappers={"WREG32": WrapperRule(symbol_arg=0, access="write")},
+            )
+
+            graph = build_deterministic_code_graph(source, source_root=root, resolver_profiles=[profile])
+
+            edge_triples = {(edge.src, edge.relation, edge.dst) for edge in graph.edges}
+            self.assertNotIn(("amdgpu_device_sw_fini", "calls", "sdma_v5_0_sw_fini"), edge_triples)
+
+    def test_stage1_uses_receiver_declared_type_to_filter_generic_ops_callbacks(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            source = root / "gfx.c"
+            source.write_text(
+                "\n".join(
+                    [
+                        "static int gfx_ring_start(void *ring) {",
+                        "  WREG32(mmCP_RB_CNTL, 1);",
+                        "  return 0;",
+                        "}",
+                        "static int unrelated_ring_start(void *ring) {",
+                        "  WREG32(mmSDMA0_RLC0_RB_CNTL, 1);",
+                        "  return 0;",
+                        "}",
+                        "static const struct amdgpu_ring_funcs gfx_ring_funcs = {",
+                        "  .start = gfx_ring_start,",
+                        "};",
+                        "static const struct unrelated_ops unrelated_ops = {",
+                        "  .start = unrelated_ring_start,",
+                        "};",
+                        "int common_ring_start(struct amdgpu_ring_funcs *ops) {",
+                        "  return (*ops->start)(0);",
+                        "}",
+                    ]
+                ),
+                encoding="utf-8",
+            )
+            profile = ResolverProfile(
+                id="test-amd-ring",
+                language="cpp",
+                symbol_prefixes=["mm", "reg"],
+                wrappers={"WREG32": WrapperRule(symbol_arg=0, access="write")},
+            )
+
+            graph = build_deterministic_code_graph(source, source_root=root, resolver_profiles=[profile])
+
+            edge_triples = {(edge.src, edge.relation, edge.dst) for edge in graph.edges}
+            self.assertIn(("common_ring_start", "calls", "gfx_ring_start"), edge_triples)
+            self.assertNotIn(("common_ring_start", "calls", "unrelated_ring_start"), edge_triples)
+            callback_edge = next(
+                edge
+                for edge in graph.edges
+                if (edge.src, edge.relation, edge.dst) == ("common_ring_start", "calls", "gfx_ring_start")
+            )
+            self.assertEqual(callback_edge.provenance.get("receiver_type"), "amdgpu_ring_funcs")
+            self.assertEqual(callback_edge.provenance.get("callback_table_type"), "amdgpu_ring_funcs")
+
+    def test_stage1_links_mxgpu_init_func_dispatch_to_callback(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            source = root / "mxgpu.c"
+            source.write_text(
+                "\n".join(
+                    [
+                        "static int vmhub_sw_init(void *adapt) {",
+                        "  return 0;",
+                        "}",
+                        "static const struct vmhub_funcs vmhub_funcs = {",
+                        "  .sw_init = vmhub_sw_init,",
+                        "};",
+                        "static int gfx_v11_hw_init(void *adapt) {",
+                        "  WREG32(mmGCVM_L2_CNTL, 1);",
+                        "  return 0;",
+                        "}",
+                        "static struct amdgv_init_func gfx_v11_func = {",
+                        "  .hw_init = gfx_v11_hw_init,",
+                        "};",
+                        "int amdgv_device_init(struct amdgv_adapter *adapt) {",
+                        "  struct amdgv_init_func *init_func = adapt->init_funcs[0];",
+                        "  return init_func->hw_init(adapt);",
+                        "}",
+                    ]
+                ),
+                encoding="utf-8",
+            )
+            profile = ResolverProfile(
+                id="test-mxgpu",
+                language="cpp",
+                symbol_prefixes=["mm", "reg"],
+                wrappers={"WREG32": WrapperRule(symbol_arg=0, access="write")},
+            )
+
+            graph = build_deterministic_code_graph(source, source_root=root, resolver_profiles=[profile])
+
+            edge_triples = {(edge.src, edge.relation, edge.dst) for edge in graph.edges}
+            self.assertIn(("gfx_v11_hw_init", "writes", "GCVM_L2_CNTL"), edge_triples)
+            self.assertIn(("amdgv_device_init", "calls", "gfx_v11_hw_init"), edge_triples)
+            callback = next(item for item in graph.callback_slots if item.function == "gfx_v11_hw_init")
+            self.assertEqual(callback.table, "gfx_v11_func")
+            self.assertEqual(callback.table_type, "amdgv_init_func")
+            dispatch_edge = next(
+                edge
+                for edge in graph.edges
+                if (edge.src, edge.relation, edge.dst) == ("amdgv_device_init", "calls", "gfx_v11_hw_init")
+            )
+            self.assertEqual(dispatch_edge.provenance.get("call_kind"), "vtable_dispatch")
+            self.assertEqual(dispatch_edge.provenance.get("callback_table_type"), "amdgv_init_func")
 
     def test_stage1_slot_call_line_uses_call_site_not_function_name(self):
         with tempfile.TemporaryDirectory() as tmpdir:

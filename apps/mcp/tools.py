@@ -18,11 +18,14 @@ from asip.workbench import (
     generate_semantic_edges_batch,
     generate_semantic_edges_for_query,
     get_evidence_detail,
+    get_job,
     index_registered_corpora,
     list_indexed_corpora,
+    list_jobs,
     list_resolver_profiles,
     load_provider_settings,
     query_evidence,
+    rebuild_deterministic_graph,
     save_provider_settings,
     validate_resolver_profile,
 )
@@ -148,8 +151,38 @@ def corpus_add(
     )
 
 
-def corpora_index(corpus_ids: List[str] | None = None, db_path: str | None = None) -> Dict[str, Any]:
-    return index_registered_corpora(Path(db_path) if db_path else DEFAULT_DB, corpus_ids=corpus_ids)
+def corpora_index(
+    corpus_ids: List[str] | None = None,
+    db_path: str | None = None,
+    resolver_profile_ids: List[str] | None = None,
+    resolverProfileIds: List[str] | None = None,
+) -> Dict[str, Any]:
+    return index_registered_corpora(
+        Path(db_path) if db_path else DEFAULT_DB,
+        corpus_ids=corpus_ids,
+        resolver_profile_ids=resolver_profile_ids or resolverProfileIds,
+    )
+
+
+def graph_rebuild(
+    corpus_ids: List[str] | None = None,
+    db_path: str | None = None,
+    resolver_profile_ids: List[str] | None = None,
+    resolverProfileIds: List[str] | None = None,
+) -> Dict[str, Any]:
+    return rebuild_deterministic_graph(
+        Path(db_path) if db_path else DEFAULT_DB,
+        corpus_ids=corpus_ids,
+        resolver_profile_ids=resolver_profile_ids or resolverProfileIds,
+    )
+
+
+def jobs_list(db_path: str | None = None, limit: int = 50) -> Dict[str, Any]:
+    return {"jobs": list_jobs(Path(db_path) if db_path else DEFAULT_DB, limit=limit)}
+
+
+def job_detail(job_id: int, db_path: str | None = None) -> Dict[str, Any]:
+    return get_job(Path(db_path) if db_path else DEFAULT_DB, job_id)
 
 
 def evidence_detail(evidence_id: int, db_path: str | None = None) -> Dict[str, Any]:

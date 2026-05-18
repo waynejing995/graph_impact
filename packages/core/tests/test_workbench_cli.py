@@ -126,6 +126,159 @@ class WorkbenchCliTests(unittest.TestCase):
             self.assertEqual(payload["files"], 1)
             self.assertGreaterEqual(payload["edges"], 1)
 
+    def test_index_and_graph_rebuild_commands_accept_resolver_profile_id(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            source_root = root / "corpus"
+            source_root.mkdir()
+            (source_root / "driver.py").write_text('@gpu_register("CLI_PROFILE_REGISTER")\n', encoding="utf-8")
+            resolver_config = root / "cli-profile.yaml"
+            resolver_config.write_text(
+                "\n".join(
+                    [
+                        "id: cli-profile",
+                        "language: python",
+                        "context_vars: []",
+                        "symbol_prefixes: []",
+                        "python_extractors: [gpu_register]",
+                        "wrappers: {}",
+                    ]
+                ),
+                encoding="utf-8",
+            )
+            db_path = root / "asip.db"
+            common = [sys.executable, "-m", "asip.cli"]
+            subprocess.run(
+                [
+                    *common,
+                    "resolver-add",
+                    "--db",
+                    str(db_path),
+                    "--id",
+                    "cli-profile",
+                    "--language",
+                    "python",
+                    "--wrapper",
+                    "gpu_register",
+                    "--strategy",
+                    "python-call",
+                    "--path",
+                    str(resolver_config),
+                ],
+                check=True,
+                capture_output=True,
+                text=True,
+            )
+            subprocess.run(
+                [
+                    *common,
+                    "corpus-add",
+                    "--db",
+                    str(db_path),
+                    "--id",
+                    "cli-profile-docs",
+                    "--source-root",
+                    str(source_root),
+                    "--include",
+                    "**/*.py",
+                    "--type",
+                    "code",
+                ],
+                check=True,
+                capture_output=True,
+                text=True,
+            )
+
+            index = subprocess.run(
+                [
+                    *common,
+                    "index",
+                    "--config",
+                    str(root / "unused.json"),
+                    "--db",
+                    str(db_path),
+                    "--corpus-id",
+                    "cli-profile-docs",
+                    "--resolver-profile-id",
+                    "cli-profile",
+                ],
+                check=True,
+                capture_output=True,
+                text=True,
+            )
+            rebuild = subprocess.run(
+                [
+                    *common,
+                    "graph-rebuild",
+                    "--db",
+                    str(db_path),
+                    "--corpus-id",
+                    "cli-profile-docs",
+                    "--resolver-profile-id",
+                    "cli-profile",
+                ],
+                check=True,
+                capture_output=True,
+                text=True,
+            )
+
+            self.assertEqual(json.loads(index.stdout)["resolver_profile_ids"], ["cli-profile"])
+            self.assertEqual(json.loads(rebuild.stdout)["resolver_profile_ids"], ["cli-profile"])
+
+    def test_performance_smoke_command_rebuilds_fixture_and_times_queries(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            source_root = root / "fixture"
+            source_root.mkdir()
+            (source_root / "gfx.c").write_text(
+                "\n".join(
+                    [
+                        "static void program_gcvm_l2(void) {",
+                        "  WREG32(mmGCVM_L2_CNTL, 1);",
+                        "}",
+                        "static void program_ih_ring(void) {",
+                        "  WREG32(mmIH_RB_CNTL, 2);",
+                        "}",
+                    ]
+                ),
+                encoding="utf-8",
+            )
+            (source_root / "guide.md").write_text(
+                "GCVM_L2_CNTL and IH_RB_CNTL appear in this fixture guide.\n",
+                encoding="utf-8",
+            )
+
+            smoke = subprocess.run(
+                [
+                    sys.executable,
+                    "-m",
+                    "asip.cli",
+                    "performance-smoke",
+                    "--db",
+                    str(root / "smoke.db"),
+                    "--source-root",
+                    str(source_root),
+                    "--query",
+                    "GCVM_L2_CNTL",
+                    "--query",
+                    "IH_RB_CNTL",
+                    "--query",
+                    "program_gcvm_l2",
+                    "--max-query-seconds",
+                    "1.0",
+                ],
+                check=True,
+                capture_output=True,
+                text=True,
+            )
+
+            payload = json.loads(smoke.stdout)
+            self.assertEqual(payload["source"], "fixture_performance_smoke")
+            self.assertTrue(payload["deterministic_counts_match"])
+            self.assertEqual(len(payload["runs"]), 2)
+            self.assertEqual(len(payload["queries"]), 3)
+            self.assertTrue(all(item["row_count"] > 0 for item in payload["queries"]))
+
     def test_index_command_accepts_explicit_source_root_override(self):
         with tempfile.TemporaryDirectory() as tmpdir:
             root = Path(tmpdir)

@@ -280,6 +280,19 @@ type AcceptanceDetail = {
   };
 };
 
+type JobRun = {
+  id: number;
+  kind: string;
+  status: string;
+  message?: string;
+  metadata?: Record<string, unknown>;
+  events?: Array<{
+    status?: string;
+    message?: string;
+    created_at?: string;
+  }>;
+};
+
 type GraphPayload = WeightedGraphPayload;
 
 type WorkbenchLimits = {
@@ -348,6 +361,8 @@ export function WorkbenchPage({ pageId }: WorkbenchPageProps) {
   const [globalQuery, setGlobalQuery] = useState("");
   const [selectedSourceTypes, setSelectedSourceTypes] = useState<string[]>([...sourceFilterTypes]);
   const [resolverProfiles, setResolverProfiles] = useState<ResolverProfile[]>([]);
+  const [selectedResolverProfileIds, setSelectedResolverProfileIds] = useState<string[]>([]);
+  const resolverProfileSelectionTouchedRef = useRef(false);
   const [resolverDraft, setResolverDraft] = useState<ResolverProfile>({
     id: "initial",
     wrapper: "RREG32",
@@ -371,6 +386,7 @@ export function WorkbenchPage({ pageId }: WorkbenchPageProps) {
     config.id === "evidence-workbench" ? "Enter a query to search live evidence." : ""
   );
   const [acceptanceRuns, setAcceptanceRuns] = useState<AcceptanceRun[]>([]);
+  const [jobRuns, setJobRuns] = useState<JobRun[]>([]);
 
   useEffect(() => {
     const storedTheme = readStoredTheme();
@@ -432,6 +448,21 @@ export function WorkbenchPage({ pageId }: WorkbenchPageProps) {
       cancelled = true;
     };
   }, []);
+
+  useEffect(() => {
+    if (config.id !== "corpus") {
+      return;
+    }
+    let cancelled = false;
+    fetchJobRuns().then((runs) => {
+      if (!cancelled) {
+        setJobRuns(runs);
+      }
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [config.id]);
 
   useLayoutEffect(() => {
     if (config.id === "evidence-workbench" && !initialSearchHandledRef.current) {
@@ -607,6 +638,16 @@ export function WorkbenchPage({ pageId }: WorkbenchPageProps) {
       cancelled = true;
     };
   }, []);
+
+  useEffect(() => {
+    const enabledIds = resolverProfiles.filter((profile) => profile.enabled).map((profile) => profile.id);
+    setSelectedResolverProfileIds((current) => {
+      if (!resolverProfileSelectionTouchedRef.current) {
+        return enabledIds;
+      }
+      return current.filter((id) => enabledIds.includes(id));
+    });
+  }, [resolverProfiles]);
 
   useEffect(() => {
     let cancelled = false;
@@ -819,8 +860,14 @@ export function WorkbenchPage({ pageId }: WorkbenchPageProps) {
   async function runPageAction(options: { semanticMode?: "query" | "batch" | "doc-nodes" } = {}) {
     if (config.id === "corpus") {
       const selectedIds = selectedCorpusIds.filter((id) => corpora.some((corpus) => corpus.id === id));
+      const enabledResolverIds = resolverProfiles.filter((profile) => profile.enabled).map((profile) => profile.id);
+      const selectedResolverIds = selectedResolverProfileIds.filter((id) => enabledResolverIds.includes(id));
       if (selectedIds.length === 0) {
         setActionMessage("Select at least one corpus to index.");
+        return;
+      }
+      if (enabledResolverIds.length > 0 && selectedResolverIds.length === 0) {
+        setActionMessage("Select at least one resolver profile to index.");
         return;
       }
       setActionMessage("Running index job...");
@@ -828,15 +875,18 @@ export function WorkbenchPage({ pageId }: WorkbenchPageProps) {
         const response = await fetch("/api/workbench/index", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ corpusIds: selectedIds })
+          body: JSON.stringify({ corpusIds: selectedIds, resolverProfileIds: selectedResolverIds })
         });
         const payload = (await response.json()) as {
           status?: string;
           corpusIds?: string[];
+          resolverProfileIds?: string[];
           dbPath?: string;
           documents?: number;
           chunks?: number;
           edges?: number;
+          jobId?: number;
+          jobStatus?: string;
           error?: string;
         };
         if (!response.ok) {
@@ -867,11 +917,18 @@ export function WorkbenchPage({ pageId }: WorkbenchPageProps) {
           )
         );
         const corpusLabel = payload.corpusIds?.length ? ` for ${payload.corpusIds.join(", ")}` : "";
+        const resolverLabel = payload.resolverProfileIds?.length
+          ? ` using ${payload.resolverProfileIds.join(", ")}`
+          : selectedResolverIds.length
+            ? ` using ${selectedResolverIds.join(", ")}`
+            : "";
+        const jobLabel = payload.jobId ? ` job ${payload.jobId} ${payload.jobStatus ?? "succeeded"}` : "";
         setActionMessage(
-          `Index built${corpusLabel}: ${payload.documents ?? 0} documents, ${payload.chunks ?? 0} chunks, ${
+          `Index built${corpusLabel}${jobLabel}: ${payload.documents ?? 0} documents, ${payload.chunks ?? 0} chunks, ${
             payload.edges ?? 0
-          } edges -> ${payload.dbPath ?? "data/asip.db"}`
+          } edges -> ${payload.dbPath ?? "data/asip.db"}${resolverLabel}`
         );
+        setJobRuns(await fetchJobRuns());
       } catch (error) {
         setActionMessage(error instanceof Error ? error.message : "Index job failed");
       }
@@ -1257,6 +1314,16 @@ export function WorkbenchPage({ pageId }: WorkbenchPageProps) {
     });
   }
 
+  function toggleResolverProfileSelection(profileId: string, selected: boolean) {
+    resolverProfileSelectionTouchedRef.current = true;
+    setSelectedResolverProfileIds((current) => {
+      if (selected) {
+        return current.includes(profileId) ? current : [...current, profileId];
+      }
+      return current.filter((id) => id !== profileId);
+    });
+  }
+
   function toggleSourceType(sourceType: string) {
     setSelectedSourceTypes((current) =>
       current.includes(sourceType)
@@ -1280,6 +1347,19 @@ export function WorkbenchPage({ pageId }: WorkbenchPageProps) {
           ? { batchSize: workbenchLimits.semantic.batchSize }
           : {})
     };
+  }
+
+  async function fetchJobRuns() {
+    try {
+      const response = await fetch("/api/workbench/jobs?limit=8");
+      if (!response.ok) {
+        return [];
+      }
+      const payload = (await response.json()) as { jobs?: JobRun[] };
+      return (payload.jobs ?? []).map(normalizeJobRun);
+    } catch {
+      return [];
+    }
   }
 
   return (
@@ -1409,12 +1489,19 @@ export function WorkbenchPage({ pageId }: WorkbenchPageProps) {
           ) : null}
 
           {config.id === "corpus" ? (
-            <CorpusEditor
-              draft={corpusDraft}
-              message={corpusMessage}
-              onAdd={addCorpus}
-              onChange={setCorpusDraft}
-            />
+            <>
+              <CorpusEditor
+                draft={corpusDraft}
+                message={corpusMessage}
+                onAdd={addCorpus}
+                onChange={setCorpusDraft}
+              />
+              <ResolverProfileSelector
+                onToggle={toggleResolverProfileSelection}
+                profiles={resolverProfiles}
+                selectedIds={selectedResolverProfileIds}
+              />
+            </>
           ) : null}
 
           {config.id === "resolver-profiles" ? (
@@ -1528,6 +1615,7 @@ export function WorkbenchPage({ pageId }: WorkbenchPageProps) {
               {actionMessage}
             </p>
           ) : null}
+          {config.id === "corpus" ? <JobRunsPanel jobs={jobRuns} /> : null}
           {config.id === "graph-explorer" ? (
             <div className="semantic-limit-controls" aria-label="Semantic generation controls">
               <label>
@@ -2329,6 +2417,28 @@ function normalizeAcceptanceRun(run: AcceptanceRun): AcceptanceRun {
   };
 }
 
+function normalizeJobRun(job: JobRun): JobRun {
+  return {
+    id: Number(job.id),
+    kind: String(job.kind ?? "job"),
+    status: String(job.status ?? "unknown"),
+    message: typeof job.message === "string" ? job.message : "",
+    metadata: isObjectRecord(job.metadata) ? job.metadata : {},
+    events: Array.isArray(job.events)
+      ? job.events.map((event) => ({
+          status: String(event.status ?? "unknown"),
+          message: typeof event.message === "string" ? event.message : "",
+          created_at: typeof event.created_at === "string" ? event.created_at : ""
+        }))
+      : []
+  };
+}
+
+function jobLifecycle(job: JobRun) {
+  const statuses = (job.events ?? []).map((event) => event.status).filter(Boolean);
+  return statuses.length ? statuses.join(" -> ") : job.status;
+}
+
 function normalizeAcceptanceDetail(detail: Partial<AcceptanceDetail> & Record<string, unknown>): AcceptanceDetail {
   return {
     id: String(detail.id ?? "unknown"),
@@ -2453,7 +2563,19 @@ function buildGraphRelationshipLines(graph: GraphPayload, emptyMessage: string, 
     return [emptyMessage || "No graph relationships returned."];
   }
   const previewLimit = Math.max(1, limit ?? graph.edges.length);
-  return graph.edges.slice(0, previewLimit).map((edge) => `${edge.src} ${edge.relation} ${edge.dst}`);
+  const relationshipOrder = [
+    ...graph.edges.filter((edge) => edge.relation === "calls"),
+    ...graph.edges.filter((edge) => edge.relation !== "calls")
+  ];
+  const seen = new Set<string>();
+  return relationshipOrder.flatMap((edge) => {
+    const line = `${edge.src} ${edge.relation} ${edge.dst}`;
+    if (seen.has(line)) {
+      return [];
+    }
+    seen.add(line);
+    return [line];
+  }).slice(0, previewLimit);
 }
 
 function sumFileCounts(corpora: CorpusEntry[]): string {
@@ -2811,6 +2933,56 @@ function CorpusEditor({
   );
 }
 
+function ResolverProfileSelector({
+  onToggle,
+  profiles,
+  selectedIds
+}: {
+  onToggle: (profileId: string, selected: boolean) => void;
+  profiles: ResolverProfile[];
+  selectedIds: string[];
+}) {
+  const enabledProfiles = profiles.filter((profile) => profile.enabled);
+  return (
+    <Card className="provider-settings-panel" aria-label="Index resolver profiles">
+      <CardHeader className="provider-settings-header">
+        <div>
+          <CardTitle>Index Resolver Profiles</CardTitle>
+          <CardDescription>Select the YAML-backed resolvers for the next corpus index job.</CardDescription>
+        </div>
+        <ToneBadge tone="code">{enabledProfiles.length} enabled</ToneBadge>
+      </CardHeader>
+      <CardContent className="provider-settings-content">
+        {enabledProfiles.length ? (
+          <FieldGroup className="resolver-profile-selection" data-slot="checkbox-group">
+            {enabledProfiles.map((profile) => {
+              const checkboxId = `resolver-profile-${profile.id}`;
+              return (
+                <Field className="provider-settings-field--toggle" key={profile.id} orientation="horizontal">
+                  <Checkbox
+                    aria-label={`Use resolver profile ${profile.id}`}
+                    checked={selectedIds.includes(profile.id)}
+                    id={checkboxId}
+                    onCheckedChange={(checked) => onToggle(profile.id, checked === true)}
+                  />
+                  <FieldContent>
+                    <FieldLabel htmlFor={checkboxId}>{profile.id}</FieldLabel>
+                    <FieldDescription>
+                      {profile.strategy} · {profile.wrappers.join(", ") || "no wrappers"} · {profile.path}
+                    </FieldDescription>
+                  </FieldContent>
+                </Field>
+              );
+            })}
+          </FieldGroup>
+        ) : (
+          <p className="settings-feedback">No enabled YAML resolver profiles are available.</p>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
+
 function ResolverProfileEditor({
   draft,
   message,
@@ -2949,6 +3121,42 @@ function ResolverProfileEditor({
         </Button>
         {message ? <span className="settings-feedback">{message}</span> : null}
       </div>
+      </CardContent>
+    </Card>
+  );
+}
+
+function JobRunsPanel({ jobs }: { jobs: JobRun[] }) {
+  const visibleJobs = jobs.slice(0, 4);
+  return (
+    <Card className="inspector-card" data-testid="job-runs-panel">
+      <CardHeader>
+        <CardTitle>Index Jobs</CardTitle>
+        <CardDescription>Durable job lifecycle from the local SQLite store.</CardDescription>
+      </CardHeader>
+      <CardContent>
+        {visibleJobs.length ? (
+          <div className="job-run-list">
+            {visibleJobs.map((job) => (
+              <div className="job-run" key={job.id}>
+                <div className="job-run__header">
+                  <strong>job {job.id}</strong>
+                  <Badge>{job.status}</Badge>
+                </div>
+                <p>
+                  <code>{job.kind}: {job.message || "no message"}</code>
+                </p>
+                <p>
+                  <code>{jobLifecycle(job)}</code>
+                </p>
+              </div>
+            ))}
+          </div>
+        ) : (
+          <p>
+            <code>No index jobs returned.</code>
+          </p>
+        )}
       </CardContent>
     </Card>
   );

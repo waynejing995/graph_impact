@@ -50,19 +50,19 @@ Supporting acceptance matrix:
 | --- | --- | --- | --- |
 | G01 | [Real Ingestion And Indexing](2026-05-16-g01-real-ingestion-indexing.md) | Partial; blocking | Raw-corpus SQLite indexing covers more MVP queries and configs include doc/PDF globs, but one clean AMD corpus run across code/docs/register/PDF still needs final verification. |
 | G02 | [Live Retrieval And Evidence Schema](2026-05-16-g02-live-retrieval-evidence-schema.md) | Partial; blocking | SQLite evidence schema, FTS, vector fallback retrieval, no-match/failure states, live inspector linkage, and clean AQ runner mechanics exist; rerank, cross-source evidence, and final visual/design closure remain open. |
-| G03 | [Dynamic Weighted Graph](2026-05-16-g03-dynamic-weighted-graph.md) | Current pass verified; final gate | `/graph` now uses `react-force-graph-2d` over live no-seed graph data, with function-operation edges, section nodes, batch semantic edges, and browser/Playwright graph QA recorded. |
-| G04 | [Corpus Management](2026-05-16-g04-corpus-management.md) | Partial; blocking | Backend/API/MCP corpus add/list/index, UI selected-corpus indexing, invalid-source failure, and a real Web add-index-query loop exist; clean-DB closure and durable job-state UX remain open. |
-| G05 | [Resolver Profiles](2026-05-16-g05-resolver-profiles.md) | Partial; blocking | Backend add/list/validate, UI validation, disabled status, and a minimal indexing integration exist; edit-in-place, per-job selection, and richer extraction remain open. |
+| G03 | [Dynamic Weighted Graph](2026-05-16-g03-dynamic-weighted-graph.md) | Partial; blocking | `/graph` uses `react-force-graph-2d` over live no-seed graph data, with function-operation edges, cross-file common-helper/direct/callback call edges, callback alias/type hints, IP-block registration aliases, selective Clang AST JSON receiver hints, section nodes, doc boxes, and batch semantic edges. Current clean-final DB `/tmp/asip-clean-amd-gemma4-final-current-2026-05-18.db` has `41,880` deterministic rebuild edges, `25` real `gemma4:e4b` semantic edges, zero raw macro/wrapper endpoints for `IP_VERSION/WREG32/RREG32/REG_SET_FIELD/SOC15_REG_OFFSET/funcs/ops/hw_init`, and a 20k graph sample with `15,154` nodes plus `function/register/doc_box/doc_section` only. This is still not full clangd/libclang cross-TU vtable/type-flow; a full typed extractor remains a named residual before full closure. |
+| G04 | [Corpus Management](2026-05-16-g04-corpus-management.md) | Partial; blocking | Backend/API/MCP corpus add/list/index, UI selected-corpus indexing, invalid-source failure, durable job lifecycle visibility, and a real Web add-index-query loop exist; clean-DB closure and graph/inspector proof for the newly indexed corpus remain open. |
+| G05 | [Resolver Profiles](2026-05-16-g05-resolver-profiles.md) | Current pass verified; final gate | YAML-backed profiles, backend/API/MCP add/list/validate, UI validation, disabled/edit state, per-index selection, and selected-profile changed graph output are proven. Richer unmatched-span diagnostics and broader non-C strategies remain open boundaries. |
 | G06 | [Provider Settings And Ollama Detection](2026-05-16-g06-provider-settings-ollama.md) | Current local/batch pass verified; explicit deferrals | Settings persist/hydrate, embedding provider calls, safe env-based extra-header expansion, isolated AQ09 Web API provenance, Settings AQ09 UI/BFF wiring, query-scoped and batch semantic-edge jobs, and local Ollama `gemma4:e4b`/`qwen3.5`/`nomic` QA are tested; credentialed OpenAI-compatible live endpoint QA and query reranking remain open boundaries. |
 | G07 | [API And MCP Product Surfaces](2026-05-16-g07-api-mcp.md) | Partial; blocking | Query/graph, selected acceptance execution, corpus/resolver/provider control-plane slices, evidence/entity detail slices, semantic-edge FastAPI/MCP parity, key read-route no-mutation coverage, FastAPI live HTTP smoke including `pnpm dev:api`, MCP server tool-matrix registration, and Web/MCP query/evidence/entity agreement exist; richer resolved-chain UX and optional real MCP runtime smoke remain open. |
 | G08 | [PDF And Document Ingestion](2026-05-16-g08-pdf-document-ingestion.md) | Partial; narrowed residual | PDF conversion/page evidence and Markdown/doc section graph nodes are proven; a separate browser proof for a real PDF-derived `pdf_section` node remains narrower residual evidence. |
-| G09 | [SQLite FTS5 Vector And NetworkX Runtime](2026-05-16-g09-storage-vector-graph-runtime.md) | Partial; runtime-boundary open | FTS5, fallback vector retrieval, provider embeddings, NetworkX graph, and native sqlite-vec extension smoke in bundled Python work; product retrieval still uses JSON vectors plus Python cosine until a native retrieval adapter is wired. |
-| G10 | [Testing Acceptance And Visual QA](2026-05-16-g10-testing-acceptance-visual-qa.md) | Current pass verified; final gate | Full current regression: core 162 OK, API/MCP 41 OK, Web API/smoke 69 passed, visual routes 15 passed, lint/tsc/diff passed. |
+| G09 | [SQLite FTS5 Vector And NetworkX Runtime](2026-05-16-g09-storage-vector-graph-runtime.md) | Partial; provider-quality boundary open | FTS5, provider embeddings, NetworkX graph, native sqlite-vec extension smoke, native `search_vector()` adapter path, and JSON/Python-cosine fallback are tested; full provider-vector coverage and semantic rerank quality remain boundaries. |
+| G10 | [Testing Acceptance And Visual QA](2026-05-16-g10-testing-acceptance-visual-qa.md) | Current clean-final acceptance and final suite verified | Clean-final AQ01-AQ09 acceptance over `/tmp/asip-clean-amd-gemma4-final-current-2026-05-18.db` is DB health pass and `9/9`, with CLI/API/Web/MCP surface labels and `gemma4:e4b`/`nomic-embed-text:latest` provider checks. Final automated rerun after the latest code/doc slice: core unittest 202 OK with 2 optional sqlite-vec skips, API/MCP unittest 45 OK with 1 optional MCP runtime skip, TypeScript check passed, lint passed, Web API+smoke Playwright 73 passed, visual route Playwright 15 passed, and `git diff --check` passed. |
 | G11 | [Completion Gate And Documentation Review](2026-05-16-g11-completion-gate.md) | Final gate open | Current blocker pass is verified; completion still requires generated artifact cleanup, final diff review, commit, push, and explicit residual deferral acceptance. |
 | G12 | [ASIC And IP Metadata Filtering](2026-05-16-g12-asic-ip-metadata-filtering.md) | Partial; blocking | Core/API/UI filters now affect query behavior; final acceptance and visual QA still need closure. |
 | G13 | [MVP Boundary And Full-Spec Deferrals](2026-05-16-g13-mvp-boundary-deferrals.md) | Blocking | Long-range full-spec items must be explicitly deferred so they do not masquerade as silent failures. |
 | G14 | [Static Data And Truthful Empty States](2026-05-16-g14-static-data-and-truthful-empty-states.md) | Current pass verified; audit residual | Static default query/graph rows are removed from product paths, unused static artifact query/graph helpers were deleted, and empty/error states have E2E/API coverage; broader route audit remains tracked for final review. |
-| G15 | [Performance Smoke And Deterministic Rebuild](2026-05-16-g15-performance-smoke-deterministic-rebuild.md) | Blocking | MVP-1 needs fixture timing, deterministic rebuild evidence, and first real-corpus timing rather than only correctness tests. |
+| G15 | [Performance Smoke And Deterministic Rebuild](2026-05-16-g15-performance-smoke-deterministic-rebuild.md) | Partial; blocking | Fixture-side smoke is automated and documented, and the dirty local AMD DB now has query-graph performance QA over six real queries plus AQ01 Web acceptance under the 30s e2e timeout. Real AMD repeat timing and full provider embedding/backfill timing remain open before final closure. |
 | G16 | [Workbench IA Theme And Visual Fidelity](2026-05-16-g16-workbench-ia-theme-visual-fidelity.md) | Current pass verified; final review | shadcn/Radix standard control pass, package graph renderer, light/dark persistence, and route visual tests are verified. |
 | G17 | [Architecture Ownership And Process Shape](2026-05-16-g17-architecture-ownership-process-shape.md) | Current pass recorded; final review | Core owns graph enrichment/batch semantic edges; API/MCP/Web are thin triggers; Web owns package adapter/shadcn UI composition; subagent review recorded residuals and fixes. |
 
@@ -116,7 +116,7 @@ per-page visual-anchor QA.
 - Query filters for `ip_block` and `asic_or_generation` are wired through core, Web API, and UI query controls.
 - Default full-corpus config now includes real IH_RB_CNTL and SDMA queue acceptance-oriented MxGPU queries; a temp SQLite verification found non-empty rows for both against `/tmp/asip-mxgpu`.
 - Current default full-corpus configs include `**/*.md`, `**/*.rst`, and `**/*.pdf` globs. A clean CLI run now proves doc evidence enters the configured index; final UI citation and broader doc-to-code acceptance are still open.
-- Current `data/asip.db` may contain local test corpora/settings from API and Playwright runs; final QA must use a clean named DB instead of treating the dirty dev DB as product evidence.
+- Current default `data/asip.db` has been reset to the clean-final DB and is byte-identical to `/tmp/asip-clean-amd-gemma4-final-current-2026-05-18.db`; the previous dirty local dev DB was backed up to `/tmp/asip-dirty-dev-before-final-default-2026-05-18.db`. Future local API or Playwright runs may dirty the default DB again, so the named clean-final artifact remains the stable final QA reference.
 - Visual anchor artifacts exist, but post-functional-change page-by-page QA still needs to be rerun before completion.
 - Performance smoke, final UI fidelity review, and architecture ownership review are now first-class gap items rather than implicit G10/G11 subpoints.
 
@@ -130,10 +130,10 @@ per-page visual-anchor QA.
 | G4. Relationship explanations and graph paths | G03, G05, G14, AQ06 | Partial | Weighted graph output plus inspector resolved-chain evidence from the same index. |
 | G5. Web UI and MCP first-class surfaces | G04, G07, G10, G16, G17 | Partial | Web/API/MCP route/tool matrix and browser QA after final code. |
 | G6. Configurable resolvers and providers | G05, G06, AQ07-AQ09 | Partial | UI/API workflow that changes resolver/provider behavior without code edits. |
-| SQLite/FTS5/sqlite-vec/vector adapter | G09, G17 | Partial | Native sqlite-vec extension smoke plus explicit note that product retrieval still uses the fallback adapter until native retrieval is wired. |
+| SQLite/FTS5/sqlite-vec/vector adapter | G09, G17 | Partial | Native sqlite-vec extension smoke, temp-table `search_vector()` adapter proof, and fallback adapter proof; full provider-vector coverage/rerank quality remains open. |
 | NetworkX graph runtime over SQLite graph store | G03, G09, G17 | Partial | Clean-corpus graph command/API/UI proof with `graph_runtime: networkx`. |
 | Next.js + shadcn UI with dark/light themes | G16 | Partial | Per-route 2K anchor QA in both themes and persistent light-theme navigation test. |
-| Testing, performance, deterministic rebuild, completion gate | G10, G11, G15 | Blocking | Final QA report with commands, timings, screenshots, and git hygiene review. |
+| Testing, performance, deterministic rebuild, completion gate | G10, G11, G15 | Blocking | Final QA report with commands, fixture and real-corpus timings, screenshots, and git hygiene review. |
 | Full-spec future capabilities and deferrals | G13 | Blocking | Deferral ledger mapping full-spec items to MVP/deferred/user-accepted status. |
 
 ## Known Stale Or Historical Documents
@@ -213,10 +213,10 @@ per-page visual-anchor QA.
   - AQ05 also fails with `required source types missing: pdf`.
   - This is the current authoritative acceptance result for `/tmp/asip-acceptance-clean-2026-05-17.db`.
 - Current clean AMD gemma provider acceptance:
-  - Artifact files: `docs/qa/2026-05-17-acceptance-clean-amd-gemma4-provider-current.json` and `docs/qa/2026-05-17-acceptance-clean-amd-gemma4-provider-current.md`.
-  - DB path: `/tmp/asip-clean-amd-gemma4-provider-2026-05-17-final.db`.
+  - Artifact files: `docs/qa/2026-05-18-acceptance-clean-amd-gemma4-final-current.json` and `docs/qa/2026-05-18-acceptance-clean-amd-gemma4-final-current.md`.
+  - DB path: `/tmp/asip-clean-amd-gemma4-final-current-2026-05-18.db`.
   - AQ summary: 9 total, 9 pass, 0 partial, 0 failed.
-  - Counts: documents 124, chunks 21884, evidence 860516, edges 10019, provider embeddings 32.
+  - Counts: documents 124, chunks 21884, evidence 860516, graph edges 41893, provider embeddings 32, semantic edges 25 after the clean-final graph rebuild and Stage 2/doc-node jobs.
   - Provider checks: `ollama/nomic-embed-text:latest` embeddings with zero fallback rows and `ollama/gemma4:e4b` semantic-edge smoke.
 - Synthetic multi-source fixture acceptance proof:
   - Artifact files: `docs/qa/2026-05-17-acceptance-multisource-fixture.json` and `docs/qa/2026-05-17-acceptance-multisource-fixture.md`.
@@ -225,11 +225,14 @@ per-page visual-anchor QA.
   - Document source counts: `code=1`, `doc=1`, `pdf=1`, `register=2`; evidence source counts: `code=23`, `doc=3`, `pdf=4`, `register=4`.
   - AQ05 passes with `code`, `doc`, `pdf`, and `register`; AQ06 passes with `code` and `register`; graph runtime is `networkx`.
   - This is fixture evidence only. It proves the multi-source path and source-diversity gate can work, but it does not close real AMD corpus ingestion, all AQ01-AQ09, live provider closure, browser visual QA, or performance.
-- Required next verification before any completion claim:
-  - `pnpm --filter web exec tsc --noEmit`
-  - `pnpm --filter web exec playwright test tests/visual-anchor-routes.spec.ts --reporter=list`
-  - Full Web Playwright, build, lint, diff check, core/API/MCP suites, browser visual QA, design review.
-  - The old visual QA `PASS` documents must be treated as stale after functional changes until fresh page-by-page anchor QA is recorded.
+- Final verification already recorded before staging:
+  - Core unittest: 202 OK with 2 optional sqlite-vec skips.
+  - API/MCP unittest: 45 OK with 1 optional MCP runtime skip.
+  - `pnpm --filter web exec tsc --noEmit` passed.
+  - `pnpm --filter web run lint` passed.
+  - Web API+smoke Playwright: 73 passed.
+  - Visual route Playwright: 15 passed.
+  - Browser/default-DB `/graph` QA and `git diff --check` passed.
 
 ## Code Freeze Rule
 

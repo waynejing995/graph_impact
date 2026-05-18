@@ -1,0 +1,178 @@
+- generic [active] [ref=e1]:
+  - alert [ref=e179]
+  - generic [ref=e180]:
+    - banner [ref=e181]:
+      - generic [ref=e183]: ASIP Evidence Workbench
+      - generic [ref=e184]:
+        - img
+        - textbox "Global symbol search" [ref=e185]:
+          - /placeholder: Search indexed symbols
+      - generic "Workbench status" [ref=e186]:
+        - generic [ref=e187]: "Provider: unverified"
+        - generic [ref=e189]: "Edge: Ollama / gemma4:e4b"
+        - generic [ref=e190]: "Index: ready"
+      - button "Switch to dark theme" [ref=e191] [cursor=pointer]:
+        - img
+        - text: Dark
+    - main [ref=e192]:
+      - navigation "ASIP sections" [ref=e193]:
+        - link "Evidence Search" [ref=e194] [cursor=pointer]:
+          - /url: /
+        - link "Graph Explorer" [ref=e195] [cursor=pointer]:
+          - /url: /graph
+        - link "Corpus" [ref=e196] [cursor=pointer]:
+          - /url: /corpus
+        - link "Resolver Profiles" [ref=e197] [cursor=pointer]:
+          - /url: /resolver-profiles
+        - link "Acceptance Tests" [ref=e198] [cursor=pointer]:
+          - /url: /acceptance
+        - link "Settings" [ref=e199] [cursor=pointer]:
+          - /url: /settings
+      - region "Graph relationship workspace" [ref=e200]:
+        - generic [ref=e201]:
+          - generic [ref=e202]:
+            - img
+            - textbox "Evidence query" [ref=e203]:
+              - /placeholder: Query live evidence
+          - textbox "IP block filter" [ref=e205]:
+            - /placeholder: IP
+          - textbox "ASIC or generation filter" [ref=e207]:
+            - /placeholder: ASIC
+          - button "Run query" [ref=e208] [cursor=pointer]
+        - generic "Page metrics" [ref=e209]:
+          - generic [ref=e210]: "matches: 0"
+          - generic [ref=e211]: "graph edges: 3000"
+          - generic [ref=e212]: "query: live"
+        - generic "Evidence source filters" [ref=e213]:
+          - button "Source filter 1 hop" [ref=e214] [cursor=pointer]:
+            - img
+            - text: 1 hop
+          - button "Source filter 2 hops" [ref=e215] [cursor=pointer]:
+            - img
+            - text: 2 hops
+          - button "Source filter writes" [ref=e216] [cursor=pointer]:
+            - img
+            - text: writes
+          - button "Source filter has_field" [ref=e217] [cursor=pointer]:
+            - img
+            - text: has_field
+        - generic [ref=e218]:
+          - generic [ref=e219]:
+            - generic [ref=e220]: Global Relation Graph
+            - generic [ref=e221]: weighted connections
+            - generic [ref=e222]: "layers deterministic: 2987 semantic: 13"
+          - generic "Graph display controls" [ref=e223]:
+            - generic [ref=e224]:
+              - generic [ref=e225]: Loaded edge budget
+              - strong [ref=e226]: 3000 / 20000
+              - generic "Loaded edge budget" [ref=e227]:
+                - slider "Loaded edge budget" [ref=e231]
+            - generic [ref=e232]:
+              - generic [ref=e233]: Minimum edge weight
+              - strong [ref=e234]: "0.00"
+              - generic "Minimum edge weight" [ref=e235]:
+                - slider "Minimum edge weight" [ref=e238]
+            - generic [ref=e239]:
+              - generic [ref=e240]: Visible nodes
+              - strong [ref=e241]: 1000 / 2726
+              - generic "Visible nodes" [ref=e242]:
+                - slider "Visible nodes" [ref=e246]
+            - generic [ref=e247]:
+              - generic [ref=e248]: Visible edges
+              - strong [ref=e249]: 3000 / 3000
+              - generic "Visible edges" [ref=e250]:
+                - slider "Visible edges" [ref=e254]
+          - img "Global weighted network graph" [ref=e255]:
+            - generic [ref=e259]:
+              - generic [ref=e260]: nodes 1000
+              - generic [ref=e261]: edges 1274
+              - generic [ref=e262]: doc_box 6
+              - generic [ref=e263]: doc_section 1
+              - generic [ref=e264]: function 837
+              - generic [ref=e265]: register 156
+              - generic [ref=e266]: aldebaran_mode2_restore_ip
+              - generic [ref=e267]: amdgpu_device_ip_early_init
+              - generic [ref=e268]: amdgpu_device_fw_loading
+              - generic [ref=e269]: amdgpu_ip_block_hw_fini
+              - generic [ref=e270]: amdgpu_ip_block_suspend
+              - generic [ref=e271]: amdgpu_device_ip_init
+              - generic [ref=e272]: amdgpu_device_ip_fini
+              - generic [ref=e273]: amdgpu_device_ip_soft_reset
+              - generic [ref=e274]: CP_RB0_BASE
+              - generic [ref=e275]: CP_RB0_BASE_HI
+              - generic [ref=e276]: CP_RB1_BASE
+              - generic [ref=e277]: CP_RB1_BASE_HI
+              - generic [ref=e278]: CP_RB_DOORBELL_RANGE_LOWER
+              - generic [ref=e279]: CP_RB_DOORBELL_RANGE_UPPER
+              - generic [ref=e280]: CP_RB_VMID
+              - generic [ref=e281]: CPC_INT_CNTL
+              - generic [ref=e282]: reads / 1.00
+              - generic [ref=e283]: reads / 1.00
+              - generic [ref=e284]: contains / 1.00
+              - generic [ref=e285]: calls / 1.00
+              - generic [ref=e286]: calls / 1.00
+              - generic [ref=e287]: calls / 1.00
+              - generic [ref=e288]: calls / 1.00
+              - generic [ref=e289]: calls / 1.00
+        - table "Evidence results" [ref=e293]:
+          - rowgroup [ref=e294]:
+            - row "Type Symbol Source Relation Score Location" [ref=e295]:
+              - columnheader "Type" [ref=e296]
+              - columnheader "Symbol" [ref=e297]
+              - columnheader "Source" [ref=e298]
+              - columnheader "Relation" [ref=e299]
+              - columnheader "Score" [ref=e300]
+              - columnheader "Location" [ref=e301]
+          - rowgroup [ref=e302]:
+            - row "No evidence matched this query. empty empty 0 live SQLite query returned no rows" [ref=e303]:
+              - cell [ref=e304]
+              - cell "No evidence matched this query." [ref=e305]:
+                - code [ref=e306]: No evidence matched this query.
+              - cell "empty" [ref=e307]:
+                - generic [ref=e308]: empty
+              - cell "empty" [ref=e309]:
+                - generic [ref=e310]: empty
+              - cell "0" [ref=e311]
+              - cell "live SQLite query returned no rows" [ref=e312]
+      - complementary [ref=e313]:
+        - generic [ref=e314]:
+          - heading "Global Graph" [level=2] [ref=e315]
+          - generic [ref=e316]:
+            - img
+            - text: live / run 1
+        - heading "Relationship Panel" [level=3] [ref=e318]
+        - generic [ref=e319]:
+          - paragraph [ref=e320]:
+            - code [ref=e321]: function:linux-amdgpu:drivers/gpu/drm/drm_mode_config.c:drm_mode_config_reset calls function:linux-amdgpu:drivers/gpu/drm/amd/amdgpu/cik.c:cik_asic_reset
+          - paragraph [ref=e322]:
+            - code [ref=e323]: function:linux-amdgpu:drivers/gpu/drm/drm_mode_config.c:drm_mode_config_reset calls function:linux-amdgpu:drivers/gpu/drm/amd/amdgpu/gfx_v10_0.c:gfx_v10_0_rlc_reset
+          - paragraph [ref=e324]:
+            - code [ref=e325]: function:linux-amdgpu:drivers/gpu/drm/drm_mode_config.c:drm_mode_config_reset calls function:linux-amdgpu:drivers/gpu/drm/amd/amdgpu/gfx_v11_0.c:gfx_v11_0_rlc_reset
+          - paragraph [ref=e326]:
+            - code [ref=e327]: function:linux-amdgpu:drivers/gpu/drm/drm_mode_config.c:drm_mode_config_reset calls function:linux-amdgpu:drivers/gpu/drm/amd/amdgpu/gfx_v12_0.c:gfx_v12_0_rlc_reset
+          - paragraph [ref=e328]:
+            - code [ref=e329]: function:linux-amdgpu:drivers/gpu/drm/drm_mode_config.c:drm_mode_config_reset calls function:linux-amdgpu:drivers/gpu/drm/amd/amdgpu/gfx_v12_1.c:gfx_v12_1_rlc_reset
+          - paragraph [ref=e330]:
+            - code [ref=e331]: function:linux-amdgpu:drivers/gpu/drm/drm_mode_config.c:drm_mode_config_reset calls function:linux-amdgpu:drivers/gpu/drm/amd/amdgpu/gfx_v6_0.c:gfx_v6_0_rlc_reset
+          - paragraph [ref=e332]:
+            - code [ref=e333]: function:linux-amdgpu:drivers/gpu/drm/drm_mode_config.c:drm_mode_config_reset calls function:linux-amdgpu:drivers/gpu/drm/amd/amdgpu/gfx_v7_0.c:gfx_v7_0_rlc_reset
+          - paragraph [ref=e334]:
+            - code [ref=e335]: function:linux-amdgpu:drivers/gpu/drm/drm_mode_config.c:drm_mode_config_reset calls function:linux-amdgpu:drivers/gpu/drm/amd/amdgpu/gfx_v8_0.c:gfx_v8_0_rlc_reset
+          - paragraph [ref=e336]:
+            - code [ref=e337]: function:linux-amdgpu:drivers/gpu/drm/drm_mode_config.c:drm_mode_config_reset calls function:linux-amdgpu:drivers/gpu/drm/amd/amdgpu/gfx_v9_0.c:gfx_v9_0_rlc_reset
+          - paragraph [ref=e338]:
+            - code [ref=e339]: function:linux-amdgpu:drivers/gpu/drm/drm_mode_config.c:drm_mode_config_reset calls function:linux-amdgpu:drivers/gpu/drm/amd/amdgpu/gfx_v9_4_3.c:gfx_v9_4_3_rlc_reset
+          - paragraph [ref=e340]:
+            - code [ref=e341]: function:linux-amdgpu:drivers/gpu/drm/drm_mode_config.c:drm_mode_config_reset calls function:linux-amdgpu:drivers/gpu/drm/amd/amdgpu/nv.c:nv_asic_reset
+          - paragraph [ref=e342]:
+            - code [ref=e343]: function:linux-amdgpu:drivers/gpu/drm/drm_mode_config.c:drm_mode_config_reset calls function:linux-amdgpu:drivers/gpu/drm/amd/amdgpu/si.c:si_asic_reset
+        - button "Generate semantic edges" [ref=e344] [cursor=pointer]
+        - button "Generate batch semantic edges" [ref=e345] [cursor=pointer]
+        - button "Extract document nodes" [ref=e346] [cursor=pointer]
+        - generic "Semantic generation controls" [ref=e347]:
+          - generic [ref=e348]:
+            - text: Semantic candidate limit
+            - spinbutton "Semantic candidate limit" [ref=e349]
+          - generic [ref=e350]:
+            - text: Semantic batch size
+            - spinbutton "Semantic batch size" [ref=e351]

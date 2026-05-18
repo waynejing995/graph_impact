@@ -267,6 +267,113 @@ class WorkbenchBackendStateTests(unittest.TestCase):
             embedding = con.execute("select provider, model from embeddings").fetchone()
             self.assertEqual(embedding, ("ollama", "nomic-embed-text"))
 
+    def test_selected_resolver_profiles_limit_registered_index_evidence_and_graph(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            db_path = root / "asip.db"
+            corpus_root = root / "driver"
+            corpus_root.mkdir()
+            selected_profile = root / "custom-a.yaml"
+            selected_profile.write_text(
+                "\n".join(
+                    [
+                        "id: custom-a",
+                        "language: cpp",
+                        "context_vars: []",
+                        "symbol_prefixes: []",
+                        "wrappers:",
+                        "  CUSTOM_A:",
+                        "    symbol_arg: 0",
+                        "    access: write",
+                    ]
+                ),
+                encoding="utf-8",
+            )
+            unselected_profile = root / "custom-b.yaml"
+            unselected_profile.write_text(
+                "\n".join(
+                    [
+                        "id: custom-b",
+                        "language: cpp",
+                        "context_vars: []",
+                        "symbol_prefixes: []",
+                        "wrappers:",
+                        "  CUSTOM_B:",
+                        "    symbol_arg: 0",
+                        "    access: write",
+                    ]
+                ),
+                encoding="utf-8",
+            )
+            (corpus_root / "custom.c").write_text(
+                "void program(void) {\n"
+                "  CUSTOM_A(SelectedReg, 1);\n"
+                "  CUSTOM_B(UnselectedReg, 1);\n"
+                "}\n",
+                encoding="utf-8",
+            )
+            add_resolver_profile(
+                db_path,
+                profile_id="custom-a",
+                language="cpp",
+                wrappers=["CUSTOM_A"],
+                strategy="write",
+                path=str(selected_profile),
+                enabled=True,
+            )
+            add_resolver_profile(
+                db_path,
+                profile_id="custom-b",
+                language="cpp",
+                wrappers=["CUSTOM_B"],
+                strategy="write",
+                path=str(unselected_profile),
+                enabled=True,
+            )
+            add_corpus(
+                db_path,
+                corpus_id="custom-driver",
+                repo="local",
+                source_root=str(corpus_root),
+                include=["**/*.c"],
+                corpus_type="code",
+            )
+
+            summary = index_registered_corpora(
+                db_path,
+                corpus_ids=["custom-driver"],
+                resolver_profile_ids=["custom-a"],
+            )
+            selected_query = query_evidence(db_path, "SelectedReg")
+            unselected_query = query_evidence(db_path, "UnselectedReg")
+
+            self.assertEqual(summary["resolver_profile_ids"], ["custom-a"])
+            self.assertTrue(
+                any(row["symbol"] == "SelectedReg" and "custom-a" in row["resolved_chain"] for row in selected_query["rows"]),
+                selected_query["rows"],
+            )
+            self.assertFalse(
+                any(row["symbol"] == "UnselectedReg" and "custom-b" in row["resolved_chain"] for row in unselected_query["rows"]),
+                unselected_query["rows"],
+            )
+            con = sqlite3.connect(db_path)
+            graph_edges = {
+                (row[0], row[1], row[2], row[3])
+                for row in con.execute(
+                    """
+                    select src, relation, dst, json_extract(provenance_json, '$.resolver_profile')
+                    from edges
+                    where source in ('clang_text_spans', 'clang_preprocess', 'text_fallback')
+                    """
+                )
+            }
+            self.assertIn(("program", "writes", "SelectedReg", "custom-a"), graph_edges)
+            self.assertNotIn(("program", "writes", "UnselectedReg", "custom-b"), graph_edges)
+            job_metadata = json.loads(
+                con.execute("select metadata_json from jobs order by id desc limit 1").fetchone()[0]
+            )
+            self.assertEqual(job_metadata["resolver_profile_ids"], ["custom-a"])
+
     def test_persisted_resolver_profile_keeps_configured_argument_positions(self):
         with tempfile.TemporaryDirectory() as tmpdir:
             root = Path(tmpdir)

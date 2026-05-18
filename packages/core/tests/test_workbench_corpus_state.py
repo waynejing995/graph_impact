@@ -3,7 +3,8 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from asip.workbench import add_corpus, index_registered_corpora, list_indexed_corpora, query_evidence
+from asip.storage import AsipStore
+from asip.workbench import add_corpus, get_job, index_registered_corpora, list_indexed_corpora, list_jobs, query_evidence
 
 
 class WorkbenchCorpusStateTests(unittest.TestCase):
@@ -63,6 +64,57 @@ class WorkbenchCorpusStateTests(unittest.TestCase):
             self.assertFalse(result["empty"], result)
             self.assertIn("doc", source_types)
             self.assertIn("pdf", source_types)
+
+    def test_index_job_lifecycle_persists_queued_indexing_and_succeeded_events(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            db_path = root / "asip.db"
+            corpus_root = root / "corpus"
+            note_path = corpus_root / "docs" / "note.md"
+            note_path.parent.mkdir(parents=True)
+            note_path.write_text("LOCAL_JOB_LIFECYCLE_REGISTER is documented here.", encoding="utf-8")
+
+            add_corpus(
+                db_path,
+                corpus_id="job-docs",
+                repo="local",
+                source_root=str(corpus_root),
+                include=["**/*.md"],
+                corpus_type="doc",
+            )
+
+            summary = index_registered_corpora(db_path, corpus_ids=["job-docs"])
+            job = get_job(db_path, int(summary["job_id"]))
+            jobs = list_jobs(db_path)
+
+            self.assertEqual(summary["job_status"], "succeeded")
+            self.assertEqual(job["status"], "succeeded")
+            self.assertEqual(job["metadata"]["result_status"], "indexed")
+            self.assertEqual([event["status"] for event in job["events"]], ["queued", "indexing", "succeeded"])
+            self.assertEqual(jobs[0]["id"], summary["job_id"])
+            self.assertEqual([event["status"] for event in jobs[0]["events"]], ["queued", "indexing", "succeeded"])
+
+    def test_legacy_success_job_status_reads_as_canonical_lifecycle_with_result_metadata(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            db_path = Path(tmpdir) / "asip.db"
+            store = AsipStore.connect(str(db_path))
+            store.migrate()
+            store.con.execute(
+                """
+                insert into jobs(kind, status, message, metadata_json, started_at, finished_at)
+                values ('index', 'indexed', 'Indexed 1 documents', '{}', '2026-05-17 16:00:00', '2026-05-17 16:00:01')
+                """
+            )
+            store.con.commit()
+
+            job = get_job(db_path, 1)
+            jobs = list_jobs(db_path)
+
+            self.assertEqual(job["status"], "succeeded")
+            self.assertEqual(job["metadata"]["result_status"], "indexed")
+            self.assertEqual([event["status"] for event in job["events"]], ["succeeded"])
+            self.assertEqual(jobs[0]["status"], "succeeded")
+            self.assertEqual([event["status"] for event in jobs[0]["events"]], ["succeeded"])
 
     def test_missing_registered_corpus_root_fails_index_and_marks_status_failed(self):
         with tempfile.TemporaryDirectory() as tmpdir:

@@ -1,0 +1,117 @@
+- generic [active] [ref=e1]:
+  - generic [ref=e2]:
+    - banner [ref=e3]:
+      - generic [ref=e5]: ASIP Evidence Workbench
+      - generic [ref=e6]:
+        - img
+        - textbox "Global symbol search" [ref=e7]:
+          - /placeholder: Search indexed symbols
+      - generic "Workbench status" [ref=e8]:
+        - generic [ref=e9]: "Provider: unverified"
+        - generic [ref=e11]: "Edge: Ollama / gemma4:e4b"
+        - generic [ref=e12]: "Index: ready"
+      - button "Switch to dark theme" [ref=e107] [cursor=pointer]:
+        - img
+        - text: Dark
+    - main [ref=e14]:
+      - navigation "ASIP sections" [ref=e15]:
+        - link "Evidence Search" [ref=e16] [cursor=pointer]:
+          - /url: /
+        - link "Graph Explorer" [ref=e17] [cursor=pointer]:
+          - /url: /graph
+        - link "Corpus" [ref=e18] [cursor=pointer]:
+          - /url: /corpus
+        - link "Resolver Profiles" [ref=e19] [cursor=pointer]:
+          - /url: /resolver-profiles
+        - link "Acceptance Tests" [ref=e20] [cursor=pointer]:
+          - /url: /acceptance
+        - link "Settings" [ref=e21] [cursor=pointer]:
+          - /url: /settings
+      - region "Graph relationship workspace" [ref=e22]:
+        - generic [ref=e23]:
+          - generic [ref=e24]:
+            - img
+            - textbox "Evidence query" [ref=e25]:
+              - /placeholder: Query live evidence
+          - textbox "IP block filter" [ref=e27]:
+            - /placeholder: IP
+          - textbox "ASIC or generation filter" [ref=e29]:
+            - /placeholder: ASIC
+          - button "Run query" [ref=e30] [cursor=pointer]
+        - generic "Page metrics" [ref=e31]:
+          - generic [ref=e32]: "matches: 0"
+          - generic [ref=e33]: "graph edges: 3000"
+          - generic [ref=e34]: "query: live"
+        - generic "Evidence source filters" [ref=e35]:
+          - button "Source filter 1 hop" [ref=e36] [cursor=pointer]:
+            - img
+            - text: 1 hop
+          - button "Source filter 2 hops" [ref=e37] [cursor=pointer]:
+            - img
+            - text: 2 hops
+          - button "Source filter writes" [ref=e38] [cursor=pointer]:
+            - img
+            - text: writes
+          - button "Source filter has_field" [ref=e39] [cursor=pointer]:
+            - img
+            - text: has_field
+        - generic [ref=e40]:
+          - generic [ref=e41]:
+            - generic [ref=e42]: Global Relation Graph
+            - generic [ref=e43]: weighted connections
+            - generic [ref=e108]: "layers deterministic: 2987 semantic: 13"
+          - generic "Graph display controls" [ref=e44]:
+            - generic [ref=e45]
+            - generic [ref=e50]
+            - generic [ref=e55]
+            - generic [ref=e60]
+          - img "Global weighted network graph" [ref=e120]:
+            - generic [ref=e124]
+        - table "Evidence results" [ref=e70]:
+          - rowgroup [ref=e71]:
+            - row "Type Symbol Source Relation Score Location" [ref=e72]
+          - rowgroup [ref=e79]:
+            - row "No evidence matched this query. empty empty 0 live SQLite query returned no rows" [ref=e80]
+      - complementary [ref=e90]:
+        - generic [ref=e91]:
+          - heading "Global Graph" [level=2] [ref=e92]
+          - generic [ref=e93]:
+            - img
+            - text: live / run 1
+        - heading "Relationship Panel" [level=3] [ref=e95]
+        - generic [ref=e96]:
+          - paragraph [ref=e155]:
+            - code [ref=e156]: function:linux-amdgpu:drivers/gpu/drm/drm_mode_config.c:drm_mode_config_reset calls function:linux-amdgpu:drivers/gpu/drm/amd/amdgpu/cik.c:cik_asic_reset
+          - paragraph [ref=e157]:
+            - code [ref=e158]: function:linux-amdgpu:drivers/gpu/drm/drm_mode_config.c:drm_mode_config_reset calls function:linux-amdgpu:drivers/gpu/drm/amd/amdgpu/gfx_v10_0.c:gfx_v10_0_rlc_reset
+          - paragraph [ref=e159]:
+            - code [ref=e160]: function:linux-amdgpu:drivers/gpu/drm/drm_mode_config.c:drm_mode_config_reset calls function:linux-amdgpu:drivers/gpu/drm/amd/amdgpu/gfx_v11_0.c:gfx_v11_0_rlc_reset
+          - paragraph [ref=e161]:
+            - code [ref=e162]: function:linux-amdgpu:drivers/gpu/drm/drm_mode_config.c:drm_mode_config_reset calls function:linux-amdgpu:drivers/gpu/drm/amd/amdgpu/gfx_v12_0.c:gfx_v12_0_rlc_reset
+          - paragraph [ref=e163]:
+            - code [ref=e164]: function:linux-amdgpu:drivers/gpu/drm/drm_mode_config.c:drm_mode_config_reset calls function:linux-amdgpu:drivers/gpu/drm/amd/amdgpu/gfx_v12_1.c:gfx_v12_1_rlc_reset
+          - paragraph [ref=e165]:
+            - code [ref=e166]: function:linux-amdgpu:drivers/gpu/drm/drm_mode_config.c:drm_mode_config_reset calls function:linux-amdgpu:drivers/gpu/drm/amd/amdgpu/gfx_v6_0.c:gfx_v6_0_rlc_reset
+          - paragraph [ref=e167]:
+            - code [ref=e168]: function:linux-amdgpu:drivers/gpu/drm/drm_mode_config.c:drm_mode_config_reset calls function:linux-amdgpu:drivers/gpu/drm/amd/amdgpu/gfx_v7_0.c:gfx_v7_0_rlc_reset
+          - paragraph [ref=e169]:
+            - code [ref=e170]: function:linux-amdgpu:drivers/gpu/drm/drm_mode_config.c:drm_mode_config_reset calls function:linux-amdgpu:drivers/gpu/drm/amd/amdgpu/gfx_v8_0.c:gfx_v8_0_rlc_reset
+          - paragraph [ref=e171]:
+            - code [ref=e172]: function:linux-amdgpu:drivers/gpu/drm/drm_mode_config.c:drm_mode_config_reset calls function:linux-amdgpu:drivers/gpu/drm/amd/amdgpu/gfx_v9_0.c:gfx_v9_0_rlc_reset
+          - paragraph [ref=e173]:
+            - code [ref=e174]: function:linux-amdgpu:drivers/gpu/drm/drm_mode_config.c:drm_mode_config_reset calls function:linux-amdgpu:drivers/gpu/drm/amd/amdgpu/gfx_v9_4_3.c:gfx_v9_4_3_rlc_reset
+          - paragraph [ref=e175]:
+            - code [ref=e176]: function:linux-amdgpu:drivers/gpu/drm/drm_mode_config.c:drm_mode_config_reset calls function:linux-amdgpu:drivers/gpu/drm/amd/amdgpu/nv.c:nv_asic_reset
+          - paragraph [ref=e177]:
+            - code [ref=e178]: function:linux-amdgpu:drivers/gpu/drm/drm_mode_config.c:drm_mode_config_reset calls function:linux-amdgpu:drivers/gpu/drm/amd/amdgpu/si.c:si_asic_reset
+        - button "Generate semantic edges" [ref=e99] [cursor=pointer]
+        - button "Generate batch semantic edges" [ref=e100] [cursor=pointer]
+        - button "Extract document nodes" [ref=e101] [cursor=pointer]
+        - generic "Semantic generation controls" [ref=e102]:
+          - generic [ref=e103]:
+            - text: Semantic candidate limit
+            - spinbutton "Semantic candidate limit" [ref=e104]
+          - generic [ref=e105]:
+            - text: Semantic batch size
+            - spinbutton "Semantic batch size" [ref=e106]
+  - alert [ref=e179]

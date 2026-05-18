@@ -1,0 +1,67 @@
+- generic [active] [ref=e1] [box=0,0,2048,1280]:
+  - generic [ref=e2] [box=0,0,2048,1280]:
+    - banner [ref=e3] [box=0,0,2048,72]:
+      - generic [ref=e5] [box=64,26,171,20]: ASIP Evidence Workbench
+      - generic [ref=e6] [box=328,18,1120,36]:
+        - img [box=338,28,15,15]
+        - textbox "Global symbol search" [ref=e7] [box=328,18,1120,36]:
+          - /placeholder: Search indexed symbols
+      - generic "Workbench status" [ref=e8] [box=1464,24,443,24]:
+        - generic [ref=e9] [box=1464,24,150,24]: "Provider: unverified"
+        - generic [ref=e11] [box=1621,24,186,24]: "Edge: Ollama / gemma4:e4b"
+        - generic [ref=e12] [box=1815,24,92,24]: "Index: ready"
+      - button "Switch to dark theme" [ref=e112] [cursor=pointer] [box=1923,18,85,36]:
+        - img [box=1938,28,16,16]
+        - text: Dark
+    - main [ref=e14] [box=0,72,2048,1208]:
+      - navigation "ASIP sections" [ref=e15] [box=0,72,288,1208]:
+        - link "Evidence Search" [ref=e16] [cursor=pointer] [box=24,96,239,34]:
+          - /url: /
+        - link "Graph Explorer" [ref=e17] [cursor=pointer] [box=24,134,239,34]:
+          - /url: /graph
+        - link "Corpus" [ref=e18] [cursor=pointer] [box=24,172,239,34]:
+          - /url: /corpus
+        - link "Resolver Profiles" [ref=e19] [cursor=pointer] [box=24,210,239,34]:
+          - /url: /resolver-profiles
+        - link "Acceptance Tests" [ref=e20] [cursor=pointer] [box=24,248,239,34]:
+          - /url: /acceptance
+        - link "Settings" [ref=e21] [cursor=pointer] [box=24,286,239,34]:
+          - /url: /settings
+      - region "Corpus management workspace" [ref=e22] [box=288,72,1248,1208]:
+        - generic [ref=e23] [box=312,96,1185,36]:
+          - generic [ref=e24] [box=312,96,768,36]
+          - textbox "IP block filter" [ref=e27] [box=1090,96,120,36]:
+            - /placeholder: IP
+          - textbox "ASIC or generation filter" [ref=e29] [box=1220,96,170,36]:
+            - /placeholder: ASIC
+          - button "Run query" [ref=e30] [cursor=pointer] [box=1400,96,97,36]
+        - generic "Page metrics" [ref=e31] [box=312,144,1185,24]:
+          - generic [ref=e32] [box=312,144,88,24]: "corpora: 33"
+          - generic [ref=e33] [box=408,144,81,24]: "files: 1369"
+          - generic [ref=e34] [box=497,144,111,24]: "status: editable"
+        - generic "Evidence source filters" [ref=e35] [box=312,178,1185,36]:
+          - button "Source filter code" [pressed] [ref=e36] [cursor=pointer] [box=312,178,86,36]
+          - button "Source filter registers" [ref=e37] [cursor=pointer] [box=406,178,113,36]
+          - button "Source filter docs" [ref=e38] [cursor=pointer] [box=527,178,86,36]
+          - button "Source filter pdf" [pressed] [ref=e39] [cursor=pointer] [box=620,178,76,36]
+        - generic "Corpus editor" [ref=e40] [box=312,226,1185,301]:
+          - generic [ref=e41] [box=313,251,1183,36]
+          - generic [ref=e46] [box=313,311,1183,191]
+        - generic "Index resolver profiles" [ref=e62] [box=312,539,1185,754]:
+          - generic [ref=e63] [box=313,564,1183,36]
+          - generic [ref=e113] [box=337,624,1135,644]
+        - table "Evidence results" [ref=e73] [box=313,1330,1183,1394]:
+          - rowgroup [ref=e74] [box=313,1330,1183,40]
+          - rowgroup [ref=e83] [box=313,1370,1183,1353]
+      - complementary [ref=e95] [box=1536,72,488,1208]:
+        - generic [ref=e96] [box=1561,96,439,24]:
+          - heading "Selected Corpus" [level=2] [ref=e97] [box=1561,98,108,21]
+          - generic [ref=e98] [box=1904,96,96,24]
+        - heading "Relationship Panel" [level=3] [ref=e100] [box=1561,168,439,18]
+        - paragraph [ref=e102] [box=1572,205,417,19]:
+          - code [ref=e103] [box=1572,208,282,14]: No relationship data returned from API.
+        - button "Run index" [ref=e104] [cursor=pointer] [box=1561,251,439,36]
+        - generic [ref=e105] [box=1561,287,439,390]:
+          - generic [ref=e106] [box=1562,312,437,44]
+          - generic [ref=e555] [box=1586,380,389,272]
+  - alert [ref=e588] [box=-1,1279,1,1]

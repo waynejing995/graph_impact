@@ -129,10 +129,10 @@ This gap remains open because static/default data can still hide the truth:
 Fresh tests covering this truth audit:
 
 ```text
-Web API + smoke Playwright: 69 passed
+Web API + smoke Playwright: 73 passed
 Visual route Playwright: 15 passed
-FastAPI/MCP unittest: 41 OK, 1 optional MCP runtime skip
-Core unittest discovery: 141 OK, 1 sqlite-vec skip
+FastAPI/MCP unittest: 45 OK, 1 optional MCP runtime skip
+Core unittest discovery: 198 OK, 2 optional sqlite-vec skips
 ```
 
 2026-05-17 continuation after subagent audit:

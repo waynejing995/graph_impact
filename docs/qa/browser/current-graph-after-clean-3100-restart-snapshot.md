@@ -1,0 +1,12 @@
+- generic [active] [ref=e1] [box=0,0,2560,1236]:
+  - generic [ref=e2] [box=0,0,2560,1236]:
+    - banner [ref=e3] [box=0,0,2560,72]:
+      - generic [ref=e5] [box=64,26,171,20]: ASIP Evidence Workbench
+      - generic [ref=e6] [box=328,18,1632,36]
+      - generic "Workbench status" [ref=e8] [box=1976,24,443,24]
+      - button "Switch to dark theme" [ref=e107] [cursor=pointer] [box=2435,18,85,36]
+    - main [ref=e14] [box=0,72,2560,1164]:
+      - navigation "ASIP sections" [ref=e15] [box=0,72,288,1164]
+      - region "Graph relationship workspace" [ref=e22] [box=288,72,1760,1164]
+      - complementary [ref=e90] [box=2048,72,488,1164]
+  - alert [ref=e179] [box=-1,1235,1,1]

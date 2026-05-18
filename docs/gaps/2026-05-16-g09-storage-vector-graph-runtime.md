@@ -1,6 +1,6 @@
 # G09 SQLite FTS5 Vector And NetworkX Runtime
 
-Status: Partial; SQLite, FTS5, fallback vector retrieval, NetworkX graph, and sqlite-vec extension smoke are live; native retrieval adapter remains a boundary
+Status: Partial; SQLite, FTS5, native sqlite-vec adapter with fallback vector retrieval, and NetworkX graph are live; provider-vector quality coverage remains a boundary
 
 ## Requirement
 
@@ -15,8 +15,8 @@ MVP-1 is SQLite-first:
 
 - `packages/core/src/asip/storage.py` creates SQLite tables for corpora, jobs, documents, chunks, FTS5, edges, evidence, resolver profiles, provider settings, and embeddings.
 - `search_text()` uses FTS5, and `query_evidence()` uses FTS matches in ranking.
-- `search_vector()` stores vectors as JSON and computes cosine similarity in Python.
-- `query_evidence()` now calls the vector adapter with a deterministic fallback query embedding and merges high-similarity chunk evidence into ranked results with `vector_score` and `retrieval_sources`.
+- `search_vector()` stores vectors as JSON as the durable source of truth, tries a temp-table sqlite-vec native adapter when the runtime can load the extension, and falls back to Python cosine when sqlite-vec is unavailable.
+- `query_evidence()` now calls the vector adapter with a deterministic fallback query embedding and merges high-similarity chunk evidence into ranked results with `vector_score`, `vector_runtime`, and `retrieval_sources`.
 - Indexing can call a configured embedding provider transport and store returned vectors; failed live calls use deterministic fallback embeddings with explicit metadata.
 - `sqlite-vec` appears in requirements and an optional runtime smoke test. System Python 3.9 lacks `sqlite3.Connection.enable_load_extension`, so that runtime still skips the extension smoke, while the bundled Codex Python 3.12 runtime loads and executes the native sqlite-vec smoke successfully.
 - `to_networkx()` exists and has core test coverage.
@@ -26,26 +26,28 @@ MVP-1 is SQLite-first:
 - `packages/core/src/asip/providers.py` now supports Ollama `/api/embed` batch embeddings in addition to `/api/embeddings`, and `asip.cli provider-embeddings` can backfill provider embeddings for existing chunks.
 - Clean AMD free-query QA records NetworkX for all six query graphs and the no-seed global graph.
 - Native sqlite-vec extension proof: `/Users/chenjingwen/.cache/codex-runtimes/codex-primary-runtime/dependencies/python/bin/python3` reports Python 3.12.13, SQLite 3.50.4, `enable_load_extension=True`, `sqlite_vec` installed, and passes `packages.core.tests.test_storage_graph.StorageGraphTests.test_sqlite_vec_extension_can_run_when_runtime_supports_extensions`.
+- Native retrieval adapter proof: the same bundled runtime passes `packages.core.tests.test_storage_graph.StorageGraphTests.test_search_vector_uses_sqlite_vec_when_runtime_supports_extensions`, which verifies `AsipStore.search_vector()` returns `retrieval_runtime=sqlite-vec`, a native distance, and the same top semantic neighbor shape as the fallback path.
+- Fallback proof: system Python 3.9 lacks loadable extension support, so the core suite still exercises JSON + Python cosine fallback and query evidence now reports `vector_runtime=python-cosine` for vector-only retrieval rows.
 
 ## Remaining Gap
 
 Storage pieces exist, graph expansion now uses NetworkX, and the product retrieval path now combines vector adapter matches into ranking.
 
-The deterministic fallback and provider embedding paths prove schema/provenance wiring and retrieval integration. The current clean AMD DB has partial provider embeddings, not full provider-vector coverage or semantic rerank quality proof. The bundled Python runtime proves the native sqlite-vec extension can load, but the product query path still uses JSON vectors plus Python cosine scoring; native sqlite-vec retrieval adapter/acceleration is not yet wired.
+The deterministic fallback and provider embedding paths prove schema/provenance wiring and retrieval integration. The current clean AMD DB has partial provider embeddings, not full provider-vector coverage or semantic rerank quality proof. The bundled Python runtime proves the native sqlite-vec extension can load and the product `search_vector()` path can use it. The native adapter is intentionally temp-table based for now, with JSON vectors retained as source of truth; a persistent sqlite-vec sidecar/table-per-dimension remains a future performance improvement rather than an MVP requirement.
 
 ## Acceptance Criteria
 
 - FTS5 search is used by query retrieval.
-- Vector adapter has a documented fallback; native sqlite-vec retrieval acceleration remains a future adapter implementation, even though the extension smoke passes in the bundled Python runtime.
+- Vector adapter has a documented fallback; native sqlite-vec retrieval is used when the runtime supports loadable extensions, otherwise the adapter reports Python cosine fallback.
 - Embeddings are generated or loaded for indexed chunks with provider/model provenance.
-- Query retrieval combines FTS and vector results through the fallback adapter; native sqlite-vec acceleration must not be claimed until product retrieval actually uses the native adapter.
+- Query retrieval combines FTS and vector results through the adapter and exposes `vector_runtime` so QA can distinguish `sqlite-vec` from `python-cosine`.
 - NetworkX graph extraction is used by graph API or documented as a post-MVP deferral accepted by the user.
 - DB schema includes enough state for jobs, provider config, evidence, entities, resolver profiles, and graph edges.
 
 ## Required Tests
 
-- Core test: query combines FTS and vector-backed results from the same store. Implemented through fallback vector adapter.
-- sqlite-vec runtime test in the Python runtime used for ASIP, plus an explicit fallback-path test.
+- Core test: query combines FTS and vector-backed results from the same store and exposes `vector_runtime`.
+- sqlite-vec runtime test in the Python runtime used for ASIP, native adapter test, plus an explicit fallback-path test.
 - Integration test: indexing creates embeddings or records why embedding generation is disabled.
 - Integration test: graph API returns NetworkX-derived subgraph from SQLite edges, or a de-scope test/document states the chosen MVP boundary.
 - Migration/schema test for core MVP tables.

@@ -1,11 +1,20 @@
-# Final Clean Evidence Package
+# Final-Candidate Evidence Package
 
 Generated: 2026-05-17
-Status: Current completion evidence; latest live graph verification appended below
+Status: Current final-candidate evidence with explicit residuals; this document is not a goal-complete claim
 
-## Clean Database
+## Evidence Classes
 
-- DB: `/tmp/asip-clean-amd-gemma4-provider-2026-05-17-final.db`
+This package intentionally separates three evidence classes:
+
+- Clean AMD DB evidence: `/tmp/asip-clean-amd-gemma4-final-current-2026-05-18.db` is the current final clean artifact. It proves clean source-diverse indexing, current deterministic graph rebuild, real `gemma4:e4b` batch semantic edges, real `gemma4:e4b` doc-node extraction, AQ01-AQ09 acceptance, and provider smoke. `/tmp/asip-clean-amd-gemma4-provider-2026-05-17-final.db` remains the previous clean base artifact.
+- Default Web DB evidence: local `data/asip.db` is now the clean-final DB and is byte-identical to `/tmp/asip-clean-amd-gemma4-final-current-2026-05-18.db`. The previous dirty dev DB was backed up to `/tmp/asip-dirty-dev-before-final-default-2026-05-18.db`.
+- Historical dirty dev DB evidence: earlier local `data/asip.db` snapshots proved live `/graph`, query performance, browser QA, semantic/doc-node jobs, and UI paths while the graph-shape fixes were still landing. Those records are retained below as development history and must not be read as the current default DB state.
+- Fixture evidence: small fixture rebuilds and isolated DB tests prove regression behavior, performance smoke, provider/API/MCP/UI slices, and error paths. They cannot close real AMD corpus requirements alone.
+
+## Current Clean AMD Database
+
+- DB: `/tmp/asip-clean-amd-gemma4-final-current-2026-05-18.db`
 - Config: `configs/edge_cases/clean-amd-gemma4-e4b.json`
 - MxGPU source root: `/tmp/asip-mxgpu`, git `f603f87`
 - Linux amdgpu source root: `/tmp/asip-linux-amdgpu`, git `6916d57`, relative root `drivers/gpu/drm/amd/amdgpu`
@@ -18,7 +27,7 @@ Counts from the clean provider DB:
 | documents | 124 |
 | chunks | 21884 |
 | evidence | 860516 |
-| edges | 10019 |
+| edges | 41893 |
 | embeddings | 32 |
 
 Document source counts: `code=7`, `doc=20`, `pdf=1`, `register=96`.
@@ -27,10 +36,56 @@ Evidence source counts: `code=126`, `doc=5664`, `pdf=5`, `register=854721`.
 
 Provider embeddings are partial by design for this QA pass: `ollama/nomic-embed-text:latest`, `metadata.source=provider`, count `32`, fallback count `0`. Full provider-vector coverage and query-time provider rerank remain G06/G09/G15 boundaries.
 
+Current graph/source counts after the 2026-05-18 rebuild and Stage 2 jobs:
+
+```text
+deterministic / clang_text_spans: 34987
+deterministic / clang_callback: 6084
+deterministic / text_fallback: 775
+semantic / ollama: 25
+evidence / query_expected_terms: 22
+```
+
+Current job ledger is clean:
+
+```text
+index indexed
+embedding_backfill embedded
+graph_rebuild succeeded, 41880 deterministic edges from 1225 files
+semantic_edges_batch succeeded, 14 semantic edges from 2 candidates
+doc_nodes_batch succeeded, 6 doc boxes and 11 semantic doc edges from 2 candidates
+```
+
+Macro/wrapper endpoint audit on the current clean DB:
+
+```text
+IP_VERSION=0
+WREG32=0
+RREG32=0
+REG_SET_FIELD=0
+SOC15_REG_OFFSET=0
+funcs=0
+ops=0
+hw_init=0
+```
+
+Product graph sample:
+
+```text
+global_graph(limit=20000)
+nodes=15154
+edges=20000
+node kinds: function=13662, register=1485, doc_box=6, doc_section=1
+edge stages: deterministic=19989, semantic=11
+visible macro/wrapper nodes: false for IP_VERSION/WREG32/REG_SET_FIELD/SOC15_REG_OFFSET/funcs/ops/hw_init
+```
+
+Stage 2 and macro QA: `docs/qa/2026-05-18-clean-final-stage2-and-macro-qa.md`.
+
 ## Acceptance
 
-- Artifact: `docs/qa/2026-05-17-acceptance-clean-amd-gemma4-provider-current.json`
-- Markdown: `docs/qa/2026-05-17-acceptance-clean-amd-gemma4-provider-current.md`
+- Artifact: `docs/qa/2026-05-18-acceptance-clean-amd-gemma4-final-current.json`
+- Markdown: `docs/qa/2026-05-18-acceptance-clean-amd-gemma4-final-current.md`
 - Result: 9 total, 9 passed, 0 partial, 0 failed
 - Surfaces labelled: CLI, API, Web, MCP
 - Provider checks: embedding pass with `nomic-embed-text:latest`; semantic edge pass with `gemma4:e4b`
@@ -55,24 +110,24 @@ Provider embeddings are partial by design for this QA pass: `ollama/nomic-embed-
 - Result: 6 passed, 0 failed
 - Themes: dark and light screenshots captured for every route
 - Historical `/graph` screenshot in that artifact: 12 nodes and 4 weighted edges visible in both themes before the later dense graph QA
-- Fresh in-app browser QA at `http://127.0.0.1:3100/graph` after this pass: top bar shows `Edge: Ollama / gemma4:e4b`; `/graph` loads the live global graph with 3,000 graph edges, 1,000 visible nodes, 1,829 visible edges, layer provenance `deterministic: 2987 semantic: 13`, and visible `function`, `register`, `doc_box`, and `doc_section` node classes. `/corpus`, `/settings`, and `/acceptance` also hydrate from live backend state and show the current gemma provider artifact.
-- Fresh in-app browser snapshot after the callback-overlink fix still shows the live `/graph` page with `Loaded edge budget 3000 / 20000`, `Visible nodes 1000 / 2120`, `Visible edges 3000 / 3000`, and the accessibility summary lists `nodes 1000`, `edges 1829`, `function 561`, `register 437`, `doc_box 1`, and `doc_section 1`; the underlying full product graph sample below records `control-keyword function nodes named "if": 0`.
+- Fresh in-app browser QA at `http://127.0.0.1:3100/graph` after making the clean-final DB the default `data/asip.db`: top bar shows `Edge: Ollama / gemma4:e4b`; `/graph` loads the live global graph with `3,000` graph edges, `1,000 / 2,883` visible nodes, `3,000 / 3,000` visible edges, rendered canvas edge count `1,132`, layer provenance `deterministic: 2989 semantic: 11`, and visible node classes `doc_box=6`, `doc_section=1`, `function=836`, `register=157`. Browser artifacts: `docs/qa/browser/graph-clean-final-default-3100-2k.png` and `docs/qa/browser/graph-clean-final-default-3100-snapshot.json`.
+- Fresh in-app browser snapshot after the cross-file common-helper fix shows the live `/graph` page with `Loaded edge budget 3000 / 20000`, `Visible nodes 1000 / 2797`, `Visible edges 3000 / 3000`, and the accessibility summary lists `nodes 1000`, `edges 1216`, `function 787`, `register 206`, `doc_box 6`, and `doc_section 1`; the underlying full product graph sample below records `control-keyword function nodes named "if": 0`.
 
 ## Automated Verification
 
-- `PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=packages/core/src:packages/core/tests:. python3 -m unittest discover -s packages/core/tests -p 'test_*.py' -v`: 162 tests OK, 1 sqlite-vec skip
-- `PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=packages/core/src:. python3 -m unittest apps.api.tests.test_app apps.api.tests.test_runtime apps.mcp.tests.test_tools apps.mcp.tests.test_server -v`: 41 tests OK, 1 optional MCP runtime skip
+- `PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=packages/core/src:packages/core/tests:. python3 -m unittest discover -s packages/core/tests -p 'test_*.py' -v`: 176 tests OK, 2 sqlite-vec optional skips
+- `PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=packages/core/src:. python3 -m unittest apps.api.tests.test_app apps.mcp.tests.test_tools apps.mcp.tests.test_server -v`: 45 tests OK, 1 optional MCP runtime skip
 - `pnpm --filter web exec tsc --noEmit`: passed
-- `pnpm --filter web exec playwright test tests/workbench-api.spec.ts --reporter=list`: 18 passed
-- `pnpm --filter web exec playwright test tests/workbench-smoke.spec.ts --reporter=list`: 35 passed
-- `pnpm --filter web exec playwright test tests/visual-anchor-routes.spec.ts --reporter=list`: 13 passed
+- `pnpm --filter web run lint`: passed
+- `pnpm --filter web exec playwright test tests/workbench-api.spec.ts tests/workbench-smoke.spec.ts --reporter=list`: 73 passed
+- `pnpm --filter web exec playwright test tests/visual-anchor-routes.spec.ts --reporter=list`: 15 passed
 - `git diff --check`: passed
 
-## Latest Live Graph And E2E Verification
+## Historical Dirty Dev DB Graph And E2E Verification
 
-This section supersedes the older automated counts above for the current working tree and the dirty local `data/asip.db` used by the live Web workbench.
+This section records pre-final development evidence from the previously dirty local `data/asip.db`. That DB was backed up to `/tmp/asip-dirty-dev-before-final-default-2026-05-18.db` before the clean-final DB was copied to the default workbench path. It is historical evidence only and must not be conflated with the current default `data/asip.db`, which is clean-final.
 
-Current provider settings were restored after tests:
+Provider settings at the time of the dirty-dev evidence:
 
 ```text
 edge: ollama / gemma4:e4b at http://localhost:11434/api/chat
@@ -80,47 +135,104 @@ embedding: ollama / nomic-embed-text:latest at http://localhost:11434/api/embedd
 extra headers: {}
 ```
 
-Current graph jobs in `data/asip.db`:
+Historical dirty-dev graph jobs:
 
 ```text
-graph_rebuild job 56: 14674 deterministic edges from 1225 files
+graph_rebuild job 78: 43030 deterministic edges from 1225 files
+typed callback receiver hints: 2220 edges with type_flow=clang_ast_json
+graph_rebuild job 80: 41998 graph-rebuild edges after IP-block registration-flow filtering
+ip_blocks version funcs table_alias edges: 14
+ip_blocks version funcs dispatch candidates: 13
+alias fallback mismatches: 0
 semantic_edges job 43: gemma4:e4b, 6 raw semantic edges
 semantic_edges job 44: gemma4:e4b, 5 raw semantic edges
 doc_nodes_batch job 45: gemma4:e4b, 6 doc boxes and 11 doc semantic edges
 ```
 
+Historical dirty-dev DB snapshot after later semantic/doc-node jobs:
+
+```text
+edges_total=41986
+stage counts: deterministic=41964, semantic=22
+source counts: clang_text_spans=35100, clang_callback=6084, text_fallback=780, ollama=22
+clang_callback call_kind: vtable_dispatch=5996, vtable_callback=67, vtable_table_alias=21
+clang_ast_json callback hints=2220
+ip_blocks version funcs table_alias=14
+ip_blocks version funcs dispatch=13
+alias_fallback_mismatches=0
+```
+
 Current product graph sample:
 
 ```text
-global_graph(all_edges=true)
-nodes=6920
-edges=9287
-node kinds: function=5302, register=1611, doc_box=6, doc_section=1
-visible semantic edges=13
-control-keyword function nodes named "if": 0
+global_graph(limit=20000)
+nodes=15239
+edges=20000
+current snapshot nodes=15170
+current snapshot edges=20000
+current snapshot components=261
+current snapshot largest_component=9864
 ```
 
 Query performance regression evidence:
 
 ```text
-query_evidence(data/asip.db, "doorbell interrupt disable")
+query_evidence(previous dirty data/asip.db, "doorbell interrupt disable")
 before final fixes: 58.228s
 after final fixes: 0.487s
 rows=24
 query graph nodes=32
 query graph edges=37
+
+2026-05-18 query-scoped graph performance fix:
+  graph_for_rows expands multi-seed queries with one NetworkX build
+  empty multi-seed graph fallback no longer rebuilds through expand_query_graph()
+  no-edge storage path returns seed nodes instead of NameError
+  callable symbol scan no longer recompiles regexes per evidence row
+
+six dirty-DB real queries:
+  Who reads or writes regGCVM_L2_CNTL?: 4.161s rows=24 nodes=102 edges=237
+  GCVM_L2_CNTL: 3.845s rows=24 nodes=102 edges=237
+  doorbell interrupt disable: 0.878s rows=24 nodes=230 edges=400
+  amdgpu_device_ip_hw_init_phase1: 2.135s rows=24 nodes=65 edges=74
+  nv_common_hw_init: 2.093s rows=24 nodes=211 edges=498
+  SDMA0_QUEUE0_RB_CNTL: 2.084s rows=24 nodes=134 edges=213
+
+AQ01 CLI/Web acceptance timing:
+  CLI command total: 26.025s
+  Web Playwright route: 26.3s
+```
+
+Fixture stable-count rebuild and smoke-query evidence:
+
+```text
+PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=packages/core/src python3 -m asip.cli performance-smoke \
+  --db /tmp/asip-performance-smoke-2026-05-18.db \
+  --source-root docs/fixtures/performance-smoke \
+  --query GCVM_L2_CNTL \
+  --query IH_RB_CNTL \
+  --query SDMA0_QUEUE0_RB_CNTL \
+  --query CP_INT_CNTL_RING0 \
+  --query 'interrupt ring buffer' \
+  --max-query-seconds 1.0 \
+  --output-json docs/qa/2026-05-18-performance-smoke-fixture.json
+
+primary rebuild: documents=2 chunks=2 evidence=19 edges=4 elapsed=0.053971s
+repeat rebuild:  documents=2 chunks=2 evidence=19 edges=4 elapsed=0.042888s
+deterministic_counts_match=true
+five live queries: all returned rows and stayed under 1s
 ```
 
 Fresh automated verification:
 
 ```text
 PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=packages/core/src:packages/core/tests:. python3 -m unittest discover -s packages/core/tests -p 'test_*.py' -v
-Ran 162 tests in 7.511s
-OK (skipped=1)
+Ran 198 tests in 14.579s
+OK (skipped=2)
 
 PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=packages/core/src:. python3 -m unittest \
-  apps.api.tests.test_app apps.api.tests.test_runtime apps.mcp.tests.test_tools apps.mcp.tests.test_server -v
-Ran 41 tests in 79.614s
+  apps.api.tests.test_app apps.mcp.tests.test_tools apps.mcp.tests.test_server -v
+Ran 45 tests in 60.871s
 OK (skipped=1)
 
 pnpm --filter web exec tsc --noEmit
@@ -130,10 +242,10 @@ pnpm --filter web run lint
 passed
 
 pnpm --filter web exec playwright test tests/workbench-api.spec.ts tests/workbench-smoke.spec.ts --reporter=list
-69 passed
+73 passed in 1.8m
 
 pnpm --filter web exec playwright test tests/visual-anchor-routes.spec.ts --reporter=list
-15 passed
+15 passed in 32.8s
 
 PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=packages/core/src:packages/core/tests:. python3 -m unittest \
   packages.core.tests.test_providers.EmbeddingProviderTests.test_extra_headers_expand_environment_placeholders_without_persisting_secret \
@@ -156,14 +268,21 @@ passed
 
 Continuation fixes verified in the same pass:
 
+- Stage 1 callback dispatch now handles local table aliases, same-function field-path aliases, receiver-path type hints for common AMD fields such as `adev->gfx.rlc.funcs`, provable IP-block `.funcs` / `version->funcs` aliases, and selective Clang AST JSON receiver-type hints. Rebuild job 78 recorded `43,030` deterministic edges after multiline function parsing and AST JSON typed receiver extraction.
+- Stage 1 now also uses corpus-level IP-block registration aliases for provable `amdgpu_device_ip_block_add(adev, &*_ip_block)` flows into common `adev->ip_blocks[i].version->funcs` dispatchers. Rebuild job 80 recorded `41,998` graph-rebuild edges; SQLite checks show `14` exact `ip_blocks version funcs` table-alias edges, `13` remaining lower-confidence dispatch candidates, and `0` alias fallback mismatches.
+- In-app browser `/graph` QA after job 80 recorded `3000` graph edges, `deterministic: 2987 semantic: 13`, `1000 / 2885` visible nodes, `1132` rendered edges, and relationship-panel evidence for `aldebaran_mode2_restore_ip -> nv_common_late_init` in `docs/qa/browser/graph-after-ip-block-registration-flow-2k.png`.
+- In-app browser `/graph` QA after job 77 recorded `3000` graph edges, `deterministic: 2987 semantic: 13`, `1000 / 2865` visible nodes, and `1148` rendered edges in `docs/qa/browser/graph-after-ip-block-flow-fix-2k.png`.
+- In-app browser `/graph` QA after job 78 recorded `3000` graph edges, `deterministic: 2987 semantic: 13`, `1000 / 2900` visible nodes, and `1101` rendered edges in `docs/qa/browser/graph-after-clang-ast-json-type-hints-2k.png`.
+- Job lifecycle events remain semantically clean after resolver profile metadata updates: the stored events are `queued -> indexing -> succeeded`, not `queued -> indexing -> indexing -> succeeded`.
 - `graph-rebuild --corpus-id` now preserves deterministic edges from non-selected corpora instead of clearing every Stage 1 edge.
 - `/resolver-profiles` can load an existing YAML-backed profile into the editor before saving, so built-in profiles are editable through the UI path instead of being add-only rows.
 - Top-bar global search runs a real `/api/workbench/query` request from graph-capable pages.
 - Source-type filter controls are real query controls and send `sourceTypes` to the Web BFF/core query path.
 - `/graph` exposes semantic generation limit and batch-size overrides in the UI and sends them to `/api/workbench/semantic-edges`.
 - The graph header now displays layer provenance such as deterministic and semantic edge counts.
+- G15 fixture performance smoke is now a product CLI path and core regression test; the QA artifact records matching empty-DB rebuild counts and five sub-second live queries. Real AMD repeat/provider timing remains an explicit residual.
 
-Clean AQ01-AQ09 provider acceptance is now represented by the `gemma4:e4b` artifact above. Historical qwen3.5 artifacts remain comparison/provenance evidence only, not current clean-provider closure. The live `data/asip.db` graph section remains separate dev-browser evidence for persisted Stage 2 semantic/doc-node jobs after the final graph-shape fixes.
+Clean AQ01-AQ09 provider acceptance is now represented by the `gemma4:e4b` artifact above. Historical qwen3.5 artifacts remain comparison/provenance evidence only, not current clean-provider closure. The historical dirty-dev graph section remains separate development evidence for persisted Stage 2 semantic/doc-node jobs before `data/asip.db` was replaced with the clean-final DB.
 
 ## Architecture Review
 
@@ -173,9 +292,9 @@ Clean AQ01-AQ09 provider acceptance is now represented by the `gemma4:e4b` artif
 | Document/PDF conversion | core | `asip.documents`, PDF tests, clean DB PDF counts | OCR/scanned PDF remains non-goal |
 | Resolver profiles | core plus UI/BFF/API/MCP | resolver profile tests and UI/API smoke | Rich edit-in-place/per-job profile selection remains future work |
 | Retrieval/evidence schema | core, thin app surfaces | clean AQ 9/9, six free queries, API/MCP/Web agreement tests | Provider-vector rerank remains boundary |
-| SQLite/FTS/vector | core storage | FTS/vector tests, provider embedding provenance, native sqlite-vec extension smoke in bundled Python runtime | Product retrieval still uses JSON vectors plus Python cosine until native sqlite-vec retrieval acceleration is wired |
+| SQLite/FTS/vector | core storage | FTS/vector tests, provider embedding provenance, native sqlite-vec extension smoke in bundled Python runtime, native `search_vector()` adapter test, fallback adapter test | JSON vectors remain the durable source of truth; full provider-vector coverage and semantic rerank quality remain open |
 | NetworkX graph | core storage/workbench | graph tests, free-query/global graph QA, visual `/graph` QA | Browser design polish still reviewed in G16 |
-| Deterministic C graph/callgraph | core code graph plus storage/workbench | function-register operation tests, compile_commands macro test, direct helper call test, cross-file ops/vtable callback test, same-slot overlink regression | Conservative source/span parser, not full clangd/libclang callback coverage |
+| Deterministic C graph/callgraph | core code graph plus storage/workbench | function-register operation tests, compile_commands macro test, direct helper call test, cross-file unique direct common-helper test, cross-file ops/vtable callback test, receiver type-hint callback test, Clang AST JSON typed receiver test, same-slot overlink regression, real rebuild job 78 | Conservative source/span parser with selective Clang AST JSON receiver hints and cross-file unique callee indexing, not full clangd/libclang callback coverage |
 | Semantic-edge generation | core plus CLI/Web/API/MCP | `gemma4:e4b` clean provider acceptance plus current live `gemma4:e4b` semantic/doc-node jobs and semantic-edge parity tests | Large prompts still need adequate `num_predict` and JSON robustness |
 | Provider settings | core plus Settings UI/BFF/API/MCP | AQ09, provider tests, settings UI tests | Credentialed OpenAI-compatible live QA requires credentials or accepted local-compatible boundary |
 | FastAPI | `apps/api` thin over core | API tests and live Uvicorn smoke | Optional deployment packaging not in MVP |
@@ -184,9 +303,9 @@ Clean AQ01-AQ09 provider acceptance is now represented by the `gemma4:e4b` artif
 
 ## Residual Boundaries
 
-- Native sqlite-vec extension loading is skipped in system Python 3.9, and the bundled Python 3.12 runtime passes the native sqlite-vec extension smoke; product retrieval still uses the fallback JSON-vector/Python-cosine adapter until native sqlite-vec retrieval acceleration is wired.
+- Native sqlite-vec extension loading is skipped in system Python 3.9, and the bundled Python 3.12 runtime passes both the native sqlite-vec extension smoke and the native `search_vector()` adapter test. The adapter keeps JSON vectors as durable source of truth and falls back to Python cosine when sqlite-vec cannot load.
 - Credentialed OpenAI-compatible live provider QA is not performed without credentials; request shape, safe env-based extra-header expansion, and local-compatible paths are tested.
-- Stage 1 now connects direct helper calls and conservative C ops/vtable callbacks, but it is not a full clangd/libclang callgraph implementation. Generic `funcs/ops/callbacks` receivers connect only when the same slot has a single known callback candidate; otherwise the extractor leaves the deterministic callback edge absent instead of overlinking every same-slot callback.
+- Stage 1 now connects direct helper calls, cross-file direct common-helper calls when the callee definition is unique, and conservative C ops/vtable callbacks, but it is not a full clangd/libclang callgraph implementation. Generic `funcs/ops/callbacks` and typed receivers such as `struct <type> *ops` emit lower-confidence dispatch-candidate edges, filtered by exact table name, callback table type, selective Clang AST JSON receiver type, or source-span alias hints where the extractor can prove them.
 - Provider embeddings are partial for the final clean DB; they prove provider provenance and AQ09, not full semantic reranking.
 - The optional live MCP runtime package is not installed, so runtime smoke is skipped while tool registration and tool functions are tested.
 - Git commit/push evidence is reported in the final assistant response after the G11 gate runs, because the commit hash is only known after this document is staged.

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import importlib.util
 import json
 import math
 import re
@@ -50,6 +51,14 @@ class AsipStore:
               metadata_json text not null default '{}',
               started_at text not null default current_timestamp,
               finished_at text
+            );
+
+            create table if not exists job_events (
+              id integer primary key,
+              job_id integer not null references jobs(id),
+              status text not null,
+              message text not null default '',
+              created_at text not null default current_timestamp
             );
 
             create table if not exists documents (
@@ -175,21 +184,59 @@ class AsipStore:
 
     def start_job(self, kind: str, message: str = "", metadata: Optional[Dict[str, object]] = None) -> int:
         cursor = self.con.execute(
-            "insert into jobs(kind, status, message, metadata_json) values (?, 'running', ?, ?)",
+            "insert into jobs(kind, status, message, metadata_json) values (?, 'queued', ?, ?)",
             (kind, message, json.dumps(metadata or {})),
         )
+        job_id = int(cursor.lastrowid)
+        self._append_job_event(job_id, "queued", message)
         self.con.commit()
-        return int(cursor.lastrowid)
+        return job_id
 
-    def finish_job(self, job_id: int, status: str, message: str = "") -> None:
+    def update_job_status(
+        self,
+        job_id: int,
+        status: str,
+        message: str = "",
+        metadata: Optional[Dict[str, object]] = None,
+    ) -> None:
+        normalized_status = _normalize_job_status(status)
+        current_row = self.con.execute(
+            "select status, message from jobs where id = ?",
+            (job_id,),
+        ).fetchone()
+        if current_row is None:
+            raise KeyError(job_id)
+        current_status = _normalize_job_status(str(current_row["status"] or ""))
+        current_message = str(current_row["message"] or "")
+        should_append_event = normalized_status != current_status or message != current_message
+        current_metadata = self._job_metadata(job_id)
+        current_metadata.update(metadata or {})
         self.con.execute(
             """
             update jobs
-            set status = ?, message = ?, finished_at = current_timestamp
+            set status = ?, message = ?, metadata_json = ?
             where id = ?
             """,
-            (status, message, job_id),
+            (normalized_status, message, json.dumps(current_metadata), job_id),
         )
+        if should_append_event:
+            self._append_job_event(job_id, normalized_status, message)
+        self.con.commit()
+
+    def finish_job(self, job_id: int, status: str, message: str = "") -> None:
+        normalized_status = _normalize_job_status(status)
+        metadata = self._job_metadata(job_id)
+        if normalized_status == "succeeded" and status != "succeeded":
+            metadata.setdefault("result_status", status)
+        self.con.execute(
+            """
+            update jobs
+            set status = ?, message = ?, metadata_json = ?, finished_at = current_timestamp
+            where id = ?
+            """,
+            (normalized_status, message, json.dumps(metadata), job_id),
+        )
+        self._append_job_event(job_id, normalized_status, message)
         self.con.commit()
 
     def get_job(self, job_id: int) -> Dict[str, object]:
@@ -199,9 +246,72 @@ class AsipStore:
         ).fetchone()
         if row is None:
             raise KeyError(job_id)
+        return self._job_payload_from_row(row)
+
+    def list_jobs(self, limit: int = 50) -> List[Dict[str, object]]:
+        rows = self.con.execute(
+            """
+            select id, kind, status, message, metadata_json, started_at, finished_at
+            from jobs
+            order by id desc
+            limit ?
+            """,
+            (max(1, int(limit)),),
+        ).fetchall()
+        jobs: List[Dict[str, object]] = []
+        for row in rows:
+            jobs.append(self._job_payload_from_row(row))
+        return jobs
+
+    def _job_payload_from_row(self, row: sqlite3.Row) -> Dict[str, object]:
         result = dict(row)
-        result["metadata"] = json.loads(str(result.pop("metadata_json")))
+        job_id = int(result["id"])
+        raw_status = str(result.get("status") or "")
+        normalized_status = _normalize_job_status(raw_status)
+        metadata = json.loads(str(result.pop("metadata_json") or "{}"))
+        if normalized_status == "succeeded" and raw_status.strip().lower() != "succeeded":
+            metadata.setdefault("result_status", raw_status)
+        result["status"] = normalized_status
+        result["metadata"] = metadata
+        events = self._job_events(job_id)
+        if not events:
+            events = [
+                {
+                    "id": 0,
+                    "job_id": job_id,
+                    "status": normalized_status,
+                    "message": result.get("message") or "",
+                    "created_at": result.get("finished_at") or result.get("started_at") or "",
+                }
+            ]
+        else:
+            events = [{**event, "status": _normalize_job_status(str(event.get("status") or ""))} for event in events]
+        result["events"] = events
         return result
+
+    def _append_job_event(self, job_id: int, status: str, message: str = "") -> None:
+        self.con.execute(
+            "insert into job_events(job_id, status, message) values (?, ?, ?)",
+            (job_id, status, message),
+        )
+
+    def _job_events(self, job_id: int) -> List[Dict[str, object]]:
+        rows = self.con.execute(
+            """
+            select id, job_id, status, message, created_at
+            from job_events
+            where job_id = ?
+            order by id asc
+            """,
+            (job_id,),
+        ).fetchall()
+        return [dict(row) for row in rows]
+
+    def _job_metadata(self, job_id: int) -> Dict[str, object]:
+        row = self.con.execute("select metadata_json from jobs where id = ?", (job_id,)).fetchone()
+        if row is None:
+            raise KeyError(job_id)
+        return json.loads(str(row["metadata_json"] or "{}"))
 
     def upsert_corpus(
         self,
@@ -700,20 +810,34 @@ class AsipStore:
         return json.loads(str(row["settings_json"]))
 
     def search_vector(self, vector: List[float], limit: int) -> List[Dict[str, object]]:
-        rows = self.con.execute(
-            """
-            select
-              embeddings.chunk_id,
-              embeddings.provider,
-              embeddings.model,
-              embeddings.vector_json,
-              chunks.text,
-              documents.path
-            from embeddings
-            join chunks on chunks.id = embeddings.chunk_id
-            join documents on documents.id = chunks.document_id
-            """
-        )
+        rows = [
+            dict(row)
+            for row in self.con.execute(
+                """
+                select
+                  embeddings.chunk_id,
+                  embeddings.provider,
+                  embeddings.model,
+                  embeddings.vector_json,
+                  chunks.text,
+                  documents.path
+                from embeddings
+                join chunks on chunks.id = embeddings.chunk_id
+                join documents on documents.id = chunks.document_id
+                """
+            )
+        ]
+        native_matches = self._search_vector_sqlite_vec(vector, limit, rows)
+        if native_matches is not None:
+            return native_matches
+        return self._search_vector_python(vector, limit, rows)
+
+    def _search_vector_python(
+        self,
+        vector: List[float],
+        limit: int,
+        rows: Iterable[Mapping[str, object]],
+    ) -> List[Dict[str, object]]:
         scored = []
         for row in rows:
             stored_vector = json.loads(str(row["vector_json"]))
@@ -725,8 +849,96 @@ class AsipStore:
                     "text": row["text"],
                     "path": row["path"],
                     "score": _cosine_similarity(vector, stored_vector),
+                    "retrieval_runtime": "python-cosine",
                 }
             )
+        return sorted(scored, key=lambda item: float(item["score"]), reverse=True)[:limit]
+
+    def _search_vector_sqlite_vec(
+        self,
+        vector: List[float],
+        limit: int,
+        rows: List[Mapping[str, object]],
+    ) -> Optional[List[Dict[str, object]]]:
+        if not vector or not rows or importlib.util.find_spec("sqlite_vec") is None:
+            return None
+        if not hasattr(self.con, "enable_load_extension"):
+            return None
+        dimension = len(vector)
+        prepared: List[tuple[int, Mapping[str, object], List[float]]] = []
+        for row in rows:
+            try:
+                stored_vector = [float(value) for value in json.loads(str(row["vector_json"]))]
+            except (TypeError, ValueError, json.JSONDecodeError):
+                continue
+            if len(stored_vector) != dimension:
+                continue
+            prepared.append((int(row["chunk_id"]), row, stored_vector))
+        if not prepared:
+            return None
+        try:
+            import sqlite_vec  # type: ignore[import-not-found]
+
+            self.con.enable_load_extension(True)
+            sqlite_vec.load(self.con)
+            self.con.enable_load_extension(False)
+            self.con.execute("drop table if exists temp.asip_vec_search")
+            self.con.execute(f"create virtual table temp.asip_vec_search using vec0(embedding float[{dimension}])")
+            self.con.executemany(
+                "insert into temp.asip_vec_search(rowid, embedding) values (?, ?)",
+                [
+                    (chunk_id, sqlite_vec.serialize_float32(stored_vector))
+                    for chunk_id, _row, stored_vector in prepared
+                ],
+            )
+            native_rows = list(
+                self.con.execute(
+                    """
+                    select rowid, distance
+                    from asip_vec_search
+                    where embedding match ?
+                    order by distance
+                    limit ?
+                    """,
+                    (sqlite_vec.serialize_float32([float(value) for value in vector]), max(1, int(limit))),
+                )
+            )
+        except Exception:
+            try:
+                self.con.enable_load_extension(False)
+            except Exception:
+                pass
+            try:
+                self.con.execute("drop table if exists temp.asip_vec_search")
+            except Exception:
+                pass
+            return None
+        finally:
+            try:
+                self.con.enable_load_extension(False)
+            except Exception:
+                pass
+        by_chunk = {chunk_id: (row, stored_vector) for chunk_id, row, stored_vector in prepared}
+        scored = []
+        for native_row in native_rows:
+            chunk_id = int(native_row["rowid"])
+            row, stored_vector = by_chunk[chunk_id]
+            scored.append(
+                {
+                    "chunk_id": chunk_id,
+                    "provider": row["provider"],
+                    "model": row["model"],
+                    "text": row["text"],
+                    "path": row["path"],
+                    "score": _cosine_similarity(vector, stored_vector),
+                    "distance": float(native_row["distance"]),
+                    "retrieval_runtime": "sqlite-vec",
+                }
+            )
+        try:
+            self.con.execute("drop table if exists temp.asip_vec_search")
+        except Exception:
+            pass
         return sorted(scored, key=lambda item: float(item["score"]), reverse=True)[:limit]
 
     def expand_graph(self, symbol: str, hops: int = 1) -> Dict[str, List[Dict[str, object]]]:
@@ -773,20 +985,34 @@ class AsipStore:
         hops: int = 1,
         include_evidence_derived: bool = False,
     ) -> Dict[str, object]:
-        if _is_graph_wrapper_hub(symbol):
+        return self.expand_graph_networkx_many(
+            [symbol],
+            hops=hops,
+            include_evidence_derived=include_evidence_derived,
+        )
+
+    def expand_graph_networkx_many(
+        self,
+        symbols: Iterable[str],
+        hops: int = 1,
+        include_evidence_derived: bool = False,
+    ) -> Dict[str, object]:
+        seed_symbols = [str(symbol) for symbol in symbols if str(symbol)]
+        seed_symbols = [symbol for symbol in seed_symbols if not _is_graph_wrapper_hub(symbol)]
+        if not seed_symbols:
             return {"nodes": [], "edges": [], "graph_runtime": "networkx"}
         if not self._has_expandable_edges(include_evidence_derived=include_evidence_derived):
-            return _single_seed_graph(symbol)
+            return _multi_seed_graph(seed_symbols)
         graph = self.to_networkx(include_evidence_derived=include_evidence_derived)
-        seen = {symbol}
-        frontier = {symbol}
+        seen = set(seed_symbols)
+        frontier = set(seed_symbols)
 
         for _ in range(max(1, hops)):
             next_frontier = set()
             for node in frontier:
                 if node not in graph:
                     continue
-                if node != symbol and _is_graph_wrapper_hub(str(node)):
+                if node not in seed_symbols and _is_graph_wrapper_hub(str(node)):
                     continue
                 neighbors = set(graph.successors(node)) | set(graph.predecessors(node))
                 next_frontier.update(neighbor for neighbor in neighbors if neighbor not in seen)
@@ -795,6 +1021,14 @@ class AsipStore:
             seen.update(next_frontier)
             frontier = next_frontier
 
+        return self._networkx_subgraph_payload(graph, seen, seed_symbols)
+
+    def _networkx_subgraph_payload(
+        self,
+        graph: object,
+        seen: set[str],
+        fallback_symbols: Iterable[str],
+    ) -> Dict[str, object]:
         subgraph = graph.subgraph(seen)
         subgraph_edges = list(subgraph.edges(data=True))
         has_semantic_edges = any(str(data.get("stage") or "") == "semantic" for _src, _dst, data in subgraph_edges)
@@ -873,15 +1107,16 @@ class AsipStore:
                 dst_node,
             )
         if not node_ids:
-            seed_node = _product_graph_node(symbol, _kind_for_graph_symbol(symbol), {})
-            if seed_node is not None:
-                node_ids.add(str(seed_node["id"]))
-                node_payloads[str(seed_node["id"])] = _boxmatrix_node_payload(
-                    str(seed_node["id"]),
-                    str(seed_node["kind"]),
-                    1,
-                    seed_node,
-                )
+            for symbol in fallback_symbols:
+                seed_node = _product_graph_node(symbol, _kind_for_graph_symbol(symbol), {})
+                if seed_node is not None:
+                    node_ids.add(str(seed_node["id"]))
+                    node_payloads[str(seed_node["id"])] = _boxmatrix_node_payload(
+                        str(seed_node["id"]),
+                        str(seed_node["kind"]),
+                        1,
+                        seed_node,
+                    )
         edges.sort(
             key=lambda edge: (-float(edge["confidence"]), str(edge["src"]), str(edge["dst"]), str(edge["relation"]))
         )
@@ -1343,6 +1578,25 @@ def _single_seed_graph(symbol: str) -> Dict[str, object]:
     return {"nodes": nodes, "edges": [], "graph_runtime": "networkx"}
 
 
+def _multi_seed_graph(symbols: Iterable[str]) -> Dict[str, object]:
+    node_payloads: Dict[str, Dict[str, object]] = {}
+    for symbol in symbols:
+        seed_node = _product_graph_node(str(symbol), _kind_for_graph_symbol(str(symbol)), {})
+        if seed_node is None:
+            continue
+        node_payloads[str(seed_node["id"])] = _boxmatrix_node_payload(
+            str(seed_node["id"]),
+            str(seed_node["kind"]),
+            1,
+            seed_node,
+        )
+    return {
+        "nodes": [node_payloads[node_id] for node_id in sorted(node_payloads)],
+        "edges": [],
+        "graph_runtime": "networkx",
+    }
+
+
 def _register_graph_node(symbol: str, metadata: Mapping[str, object]) -> Dict[str, object]:
     register_symbol = _register_symbol_for_graph(str(metadata.get("symbol") or symbol))
     source = _source_records_for_graph(metadata)
@@ -1662,7 +1916,21 @@ def _looks_like_function_symbol(symbol: str) -> bool:
 def _snippet_has_callable_symbol(snippet: str, symbol: str) -> bool:
     if not snippet or not symbol:
         return False
-    return bool(re.search(rf"\b{re.escape(symbol)}\s*\(", snippet))
+    offset = snippet.find(symbol)
+    while offset >= 0:
+        before = snippet[offset - 1] if offset > 0 else ""
+        if not before or not _is_c_identifier_char(before):
+            cursor = offset + len(symbol)
+            while cursor < len(snippet) and snippet[cursor].isspace():
+                cursor += 1
+            if cursor < len(snippet) and snippet[cursor] == "(":
+                return True
+        offset = snippet.find(symbol, offset + 1)
+    return False
+
+
+def _is_c_identifier_char(value: str) -> bool:
+    return value == "_" or value.isalnum()
 
 
 def _merge_graph_metadata(base: Mapping[str, object], override: Optional[Mapping[str, object]]) -> Dict[str, object]:
@@ -2110,9 +2378,13 @@ def _select_global_graph_edges(edges: List[Dict[str, object]], edge_limit: int) 
     if limit == 0:
         return []
     protected = [edge for edge in edges if _is_protected_global_edge(edge)]
+    protected_budget = min(len(protected), limit)
+    remaining_budget = max(0, limit - protected_budget)
+    call_backbone_budget = max(1, remaining_budget - max(0, remaining_budget // 5)) if remaining_budget else 0
+    call_backbone = _largest_call_backbone_edges(edges, call_backbone_budget)
     selected: List[Dict[str, object]] = []
     seen: set[tuple[str, str, str]] = set()
-    for edge in [*protected, *edges]:
+    for edge in [*protected, *call_backbone, *edges]:
         key = (str(edge["src"]), str(edge["dst"]), str(edge["relation"]))
         if key in seen:
             continue
@@ -2121,6 +2393,115 @@ def _select_global_graph_edges(edges: List[Dict[str, object]], edge_limit: int) 
         if len(selected) >= limit:
             break
     return selected
+
+
+def _largest_call_backbone_edges(edges: List[Dict[str, object]], budget: int) -> List[Dict[str, object]]:
+    if budget <= 0:
+        return []
+    call_edges = [
+        edge
+        for edge in edges
+        if str(edge.get("relation") or "") == "calls" and not _is_protected_global_edge(edge)
+    ]
+    if not call_edges:
+        return []
+
+    adjacency: Dict[str, set[str]] = {}
+    for edge in call_edges:
+        src = str(edge.get("src") or "")
+        dst = str(edge.get("dst") or "")
+        if not src or not dst:
+            continue
+        adjacency.setdefault(src, set()).add(dst)
+        adjacency.setdefault(dst, set()).add(src)
+
+    seen_nodes: set[str] = set()
+    components: List[set[str]] = []
+    for node in adjacency:
+        if node in seen_nodes:
+            continue
+        stack = [node]
+        seen_nodes.add(node)
+        component: set[str] = set()
+        while stack:
+            current = stack.pop()
+            component.add(current)
+            for neighbor in adjacency.get(current, ()):
+                if neighbor not in seen_nodes:
+                    seen_nodes.add(neighbor)
+                    stack.append(neighbor)
+        components.append(component)
+
+    component_rank = {node: index for index, component in enumerate(
+        sorted(components, key=lambda item: (-len(item), sorted(item)[0] if item else ""))
+    ) for node in component}
+    ranked_edges = sorted(
+        call_edges,
+        key=lambda edge: (
+            component_rank.get(str(edge.get("src") or ""), len(components)),
+            _call_backbone_priority(edge),
+            str(edge.get("src") or ""),
+            str(edge.get("dst") or ""),
+        ),
+    )
+
+    parent: Dict[str, str] = {}
+
+    def find(node: str) -> str:
+        parent.setdefault(node, node)
+        while parent[node] != node:
+            parent[node] = parent[parent[node]]
+            node = parent[node]
+        return node
+
+    def union(left: str, right: str) -> bool:
+        left_root = find(left)
+        right_root = find(right)
+        if left_root == right_root:
+            return False
+        parent[right_root] = left_root
+        return True
+
+    selected: List[Dict[str, object]] = []
+    selected_keys: set[tuple[str, str, str]] = set()
+    for edge in ranked_edges:
+        if len(selected) >= budget:
+            break
+        src = str(edge.get("src") or "")
+        dst = str(edge.get("dst") or "")
+        key = (src, dst, str(edge.get("relation") or ""))
+        if not src or not dst or key in selected_keys:
+            continue
+        if union(src, dst):
+            selected.append(edge)
+            selected_keys.add(key)
+
+    for edge in ranked_edges:
+        if len(selected) >= budget:
+            break
+        key = (str(edge.get("src") or ""), str(edge.get("dst") or ""), str(edge.get("relation") or ""))
+        if key in selected_keys:
+            continue
+        selected.append(edge)
+        selected_keys.add(key)
+    return selected
+
+
+def _call_backbone_priority(edge: Mapping[str, object]) -> tuple[int, float, int]:
+    sources = {str(source) for source in edge.get("sources", []) if source}
+    source_priority = 0 if "clang_callback" in sources else 1
+    return (source_priority, -float(edge.get("weight") or 0), -int(edge.get("count") or 0))
+
+
+def _normalize_job_status(status: str) -> str:
+    normalized = str(status or "").strip().lower()
+    if normalized in {"queued", "indexing", "succeeded", "failed"}:
+        return normalized
+    if normalized in {"running", "started", "in_progress"}:
+        return "indexing"
+    if normalized in {"error", "errored"}:
+        return "failed"
+    return "succeeded"
 
 
 def _is_protected_global_edge(edge: Mapping[str, object]) -> bool:

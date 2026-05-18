@@ -888,10 +888,144 @@ test("corpus page indexes only the selected corpus and shows indexed status", as
   await expect(page.getByRole("checkbox", { name: "Index api-corpus-b" })).toBeChecked();
   await page.getByRole("button", { name: "Run index" }).click();
 
-  await expect.poll(() => indexRequestBody).toEqual({ corpusIds: ["api-corpus-b"] });
+  await expect.poll(() => indexRequestBody).toEqual({ corpusIds: ["api-corpus-b"], resolverProfileIds: [] });
   await expect(page.getByRole("table", { name: "Evidence results" })).toContainText("api-corpus-b");
   await expect(page.getByRole("table", { name: "Evidence results" })).toContainText("indexed");
   await expect(page.getByTestId("action-feedback")).toContainText("api-corpus-b");
+});
+
+test("corpus page sends the selected resolver profiles with the index job", async ({ page }) => {
+  let indexRequestBody: unknown = null;
+  await page.route("**/api/workbench/corpora", async (route) => {
+    await route.fulfill({
+      contentType: "application/json",
+      body: JSON.stringify({
+        corpora: [
+          {
+            id: "api-corpus-resolver",
+            repo: "https://example.test/api-corpus-resolver",
+            sourceRoot: "/api/corpus/resolver",
+            include: ["**/*.c"],
+            fileCount: 3,
+            status: "not_indexed"
+          }
+        ]
+      })
+    });
+  });
+  await page.route("**/api/workbench/resolver-profiles", async (route) => {
+    await route.fulfill({
+      contentType: "application/json",
+      body: JSON.stringify({
+        profiles: [
+          {
+            id: "amd-soc15",
+            language: "cpp",
+            wrappers: ["WREG32_SOC15"],
+            path: "configs/resolvers/amd-soc15.yaml",
+            enabled: true
+          },
+          {
+            id: "amd-direct-mmio",
+            language: "cpp",
+            wrappers: ["WREG32"],
+            path: "configs/resolvers/amd-direct-mmio.yaml",
+            enabled: true
+          }
+        ]
+      })
+    });
+  });
+  await page.route("**/api/workbench/index", async (route) => {
+    indexRequestBody = route.request().postDataJSON();
+    await route.fulfill({
+      contentType: "application/json",
+      body: JSON.stringify({
+        status: "indexed",
+        corpusIds: ["api-corpus-resolver"],
+        resolverProfileIds: ["amd-soc15"],
+        dbPath: "data/asip.db",
+        documents: 1,
+        chunks: 2,
+        edges: 3
+      })
+    });
+  });
+
+  await page.goto("/corpus");
+
+  await expect(page.getByRole("checkbox", { name: "Use resolver profile amd-soc15" })).toBeChecked();
+  await page.getByRole("checkbox", { name: "Use resolver profile amd-direct-mmio" }).uncheck();
+  await page.getByRole("button", { name: "Run index" }).click();
+
+  await expect.poll(() => indexRequestBody).toEqual({
+    corpusIds: ["api-corpus-resolver"],
+    resolverProfileIds: ["amd-soc15"]
+  });
+  await expect(page.getByTestId("action-feedback")).toContainText("amd-soc15");
+});
+
+test("corpus page shows durable index job lifecycle events", async ({ page }) => {
+  await page.route("**/api/workbench/corpora", async (route) => {
+    await route.fulfill({
+      contentType: "application/json",
+      body: JSON.stringify({
+        corpora: [
+          {
+            id: "api-job-corpus",
+            repo: "local",
+            sourceRoot: "/api/job/corpus",
+            include: ["**/*.md"],
+            fileCount: 1,
+            status: "not_indexed"
+          }
+        ]
+      })
+    });
+  });
+  await page.route("**/api/workbench/jobs**", async (route) => {
+    await route.fulfill({
+      contentType: "application/json",
+      body: JSON.stringify({
+        jobs: [
+          {
+            id: 42,
+            kind: "index",
+            status: "succeeded",
+            message: "Indexed 1 documents",
+            metadata: { result_status: "indexed", corpus_ids: ["api-job-corpus"] },
+            events: [
+              { status: "queued", message: "Indexing api-job-corpus" },
+              { status: "indexing", message: "Indexing api-job-corpus" },
+              { status: "succeeded", message: "Indexed 1 documents" }
+            ]
+          }
+        ]
+      })
+    });
+  });
+  await page.route("**/api/workbench/index", async (route) => {
+    await route.fulfill({
+      contentType: "application/json",
+      body: JSON.stringify({
+        status: "indexed",
+        jobId: 42,
+        jobStatus: "succeeded",
+        corpusIds: ["api-job-corpus"],
+        dbPath: "data/asip.db",
+        documents: 1,
+        chunks: 1,
+        edges: 1
+      })
+    });
+  });
+
+  await page.goto("/corpus");
+  await page.getByRole("button", { name: "Run index" }).click();
+
+  await expect(page.getByTestId("action-feedback")).toContainText("job 42 succeeded");
+  await expect(page.getByTestId("job-runs-panel")).toContainText("job 42");
+  await expect(page.getByTestId("job-runs-panel")).toContainText("queued -> indexing -> succeeded");
 });
 
 test("corpus page marks selected corpus failed when indexing fails", async ({ page }) => {
