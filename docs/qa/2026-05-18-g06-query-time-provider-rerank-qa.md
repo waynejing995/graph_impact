@@ -60,7 +60,7 @@ Full core rerun:
 ```text
 PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=packages/core/src:packages/core/tests:. python3 -m unittest discover -s packages/core/tests -p 'test_*.py' -v
 
-Ran 220 tests in 22.794s
+Ran 224 tests in 23.515s
 OK (skipped=2)
 ```
 

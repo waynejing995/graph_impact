@@ -4,6 +4,7 @@ import tempfile
 import unittest
 from pathlib import Path
 from types import SimpleNamespace
+from unittest.mock import patch
 
 from asip.storage import AsipStore
 from asip import workbench
@@ -711,6 +712,157 @@ class WorkbenchLiveTests(unittest.TestCase):
             self.assertIn((function_id, "sets_field", register_id), edges)
             register_node = next(node for node in graph["nodes"] if node["id"] == register_id)
             self.assertIn("ENABLE_LOCAL_FIELD", register_node["attr"]["fields"])
+
+    def test_code_graph_edge_persistence_counts_only_inserted_edges(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            db_path = Path(tmpdir) / "asip.db"
+            store = AsipStore.connect(str(db_path))
+            store.migrate()
+            seen = set()
+
+            rejected_count = workbench._persist_code_graph_edge(
+                store,
+                SimpleNamespace(
+                    src="program_register",
+                    relation="calls",
+                    dst="WREG32",
+                    confidence=0.7,
+                    stage="deterministic",
+                    source="clang_callback",
+                    path="driver.c",
+                    line_start=10,
+                    line_end=10,
+                    provenance={},
+                ),
+                seen,
+            )
+            inserted_count = workbench._persist_code_graph_edge(
+                store,
+                SimpleNamespace(
+                    src="program_register",
+                    relation="writes",
+                    dst="GCVM_L2_CNTL",
+                    confidence=0.9,
+                    stage="deterministic",
+                    source="clang_text_spans",
+                    path="driver.c",
+                    line_start=11,
+                    line_end=11,
+                    provenance={},
+                ),
+                seen,
+            )
+
+            persisted_count = store.con.execute("select count(*) from edges").fetchone()[0]
+            self.assertEqual(rejected_count, 0)
+            self.assertEqual(inserted_count, 1)
+            self.assertEqual(persisted_count, rejected_count + inserted_count)
+
+    def test_query_term_edge_persistence_counts_only_inserted_edges(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            db_path = Path(tmpdir) / "asip.db"
+            store = AsipStore.connect(str(db_path))
+            store.migrate()
+            chunk = workbench.IndexedChunk(
+                chunk_id=1,
+                corpus_id="code",
+                repo="local",
+                source_type="code",
+                path="driver.c",
+                text="WREG32 GCVM_L2_CNTL ENABLE_L2_CACHE",
+                line_start=1,
+                line_end=1,
+            )
+            query = SimpleNamespace(expected_terms=["WREG32", "GCVM_L2_CNTL", "ENABLE_L2_CACHE"])
+
+            with patch.object(workbench, "is_graph_entity_endpoint", return_value=True):
+                count = workbench._index_chunk_edges(store, chunk, [query])
+
+            persisted_count = store.con.execute("select count(*) from edges").fetchone()[0]
+            self.assertEqual(count, 1)
+            self.assertEqual(persisted_count, count)
+
+    def test_generated_semantic_edge_persistence_counts_only_inserted_edges(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            db_path = Path(tmpdir) / "asip.db"
+            store = AsipStore.connect(str(db_path))
+            store.migrate()
+            generated = {
+                "cases": [
+                    {
+                        "edges": [
+                            {
+                                "src": "WREG32",
+                                "dst": "GCVM_L2_CNTL",
+                                "relation": "writes",
+                                "confidence": 0.8,
+                            },
+                            {
+                                "src": "program_register",
+                                "dst": "GCVM_L2_CNTL",
+                                "relation": "writes",
+                                "confidence": 0.9,
+                            },
+                        ]
+                    }
+                ]
+            }
+
+            with patch.object(workbench, "is_graph_entity_endpoint", return_value=True):
+                count = workbench._persist_generated_edges(store, generated, provenance={"provider": "test"})
+
+            persisted_count = store.con.execute("select count(*) from edges").fetchone()[0]
+            self.assertEqual(count, 1)
+            self.assertEqual(persisted_count, count)
+
+    def test_index_registered_corpus_summary_counts_only_inserted_code_graph_edges(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            source_root = root / "corpus"
+            source_root.mkdir()
+            (source_root / "driver.c").write_text("void placeholder(void) {}\n", encoding="utf-8")
+            db_path = root / "asip.db"
+            store = AsipStore.connect(str(db_path))
+            store.migrate()
+            store.upsert_corpus("code", "local", str(source_root), ["**/*.c"], status="not_indexed", file_count=0)
+            store.upsert_resolver_profile("test-cpp", "cpp", ["WREG32"], "reference", "test.yaml")
+            fake_graph = SimpleNamespace(
+                edges=[
+                    SimpleNamespace(
+                        src="program_register",
+                        relation="calls",
+                        dst="WREG32",
+                        confidence=0.7,
+                        stage="deterministic",
+                        source="clang_callback",
+                        path="driver.c",
+                        line_start=10,
+                        line_end=10,
+                        provenance={},
+                    ),
+                    SimpleNamespace(
+                        src="program_register",
+                        relation="writes",
+                        dst="GCVM_L2_CNTL",
+                        confidence=0.9,
+                        stage="deterministic",
+                        source="clang_text_spans",
+                        path="driver.c",
+                        line_start=11,
+                        line_end=11,
+                        provenance={},
+                    ),
+                ],
+                callback_slots=[],
+                slot_calls=[],
+            )
+
+            with patch.object(workbench, "build_deterministic_code_graph", return_value=fake_graph):
+                summary = workbench.index_registered_corpora(db_path, corpus_ids=["code"])
+
+            persisted_count = AsipStore.connect(str(db_path)).con.execute("select count(*) from edges").fetchone()[0]
+            self.assertEqual(summary["edges"], 1)
+            self.assertEqual(summary["edges"], persisted_count)
 
     def test_index_registered_corpus_persists_stage1_deterministic_code_graph_edges(self):
         with tempfile.TemporaryDirectory() as tmpdir:

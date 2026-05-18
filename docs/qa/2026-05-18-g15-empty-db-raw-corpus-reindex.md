@@ -37,7 +37,7 @@ code      7
 pdf       1
 ```
 
-The CLI index summary reported `edges=39233`, while the final SQLite `edges` table contained `39199`. The stable table count is used for graph verification; the summary/table reporting delta remains a small follow-up.
+The CLI index summary reported `edges=39233`, while the final SQLite `edges` table contained `39199`. The stable table count is used for graph verification. A later follow-up fixed the summary/table counting path; see `docs/qa/2026-05-18-g15-edge-count-summary-qa.md`.
 
 ## Stage 2 Semantic Edge Debug
 
@@ -139,5 +139,4 @@ This satisfies the "more than five real query" verification requirement, while a
 - Full clangd/libclang cross-TU vtable/type-flow extraction is still not implemented.
 - Credentialed hosted OpenAI-compatible live QA is still not run.
 - Semantic ranking quality remains a product-quality boundary; Q5-Q7 show weak ranking even though live rows return.
-- The CLI index summary/table edge-count delta should be cleaned up.
 - OCR for scanned PDFs remains outside this artifact.

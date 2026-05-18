@@ -152,7 +152,7 @@ Stage 1 graph edges. The same artifact records a 3,000-edge global graph with
 
 ## Automated Verification
 
-- `PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=packages/core/src:packages/core/tests:. python3 -m unittest discover -s packages/core/tests -p 'test_*.py' -v`: 220 tests OK, 2 sqlite-vec optional skips
+- `PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=packages/core/src:packages/core/tests:. python3 -m unittest discover -s packages/core/tests -p 'test_*.py' -v`: 224 tests OK, 2 sqlite-vec optional skips
 - `PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=packages/core/src:packages/core/tests:. python3 -m unittest apps.api.tests.test_app apps.mcp.tests.test_tools apps.mcp.tests.test_server -v`: 47 tests OK, 1 optional MCP runtime skip under system Python 3.9
 - `PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=packages/core/src:. /Users/chenjingwen/.cache/codex-runtimes/codex-primary-runtime/dependencies/python/bin/python3 -m unittest apps.mcp.tests.test_tools apps.mcp.tests.test_server -v`: 29 tests OK, 0 skips with real `mcp 1.27.1` runtime
 - `pnpm --filter web run lint`: passed
@@ -340,7 +340,7 @@ Continuation fixes verified in the same pass:
 - Source-type filter controls are real query controls and send `sourceTypes` to the Web BFF/core query path.
 - `/graph` exposes semantic generation limit and batch-size overrides in the UI and sends them to `/api/workbench/semantic-edges`.
 - The graph header now displays layer provenance such as deterministic and semantic edge counts.
-- G15 fixture performance smoke is now a product CLI path and core regression test; the QA artifact records matching empty-DB rebuild counts and five sub-second live queries. Real AMD repeat deterministic graph rebuild timing is recorded with stable counts; bounded provider backfill, full local temp-copy provider backfill, and two empty-DB raw re-index timings are recorded. Broader future all-file indexing scale, hosted-provider throughput, and semantic ranking quality remain explicit residuals.
+- G15 fixture performance smoke is now a product CLI path and core regression test; the QA artifact records matching empty-DB rebuild counts and five sub-second live queries. Real AMD repeat deterministic graph rebuild timing is recorded with stable counts; bounded provider backfill, full local temp-copy provider backfill, two empty-DB raw re-index timings, and edge-count summary/table counting are recorded. Broader future all-file indexing scale, hosted-provider throughput, and semantic ranking quality remain explicit residuals.
 - G07 resolved-chain and parity follow-up is recorded in `docs/qa/2026-05-18-g07-resolved-chain-and-parity-qa.md`: evidence detail and entity explain now return deterministic structured `resolved_chain_explanation(s)`, and Web BFF/MCP parity covers query, evidence detail, entity, entity graph counts, and direct seed graph counts.
 - G07 real MCP runtime smoke is recorded in `docs/qa/2026-05-18-g07-real-mcp-runtime-smoke.md`: bundled Python 3.12 with `mcp 1.27.1` runs MCP tool/server tests with 29 OK and 0 skips.
 

@@ -1978,7 +1978,7 @@ def _persist_generated_edges(
             if edge_key in seen_edges:
                 continue
             seen_edges.add(edge_key)
-            store.add_edge(
+            edge_id = store.add_edge(
                 src=src,
                 dst=dst,
                 relation=relation,
@@ -1992,7 +1992,8 @@ def _persist_generated_edges(
                 },
                 commit=False,
             )
-            edge_count += 1
+            if edge_id:
+                edge_count += 1
     if edge_count and commit:
         store.con.commit()
     return edge_count
@@ -2354,7 +2355,7 @@ def _persist_code_graph_edge(
     if key in seen:
         return 0
     seen.add(key)
-    store.add_edge(
+    edge_id = store.add_edge(
         src=edge.src,
         dst=edge.dst,
         relation=edge.relation,
@@ -2371,7 +2372,7 @@ def _persist_code_graph_edge(
         },
         commit=False,
     )
-    return 1
+    return 1 if edge_id else 0
 
 
 def _index_chunk_edges(store: AsipStore, chunk: IndexedChunk, queries: Iterable[Any]) -> int:
@@ -2381,7 +2382,7 @@ def _index_chunk_edges(store: AsipStore, chunk: IndexedChunk, queries: Iterable[
         if len(terms) < 2:
             continue
         for src, dst in zip(terms, terms[1:]):
-            store.add_edge(
+            edge_id = store.add_edge(
                 src=src,
                 dst=dst,
                 relation=_relation_for_terms(chunk.text, src, dst),
@@ -2394,7 +2395,8 @@ def _index_chunk_edges(store: AsipStore, chunk: IndexedChunk, queries: Iterable[
                 provenance={"extractor": "query_expected_terms", "query_config": True},
                 commit=False,
             )
-            count += 1
+            if edge_id:
+                count += 1
     if count:
         store.con.commit()
     return count

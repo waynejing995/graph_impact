@@ -211,7 +211,7 @@ The default product graph must not treat evidence/query-term edges as Stage 1. E
 - 2026-05-17 follow-up semantic QA used a real local Ollama `gemma4:e4b` call for `IH_RB_CNTL RB_ENABLE interrupt ring buffer`, persisted six `stage=semantic/source=ollama` rows, and exposed three valid function-to-function semantic product graph edges after filtering temporary/local-variable endpoints such as `ih_ring_entry` and `kfd.dev`.
 - 2026-05-17 RED/GREEN hardening prevents LLM semantic edges from promoting local variables into function nodes and verifies register seed aliases `reg*`, `mm*`, and `smn*` all canonicalize to the same register graph seed before expansion.
 - Verification on 2026-05-17, superseding earlier counts:
-  - `PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=packages/core/src:packages/core/tests:. python3 -m unittest discover -s packages/core/tests -p 'test_*.py' -v`: latest 2026-05-18 run is 220 tests OK, 2 sqlite-vec skips.
+  - `PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=packages/core/src:packages/core/tests:. python3 -m unittest discover -s packages/core/tests -p 'test_*.py' -v`: latest 2026-05-18 run is 224 tests OK, 2 sqlite-vec skips.
   - `PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=packages/core/src:. python3 -m unittest apps.api.tests.test_app apps.mcp.tests.test_tools apps.mcp.tests.test_server -v`: latest 2026-05-18 run is 47 tests OK, 1 optional MCP runtime skip.
   - `pnpm --filter web exec tsc --noEmit`: passed.
   - `pnpm --filter web run lint`: passed.

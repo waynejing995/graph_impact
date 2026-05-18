@@ -1,4 +1,5 @@
 import json
+import sqlite3
 import subprocess
 import sys
 import tempfile
@@ -71,8 +72,10 @@ class WorkbenchCliTests(unittest.TestCase):
             index_payload = json.loads(index.stdout)
             query_payload = json.loads(query.stdout)
             graph_payload = json.loads(graph.stdout)
+            persisted_edge_count = sqlite3.connect(db_path).execute("select count(*) from edges").fetchone()[0]
 
             self.assertEqual(index_payload["source"], "raw_corpus")
+            self.assertEqual(index_payload["edges"], persisted_edge_count)
             self.assertEqual(query_payload["source"], "sqlite")
             self.assertTrue(any(row["symbol"] == "DOORBELL_INTERRUPT_DISABLE" for row in query_payload["rows"]))
             self.assertTrue(any(edge["dst"].endswith(":BIF_DOORBELL_INT_CNTL") for edge in graph_payload["edges"]))
