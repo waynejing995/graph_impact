@@ -93,8 +93,19 @@ class ResolverValidateRequest(BaseModel):
 
 
 @app.get("/query")
-def query(q: str, db_path: Optional[str] = None):
-    return search_evidence(q, db_path=db_path)
+def query(
+    q: str,
+    db_path: Optional[str] = None,
+    ip_block: str = "",
+    asic: str = "",
+    asic_or_generation: str = "",
+):
+    return search_evidence(
+        q,
+        db_path=db_path,
+        ip_block=ip_block,
+        asic_or_generation=asic_or_generation or asic,
+    )
 
 
 @app.get("/graph")

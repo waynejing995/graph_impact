@@ -42,7 +42,9 @@ class CodeGraphCallbackSlot:
     function: str
     table: str
     table_type: str = ""
+    initializer_flow: str = "text"
     path: str = ""
+    function_path: str = ""
     line_start: Optional[int] = None
     assignment_line_start: Optional[int] = None
     function_line_start: Optional[int] = None
@@ -155,12 +157,13 @@ def build_deterministic_code_graph(
         spans = _function_spans_from_text(source_text)
         analysis_mode = "text_fallback"
         diagnostics.append("clang did not return function spans; used text fallback")
-    ast_slot_call_hints = _clang_ast_json_slot_call_hints(
+    ast_json = _clang_ast_json(
         source_path,
         source_text,
         effective_clang_args,
         diagnostics,
     )
+    ast_slot_call_hints = _clang_ast_json_slot_call_hints(source_text, ast_json, diagnostics)
     preprocessed_text = _clang_preprocess(source_path, effective_clang_args, diagnostics) if effective_clang_args else ""
     preprocessed_spans = {
         span.name: span
@@ -175,7 +178,24 @@ def build_deterministic_code_graph(
     known_function_names = set(known_locations)
     callable_function_names = function_names | known_function_names
     function_lines = {span.name: span.line_start for span in spans}
-    callback_slots = _callback_slots_from_text(source_text, function_names, function_lines, display_path)
+    callback_slots = _merge_callback_slots(
+        _callback_slots_from_text(
+            source_text,
+            function_names,
+            function_lines,
+            display_path,
+            known_locations,
+        ),
+        _clang_ast_json_callback_slots(
+            source_text,
+            ast_json,
+            display_path,
+            function_names,
+            function_lines,
+            known_locations,
+            diagnostics,
+        ),
+    )
     table_field_aliases = _merge_table_field_aliases(
         known_table_field_aliases or {},
         _table_field_aliases_from_text(source_text),
@@ -323,8 +343,10 @@ def build_deterministic_code_graph(
                         "type_flow": slot_call.type_flow,
                         "callback_table": callback.table,
                         "callback_table_type": callback.table_type,
+                        "callback_initializer_flow": callback.initializer_flow,
                         "callback_candidate_count": len(callbacks),
                         "dispatch_scope": "generic_slot" if call_kind == "vtable_dispatch" else "matched_slot",
+                        "callee_path": callback.function_path or callback.path,
                         "callback_path": callback.path,
                         "callee_line": callback.function_line_start,
                         "callback_line": callback.assignment_line_start or callback.line_start,
@@ -468,14 +490,14 @@ def _function_spans_from_clang(
     return [], "clang_ast_failed", diagnostics
 
 
-def _clang_ast_json_slot_call_hints(
+def _clang_ast_json(
     source_path: Path,
     source_text: str,
     clang_args: Iterable[str],
     diagnostics: List[str],
-) -> dict[tuple[str, str, str, int], _AstSlotCallHint]:
-    if not _source_may_have_slot_calls(source_text):
-        return {}
+) -> Optional[Mapping[str, Any]]:
+    if not _source_may_have_ast_json_callback_data(source_text):
+        return None
     command = [
         "clang",
         "-std=gnu89",
@@ -490,14 +512,23 @@ def _clang_ast_json_slot_call_hints(
         completed = subprocess.run(command, text=True, capture_output=True, timeout=20, check=False)
     except (OSError, subprocess.SubprocessError) as exc:
         diagnostics.append(str(exc))
-        return {}
+        return None
     if not completed.stdout.strip().startswith("{"):
         if completed.stderr.strip():
             diagnostics.append(completed.stderr.strip()[:2000])
-        return {}
+        return None
     try:
-        ast = json.loads(completed.stdout)
+        return json.loads(completed.stdout)
     except json.JSONDecodeError:
+        return None
+
+
+def _clang_ast_json_slot_call_hints(
+    source_text: str,
+    ast: Optional[Mapping[str, Any]],
+    diagnostics: List[str],
+) -> dict[tuple[str, str, str, int], _AstSlotCallHint]:
+    if ast is None or not _source_may_have_slot_calls(source_text):
         return {}
     hints: dict[tuple[str, str, str, int], _AstSlotCallHint] = {}
     for function in _ast_nodes(ast, "FunctionDecl"):
@@ -528,8 +559,96 @@ def _clang_ast_json_slot_call_hints(
     return hints
 
 
+def _clang_ast_json_callback_slots(
+    source_text: str,
+    ast: Optional[Mapping[str, Any]],
+    display_path: str,
+    function_names: set[str],
+    function_lines: Mapping[str, int],
+    known_function_locations: Mapping[str, Iterable[CodeGraphFunctionLocation]],
+    diagnostics: List[str],
+) -> List[CodeGraphCallbackSlot]:
+    if ast is None or not _source_may_have_callback_initializers(source_text):
+        return []
+    callbacks: List[CodeGraphCallbackSlot] = []
+    for variable in _ast_nodes(ast, "VarDecl"):
+        table = str(variable.get("name") or "").strip()
+        if not table:
+            continue
+        table_type = _normalize_callback_table_type(_ast_qual_type(variable))
+        if not table_type and not _looks_like_callback_table_name(table):
+            continue
+        for reference in _ast_nodes(variable, "DeclRefExpr"):
+            callback = _ast_referenced_function_name(reference)
+            if not callback:
+                callback = _source_identifier_for_ast_reference(source_text, reference)
+            if not callback:
+                continue
+            callback_location = _callback_function_location(
+                callback,
+                display_path,
+                function_names,
+                function_lines,
+                known_function_locations,
+            )
+            if callback_location is None:
+                continue
+            slot = _slot_name_for_ast_callback_reference(source_text, reference)
+            if not slot:
+                continue
+            assignment_line = _assignment_line_for_ast_callback_reference(source_text, reference)
+            callbacks.append(
+                CodeGraphCallbackSlot(
+                    slot=slot,
+                    function=callback,
+                    table=table,
+                    table_type=table_type,
+                    initializer_flow="clang_ast_json",
+                    path=display_path,
+                    function_path=callback_location.path,
+                    line_start=assignment_line,
+                    assignment_line_start=assignment_line,
+                    function_line_start=callback_location.line_start,
+                )
+            )
+    if callbacks:
+        diagnostics.append(f"clang ast json provided {len(callbacks)} typed callback initializers")
+    return callbacks
+
+
+def _merge_callback_slots(*slot_groups: Iterable[CodeGraphCallbackSlot]) -> List[CodeGraphCallbackSlot]:
+    merged: List[CodeGraphCallbackSlot] = []
+    seen: set[tuple[str, str, str, str, int]] = set()
+    for group in slot_groups:
+        for slot in group:
+            key = (
+                slot.slot,
+                slot.function,
+                slot.table,
+                slot.path,
+                int(slot.assignment_line_start or slot.line_start or 0),
+            )
+            if key in seen:
+                continue
+            seen.add(key)
+            merged.append(slot)
+    return merged
+
+
+def _source_may_have_ast_json_callback_data(source_text: str) -> bool:
+    return _source_may_have_slot_calls(source_text) or _source_may_have_callback_initializers(source_text)
+
+
 def _source_may_have_slot_calls(source_text: str) -> bool:
     return bool(re.search(r"(?:->|\.)\s*[A-Za-z_]\w*\s*\)?\s*\(", source_text))
+
+
+def _source_may_have_callback_initializers(source_text: str) -> bool:
+    if not re.search(r"\b(?:funcs|ops|callbacks|func)\b", source_text):
+        return False
+    if re.search(r"\.[A-Za-z_]\w*\s*=", source_text):
+        return True
+    return bool(re.search(r"\b[A-Za-z_]\w*\s*\(\s*[A-Za-z_]\w*\s*,\s*[A-Za-z_]\w*", source_text))
 
 
 def _ast_nodes(node: Any, kind: str) -> Iterable[Mapping[str, Any]]:
@@ -577,8 +696,8 @@ def _receiver_text_for_ast_member(source_text: str, member: Mapping[str, Any], s
     end = node_range.get("end")
     if not isinstance(begin, Mapping) or not isinstance(end, Mapping):
         return ""
-    start = int(begin.get("offset") or -1)
-    end_offset = int(end.get("offset") or -1)
+    start = _ast_location_offset(begin)
+    end_offset = _ast_location_offset(end)
     token_length = int(end.get("tokLen") or 0)
     if start < 0 or end_offset < start:
         return ""
@@ -606,6 +725,84 @@ def _ast_qual_type(node: Mapping[str, Any]) -> str:
     return _ast_qual_type(child) if child is not None else ""
 
 
+def _ast_referenced_function_name(node: Mapping[str, Any]) -> str:
+    referenced = node.get("referencedDecl")
+    if not isinstance(referenced, Mapping) or referenced.get("kind") != "FunctionDecl":
+        return ""
+    name = str(referenced.get("name") or "").strip()
+    return "" if _looks_like_preprocessor_macro(name) else name
+
+
+def _source_identifier_for_ast_reference(source_text: str, node: Mapping[str, Any]) -> str:
+    offset = _ast_node_spelling_offset(node)
+    if offset < 0:
+        return ""
+    match = re.match(r"[A-Za-z_]\w*", source_text[offset:])
+    if not match:
+        return ""
+    name = match.group(0)
+    return "" if _looks_like_preprocessor_macro(name) else name
+
+
+def _slot_name_for_ast_callback_reference(source_text: str, node: Mapping[str, Any]) -> str:
+    slot_match = _slot_match_for_ast_callback_reference(source_text, node)
+    return slot_match[0] if slot_match else ""
+
+
+def _assignment_line_for_ast_callback_reference(source_text: str, node: Mapping[str, Any]) -> int:
+    slot_match = _slot_match_for_ast_callback_reference(source_text, node)
+    if slot_match:
+        return _line_number_for_offset(source_text, slot_match[1])
+    offset = _ast_node_spelling_offset(node)
+    return _line_number_for_offset(source_text, offset) if offset >= 0 else 0
+
+
+def _slot_match_for_ast_callback_reference(source_text: str, node: Mapping[str, Any]) -> Optional[tuple[str, int]]:
+    offset = _ast_node_spelling_offset(node)
+    if offset < 0:
+        return None
+    start = max(source_text.rfind("{", 0, offset), source_text.rfind(",", 0, offset), source_text.rfind("\n", 0, offset))
+    prefix_start = start + 1
+    prefix = source_text[prefix_start:offset]
+    matches = list(re.finditer(r"\.(?P<slot>[A-Za-z_]\w*)\s*=", prefix))
+    if matches:
+        match = matches[-1]
+        return match.group("slot"), prefix_start + match.start("slot") - 1
+    line_start = source_text.rfind("\n", 0, offset) + 1
+    line_prefix = source_text[line_start:offset]
+    macro_matches = list(
+        re.finditer(r"\b[A-Za-z_]\w*\s*\(\s*(?P<slot>[A-Za-z_]\w*)\s*,[^()\n]*$", line_prefix)
+    )
+    if not macro_matches:
+        return None
+    match = macro_matches[-1]
+    return match.group("slot"), line_start + match.start("slot")
+
+
+def _ast_node_spelling_offset(node: Mapping[str, Any]) -> int:
+    node_range = node.get("range")
+    if not isinstance(node_range, Mapping):
+        return -1
+    begin = node_range.get("begin")
+    if not isinstance(begin, Mapping):
+        return -1
+    return _ast_location_offset(begin, prefer_spelling=True)
+
+
+def _ast_location_offset(location: Mapping[str, Any], prefer_spelling: bool = False) -> int:
+    offset = location.get("offset")
+    if isinstance(offset, int):
+        return offset
+    nested_keys = ("spellingLoc", "expansionLoc") if prefer_spelling else ("expansionLoc", "spellingLoc")
+    for key in nested_keys:
+        nested = location.get(key)
+        if isinstance(nested, Mapping):
+            nested_offset = nested.get("offset")
+            if isinstance(nested_offset, int):
+                return nested_offset
+    return -1
+
+
 def _normalize_callback_table_type(qual_type: str) -> str:
     cleaned = qual_type.strip()
     cleaned = re.sub(r"\b(?:const|volatile|restrict)\b", "", cleaned)
@@ -625,7 +822,7 @@ def _ast_line_number(source_text: str, node: Mapping[str, Any]) -> int:
     begin = node_range.get("begin")
     if not isinstance(begin, Mapping):
         return 0
-    offset = int(begin.get("offset") or -1)
+    offset = _ast_location_offset(begin)
     return _line_number_for_offset(source_text, offset) if offset >= 0 else 0
 
 
@@ -771,6 +968,7 @@ def _callback_slots_from_text(
     function_names: set[str],
     function_lines: Mapping[str, int],
     display_path: str,
+    known_function_locations: Optional[Mapping[str, Iterable[CodeGraphFunctionLocation]]] = None,
 ) -> List[CodeGraphCallbackSlot]:
     assignment = re.compile(
         r"\.(?P<slot>[A-Za-z_]\w*)\s*=\s*&?\s*(?P<callback>[A-Za-z_]\w*)\b"
@@ -779,6 +977,7 @@ def _callback_slots_from_text(
     table_type = ""
     table_depth = 0
     callbacks: List[CodeGraphCallbackSlot] = []
+    known_locations = known_function_locations or {}
     for line_number, line in enumerate(source_text.splitlines(), start=1):
         table_match = re.search(
             r"\b(?:static\s+)?(?:const\s+)?(?:struct\s+)?(?P<table_type>[A-Za-z_]\w*)\s+"
@@ -794,7 +993,14 @@ def _callback_slots_from_text(
             table_type = ""
         for match in assignment.finditer(line):
             callback = match.group("callback")
-            if callback not in function_names:
+            callback_location = _callback_function_location(
+                callback,
+                display_path,
+                function_names,
+                function_lines,
+                known_locations,
+            )
+            if callback_location is None:
                 continue
             callbacks.append(
                 CodeGraphCallbackSlot(
@@ -803,9 +1009,10 @@ def _callback_slots_from_text(
                     table=table_name,
                     table_type=table_type,
                     path=display_path,
+                    function_path=callback_location.path,
                     line_start=line_number,
                     assignment_line_start=line_number,
-                    function_line_start=function_lines.get(callback),
+                    function_line_start=callback_location.line_start,
                 )
             )
         if table_depth > 0 and not table_match:
@@ -814,6 +1021,25 @@ def _callback_slots_from_text(
                 table_name = ""
                 table_type = ""
     return callbacks
+
+
+def _callback_function_location(
+    callback: str,
+    display_path: str,
+    function_names: set[str],
+    function_lines: Mapping[str, int],
+    known_function_locations: Mapping[str, Iterable[CodeGraphFunctionLocation]],
+) -> Optional[CodeGraphFunctionLocation]:
+    if callback in function_names:
+        return CodeGraphFunctionLocation(
+            name=callback,
+            path=display_path,
+            line_start=function_lines.get(callback),
+        )
+    locations = list(known_function_locations.get(callback, ()))
+    if len(locations) == 1:
+        return locations[0]
+    return None
 
 
 def _direct_function_calls(
@@ -1161,13 +1387,13 @@ def _callbacks_for_slot_call(
     exact = [callback for callback in callbacks if callback.table in {receiver, receiver_leaf}]
     if exact:
         return exact
-    expected_table_type = _expected_callback_table_type(receiver)
-    if expected_table_type:
-        typed = [callback for callback in callbacks if callback.table_type == expected_table_type]
-        return typed
     receiver_type = str(getattr(slot_call, "receiver_type", "") or "").strip()
     if receiver_type:
         typed = [callback for callback in callbacks if callback.table_type == receiver_type]
+        return typed
+    expected_table_type = _expected_callback_table_type(receiver)
+    if expected_table_type:
+        typed = [callback for callback in callbacks if callback.table_type == expected_table_type]
         return typed
     if receiver_leaf in _GENERIC_CALLBACK_RECEIVERS:
         return callbacks

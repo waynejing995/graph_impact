@@ -30,6 +30,7 @@
   },
   "embedding": {
     "backfillLimit": 0,
-    "batchSize": 64
+    "batchSize": 16,
+    "maxTextChars": 4096
   }
 }

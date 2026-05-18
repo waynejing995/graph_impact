@@ -125,10 +125,12 @@ job_id=38
 SQLite verification:
 
 ```text
-deterministic / clang_ast = 10108
+historical pre-correction label: deterministic / clang_ast = 10108
 semantic / ollama = 6
 semantic relations = reads 3, calls 2, writes 1
 ```
+
+This older QA used the now-superseded `clang_ast` source label. Later G03 QA records the corrected provenance split: `clang_text_spans`/`clang_preprocess`/`clang_callback`, with AST JSON only as narrow `type_flow` or callback-initializer provenance.
 
 Product graph verification after the semantic run:
 
@@ -270,11 +272,11 @@ doc_nodes_batch job 45: gemma4:e4b, 2 candidates, 6 doc boxes, 11 edges
 Current SQLite edge counts:
 
 ```text
-deterministic | clang_ast | reads      | 2536
-deterministic | clang_ast | writes     | 4955
-deterministic | clang_ast | sets_field | 995
-deterministic | clang_ast | maps_base  | 1616
-deterministic | clang_ast | field_shift| 6
+historical pre-correction label | deterministic | clang_ast | reads      | 2536
+historical pre-correction label | deterministic | clang_ast | writes     | 4955
+historical pre-correction label | deterministic | clang_ast | sets_field | 995
+historical pre-correction label | deterministic | clang_ast | maps_base  | 1616
+historical pre-correction label | deterministic | clang_ast | field_shift| 6
 semantic      | ollama    | reads      | 4
 semantic      | ollama    | writes     | 7
 ```

@@ -1,6 +1,6 @@
 # G12 ASIC And IP Metadata Filtering
 
-Status: Partial; core/API/UI filtering exists, dedicated real AMD filter acceptance and inference-limit docs remain blocking
+Status: Current real AMD filter pass verified; heuristic inference boundary documented
 
 ## Requirement
 
@@ -15,13 +15,15 @@ The full ASIP technical spec lists ASIC filtering as an MVP required feature. MV
 - `apps/web/app/api/workbench/query/route.ts` passes `ipBlock`/`ip_block` and `asic`/`asic_or_generation` query params to the core CLI.
 - The Web query composer exposes `IP block filter` and `ASIC or generation filter` inputs and sends them with free-form queries.
 - Core and Playwright tests verify that filters change query results instead of acting as static chips.
+- 2026-05-18 FastAPI and MCP parity fix: `/query` now accepts `ip_block` plus `asic` or `asic_or_generation`, and MCP `search_evidence()` accepts `ip_block`, `asic_or_generation`, and `asic`. Targeted RED/GREEN tests prove both surfaces filter identical same-symbol evidence rows down to the scoped `GC/gc_11_0` result.
+- 2026-05-18 real AMD filter QA proves `CP_INT_CNTL_RING0` over the clean-final default DB changes from 20 mixed rows unfiltered to 2 `CP/gfx_v10_0` code rows with `ip_block=CP`, and to 0 rows with `ip_block=SDMA`. Browser QA at 2K shows the same filtered query with `matches: 2`, two code rows from `gfx_v10_0.c`, and graph/inspector updates. Evidence: `docs/qa/2026-05-18-g12-filter-surface-qa.md` and `docs/qa/browser/g12-filter-cp-clean-final-3100-2k.png`.
 - The clean provider AQ01-AQ09 runner artifact covers the broader acceptance matrix, but it is not a dedicated ASIC/IP filter proof.
 
 ## Remaining Gap
 
-Dedicated final acceptance still needs to run representative real AMD queries with and without filters, and visual QA must confirm the new filter controls do not break the 2K layout.
+Dedicated real AMD filter QA is now recorded. Remaining boundary: metadata inference is heuristic, not a full AMD IP/ASIC taxonomy parser.
 
-Current metadata inference is heuristic and not yet validated against AMD corpus examples.
+Current metadata inference reads simple symbol/path hints. `_ip_block_for_symbol()` scans the symbol plus path for `GC`, `CP`, `SDMA`, `GMC`, `BIF`, `RLC`, or `GDS`; `_asic_for_path()` extracts path fragments such as `gfx_v10_0`, `gc_11_0`, `nbio_v7_9`, or `sdma_v5_0`. This is enough for scoped retrieval and QA, but it can miss aliases, marketing names, firmware-only names, or ASIC context that only exists outside the file path/symbol.
 
 ## Acceptance Criteria
 
@@ -34,7 +36,8 @@ Current metadata inference is heuristic and not yet validated against AMD corpus
 ## Required Tests
 
 - Core test: fixture with two ASIC/IP hints returns only scoped evidence when filter parameters are provided. Added.
-- API test: query endpoint accepts and applies ASIC/IP filters or returns a documented unsupported response. Added.
+- API test: FastAPI query endpoint accepts and applies ASIC/IP filters. Added.
+- MCP test: `search_evidence()` accepts and applies ASIC/IP filters. Added.
 - E2E test: UI can run a scoped query and displays the active scope. Added.
 - Design review maps this gap to the full spec MVP `ASIC filtering` requirement.
 

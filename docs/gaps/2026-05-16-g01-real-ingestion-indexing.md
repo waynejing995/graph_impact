@@ -1,6 +1,6 @@
 # G01 Real Ingestion And Indexing
 
-Status: Partial; blocking until full code/docs/register/PDF AMD corpus acceptance is verified
+Status: Current clean-final pass verified; final gate and scale boundaries remain
 
 ## Requirement
 
@@ -38,7 +38,7 @@ The index path must build ASIP evidence from raw inputs, not from an already gen
 
 The first live slice now has real SQLite indexing for MxGPU/Linux snippets plus configured docs/PDF/register sources, and the clean AMD DB proves code, docs, generated register headers, and a reduced AMD amdgpu PDF fixture in one repeatable CLI/core path. The old clean provider AQ pass remains superseded because its recorded source diversity is code-only, while the new clean AMD provider artifact is the current acceptance evidence.
 
-The configured raw-corpus path deliberately remains query-focused for code sources and supplemental for docs/register/PDF to avoid unbounded symbol evidence explosions; full all-file code indexing still needs a more selective parser/indexer before it can close G15. Final Web/API/browser closure still needs visual QA and product-surface review.
+The configured raw-corpus path deliberately remains query-focused for code sources and supplemental for docs/register/PDF to avoid unbounded symbol evidence explosions; full all-file code indexing still needs a more selective parser/indexer before it can close G15. Current clean-final Web/API/browser product-surface QA is recorded in the final evidence package, while G11 still owns final documentation review, commit, push, and explicit residual-boundary acceptance.
 
 Final closure must link to [Final Clean Evidence Package Gate](2026-05-17-final-clean-evidence-package.md) and include real source roots, DB health, source-type counts, query evidence, graph counts, provider state, visual QA, and performance.
 

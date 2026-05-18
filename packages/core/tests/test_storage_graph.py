@@ -250,6 +250,27 @@ class StorageGraphTests(unittest.TestCase):
         self.assertIn("calls", relations)
         self.assertLessEqual(len(graph["edges"]), 4)
 
+    def test_global_graph_budget_preserves_callback_operation_edges(self):
+        store = AsipStore.connect(":memory:")
+        store.migrate()
+        for index in range(10):
+            store.add_edge(f"isolated_writer_{index}", f"ISOLATED_CNTL_{index}", "writes", 0.99 - index * 0.001)
+        store.add_edge("amdgpu_device_hw_init", "gfx_v11_0_hw_init", "calls", 0.72, source="clang_callback")
+        store.add_edge("gfx_v11_0_hw_init", "GCVM_L2_CNTL", "writes", 0.71, source="clang_text_spans")
+
+        graph = store.global_graph_networkx(limit=3)
+
+        edge_triples = {(edge["src"], edge["relation"], edge["dst"]) for edge in graph["edges"]}
+        self.assertIn(
+            ("function:unknown:unknown:amdgpu_device_hw_init", "calls", "function:unknown:unknown:gfx_v11_0_hw_init"),
+            edge_triples,
+        )
+        self.assertIn(
+            ("function:unknown:unknown:gfx_v11_0_hw_init", "writes", "register:GC:unknown:unknown:GCVM_L2_CNTL"),
+            edge_triples,
+        )
+        self.assertLessEqual(len(graph["edges"]), 3)
+
     def test_global_graph_budget_preserves_largest_connected_backbone(self):
         store = AsipStore.connect(":memory:")
         store.migrate()

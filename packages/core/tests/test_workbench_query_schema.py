@@ -453,6 +453,48 @@ class WorkbenchQuerySchemaTests(unittest.TestCase):
             self.assertIn("pdf", {row["source_type"] for row in result["rows"]})
             self.assertLessEqual(len(result["rows"]), 5)
 
+    def test_query_graph_keeps_pdf_section_node_from_matching_pdf_row_when_edges_exist(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            db_path = Path(tmpdir) / "asip.db"
+            store = AsipStore.connect(str(db_path))
+            store.migrate()
+            store.add_edge("UNRELATED_HELPER", "UNRELATED_REG", "writes", 0.8)
+            pdf_document_id = store.add_document("fixture", "pdf", "docs/manual.pdf")
+            pdf_chunk_id = store.add_chunk(
+                pdf_document_id,
+                "GCVM_L2_CNTL is described on this PDF page.",
+                1,
+                1,
+                page=3,
+            )
+            store.add_evidence(
+                pdf_chunk_id,
+                "fixture",
+                "pdf",
+                "local",
+                "docs/manual.pdf",
+                "GCVM_L2_CNTL",
+                "register",
+                "mention",
+                0.9,
+                "GCVM_L2_CNTL is described on this PDF page.",
+                "pdf page -> GCVM_L2_CNTL",
+                line_start=1,
+                line_end=1,
+                page=3,
+            )
+
+            result = query_evidence(db_path, "GCVM_L2_CNTL PDF page", limit=5)
+
+            nodes = {node["id"]: node for node in result["graph"]["nodes"]}
+            edges = {(edge["src"], edge["relation"], edge["dst"]) for edge in result["graph"]["edges"]}
+            self.assertEqual(nodes["docs/manual.pdf#page-3"]["kind"], "pdf_section")
+            self.assertEqual(nodes["docs/manual.pdf#page-3"]["attr"]["source"][0]["page"], 3)
+            self.assertIn(
+                ("docs/manual.pdf#page-3", "documents", "register:GC:unknown:fixture:GCVM_L2_CNTL"),
+                edges,
+            )
+
     def test_register_queries_preserve_matching_register_header_rows_when_code_scores_dominate(self):
         with tempfile.TemporaryDirectory() as tmpdir:
             db_path = Path(tmpdir) / "asip.db"

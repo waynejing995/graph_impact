@@ -1,0 +1,113 @@
+{
+  "date": "2026-05-18",
+  "status": "pass_with_residuals",
+  "db_path": "/tmp/asip-provider-embed-batch-smoke-20260518-133434.db",
+  "source_db": "data/asip.db backup copy",
+  "provider_settings": {
+    "edge": {
+      "provider": "ollama",
+      "base_url": "http://localhost:11434",
+      "api_path": "/api/chat",
+      "model": "gemma4:e4b",
+      "think": false,
+      "timeout_seconds": 900
+    },
+    "embedding": {
+      "provider": "ollama",
+      "base_url": "http://localhost:11434",
+      "api_path": "/api/embed",
+      "model": "nomic-embed-text:latest",
+      "timeout_seconds": 900
+    }
+  },
+  "database_counts": {
+    "documents": 124,
+    "chunks": 21884,
+    "evidence": 860516,
+    "edges": 41942
+  },
+  "embedding_backfill": {
+    "final_job_id": 10,
+    "status": "succeeded",
+    "message": "Embedded 12572 chunks; truncated 10770 long inputs",
+    "stdout": {
+      "source": "provider_embedding_backfill",
+      "provider": "ollama",
+      "model": "nomic-embed-text:latest",
+      "embedded_chunks": 12572,
+      "truncated_chunks": 10770,
+      "batch_size": 16,
+      "limit": 0,
+      "job_id": 10
+    },
+    "elapsed_seconds": 2388.07,
+    "final_provider_embedding_count": 21884,
+    "missing_provider_embeddings": 0,
+    "truncated_provider_embeddings": 10770,
+    "earlier_attempts": [
+      {
+        "job_id": 8,
+        "status": "succeeded",
+        "message": "Embedded 64 chunks"
+      },
+      {
+        "job_id": 9,
+        "status": "failed",
+        "message": "HTTP Error 400: Bad Request",
+        "debugged_cause": "Ollama /api/embed rejected an over-large input batch/context; the fix now splits failed batches and truncates long inputs with metadata."
+      }
+    ]
+  },
+  "semantic_edges": {
+    "job_before_dedupe_fix": {
+      "job_id": 11,
+      "status": "succeeded",
+      "message": "Generated 2 semantic edges",
+      "provider": "ollama",
+      "model": "gemma4:e4b",
+      "query": "GCVM_L2_CNTL",
+      "observed_duplicate": "regGCVM_L2_CNTL reads GCVM_L2_CNTL was persisted twice before the dedupe regression fix."
+    },
+    "job_after_dedupe_fix": {
+      "job_id": 12,
+      "status": "succeeded",
+      "message": "Generated 1 semantic edges",
+      "provider": "ollama",
+      "model": "gemma4:e4b",
+      "query": "GCVM_L2_CNTL",
+      "evidence_rows": 4,
+      "elapsed_seconds": 51.44,
+      "persisted_edges": [
+        {
+          "src": "regGCVM_L2_CNTL",
+          "relation": "reads",
+          "dst": "GCVM_L2_CNTL",
+          "count_for_job": 1
+        }
+      ]
+    },
+    "final_semantic_edge_count": 28
+  },
+  "edge_counts_by_stage_source": {
+    "deterministic:clang_text_spans": 34987,
+    "deterministic:clang_callback": 6133,
+    "deterministic:text_fallback": 775,
+    "semantic:ollama": 28,
+    "evidence:query_expected_terms": 22
+  },
+  "tests": [
+    {
+      "command": "PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=packages/core/src:packages/core/tests:. python3 -m unittest packages.core.tests.test_workbench_backend_state.WorkbenchBackendStateTests.test_backfill_provider_embeddings_splits_context_too_large_batches packages.core.tests.test_workbench_backend_state.WorkbenchBackendStateTests.test_backfill_provider_embeddings_truncates_long_inputs_with_metadata -v",
+      "result": "passed"
+    },
+    {
+      "command": "PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=packages/core/src:packages/core/tests:. python3 -m unittest packages.core.tests.test_workbench_live.WorkbenchLiveTests.test_semantic_edge_job_deduplicates_provider_edges_before_persisting -v",
+      "result": "passed"
+    }
+  ],
+  "residuals": [
+    "This proves full local Ollama provider embedding coverage on a temp copy, not credentialed live OpenAI-compatible coverage.",
+    "query_evidence still uses deterministic query vectors plus FTS/lexical scoring; provider-vector query-time reranking remains a named residual.",
+    "Long chunks are truncated to fit local embedding context and carry embedding_text_truncated metadata."
+  ]
+}

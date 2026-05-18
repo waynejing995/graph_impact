@@ -1,6 +1,6 @@
 # G14 Static Data And Truthful Empty States
 
-Status: Partial/blocking; static data removal and final route-by-route truth audit remain open
+Status: Current static-limit cleanup pass verified; final route-by-route truth audit remains open
 
 ## Requirement
 
@@ -111,7 +111,7 @@ The UI has become partially live, and query/graph/backend empty/failure paths pl
 This gap remains open because static/default data can still hide the truth:
 
 - route-level fallback rows, static metrics, and demo labels must be audited again after the shadcn/package pass.
-- provider failure nuance, optional real MCP runtime smoke, and remaining route-specific demo states still need route-by-route truth audit before this gap can close.
+- provider failure nuance and remaining route-specific demo states still need route-by-route truth audit before this gap can close. The previous optional real MCP runtime smoke residual is now covered in bundled Python 3.12 by `docs/qa/2026-05-18-g07-real-mcp-runtime-smoke.md`.
 - graph provenance must be visible enough to distinguish raw explicit edges, indexed-evidence edges, function-operation edges, document-section edges, and LLM semantic edges. Missing graph layers must not be hidden behind a generic `ready` label.
 
 2026-05-17 final route truth audit:
@@ -129,10 +129,13 @@ This gap remains open because static/default data can still hide the truth:
 Fresh tests covering this truth audit:
 
 ```text
-Web API + smoke Playwright: 73 passed
+Web API + smoke Playwright: 75 passed
 Visual route Playwright: 15 passed
-FastAPI/MCP unittest: 45 OK, 1 optional MCP runtime skip
-Core unittest discovery: 198 OK, 2 optional sqlite-vec skips
+Combined Web API + smoke + visual Playwright: 90 passed
+FastAPI/MCP unittest: 47 OK, 1 optional MCP runtime skip
+Bundled-Python MCP runtime: 29 OK, 0 skips
+Core unittest discovery: 213 OK, 2 optional sqlite-vec skips
+Lint and TypeScript: passed
 ```
 
 2026-05-17 continuation after subagent audit:
@@ -140,6 +143,7 @@ Core unittest discovery: 198 OK, 2 optional sqlite-vec skips
 - Top-bar global search now runs a real query on graph-capable pages instead of acting as decorative input.
 - Source-type controls now constrain the live query request with `sourceTypes`; core `query_evidence()` filters by `source_type`.
 - The graph header exposes deterministic/semantic layer counts so users can distinguish graph provenance instead of seeing only generic weighted connections.
+- 2026-05-18 static/limit cleanup is recorded in `docs/qa/2026-05-18-g14-static-limit-cleanup-qa.md`. The Web query path no longer fabricates a synthetic graph from rows when an API response omits `graph`, query metrics no longer invent `graph edges` from row count, query-scoped semantic-edge generation now uses `semantic.queryLimit` instead of the batch candidate limit, the Graph BFF clamps normal limits to configured `graph.maxEdgeBudget`, and exact function-node queries can expand persisted graph neighborhoods without synthesizing evidence rows.
 
 The product needs a clear data truth policy:
 

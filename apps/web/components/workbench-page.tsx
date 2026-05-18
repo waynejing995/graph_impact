@@ -307,6 +307,7 @@ type WorkbenchLimits = {
     accessibilitySummaryLimit?: number;
   };
   semantic?: {
+    queryLimit?: number;
     batchCandidateLimit?: number;
     batchSize?: number;
   };
@@ -942,7 +943,7 @@ export function WorkbenchPage({ pageId }: WorkbenchPageProps) {
           try {
             const docNodePayload = {
               mode: "doc-nodes",
-              ...semanticGenerationLimits()
+              ...semanticGenerationLimits("doc-nodes")
             };
             const response = await fetch("/api/workbench/semantic-edges", {
               method: "POST",
@@ -983,7 +984,7 @@ export function WorkbenchPage({ pageId }: WorkbenchPageProps) {
           try {
             const semanticPayload = {
               mode: "batch",
-              ...semanticGenerationLimits()
+              ...semanticGenerationLimits("batch")
             };
             const response = await fetch("/api/workbench/semantic-edges", {
               method: "POST",
@@ -1025,7 +1026,7 @@ export function WorkbenchPage({ pageId }: WorkbenchPageProps) {
         }
         setActionMessage("Generating semantic edges...");
         try {
-          const limits = semanticGenerationLimits();
+          const limits = semanticGenerationLimits("query");
           const response = await fetch("/api/workbench/semantic-edges", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
@@ -1332,14 +1333,18 @@ export function WorkbenchPage({ pageId }: WorkbenchPageProps) {
     );
   }
 
-  function semanticGenerationLimits() {
+  function semanticGenerationLimits(mode: "query" | "batch" | "doc-nodes") {
     const parsedLimit = Number(semanticLimitDraft);
     const parsedBatchSize = Number(semanticBatchSizeDraft);
+    const configuredLimit =
+      mode === "query"
+        ? workbenchLimits.semantic?.queryLimit
+        : workbenchLimits.semantic?.batchCandidateLimit;
     return {
       ...(Number.isFinite(parsedLimit) && parsedLimit > 0
         ? { limit: parsedLimit }
-        : workbenchLimits.semantic?.batchCandidateLimit !== undefined
-          ? { limit: workbenchLimits.semantic.batchCandidateLimit }
+        : configuredLimit !== undefined
+          ? { limit: configuredLimit }
           : {}),
       ...(Number.isFinite(parsedBatchSize) && parsedBatchSize > 0
         ? { batchSize: parsedBatchSize }
@@ -1524,7 +1529,6 @@ export function WorkbenchPage({ pageId }: WorkbenchPageProps) {
               limits={workbenchLimits}
               loadedEdgeBudget={graphEdgeBudget}
               onLoadedEdgeBudgetChange={setGraphEdgeBudget}
-              rows={queryEvidenceRows}
               testId={config.id === "graph-explorer" ? "global-network-graph" : "query-network-graph"}
             />
           ) : null}
@@ -2250,7 +2254,7 @@ function buildPageMetrics(
   if (pageId === "evidence-workbench" || pageId === "graph-explorer") {
     return [
       { label: "matches", value: String(queryRows.length), tone: "success" },
-      { label: "graph edges", value: String(graph?.edges.length ?? Math.min(7, queryRows.length)) },
+      { label: "graph edges", value: graph ? String(graph.edges.length) : "not returned" },
       { label: "query", value: "live", tone: "code" }
     ];
   }
@@ -3168,7 +3172,6 @@ function GlobalNetworkGraph({
   limits,
   loadedEdgeBudget,
   onLoadedEdgeBudgetChange,
-  rows,
   testId
 }: {
   emptyMessage?: string;
@@ -3176,10 +3179,9 @@ function GlobalNetworkGraph({
   limits: WorkbenchLimits;
   loadedEdgeBudget: number | null;
   onLoadedEdgeBudgetChange: (value: number | null) => void;
-  rows: EvidenceRow[];
   testId: string;
 }) {
-  const graphData = buildGraphData(graph, rows);
+  const graphData = buildGraphData(graph);
   const isEmpty = graphData.nodes.length === 0;
   const [minEdgeWeight, setMinEdgeWeight] = useState<number | null>(null);
   const [maxNodes, setMaxNodes] = useState<number | null>(null);
@@ -3325,52 +3327,11 @@ function GraphDisplayControls({
   );
 }
 
-function buildGraphData(graph: GraphPayload | null, rows: EvidenceRow[]): GraphPayload {
+function buildGraphData(graph: GraphPayload | null): GraphPayload {
   if (graph) {
     return sanitizeGraphPayload(graph) ?? { nodes: [], edges: [] };
   }
-  if (rows.length === 0) {
-    return { nodes: [], edges: [] };
-  }
-  const merged = rows.filter(
-    (row, index, allRows) => allRows.findIndex((candidate) => candidate.symbol === row.symbol) === index
-  );
-  const registerIndex = merged.findIndex((row) => row.tone === "register");
-  if (registerIndex > 0) {
-    const [registerRow] = merged.splice(registerIndex, 1);
-    merged.unshift(registerRow);
-  }
-  const pdfIndex = merged.findIndex((row, index) => index > 0 && row.tone === "pdf");
-  if (pdfIndex > 0) {
-    const [pdfRow] = merged.splice(pdfIndex, 1);
-    merged.splice(Math.min(6, merged.length), 0, pdfRow);
-  }
-  const nodes = merged.flatMap((row, index) => {
-    const kind = graphKindForEvidenceRow(row);
-    if (!kind || !row.symbol) {
-      return [];
-    }
-    return [{
-      id: row.symbol,
-      kind,
-      label: row.symbol,
-      in: [],
-      out: [],
-      attr: {
-        entity_type: row.entity_type ?? "",
-        source_type: row.source_type ?? "",
-        source: [sourceRecordForEvidenceRow(row)]
-      },
-      weight: Math.max(1, 9 - index)
-    }];
-  }).slice(0, 9);
-  const edges = nodes.slice(1).map((node, index) => ({
-    src: nodes[0].id,
-    dst: node.id,
-    relation: normalizeGraphRelation(merged[index + 1]?.relation ?? "relates_to").relation,
-    weight: Number(merged[index + 1]?.score) || Math.max(0.2, 0.9 - index * 0.08)
-  }));
-  return sanitizeGraphPayload({ nodes, edges }) ?? { nodes: [], edges: [] };
+  return { nodes: [], edges: [] };
 }
 
 const allowedGraphKinds = new Set(["function", "register", "doc_section", "pdf_section", "doc_box"]);
@@ -3429,22 +3390,6 @@ function sanitizeGraphPayload(graph: GraphPayload | null | undefined): GraphPayl
   return { nodes, edges };
 }
 
-function graphKindForEvidenceRow(row: EvidenceRow) {
-  if (row.tone === "register") {
-    return "register";
-  }
-  if (row.tone === "doc") {
-    return "doc_section";
-  }
-  if (row.tone === "pdf") {
-    return "pdf_section";
-  }
-  if (row.tone === "code" && row.entity_type === "function") {
-    return "function";
-  }
-  return null;
-}
-
 function normalizeGraphRelation(rawRelation: string | undefined) {
   const raw = String(rawRelation ?? "").trim();
   const normalized = raw.toLowerCase().replace(/[-\s]+/g, "_");
@@ -3468,17 +3413,6 @@ function normalizeGraphRelation(rawRelation: string | undefined) {
     return { relation: candidate, original: candidate === normalized ? "" : raw };
   }
   return { relation: "relates_to", original: raw };
-}
-
-function sourceRecordForEvidenceRow(row: EvidenceRow) {
-  return {
-    corpus_id: row.corpus_id ?? "unknown",
-    repo: row.source ?? "unknown",
-    path: row.path ?? "",
-    ...(row.line_start ? { line_start: row.line_start } : {}),
-    ...(row.line_end ? { line_end: row.line_end } : {}),
-    ...(row.page ? { page: row.page } : {})
-  };
 }
 
 function unknownSourceRecord() {

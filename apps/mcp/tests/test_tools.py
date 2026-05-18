@@ -31,7 +31,9 @@ from apps.mcp.tools import (
 
 class McpToolsTests(unittest.TestCase):
     def test_search_evidence_returns_live_sqlite_rows(self):
-        result = search_evidence("doorbell interrupt disable")
+        with TemporaryDirectory() as tmpdir:
+            db_path = _create_live_smoke_sqlite_db(Path(tmpdir) / "live.db")
+            result = search_evidence("doorbell interrupt disable", db_path=db_path)
 
         self.assertTrue(result["query_id"].endswith("doorbell_interrupt_disable"))
         self.assertEqual(result["source"], "sqlite")
@@ -58,8 +60,22 @@ class McpToolsTests(unittest.TestCase):
             self.assertEqual(result["rows"], [])
             self.assertTrue(result["empty"])
 
+    def test_search_evidence_applies_ip_and_asic_filters(self):
+        with TemporaryDirectory() as tmpdir:
+            db_path = _create_filter_sqlite_db(Path(tmpdir) / "filters.db")
+
+            result = search_evidence("FILTER_REG", db_path=db_path, ip_block="GC", asic_or_generation="gc_11_0")
+
+            self.assertEqual([row["symbol"] for row in result["rows"]], ["FILTER_REG"])
+            self.assertEqual({row["ip_block"] for row in result["rows"]}, {"GC"})
+            self.assertEqual({row["asic_or_generation"] for row in result["rows"]}, {"gc_11_0"})
+            self.assertEqual(result["filters"]["ip_block"], "GC")
+            self.assertEqual(result["filters"]["asic_or_generation"], "gc_11_0")
+
     def test_graph_expand_returns_live_weighted_edges(self):
-        result = graph_expand("GCVM_L2_CNTL")
+        with TemporaryDirectory() as tmpdir:
+            db_path = _create_live_smoke_sqlite_db(Path(tmpdir) / "live.db")
+            result = graph_expand("GCVM_L2_CNTL", db_path=db_path)
 
         self.assertTrue(any(edge["relation"] == "sets_field" for edge in result["edges"]))
         self.assertTrue(any(node["kind"] == "register" and node["label"] == "GCVM_L2_CNTL" for node in result["nodes"]))
@@ -412,9 +428,19 @@ class McpToolsTests(unittest.TestCase):
             self.assertEqual(detail["id"], evidence_id)
             self.assertEqual(detail["symbol"], "DETAIL_REGISTER")
             self.assertIn("resolved_chain", detail)
+            self.assertEqual(detail["resolved_chain_explanation"]["evidence_id"], evidence_id)
+            self.assertEqual(
+                [step["label"] for step in detail["resolved_chain_explanation"]["steps"]],
+                ["source mention", "DETAIL_REGISTER"],
+            )
+            self.assertEqual(detail["resolved_chain_explanation"]["source"]["path"], "note.md")
             self.assertEqual(explained["symbol"], "DETAIL_REGISTER")
             self.assertTrue(any(row["id"] == evidence_id for row in explained["evidence"]))
             self.assertIn("graph", explained)
+            self.assertEqual(
+                explained["resolved_chain_explanations"][0]["steps"][-1]["label"],
+                "DETAIL_REGISTER",
+            )
 
     def test_evidence_detail_explicit_missing_db_returns_not_found_without_creating_db(self):
         with TemporaryDirectory() as tmpdir:
@@ -435,6 +461,7 @@ class McpToolsTests(unittest.TestCase):
             self.assertEqual(result["symbol"], "GCVM_L2_CNTL")
             self.assertEqual(result["evidence"], [])
             self.assertEqual(result["resolved_chains"], [])
+            self.assertEqual(result["resolved_chain_explanations"], [])
             self.assertEqual(result["graph"]["edges"], [])
 
     def test_provider_settings_tools_round_trip_edge_and_embedding_settings(self):
@@ -595,6 +622,69 @@ def _create_empty_sqlite_db(db_path: str) -> None:
     con.execute("create table marker(id integer)")
     con.commit()
     con.close()
+
+
+def _create_filter_sqlite_db(db_path: Path) -> str:
+    from asip.storage import AsipStore
+
+    store = AsipStore.connect(str(db_path))
+    store.migrate()
+    for ip_block, asic, path, line in (
+        ("GC", "gc_11_0", "drivers/gpu/drm/amd/amdgpu/gc.c", 11),
+        ("SDMA", "sdma_5_0", "drivers/gpu/drm/amd/amdgpu/sdma.c", 22),
+    ):
+        document_id = store.add_document("fixture", "code", path)
+        chunk_id = store.add_chunk(document_id, f"FILTER_REG evidence for {ip_block}", line, line)
+        store.add_evidence(
+            chunk_id,
+            "fixture",
+            "code",
+            "local",
+            path,
+            "FILTER_REG",
+            "register",
+            "write",
+            0.9,
+            f"FILTER_REG evidence for {ip_block}",
+            f"{ip_block} writes FILTER_REG",
+            line_start=line,
+            line_end=line,
+            ip_block=ip_block,
+            asic_or_generation=asic,
+        )
+    return str(db_path)
+
+
+def _create_live_smoke_sqlite_db(db_path: Path) -> str:
+    from asip.storage import AsipStore
+
+    store = AsipStore.connect(str(db_path))
+    store.migrate()
+    document_id = store.add_document("fixture", "code", "drivers/gpu/drm/amd/amdgpu/doorbell.c")
+    chunk_id = store.add_chunk(
+        document_id,
+        "DOORBELL_INTERRUPT_DISABLE evidence and GCVM_L2_CNTL ENABLE_L2_CACHE field programming.",
+        10,
+        12,
+    )
+    store.add_evidence(
+        chunk_id,
+        "fixture",
+        "code",
+        "local",
+        "drivers/gpu/drm/amd/amdgpu/doorbell.c",
+        "DOORBELL_INTERRUPT_DISABLE",
+        "field",
+        "mention",
+        0.95,
+        "DOORBELL_INTERRUPT_DISABLE evidence",
+        "fixture -> DOORBELL_INTERRUPT_DISABLE",
+        line_start=10,
+        line_end=12,
+        query_id="fixture_doorbell_interrupt_disable",
+    )
+    store.add_edge("program_gcvm_l2", "GCVM_L2_CNTL", "sets_field", 0.95, provenance={"fields": ["ENABLE_L2_CACHE"]})
+    return str(db_path)
 
 
 def _sqlite_table_exists(db_path: str, table_name: str) -> bool:

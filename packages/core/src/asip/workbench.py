@@ -43,7 +43,7 @@ from .semantic_edges import (
     normalize_generated_cases,
     scan_full_corpus_queries,
 )
-from .storage import AsipStore
+from .storage import AsipStore, section_overlay_graph_for_evidence_rows
 
 
 SOURCE_EXTENSIONS = {".c", ".cc", ".cpp", ".h", ".hpp", ".md", ".rst", ".txt", ".pdf"}
@@ -399,7 +399,15 @@ def query_evidence(
 
     rows.sort(key=lambda item: (-float(item["rank_score"]), str(item["symbol"]), int(item["id"])))
     rows = _select_diverse_rows(_dedupe_rows(rows), result_limit)
-    graph = graph_for_rows(rows, db_path)
+    if rows:
+        graph = graph_for_rows(rows, db_path)
+    else:
+        graph_seed = query.strip()
+        graph = (
+            expand_query_graph(db_path, graph_seed)
+            if graph_seed and is_graph_entity_endpoint(graph_seed) and _sqlite_table_exists(db_path, "edges")
+            else graph_for_rows(rows, db_path)
+        )
     return {
         "query": query,
         "queryId": _query_id_for_results(query, rows),
@@ -434,7 +442,9 @@ def get_evidence_detail(db_path: Path, evidence_id: int) -> Dict[str, Any]:
     store = AsipStore.connect(str(db_path))
     for row in store.all_evidence():
         if int(row["id"]) == int(evidence_id):
-            return _json_ready(row)
+            detail = _json_ready(row)
+            detail["resolved_chain_explanation"] = _resolved_chain_explanation_for_row(detail)
+            return detail
     raise ValueError(f"evidence id not found: {evidence_id}")
 
 
@@ -447,6 +457,11 @@ def explain_entity(db_path: Path, symbol: str) -> Dict[str, Any]:
         "graph": graph,
         "resolved_chains": [
             row.get("resolved_chain")
+            for row in evidence.get("rows", [])
+            if row.get("resolved_chain")
+        ],
+        "resolved_chain_explanations": [
+            _resolved_chain_explanation_for_row(row)
             for row in evidence.get("rows", [])
             if row.get("resolved_chain")
         ],
@@ -560,6 +575,13 @@ def graph_for_rows(rows: List[Dict[str, Any]], db_path: Path) -> Dict[str, Any]:
     for node in graph["nodes"]:
         node_by_id.setdefault(str(node["id"]), _graph_node_payload(node))
     for edge in graph["edges"]:
+        ready_edge = _edge_with_weight(edge)
+        key = (str(ready_edge["src"]), str(ready_edge["relation"]), str(ready_edge["dst"]))
+        edge_by_key.setdefault(key, ready_edge)
+    section_graph = section_overlay_graph_for_evidence_rows(rows)
+    for node in section_graph["nodes"]:
+        node_by_id.setdefault(str(node["id"]), _graph_node_payload(node))
+    for edge in section_graph["edges"]:
         ready_edge = _edge_with_weight(edge)
         key = (str(ready_edge["src"]), str(ready_edge["relation"]), str(ready_edge["dst"]))
         edge_by_key.setdefault(key, ready_edge)
@@ -925,6 +947,7 @@ def backfill_provider_embeddings(
     limits = load_workbench_limits()
     effective_limit = limit if limit is not None else limits.int_value("embedding", "backfill_limit", minimum=0)
     effective_batch_size = batch_size if batch_size is not None else limits.int_value("embedding", "batch_size", minimum=1)
+    max_text_chars = limits.int_value("embedding", "max_text_chars", minimum=0) or 0
     if effective_limit is None or effective_batch_size is None:
         raise ValueError(f"embedding limits are missing from {limits.path}")
     db_path.parent.mkdir(parents=True, exist_ok=True)
@@ -941,6 +964,7 @@ def backfill_provider_embeddings(
         metadata={"provider_settings": provider_settings, "limit": effective_limit, "batch_size": batch_size},
     )
     embedded_chunks = 0
+    truncated_chunks = 0
     try:
         rows = _chunks_missing_provider_embedding(store, config.provider, config.model, limit=effective_limit)
         provider = create_embedding_provider(config)
@@ -948,17 +972,22 @@ def backfill_provider_embeddings(
             provider.transport = embedding_transport
         for start in range(0, len(rows), batch_size):
             batch = rows[start : start + batch_size]
-            vectors = provider.embed([str(row["text"]) for row in batch], config)
-            for row, vector in zip(batch, vectors):
+            prepared = [_prepare_embedding_input_text(str(row["text"]), max_text_chars) for row in batch]
+            vectors = _embed_provider_batch(provider, [item["text"] for item in prepared], config)
+            for row, prepared_text, vector in zip(batch, prepared, vectors):
+                metadata = {"source": "provider", **prepared_text["metadata"]}
+                if prepared_text["metadata"].get("embedding_text_truncated"):
+                    truncated_chunks += 1
                 store.add_embedding(
                     int(row["id"]),
                     provider=config.provider,
                     model=config.model,
                     vector=vector,
-                    metadata={"source": "provider"},
+                    metadata=metadata,
                 )
                 embedded_chunks += 1
-        store.finish_job(job_id, "embedded", f"Embedded {embedded_chunks} chunks")
+        suffix = f"; truncated {truncated_chunks} long inputs" if truncated_chunks else ""
+        store.finish_job(job_id, "embedded", f"Embedded {embedded_chunks} chunks{suffix}")
     except Exception as exc:
         store.finish_job(job_id, "failed", str(exc))
         raise
@@ -968,10 +997,42 @@ def backfill_provider_embeddings(
         "provider": config.provider,
         "model": config.model,
         "embedded_chunks": embedded_chunks,
+        "truncated_chunks": truncated_chunks,
         "batch_size": batch_size,
         "limit": limit,
         "job_id": job_id,
     }
+
+
+def _prepare_embedding_input_text(text: str, max_text_chars: int) -> Dict[str, Any]:
+    if max_text_chars <= 0 or len(text) <= max_text_chars:
+        return {"text": text, "metadata": {}}
+    return {
+        "text": text[:max_text_chars],
+        "metadata": {
+            "embedding_text_truncated": True,
+            "embedding_text_chars": max_text_chars,
+            "original_text_chars": len(text),
+        },
+    }
+
+
+def _embed_provider_batch(provider: Any, texts: List[str], config: EmbeddingProviderConfig) -> List[List[float]]:
+    try:
+        return provider.embed(texts, config)
+    except Exception as exc:
+        if len(texts) > 1 and _is_provider_context_length_error(exc):
+            midpoint = max(1, len(texts) // 2)
+            return [
+                *_embed_provider_batch(provider, texts[:midpoint], config),
+                *_embed_provider_batch(provider, texts[midpoint:], config),
+            ]
+        raise
+
+
+def _is_provider_context_length_error(exc: Exception) -> bool:
+    message = str(exc).lower()
+    return "context length" in message or "input length" in message or "too large" in message
 
 
 def generate_semantic_edges_for_query(
@@ -1792,6 +1853,7 @@ def _persist_generated_edges(
     commit: bool = True,
 ) -> int:
     edge_count = 0
+    seen_edges: set[tuple[str, str, str]] = set()
     for case in generated.get("cases", []):
         if not isinstance(case, Mapping):
             continue
@@ -1807,6 +1869,10 @@ def _persist_generated_edges(
                 continue
             if not is_graph_entity_endpoint(src) or not is_graph_entity_endpoint(dst):
                 continue
+            edge_key = (src, relation.lower(), dst)
+            if edge_key in seen_edges:
+                continue
+            seen_edges.add(edge_key)
             store.add_edge(
                 src=src,
                 dst=dst,
@@ -1987,9 +2053,10 @@ def _index_deterministic_code_graph_files(
                             "type_flow": str(getattr(slot_call, "type_flow", "") or ""),
                             "callback_table": str(callback.table),
                             "callback_table_type": str(getattr(callback, "table_type", "") or ""),
+                            "callback_initializer_flow": str(getattr(callback, "initializer_flow", "") or ""),
                             "callback_candidate_count": len(callbacks),
                             "dispatch_scope": "generic_slot" if call_kind == "vtable_dispatch" else "matched_slot",
-                            "callee_path": str(callback.path),
+                            "callee_path": str(getattr(callback, "function_path", "") or callback.path),
                             "callback_path": str(callback.path),
                             "callee_line": getattr(callback, "function_line_start", None),
                             "callback_line": getattr(callback, "assignment_line_start", None) or callback.line_start,
@@ -2367,6 +2434,48 @@ def _resolved_chain_for_symbol(text: str, symbol: str, access_type: str) -> str:
     if access_type in {"read", "write"}:
         return f"{access_type} wrapper -> {symbol}"
     return f"source mention -> {symbol}"
+
+
+def _resolved_chain_explanation_for_row(row: Mapping[str, Any]) -> Dict[str, Any]:
+    chain = str(row.get("resolved_chain") or "").strip()
+    labels = [part.strip() for part in re.split(r"\s*->\s*", chain) if part.strip()]
+    if not labels and row.get("symbol"):
+        labels = [str(row["symbol"])]
+    steps = [
+        {
+            "index": index,
+            "label": label,
+            "kind": _resolved_chain_step_kind(label),
+        }
+        for index, label in enumerate(labels, start=1)
+    ]
+    return {
+        "evidence_id": row.get("id"),
+        "symbol": row.get("symbol", ""),
+        "relation": row.get("relation") or row.get("access_type") or "",
+        "resolved_chain": chain,
+        "steps": steps,
+        "source": {
+            key: row[key]
+            for key in ("corpus_id", "repo", "path", "line_start", "line_end", "page", "source_type")
+            if row.get(key) is not None
+        },
+        "snippet": row.get("snippet", ""),
+    }
+
+
+def _resolved_chain_step_kind(label: str) -> str:
+    lowered = label.lower()
+    if lowered.startswith(("read ", "write ", "source ", "resolver ", "doc ", "pdf ")):
+        return "operation"
+    if lowered.startswith("register "):
+        return "register"
+    if lowered.startswith("field "):
+        return "field"
+    if lowered.endswith("wrapper") or lowered in {"reg_set_field"}:
+        return "resolver"
+    candidate = label.split()[-1] if label.split() else label
+    return _entity_type_for_symbol(candidate)
 
 
 def _relation_for_terms(text: str, src: str, dst: str) -> str:

@@ -36,9 +36,15 @@ DEFAULT_CONFIG = REPO_ROOT / "configs/edge_cases/full-corpus-gemma4-e4b.json"
 DEFAULT_DB = REPO_ROOT / "data/asip.db"
 
 
-def search_evidence(query: str, db_path: str | None = None) -> Dict[str, Any]:
+def search_evidence(
+    query: str,
+    db_path: str | None = None,
+    ip_block: str = "",
+    asic_or_generation: str = "",
+    asic: str = "",
+) -> Dict[str, Any]:
     db = Path(db_path) if db_path else DEFAULT_DB
-    payload = query_evidence(db, query)
+    payload = query_evidence(db, query, ip_block=ip_block, asic_or_generation=asic_or_generation or asic)
     payload["query_id"] = payload.get("queryId", "")
     return payload
 

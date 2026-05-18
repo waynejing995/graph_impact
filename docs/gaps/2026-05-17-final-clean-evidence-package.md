@@ -63,8 +63,17 @@ The current final-candidate package is `docs/qa/2026-05-17-final-clean-evidence-
 It links the clean AMD DB, source roots, counts, AQ01-AQ09 9/9 artifact,
 six free-form queries, `gemma4:e4b` clean provider smoke and live semantic-edge jobs, visual QA screenshots,
 automated verification, architecture review, and a final git gate. Commit and
-push evidence is recorded by the repository history for the change that includes
-the package.
+push evidence remains pending until the G11 final gate stages, commits, and
+pushes the change that includes this package.
+
+2026-05-18 continuation evidence added to that package:
+
+- full local temp-copy `ollama/nomic-embed-text:latest` provider embedding coverage over `21884 / 21884` chunks;
+- real `gemma4:e4b` semantic-edge generation after dedupe hardening;
+- 10 real CLI/core graph queries including exact function-node graph fallback;
+- in-app browser 2K screenshots for the default global graph and `gfx_v11_0_hw_init` graph query.
+
+These narrow previous provider/query/browser gaps, but they do not remove the G13 residuals for full clangd/libclang cross-TU type-flow, query-time provider rerank, credentialed OpenAI-compatible live QA, scanned-PDF OCR, or full empty-DB raw re-index timing.
 
 ## Closure Rule
 

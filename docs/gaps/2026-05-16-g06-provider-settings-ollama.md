@@ -1,6 +1,6 @@
 # G06 Provider Settings And Ollama Detection
 
-Status: Batch/query semantic-edge provider paths verified locally; OpenAI-compatible secret and rerank boundaries remain explicit deferrals/blockers
+Status: Batch/query semantic-edge and full local temp-copy provider backfill verified; OpenAI-compatible secret and query-time provider rerank remain explicit deferrals/blockers
 
 ## Requirement
 
@@ -44,6 +44,8 @@ Semantic-edge generation must support both query-scoped generation and batch cor
 - 2026-05-17 targeted batch QA `docs/qa/2026-05-17-graph-function-section-batch-qa.md` records a real `asip.cli semantic-edges-batch --db data/asip.db --limit 2 --batch-size 1` run using `ollama/gemma4:e4b`: `candidate_count=2`, `edge_count=11`, `job_id=10`.
 - Provider extra headers now support late-bound secret expansion for both embedding and semantic-edge providers: `env:VAR` for whole-header values and `${ENV:VAR}` inside strings such as `Bearer ${ENV:OPENAI_API_KEY}`. Expansion happens only when the request is built, leaves the saved provider settings unchanged, and raises a clear `unset environment variable` error before transport if the variable is missing.
 - Targeted regression coverage: `packages.core.tests.test_providers.EmbeddingProviderTests.test_extra_headers_expand_environment_placeholders_without_persisting_secret`, `packages.core.tests.test_providers.EmbeddingProviderTests.test_extra_header_env_placeholder_requires_existing_variable`, `packages.core.tests.test_providers.EmbeddingProviderTests.test_extra_headers_expand_direct_environment_reference`, `packages.core.tests.test_semantic_edges.SemanticEdgeFeatureTests.test_edge_provider_extra_headers_expand_environment_placeholders`, and `packages.core.tests.test_semantic_edges.SemanticEdgeFeatureTests.test_edge_provider_extra_header_missing_environment_stops_before_transport`.
+- 2026-05-18 bounded provider-backfill smoke is recorded in `docs/qa/2026-05-18-g06-provider-backfill-smoke.md` and `.json`. A SQLite backup copy of live `data/asip.db` ran `python3 -m asip.cli provider-embeddings --limit 128 --batch-size 8` through local Ollama `nomic-embed-text:latest`: `exit_code=0`, `embedded_chunks=128`, elapsed `17.703s`, and provider embedding count increased from `32` to `160` in the temp DB. This is product CLI/provider evidence, not full provider-vector coverage.
+- 2026-05-18 full local temp-copy provider backfill is recorded in `docs/qa/2026-05-18-g06-full-provider-backfill-tempdb-qa.md` and `.json`. A backup copy of current `data/asip.db` ended with `21884 / 21884` chunks covered by `ollama/nomic-embed-text:latest`, `missing_provider_embeddings=0`, and `10770` long chunks marked with truncation metadata after fixing batch splitting and context-length handling. The resumed full job embedded `12572` remaining chunks in `2388.07s`; earlier failed job 9 exposed the Ollama context-limit issue. The same artifact records a real `gemma4:e4b` query semantic-edge call after dedupe hardening: job 12 generated one persisted edge for `GCVM_L2_CNTL` in `51.44s`.
 
 ## Remaining Gap
 
@@ -53,7 +55,7 @@ Local Ollama availability, a small job-level AQ09 provider path, isolated Web BF
 
 The batch semantic-edge product path is now implemented and tested for indexed candidates and graph refresh. Remaining provider risk is operational: local Ollama generation is slow/heavy on `gemma4:e4b`, and a credentialed live OpenAI-compatible endpoint has not been supplied.
 
-The current clean AMD DB has partial provider embeddings, not full provider-vector coverage for all chunks. Provider status must not imply that `qwen`, `gemma`, `nomic`, or any OpenAI-compatible model generated every current index vector unless job metadata proves it.
+The current full local coverage proof is a named temp-copy artifact, not a credentialed hosted provider proof. Provider status must still not imply that `qwen`, `gemma`, `nomic`, or any OpenAI-compatible model generated every current default-DB vector unless job metadata proves it for that DB.
 
 OpenAI-compatible smoke currently validates request shape and safe secret/env header expansion, but does not perform a credentialed live OpenAI-compatible endpoint check because no live credentialed endpoint has been supplied.
 
@@ -80,6 +82,7 @@ OpenAI-compatible smoke currently validates request shape and safe secret/env he
 - UI test: fresh browser session loads backend provider settings.
 - Core/API/Web test: batch semantic-edge generation uses the saved edge provider settings, persists graph edges, and reports structured failure details when the provider fails or times out.
 - Regression test: the model label shown in the Web top bar/settings is hydrated from backend settings and matches the provider/model recorded on the last edge job; stale localStorage must not override backend state.
+- QA smoke: bounded `provider-embeddings` backfill on a temp copy records elapsed time, provider/model, embedded chunk count, and no full-coverage claim.
 
 ## Not Closed Until
 

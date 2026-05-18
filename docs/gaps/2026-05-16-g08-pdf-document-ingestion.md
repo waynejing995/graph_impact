@@ -1,6 +1,6 @@
 # G08 PDF And Document Ingestion
 
-Status: Markdown/doc section graph nodes verified; indexed PDF evidence exists; PDF-specific section browser proof remains a narrower residual
+Status: Current pass verified for indexed PDF evidence, page provenance, and browser/API `pdf_section` proof
 
 ## Requirement
 
@@ -20,11 +20,11 @@ After conversion to Markdown/text chunks, documents must also provide graph stru
 - `packages/core/tests/test_workbench_corpus_state.py` verifies registered `.rst` and `.pdf` text can become queryable doc/pdf evidence.
 - `packages/core/tests/test_workbench_live.py` verifies configured include globs can index non-query Markdown/PDF files as queryable evidence.
 - A converter-level smoke against AMD's public MI300 CDNA3 ISA PDF extracted 561 page chunks and first-page text containing `AMD Instinct MI300`.
-- Current default full-corpus runs have not proven real indexed PDF evidence in the Web query path.
+- Current clean-final default-corpus QA proves indexed PDF evidence in the Web query path.
 - The historical clean provider AQ01-AQ09 artifact passed the older runner matrix, but every query reported `source_types: ["code"]`; it does not prove PDF or documentation evidence appears in retrieval.
 - Source-gated acceptance rerun `docs/qa/2026-05-17-acceptance-clean-qwen35-source-gated-current.json` and `.md` now correctly fails AQ05 with `required source types missing: pdf` against the old clean DB.
 - Synthetic multi-source fixture acceptance `docs/qa/2026-05-17-acceptance-multisource-fixture.*` proves PDF evidence can enter the same acceptance query path as code/doc/register. AQ05 source types include `pdf`, and the fixture DB has PDF evidence with `page=1` symbols `AMDGPU`, `ENABLE_L2_CACHE`, `GCVM_L2_CNTL`, and `PDF`.
-- A targeted Web smoke test now asserts evidence rows can expose source type and PDF page citation in the table/inspector, but final browser QA still needs to run against the real final corpus and visual anchors.
+- A targeted Web smoke test asserts evidence rows can expose source type and PDF page citation in the table/inspector, and the clean-final browser QA now proves the same path against the default workbench corpus.
 - Reduced AMD amdgpu documentation fixture `docs/fixtures/amd-amdgpu-docs/amdgpu-driver-source-tree.md` and `.pdf` is included in `configs/edge_cases/clean-amd-gemma4-e4b.json`.
 - `packages/core/tests/test_documents.py` now verifies that the reduced AMD PDF fixture is extractable and that ReportLab `/ASCII85Decode` + `/FlateDecode` PDF streams can be decoded by the fallback extractor when `pypdf`/MarkItDown are unavailable.
 - Clean AMD DB `/tmp/asip-clean-amd-gemma4-provider-2026-05-17-final.db` contains `documents` source count `pdf=1` and `evidence` source count `pdf=5`; AQ05 passes with `code`, `doc`, `pdf`, and `register` in `docs/qa/2026-05-17-acceptance-clean-amd-gemma4-provider-current.json`.
@@ -33,16 +33,15 @@ After conversion to Markdown/text chunks, documents must also provide graph stru
 - 2026-05-17 semantic endpoint hardening now proves a Stage 2 provider can return a document-section endpoint such as `docs/guide.md#programming-local-registers`, and the default global graph preserves it as `kind=doc_section`.
 - 2026-05-17 PDF section provenance hardening now proves a PDF-derived graph node such as `docs/manual.pdf#page-3` carries `source_type=pdf`, `path`, `page`, `anchor`, and a user-facing label through the core graph payload.
 - 2026-05-17 BoxMatrix-style doc-node extraction now uses the configured LLM provider call to turn document chunks into self-contained `doc_box` nodes and relationships. This intentionally does not use a BoxMatrix skill; the provider prompt carries the box/matrix abstraction and stores provider/model/job provenance.
+- 2026-05-18 clean-final PDF section QA proves the real default Web/API path can expose `amdgpu-driver-source-tree.pdf#page-1` as `kind=pdf_section` with `attr.source[0].path=amdgpu-driver-source-tree.pdf` and `attr.source[0].page=1`. Evidence is recorded in `docs/qa/2026-05-18-pdf-section-clean-final-qa.md`, with browser screenshot `docs/qa/browser/pdf-section-query-clean-final-3100-2k.png`.
 
 ## Remaining Gap
 
-PDF support is functional for deterministic fixtures, a source-diverse synthetic fixture, a real converter-level AMD PDF smoke, and an indexed reduced AMD amdgpu PDF in the clean AMD DB. The old clean AQ runner pass is superseded by the source-gated failure artifact; the current clean AMD artifact is the first accepted indexed PDF evidence. G08 remains open until final API/UI/browser QA shows page/source metadata to the user.
+PDF support is functional for deterministic fixtures, a source-diverse synthetic fixture, a real converter-level AMD PDF smoke, and an indexed reduced AMD amdgpu PDF in the clean AMD DB. The current clean-final API and browser QA now show the PDF section node and page/source metadata to the user.
 
-MarkItDown remains optional; `pypdf` is the declared page-preserving converter for MVP smoke coverage, with a stdlib fallback for simple and ReportLab-compressed text streams. The final acceptance path still needs browser QA proving PDF page/source citations through API/UI.
+MarkItDown remains optional; `pypdf` is the declared page-preserving converter for MVP smoke coverage, with a stdlib fallback for simple and ReportLab-compressed text streams. The final acceptance path now has API and browser proof for PDF page/source citations through the product UI.
 
-The Web inspector and E2E path still need to prove PDF page/source metadata is visible to users.
-
-Document graph extraction is implemented for converted document chunks, heading/line/page section ids, PDF section provenance, and LLM-extracted BoxMatrix-style doc boxes. The residual G08 risk is narrower: final browser proof still needs to isolate a real PDF-derived `pdf_section` node with page provenance from the final AMD corpus rather than only fixture-level core proof.
+Document graph extraction is implemented for converted document chunks, heading/line/page section ids, PDF section provenance, and LLM-extracted BoxMatrix-style doc boxes. The remaining boundary is content depth: the reduced clean-final PDF is intentionally small and generic, so it proves page-aware ingestion and section rendering, while richer real AMD PDF coverage stays outside this slice unless a larger PDF corpus is added.
 
 ## Acceptance Criteria
 

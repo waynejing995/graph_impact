@@ -1,0 +1,199 @@
+{
+  "source": "asip.g15.real_corpus_repeat_graph_rebuild",
+  "generated_at": "2026-05-18T12:22:08+0800",
+  "source_db_path": "/Volumes/data/User/wayne/Code/graph_impact/data/asip.db",
+  "copy_method": "sqlite3.Connection.backup(readonly source)",
+  "command": "python3 -m asip.cli graph-rebuild --db <tmp-copy> --corpus-id linux-amdgpu --corpus-id mxgpu",
+  "runs": [
+    {
+      "run": 1,
+      "db_path": "/tmp/asip-g15-live-repeat-1-2026-05-18.db",
+      "preflight_corpora": [
+        {
+          "id": "amd-amdgpu-docs",
+          "status": "indexed",
+          "source_root": "/Volumes/data/User/wayne/Code/graph_impact/docs/fixtures/amd-amdgpu-docs"
+        },
+        {
+          "id": "linux-amdgpu",
+          "status": "indexed",
+          "source_root": "/tmp/asip-linux-amdgpu"
+        },
+        {
+          "id": "mxgpu",
+          "status": "indexed",
+          "source_root": "/tmp/asip-mxgpu"
+        }
+      ],
+      "exit_code": 0,
+      "elapsed_seconds": 131.639,
+      "stdout_summary": {
+        "source": "deterministic_graph_rebuild",
+        "db_path": "/tmp/asip-g15-live-repeat-1-2026-05-18.db",
+        "corpus_ids": [
+          "linux-amdgpu",
+          "mxgpu"
+        ],
+        "files": 1225,
+        "edges": 41923,
+        "job_id": 7,
+        "resolver_profile_ids": [
+          "linux-amdgpu",
+          "amd-mxgpu",
+          "amd-direct-mmio",
+          "amd-field-macros",
+          "amd-soc15",
+          "amdgv-mxgpu-context",
+          "initial",
+          "python-hw-symbols",
+          "toy-python"
+        ]
+      },
+      "stderr": "",
+      "counts": {
+        "corpora": 3,
+        "documents": 124,
+        "chunks": 21884,
+        "evidence": 860516,
+        "edges": 41936,
+        "embeddings": 32,
+        "jobs": 7
+      },
+      "edge_sources": {
+        "clang_callback": 6127,
+        "clang_text_spans": 34987,
+        "ollama": 25,
+        "query_expected_terms": 22,
+        "text_fallback": 775
+      },
+      "edge_relations": {
+        "calls": 27706,
+        "contains_box": 6,
+        "is_responsible_for": 5,
+        "maps_base": 2387,
+        "mentions": 1,
+        "reads": 3533,
+        "sets_field": 1563,
+        "writes": 6735
+      }
+    },
+    {
+      "run": 2,
+      "db_path": "/tmp/asip-g15-live-repeat-2-2026-05-18.db",
+      "preflight_corpora": [
+        {
+          "id": "amd-amdgpu-docs",
+          "status": "indexed",
+          "source_root": "/Volumes/data/User/wayne/Code/graph_impact/docs/fixtures/amd-amdgpu-docs"
+        },
+        {
+          "id": "linux-amdgpu",
+          "status": "indexed",
+          "source_root": "/tmp/asip-linux-amdgpu"
+        },
+        {
+          "id": "mxgpu",
+          "status": "indexed",
+          "source_root": "/tmp/asip-mxgpu"
+        }
+      ],
+      "exit_code": 0,
+      "elapsed_seconds": 126.034,
+      "stdout_summary": {
+        "source": "deterministic_graph_rebuild",
+        "db_path": "/tmp/asip-g15-live-repeat-2-2026-05-18.db",
+        "corpus_ids": [
+          "linux-amdgpu",
+          "mxgpu"
+        ],
+        "files": 1225,
+        "edges": 41923,
+        "job_id": 7,
+        "resolver_profile_ids": [
+          "linux-amdgpu",
+          "amd-mxgpu",
+          "amd-direct-mmio",
+          "amd-field-macros",
+          "amd-soc15",
+          "amdgv-mxgpu-context",
+          "initial",
+          "python-hw-symbols",
+          "toy-python"
+        ]
+      },
+      "stderr": "",
+      "counts": {
+        "corpora": 3,
+        "documents": 124,
+        "chunks": 21884,
+        "evidence": 860516,
+        "edges": 41936,
+        "embeddings": 32,
+        "jobs": 7
+      },
+      "edge_sources": {
+        "clang_callback": 6127,
+        "clang_text_spans": 34987,
+        "ollama": 25,
+        "query_expected_terms": 22,
+        "text_fallback": 775
+      },
+      "edge_relations": {
+        "calls": 27706,
+        "contains_box": 6,
+        "is_responsible_for": 5,
+        "maps_base": 2387,
+        "mentions": 1,
+        "reads": 3533,
+        "sets_field": 1563,
+        "writes": 6735
+      }
+    }
+  ],
+  "deterministic_counts_match": true,
+  "failed_clean_artifact_copy_attempt": {
+    "source": "asip.g15.real_corpus_repeat_graph_rebuild",
+    "generated_at": "2026-05-18T12:15:47+0800",
+    "source_db_path": "/tmp/asip-clean-amd-gemma4-final-current-2026-05-18.db",
+    "command": "python3 -m asip.cli graph-rebuild --db <tmp-copy> --corpus-id linux-amdgpu --corpus-id mxgpu",
+    "runs": [
+      {
+        "run": 1,
+        "db_path": "/tmp/asip-g15-repeat-1-2026-05-18.db",
+        "exit_code": 1,
+        "elapsed_seconds": 0.093,
+        "stdout_summary": {
+          "raw_stdout": ""
+        },
+        "stderr": "Traceback (most recent call last):\n  File \"/Library/Developer/CommandLineTools/Library/Frameworks/Python3.framework/Versions/3.9/lib/python3.9/runpy.py\", line 197, in _run_module_as_main\n    return _run_code(code, main_globals, None,\n  File \"/Library/Developer/CommandLineTools/Library/Frameworks/Python3.framework/Versions/3.9/lib/python3.9/runpy.py\", line 87, in _run_code\n    exec(code, run_globals)\n  File \"/Volumes/data/User/wayne/Code/graph_impact/packages/core/src/asip/cli.py\", line 477, in <module>\n    raise SystemExit(main())\n  File \"/Volumes/data/User/wayne/Code/graph_impact/packages/core/src/asip/cli.py\", line 341, in main\n    rebuild_deterministic_graph(\n  File \"/Volumes/data/User/wayne/Code/graph_impact/packages/core/src/asip/workbench.py\", line 849, in rebuild_deterministic_graph\n    raise ValueError(\"no registered corpora found\")\nValueError: no registered corpora found",
+        "counts": {
+          "corpora": 3,
+          "documents": 124,
+          "chunks": 21884,
+          "evidence": 860516,
+          "edges": 41893,
+          "embeddings": 32,
+          "jobs": 5
+        },
+        "edge_sources": {
+          "clang_callback": 6084,
+          "clang_text_spans": 34987,
+          "ollama": 25,
+          "query_expected_terms": 22,
+          "text_fallback": 775
+        },
+        "edge_relations": {
+          "calls": 27663,
+          "contains_box": 6,
+          "is_responsible_for": 5,
+          "maps_base": 2387,
+          "mentions": 1,
+          "reads": 3533,
+          "sets_field": 1563,
+          "writes": 6735
+        }
+      }
+    ],
+    "deterministic_counts_match": false
+  }
+}

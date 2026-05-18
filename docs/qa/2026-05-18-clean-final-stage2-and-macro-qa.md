@@ -274,3 +274,25 @@ Browser artifacts:
 docs/qa/browser/graph-clean-final-default-3100-2k.png
 docs/qa/browser/graph-clean-final-default-3100-snapshot.json
 ```
+
+## Clean-Final PDF Section Browser QA
+
+The G08 PDF-section residual was closed in a follow-up API/UI pass:
+
+```text
+query: amdgpu documentation driver source tree PDF QA
+source filter: pdf
+API: HTTP 200
+rows: 1
+graph node: amdgpu-driver-source-tree.pdf#page-1
+graph kind: pdf_section
+page provenance: attr.source[0].page=1
+browser graph summary: nodes 1, edges 0, pdf_section 1
+```
+
+Evidence:
+
+```text
+docs/qa/2026-05-18-pdf-section-clean-final-qa.md
+docs/qa/browser/pdf-section-query-clean-final-3100-2k.png
+```

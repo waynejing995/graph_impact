@@ -15,6 +15,39 @@ async function expectSelectText(page: Page, name: string, text: string, exact = 
   await expect(page.getByRole("combobox", { name, exact })).toContainText(text);
 }
 
+async function routeWorkbenchDbPath(page: Page, dbPath: string) {
+  const addDbPathToUrl = (requestUrl: string) => {
+    const url = new URL(requestUrl);
+    url.searchParams.set("dbPath", dbPath);
+    return url.toString();
+  };
+  const addDbPathToBody = (bodyText: string | null) =>
+    JSON.stringify({ ...(bodyText ? JSON.parse(bodyText) : {}), dbPath });
+
+  await page.route("**/api/workbench/corpora**", async (route) => {
+    if (route.request().method() === "GET") {
+      await route.continue({ url: addDbPathToUrl(route.request().url()) });
+      return;
+    }
+    await route.continue({
+      headers: { ...route.request().headers(), "content-type": "application/json" },
+      postData: addDbPathToBody(route.request().postData())
+    });
+  });
+  await page.route("**/api/workbench/index", async (route) => {
+    await route.continue({
+      headers: { ...route.request().headers(), "content-type": "application/json" },
+      postData: addDbPathToBody(route.request().postData())
+    });
+  });
+  await page.route("**/api/workbench/query?**", async (route) => {
+    await route.continue({ url: addDbPathToUrl(route.request().url()) });
+  });
+  await page.route("**/api/workbench/jobs?**", async (route) => {
+    await route.continue({ url: addDbPathToUrl(route.request().url()) });
+  });
+}
+
 test("first screen is the ASIP evidence workbench", async ({ page }) => {
   await page.goto("/");
 
@@ -571,7 +604,7 @@ test("evidence query inspector changes when a different live row is selected", a
   await expect(page.getByText("WREG32(API_SECOND_REGISTER, data);")).toBeVisible();
 });
 
-test("query graph fallback derives only API rows when graph payload is omitted", async ({ page }) => {
+test("query graph reports omitted graph payload instead of synthesizing static rows", async ({ page }) => {
   await page.route("**/api/workbench/query?**", async (route) => {
     await route.fulfill({
       contentType: "application/json",
@@ -596,7 +629,9 @@ test("query graph fallback derives only API rows when graph payload is omitted",
   await page.getByRole("textbox", { name: "Evidence query" }).fill("api rows without graph");
   await page.getByRole("button", { name: "Run query" }).click();
 
-  await expect(page.getByTestId("query-network-graph")).toContainText("API_ONLY_REGISTER");
+  await expect(page.getByRole("table", { name: "Evidence results" })).toContainText("API_ONLY_REGISTER");
+  await expect(page.getByLabel("Page metrics")).toContainText("graph edges: not returned");
+  await expect(page.getByTestId("query-network-graph")).toContainText("No graph data returned.");
   await expect(page.getByTestId("query-network-graph")).not.toContainText("GCVM_L2_CNTL");
 });
 
@@ -1237,6 +1272,7 @@ test("corpus page adds user corpus rows", async ({ page }) => {
 test("corpus page adds indexes and queries a real local corpus through the UI", async ({ page }) => {
   test.setTimeout(60_000);
   const root = mkdtempSync(path.join(tmpdir(), "asip-ui-corpus-"));
+  const dbPath = path.join(root, "ui-clean-flow.db");
   const docsRoot = path.join(root, "docs");
   mkdirSync(docsRoot, { recursive: true });
   const uniqueId = `ui-full-loop-${Date.now()}`;
@@ -1246,6 +1282,7 @@ test("corpus page adds indexes and queries a real local corpus through the UI", 
     `${uniqueSymbol} sets UI_FULL_LOOP_FIELD before browser validation.`,
     "utf8"
   );
+  await routeWorkbenchDbPath(page, dbPath);
 
   await page.goto("/corpus");
   await page.getByRole("textbox", { name: "Corpus id" }).fill(uniqueId);
@@ -1282,6 +1319,16 @@ test("corpus page adds indexes and queries a real local corpus through the UI", 
   await expect(resultsTable).not.toContainText("Loading live evidence");
   await expect(resultsTable).toContainText(uniqueSymbol);
   await expect(resultsTable).toContainText("note.md", { timeout: 30_000 });
+  await expect(page.getByLabel("Page metrics")).toContainText("graph edges: 1");
+  const graph = page.getByTestId("force-graph");
+  await expect(graph).toHaveAttribute("data-node-count", "3");
+  await expect(graph).toHaveAttribute("data-edge-count", "1");
+  await expect(graph).toContainText("doc_section 1");
+  await expect(graph).toContainText(uniqueSymbol);
+  await expect(page.getByRole("heading", { name: `Resolved Evidence: ${uniqueSymbol}` })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Source Location" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Source Preview" })).toBeVisible();
+  await expect(page.getByText("doc function docs/note.md line 1")).toBeVisible();
 });
 
 test("resolver page adds configurable profiles", async ({ page }) => {
@@ -1518,7 +1565,7 @@ test("graph page relationship panel is API-backed when graph API succeeds", asyn
 });
 
 test("graph page runs semantic edge generation through the workbench API", async ({ page }) => {
-  let requestBody: { q?: string } = {};
+  let requestBody: { q?: string; limit?: number } = {};
   await page.route("**/api/workbench/semantic-edges", async (route) => {
     requestBody = route.request().postDataJSON() as typeof requestBody;
     await route.fulfill({
@@ -1555,6 +1602,7 @@ test("graph page runs semantic edge generation through the workbench API", async
   await page.getByRole("button", { name: "Generate semantic edges" }).click();
 
   expect(requestBody.q).toBe("UI_EDGE_REGISTER UI_EDGE_FIELD");
+  expect(requestBody.limit).toBe(8);
   await expect(page.getByTestId("action-feedback")).toContainText("Semantic edges generated: 1");
   await expect(page.getByTestId("global-network-graph")).toContainText("UI_EDGE_REGISTER");
 });

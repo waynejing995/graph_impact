@@ -56,6 +56,92 @@ test("corpora API persists user-added corpus state", async ({ request }) => {
   );
 });
 
+test("corpus API indexes a clean named DB and returns query graph provenance for the new corpus", async ({ request }) => {
+  const root = mkdtempSync(path.join(tmpdir(), "asip-api-clean-corpus-"));
+  const corpusRoot = path.join(root, "corpus");
+  mkdirSync(corpusRoot, { recursive: true });
+  const dbPath = path.join(root, "clean-g04.db");
+  writeFileSync(
+    path.join(corpusRoot, "note.md"),
+    "G04_CLEAN_FLOW_REGISTER sets G04_CLEAN_FLOW_FIELD and links clean corpus graph inspector proof.",
+    "utf8"
+  );
+
+  const create = await request.post("/api/workbench/corpora", {
+    data: {
+      dbPath,
+      id: "g04-clean-docs",
+      repo: "local",
+      sourceRoot: corpusRoot,
+      include: ["**/*.md"],
+      type: "doc"
+    }
+  });
+  expect(create.ok()).toBe(true);
+
+  const indexed = await request.post("/api/workbench/index", {
+    data: { dbPath, corpusIds: ["g04-clean-docs"] }
+  });
+  expect(indexed.ok()).toBe(true);
+  const indexBody = (await indexed.json()) as { status: string; corpusIds: string[]; jobStatus: string };
+  expect(indexBody).toMatchObject({
+    status: "indexed",
+    jobStatus: "succeeded",
+    corpusIds: ["g04-clean-docs"]
+  });
+
+  const queried = await request.get(
+    `/api/workbench/query?q=${encodeURIComponent("G04_CLEAN_FLOW_REGISTER")}&dbPath=${encodeURIComponent(dbPath)}`
+  );
+  expect(queried.ok()).toBe(true);
+  const payload = (await queried.json()) as {
+    rows: Array<{ symbol: string; corpus_id: string; source_type: string; path: string }>;
+    graph: {
+      nodes: Array<{ id: string; kind?: string; label?: string; attr?: { source?: Array<{ corpus_id?: string; path?: string }> } }>;
+      edges: Array<{ src: string; relation?: string; dst: string; source?: string }>;
+    };
+  };
+
+  expect(payload.rows).toEqual(
+    expect.arrayContaining([
+      expect.objectContaining({
+        symbol: "G04_CLEAN_FLOW_REGISTER",
+        corpus_id: "g04-clean-docs",
+        source_type: "doc",
+        path: "note.md"
+      })
+    ])
+  );
+  expect(payload.graph.nodes).toEqual(
+    expect.arrayContaining([
+      expect.objectContaining({
+        id: "note.md#lines-1",
+        kind: "doc_section",
+        attr: expect.objectContaining({
+          source: expect.arrayContaining([expect.objectContaining({ corpus_id: "g04-clean-docs", path: "note.md" })])
+        })
+      }),
+      expect.objectContaining({
+        label: "G04_CLEAN_FLOW_REGISTER",
+        kind: "register",
+        attr: expect.objectContaining({
+          source: expect.arrayContaining([expect.objectContaining({ corpus_id: "g04-clean-docs", path: "note.md" })])
+        })
+      })
+    ])
+  );
+  expect(payload.graph.edges).toEqual(
+    expect.arrayContaining([
+      expect.objectContaining({
+        src: "note.md#lines-1",
+        relation: "documents",
+        dst: expect.stringContaining("G04_CLEAN_FLOW_REGISTER"),
+        source: "query_matched_section"
+      })
+    ])
+  );
+});
+
 test("index API passes selected resolver profiles into the indexing job", async ({ request }) => {
   const root = mkdtempSync(path.join(tmpdir(), "asip-index-resolver-profile-"));
   const corpusRoot = path.join(root, "corpus");
@@ -180,6 +266,42 @@ test("query API ranks live SQLite evidence and graph edges for a free-form query
   expect(body.graph.nodes.map((node) => node.id)).not.toContain("ENABLE_LOCAL_FIELD");
 });
 
+test("query API exposes matching PDF section node with page provenance", async ({ request }) => {
+  const dbPath = createPdfSectionQueryDb();
+  const response = await request.get(
+    `/api/workbench/query?q=${encodeURIComponent("GCVM_L2_CNTL PDF page")}&dbPath=${encodeURIComponent(dbPath)}`
+  );
+
+  expect(response.ok()).toBe(true);
+  const body = (await response.json()) as {
+    graph: {
+      nodes: Array<{ id: string; kind?: string; attr?: { source?: Array<{ page?: number; path?: string }> } }>;
+      edges: Array<{ src: string; relation?: string; dst: string }>;
+    };
+  };
+
+  expect(body.graph.nodes).toEqual(
+    expect.arrayContaining([
+      expect.objectContaining({
+        id: "docs/manual.pdf#page-3",
+        kind: "pdf_section",
+        attr: expect.objectContaining({
+          source: expect.arrayContaining([expect.objectContaining({ path: "docs/manual.pdf", page: 3 })])
+        })
+      })
+    ])
+  );
+  expect(body.graph.edges).toEqual(
+    expect.arrayContaining([
+      expect.objectContaining({
+        src: "docs/manual.pdf#page-3",
+        relation: "documents",
+        dst: expect.stringContaining("GCVM_L2_CNTL")
+      })
+    ])
+  );
+});
+
 test("Web BFF and MCP agree for the same SQLite query, evidence row, and entity", async ({ request }) => {
   const { dbPath } = await createIndexedRawFixture(request);
   const queryText = "LOCAL_TEST_CNTL field";
@@ -202,8 +324,17 @@ test("Web BFF and MCP agree for the same SQLite query, evidence row, and entity"
     `/api/workbench/evidence/${evidenceId}?dbPath=${encodeURIComponent(dbPath)}`
   );
   expect(webDetail.ok()).toBe(true);
-  const webBody = (await webDetail.json()) as { id: number; symbol: string; path: string; resolved_chain: string };
+  const webBody = (await webDetail.json()) as {
+    id: number;
+    symbol: string;
+    path: string;
+    resolved_chain: string;
+    resolved_chain_explanation: { steps: Array<{ label: string }> };
+  };
   expect(pickEvidenceAgreement(webBody)).toEqual(pickEvidenceAgreement(mcp.detail));
+  expect(webBody.resolved_chain_explanation.steps.map((step) => step.label)).toEqual(
+    mcp.detail.resolved_chain_explanation.steps.map((step) => step.label)
+  );
 
   const webEntity = await request.get(
     `/api/workbench/entities/${encodeURIComponent(symbol)}?dbPath=${encodeURIComponent(dbPath)}`
@@ -213,10 +344,37 @@ test("Web BFF and MCP agree for the same SQLite query, evidence row, and entity"
     symbol: string;
     evidence: Array<{ id: number; symbol: string; path: string; resolved_chain: string }>;
     resolved_chains: string[];
+    resolved_chain_explanations: Array<{ evidence_id: number; steps: Array<{ label: string }> }>;
+    graph: { nodes: unknown[]; edges: unknown[] };
   };
   expect(webEntityBody.symbol).toBe(mcp.entity.symbol);
   expect(webEntityBody.evidence.map(pickEvidenceAgreement)).toEqual(mcp.entity.evidence.map(pickEvidenceAgreement));
   expect(webEntityBody.resolved_chains).toEqual(mcp.entity.resolved_chains);
+  expect(webEntityBody.resolved_chain_explanations.map((item) => item.evidence_id)).toEqual(
+    mcp.entity.resolved_chain_explanations.map((item) => item.evidence_id)
+  );
+  expect({
+    nodes: webEntityBody.graph.nodes.length,
+    edges: webEntityBody.graph.edges.length
+  }).toEqual({
+    nodes: mcp.entity.graph.nodes.length,
+    edges: mcp.entity.graph.edges.length
+  });
+
+  const webGraph = await request.get(
+    `/api/workbench/graph?seed=${encodeURIComponent(symbol)}&dbPath=${encodeURIComponent(dbPath)}`
+  );
+  expect(webGraph.ok()).toBe(true);
+  const webGraphBody = (await webGraph.json()) as { nodes: unknown[]; edges: unknown[]; queryId: string };
+  expect({
+    queryId: webGraphBody.queryId,
+    nodes: webGraphBody.nodes.length,
+    edges: webGraphBody.edges.length
+  }).toEqual({
+    queryId: mcp.graph.queryId,
+    nodes: mcp.graph.nodes.length,
+    edges: mcp.graph.edges.length
+  });
 });
 
 test("query API applies ASIC and IP metadata filters", async ({ request }) => {
@@ -521,12 +679,13 @@ test("workbench limits API exposes graph budgets from repo config", async ({ req
   expect(response.ok()).toBe(true);
   const body = (await response.json()) as {
     graph?: { edgeBudget?: number; visibleNodeBudget?: number; visibleEdgeBudget?: number };
-    semantic?: { batchCandidateLimit?: number; batchSize?: number };
+    semantic?: { queryLimit?: number; batchCandidateLimit?: number; batchSize?: number };
   };
 
   expect(body.graph?.edgeBudget).toBeGreaterThan(0);
   expect(body.graph?.visibleNodeBudget).toBeGreaterThan(0);
   expect(body.graph?.visibleEdgeBudget).toBeGreaterThan(0);
+  expect(body.semantic?.queryLimit).toBeGreaterThan(0);
   expect(body.semantic?.batchCandidateLimit).toBeGreaterThan(0);
   expect(body.semantic?.batchSize).toBeGreaterThan(0);
 });
@@ -767,12 +926,13 @@ function runMcpAgreementProbe(query: string, evidenceId: number, symbol: string,
   const script = String.raw`
 import json
 import sys
-from apps.mcp.tools import entity_explain, evidence_detail, search_evidence
+from apps.mcp.tools import entity_explain, evidence_detail, graph_expand, search_evidence
 
 print(json.dumps({
   "query": search_evidence(sys.argv[1], db_path=sys.argv[4]),
   "detail": evidence_detail(evidence_id=int(sys.argv[2]), db_path=sys.argv[4]),
   "entity": entity_explain(symbol=sys.argv[3], db_path=sys.argv[4]),
+  "graph": graph_expand(seed=sys.argv[3], db_path=sys.argv[4]),
 }))
 `;
   const result = spawnSync("python3", ["-c", script, query, String(evidenceId), symbol, dbPath], {
@@ -787,12 +947,21 @@ print(json.dumps({
   expect(result.status, result.stderr || result.stdout).toBe(0);
   return JSON.parse(result.stdout) as {
     query: { source: string; queryId: string; rows: Array<{ id: number }> };
-    detail: { id: number; symbol: string; path: string; resolved_chain: string };
+    detail: {
+      id: number;
+      symbol: string;
+      path: string;
+      resolved_chain: string;
+      resolved_chain_explanation: { steps: Array<{ label: string }> };
+    };
     entity: {
       symbol: string;
       evidence: Array<{ id: number; symbol: string; path: string; resolved_chain: string }>;
       resolved_chains: string[];
+      resolved_chain_explanations: Array<{ evidence_id: number; steps: Array<{ label: string }> }>;
+      graph: { nodes: unknown[]; edges: unknown[] };
     };
+    graph: { queryId: string; nodes: unknown[]; edges: unknown[] };
   };
 }
 
@@ -878,6 +1047,49 @@ async function createIndexedRawFixture(request: APIRequestContext) {
   const response = await request.post("/api/workbench/index", { data: { configPath, dbPath } });
   expect(response.ok()).toBe(true);
   return { dbPath };
+}
+
+function createPdfSectionQueryDb() {
+  const root = mkdtempSync(path.join(tmpdir(), "asip-api-pdf-section-"));
+  const dbPath = path.join(root, "query.db");
+  const repoRoot = path.resolve(process.cwd(), "../..");
+  const script = String.raw`
+import sys
+from asip.storage import AsipStore
+
+store = AsipStore.connect(sys.argv[1])
+store.migrate()
+store.add_edge("UNRELATED_HELPER", "UNRELATED_REG", "writes", 0.8)
+document_id = store.add_document("fixture", "pdf", "docs/manual.pdf")
+chunk_id = store.add_chunk(document_id, "GCVM_L2_CNTL is described on this PDF page.", 1, 1, page=3)
+store.add_evidence(
+    chunk_id,
+    "fixture",
+    "pdf",
+    "local",
+    "docs/manual.pdf",
+    "GCVM_L2_CNTL",
+    "register",
+    "mention",
+    0.9,
+    "GCVM_L2_CNTL is described on this PDF page.",
+    "pdf page -> GCVM_L2_CNTL",
+    line_start=1,
+    line_end=1,
+    page=3,
+)
+`;
+  const result = spawnSync("python3", ["-c", script, dbPath], {
+    cwd: repoRoot,
+    env: {
+      ...process.env,
+      PYTHONDONTWRITEBYTECODE: "1",
+      PYTHONPATH: [path.join(repoRoot, "packages/core/src"), repoRoot].join(":")
+    },
+    encoding: "utf8"
+  });
+  expect(result.status, result.stderr || result.stdout).toBe(0);
+  return dbPath;
 }
 
 function seedProviderAcceptanceDb(dbPath: string, corpusRoot: string, edgeBaseUrl = "http://127.0.0.1:9") {

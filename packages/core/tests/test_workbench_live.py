@@ -50,6 +50,33 @@ class FakeSemanticEdgeProvider:
         }
 
 
+class DuplicateSemanticEdgeProvider:
+    def generate(self, prompt, model):
+        return {
+            "cases": [
+                {
+                    "id": "duplicate-semantic-edge",
+                    "edges": [
+                        {
+                            "src": "regGCVM_L2_CNTL",
+                            "relation": "reads",
+                            "dst": "GCVM_L2_CNTL",
+                            "confidence": 0.9,
+                            "evidence": "tmp = RREG32(SOC15_REG_OFFSET(GC, 0, regGCVM_L2_CNTL));",
+                        },
+                        {
+                            "src": "regGCVM_L2_CNTL",
+                            "relation": "reads",
+                            "dst": "GCVM_L2_CNTL",
+                            "confidence": 0.9,
+                            "evidence": "tmp = RREG32(SOC15_REG_OFFSET(GC, 0, regGCVM_L2_CNTL));",
+                        },
+                    ],
+                }
+            ]
+        }
+
+
 class FailingSecondBatchSemanticEdgeProvider:
     def __init__(self):
         self.calls = 0
@@ -185,6 +212,40 @@ class WorkbenchLiveTests(unittest.TestCase):
             edge_stages = {row[0] for row in con.execute("select distinct stage from edges")}
             self.assertIn("deterministic", edge_stages)
             self.assertIn("evidence", edge_stages)
+
+    def test_query_evidence_expands_graph_when_query_matches_function_node_without_evidence_rows(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            db_path = Path(tmpdir) / "asip.db"
+            store = AsipStore.connect(str(db_path))
+            store.migrate()
+            store.add_edge(
+                "gfx_v11_0_hw_init",
+                "gfx_v11_0_init_golden_registers",
+                "calls",
+                0.91,
+                stage="deterministic",
+                source="clang_text_spans",
+                path="drivers/gpu/drm/amd/amdgpu/gfx_v11_0.c",
+                line_start=4862,
+                line_end=4862,
+                provenance={
+                    "function": "gfx_v11_0_hw_init",
+                    "callee": "gfx_v11_0_init_golden_registers",
+                    "callee_path": "drivers/gpu/drm/amd/amdgpu/gfx_v11_0.c",
+                    "callee_line": 498,
+                    "corpus_id": "linux-amdgpu",
+                    "repo": "https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git",
+                },
+            )
+
+            result = query_evidence(db_path, "gfx_v11_0_hw_init", limit=5)
+
+            self.assertEqual(result["rows"], [])
+            self.assertTrue(result["empty"])
+            self.assertEqual(result["graph"]["source"], "networkx")
+            self.assertGreaterEqual(len(result["graph"]["nodes"]), 2)
+            self.assertEqual(len(result["graph"]["edges"]), 1)
+            self.assertEqual(result["graph"]["edges"][0]["relation"], "calls")
 
     def test_configured_index_includes_non_query_docs_and_pdfs_from_globs(self):
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -1395,6 +1456,80 @@ class WorkbenchLiveTests(unittest.TestCase):
             self.assertEqual(call_provenance["callee_path"], "gfx_v11_0.c")
             self.assertEqual(call_provenance["callee_line"], 1)
 
+    def test_index_registered_corpus_links_cross_file_callback_initializer_to_registers(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            source_root = root / "corpus"
+            source_root.mkdir()
+            (source_root / "gfx_v11_0.c").write_text(
+                "\n".join(
+                    [
+                        "static int gfx_v11_0_hw_init(void *adev) {",
+                        "  WREG32(mmGCVM_L2_CNTL, 1);",
+                        "  return 0;",
+                        "}",
+                    ]
+                ),
+                encoding="utf-8",
+            )
+            (source_root / "table.c").write_text(
+                "\n".join(
+                    [
+                        "#define ASIP_CB(fn) fn",
+                        "struct amd_ip_funcs {",
+                        "  int (*hw_init)(void *);",
+                        "};",
+                        "static const struct amd_ip_funcs gfx_v11_0_ip_funcs = {",
+                        "  .hw_init = ASIP_CB(gfx_v11_0_hw_init),",
+                        "};",
+                        "int amdgpu_common_hw_init(struct amd_ip_funcs *funcs) {",
+                        "  return funcs->hw_init(0);",
+                        "}",
+                    ]
+                ),
+                encoding="utf-8",
+            )
+            db_path = root / "asip.db"
+            store = AsipStore.connect(str(db_path))
+            store.migrate()
+            store.upsert_corpus("linux-amdgpu", "https://github.com/torvalds/linux", str(source_root), ["**/*.c"])
+            store.upsert_resolver_profile(
+                "test-amd-callbacks",
+                "cpp",
+                ["WREG32"],
+                "reference",
+                "test.yaml",
+                config={
+                    "id": "test-amd-callbacks",
+                    "language": "cpp",
+                    "symbol_prefixes": ["reg", "mm"],
+                    "wrappers": {"WREG32": {"symbol_arg": 0, "access": "write"}},
+                },
+            )
+
+            workbench.index_registered_corpora(db_path, corpus_ids=["linux-amdgpu"])
+            graph = workbench.global_graph(db_path, limit=80, all_edges=True)
+
+            common_id = "function:linux-amdgpu:table.c:amdgpu_common_hw_init"
+            callback_id = "function:linux-amdgpu:gfx_v11_0.c:gfx_v11_0_hw_init"
+            register_id = "register:GC:11.0:GCVM_L2_CNTL"
+            graph_edges = {(edge["src"], edge["relation"], edge["dst"]) for edge in graph["edges"]}
+            self.assertIn((common_id, "calls", callback_id), graph_edges)
+            self.assertIn((callback_id, "writes", register_id), graph_edges)
+            call_row = AsipStore.connect(str(db_path)).con.execute(
+                "select source, provenance_json from edges where src = ? and dst = ? and relation = 'calls'",
+                ("amdgpu_common_hw_init", "gfx_v11_0_hw_init"),
+            ).fetchone()
+            self.assertIsNotNone(call_row)
+            self.assertEqual(call_row["source"], "clang_callback")
+            call_provenance = json.loads(str(call_row["provenance_json"]))
+            self.assertEqual(call_provenance["call_kind"], "vtable_dispatch")
+            self.assertEqual(call_provenance["callee_path"], "gfx_v11_0.c")
+            self.assertEqual(call_provenance["callback_path"], "table.c")
+            self.assertEqual(call_provenance["callee_line"], 1)
+            self.assertEqual(call_provenance["callback_line"], 6)
+            self.assertEqual(call_provenance["callback_initializer_flow"], "clang_ast_json")
+
     def test_stage1_specific_vtable_call_does_not_connect_every_same_named_slot(self):
         with tempfile.TemporaryDirectory() as tmpdir:
             root = Path(tmpdir)
@@ -2542,6 +2677,51 @@ class WorkbenchLiveTests(unittest.TestCase):
             register_node = next(node for node in graph["nodes"] if node["kind"] == "register")
             self.assertEqual(register_node["label"], "GCVM_L2_CNTL")
             self.assertIn("ENABLE_L2_CACHE", register_node["attr"]["fields"])
+
+    def test_semantic_edge_job_deduplicates_provider_edges_before_persisting(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            db_path = root / "asip.db"
+            corpus_root = root / "docs"
+            corpus_root.mkdir()
+            (corpus_root / "note.md").write_text(
+                "GCVM_L2_CNTL appears with regGCVM_L2_CNTL in the indexed workbench document.",
+                encoding="utf-8",
+            )
+            save_provider_settings(
+                db_path,
+                {
+                    "edge": {
+                        "provider": "ollama",
+                        "base_url": "http://edge.local",
+                        "api_path": "/api/chat",
+                        "model": "gemma4:e4b",
+                        "timeout_seconds": 2,
+                    }
+                },
+            )
+            add_corpus(db_path, "edge-docs", "local", str(corpus_root), ["**/*.md"], "doc")
+            index_registered_corpora(db_path, corpus_ids=["edge-docs"])
+
+            summary = generate_semantic_edges_for_query(
+                db_path,
+                "GCVM_L2_CNTL regGCVM_L2_CNTL",
+                edge_provider=DuplicateSemanticEdgeProvider(),
+            )
+
+            self.assertEqual(summary["edge_count"], 1)
+            store = AsipStore.connect(str(db_path))
+            count = store.con.execute(
+                """
+                select count(*)
+                from edges
+                where stage = 'semantic'
+                  and source = 'ollama'
+                  and src = 'regGCVM_L2_CNTL'
+                  and dst = 'GCVM_L2_CNTL'
+                """
+            ).fetchone()[0]
+            self.assertEqual(count, 1)
 
 
 if __name__ == "__main__":

@@ -1,0 +1,47 @@
+{
+  "source": "asip.g06.provider_embedding_backfill_smoke",
+  "generated_at": "2026-05-18T12:22:56+0800",
+  "source_db_path": "/Volumes/data/User/wayne/Code/graph_impact/data/asip.db",
+  "db_path": "/tmp/asip-g06-provider-backfill-smoke-2026-05-18.db",
+  "copy_method": "sqlite3.Connection.backup(readonly source)",
+  "command": "python3 -m asip.cli provider-embeddings --db <tmp-copy> --limit 128 --batch-size 8",
+  "exit_code": 0,
+  "elapsed_seconds": 17.703,
+  "stdout_summary": {
+    "source": "provider_embedding_backfill",
+    "db_path": "/tmp/asip-g06-provider-backfill-smoke-2026-05-18.db",
+    "provider": "ollama",
+    "model": "nomic-embed-text:latest",
+    "embedded_chunks": 128,
+    "batch_size": 8,
+    "limit": 128,
+    "job_id": 7
+  },
+  "stderr": "",
+  "embedding_counts": [
+    {
+      "provider": "ollama",
+      "model": "nomic-embed-text:latest",
+      "metadata_source": "provider",
+      "count": 160
+    }
+  ],
+  "recent_jobs": [
+    {
+      "kind": "embedding_backfill",
+      "status": "succeeded",
+      "message": "Embedded 128 chunks"
+    },
+    {
+      "kind": "graph_rebuild",
+      "status": "succeeded",
+      "message": "Rebuilt 41923 deterministic graph edges from 1225 files"
+    },
+    {
+      "kind": "doc_nodes_batch",
+      "status": "succeeded",
+      "message": "Generated 6 doc boxes from 2 candidates"
+    }
+  ],
+  "full_backfill_claimed": false
+}

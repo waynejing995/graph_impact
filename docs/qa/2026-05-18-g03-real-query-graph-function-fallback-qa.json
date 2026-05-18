@@ -1,0 +1,138 @@
+{
+  "date": "2026-05-18",
+  "status": "pass_with_residuals",
+  "db_path": "/tmp/asip-provider-embed-batch-smoke-20260518-133434.db",
+  "global_graph": {
+    "limit": 3000,
+    "elapsed_seconds": 4.849,
+    "nodes": 2805,
+    "edges": 3000,
+    "graph_runtime": "networkx",
+    "source": "networkx",
+    "node_kinds": {
+      "function": 2532,
+      "register": 266,
+      "doc_box": 6,
+      "doc_section": 1
+    },
+    "relations": {
+      "calls": 2392,
+      "writes": 266,
+      "reads": 180,
+      "maps_base": 82,
+      "sets_field": 69,
+      "contains": 6,
+      "relates_to": 5
+    }
+  },
+  "queries": [
+    {
+      "query": "GCVM_L2_CNTL",
+      "elapsed_seconds": 5.845,
+      "rows": 12,
+      "graph_nodes": 95,
+      "graph_edges": 231,
+      "relations": {"calls": 53, "maps_base": 3, "reads": 38, "sets_field": 49, "writes": 88}
+    },
+    {
+      "query": "CP_INT_CNTL_RING0",
+      "elapsed_seconds": 2.647,
+      "rows": 12,
+      "graph_nodes": 148,
+      "graph_edges": 227,
+      "relations": {"calls": 107, "maps_base": 25, "reads": 19, "sets_field": 31, "writes": 45}
+    },
+    {
+      "query": "SDMA0_QUEUE0_RB_CNTL",
+      "elapsed_seconds": 2.588,
+      "rows": 12,
+      "graph_nodes": 134,
+      "graph_edges": 213,
+      "relations": {"calls": 82, "maps_base": 23, "reads": 27, "sets_field": 36, "writes": 45}
+    },
+    {
+      "query": "IH_RB_CNTL",
+      "elapsed_seconds": 2.636,
+      "rows": 12,
+      "graph_nodes": 164,
+      "graph_edges": 477,
+      "relations": {"calls": 99, "maps_base": 130, "reads": 72, "sets_field": 76, "writes": 100}
+    },
+    {
+      "query": "doorbell interrupt disable",
+      "elapsed_seconds": 1.656,
+      "rows": 12,
+      "graph_nodes": 17,
+      "graph_edges": 32,
+      "relations": {"calls": 10, "reads": 8, "sets_field": 4, "writes": 10}
+    },
+    {
+      "query": "SDMA0_RLC0_RB_CNTL",
+      "elapsed_seconds": 2.603,
+      "rows": 12,
+      "graph_nodes": 70,
+      "graph_edges": 142,
+      "relations": {"calls": 33, "maps_base": 23, "reads": 28, "sets_field": 14, "writes": 44}
+    },
+    {
+      "query": "BIF_DOORBELL_INT_CNTL",
+      "elapsed_seconds": 2.451,
+      "rows": 12,
+      "graph_nodes": 16,
+      "graph_edges": 32,
+      "relations": {"calls": 10, "reads": 8, "sets_field": 4, "writes": 10}
+    },
+    {
+      "query": "mmIH_RB_CNTL",
+      "elapsed_seconds": 2.561,
+      "rows": 12,
+      "graph_nodes": 164,
+      "graph_edges": 477,
+      "relations": {"calls": 99, "maps_base": 130, "reads": 72, "sets_field": 76, "writes": 100}
+    },
+    {
+      "query": "gfx_v11_0_hw_init",
+      "elapsed_seconds": 2.439,
+      "rows": 0,
+      "graph_nodes": 29,
+      "graph_edges": 36,
+      "relations": {"calls": 36},
+      "note": "function-node graph fallback from persisted edges when evidence rows are absent"
+    },
+    {
+      "query": "gfxhub_v11_5_0_gart_enable",
+      "elapsed_seconds": 2.416,
+      "rows": 0,
+      "graph_nodes": 17,
+      "graph_edges": 16,
+      "relations": {"calls": 15, "writes": 1},
+      "note": "function-node graph fallback from persisted edges when evidence rows are absent"
+    }
+  ],
+  "cli_query_smoke": {
+    "queries": 10,
+    "result": "all commands exited 0"
+  },
+  "browser_qa": {
+    "global_graph_screenshot": "docs/qa/browser/graph-after-full-backfill-and-query-fallback-2k.png",
+    "global_graph_snapshot": "docs/qa/browser/graph-after-full-backfill-and-query-fallback-deep-snapshot.md",
+    "function_query_screenshot": "docs/qa/browser/graph-function-query-fallback-2k.png",
+    "function_query_snapshot": "docs/qa/browser/graph-function-query-fallback-2k-snapshot.md",
+    "function_query_observed": {
+      "matches": 0,
+      "graph_edges": 36,
+      "relationship_panel_contains": "gfx_v11_0_hw_init calls gfx_v11_0_init_golden_registers"
+    }
+  },
+  "tests": [
+    {
+      "command": "PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=packages/core/src:packages/core/tests:. python3 -m unittest packages.core.tests.test_workbench_live.WorkbenchLiveTests.test_query_evidence_expands_graph_when_query_matches_function_node_without_evidence_rows -v",
+      "result": "passed"
+    }
+  ],
+  "residuals": [
+    "Full clangd/libclang cross-translation-unit vtable/type-flow remains a G03 residual.",
+    "Function-node fallback exposes graph neighborhoods even when evidence rows are absent; it does not synthesize evidence rows.",
+    "The default global graph is a budgeted 3000-edge product view; users can adjust frontend bars, and the API supports larger/all-edge requests."
+  ]
+}

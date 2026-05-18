@@ -36,6 +36,18 @@ class FakeBatchEmbeddingTransport:
         return {"embeddings": [[float(index), float(index) + 0.5] for index, _ in enumerate(payload["input"])]}
 
 
+class FakeContextLimitedBatchEmbeddingTransport:
+    def __init__(self, max_inputs: int):
+        self.max_inputs = max_inputs
+        self.requests = []
+
+    def post_json(self, url, payload, headers, timeout):
+        self.requests.append({"url": url, "payload": payload, "headers": dict(headers), "timeout": timeout})
+        if len(payload["input"]) > self.max_inputs:
+            raise RuntimeError("embedding request failed with HTTP 400: the input length exceeds the context length")
+        return {"embeddings": [[float(index), float(index) + 0.5] for index, _ in enumerate(payload["input"])]}
+
+
 class WorkbenchBackendStateTests(unittest.TestCase):
     def test_resolver_profile_is_persisted_and_validated_in_backend(self):
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -531,6 +543,67 @@ class WorkbenchBackendStateTests(unittest.TestCase):
             ).fetchone()
             self.assertEqual((provider, model), ("ollama", "nomic-embed-text"))
             self.assertEqual(json.loads(metadata_json)["source"], "provider")
+
+    def test_backfill_provider_embeddings_splits_context_too_large_batches(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            db_path = Path(tmpdir) / "asip.db"
+            store = AsipStore.connect(str(db_path))
+            store.migrate()
+            document_id = store.add_document("docs", "doc", "docs/note.md")
+            for index in range(4):
+                store.add_chunk(document_id, f"chunk {index} GCVM_L2_CNTL ENABLE_L2_CACHE", index + 1, index + 1)
+            save_provider_settings(
+                db_path,
+                {
+                    "embedding": {
+                        "provider": "ollama",
+                        "base_url": "http://embed.local",
+                        "api_path": "/api/embed",
+                        "model": "nomic-embed-text",
+                    },
+                },
+            )
+            transport = FakeContextLimitedBatchEmbeddingTransport(max_inputs=2)
+
+            summary = backfill_provider_embeddings(db_path, batch_size=4, embedding_transport=transport)
+
+            self.assertEqual(summary["embedded_chunks"], 4)
+            self.assertEqual([len(request["payload"]["input"]) for request in transport.requests], [4, 2, 2])
+            con = sqlite3.connect(db_path)
+            self.assertEqual(con.execute("select count(*) from embeddings").fetchone()[0], 4)
+
+    def test_backfill_provider_embeddings_truncates_long_inputs_with_metadata(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            db_path = Path(tmpdir) / "asip.db"
+            store = AsipStore.connect(str(db_path))
+            store.migrate()
+            document_id = store.add_document("docs", "doc", "docs/large-section.md")
+            store.add_chunk(document_id, "A" * 5000, 1, 200)
+            save_provider_settings(
+                db_path,
+                {
+                    "embedding": {
+                        "provider": "ollama",
+                        "base_url": "http://embed.local",
+                        "api_path": "/api/embed",
+                        "model": "nomic-embed-text",
+                    },
+                },
+            )
+            transport = FakeBatchEmbeddingTransport()
+
+            summary = backfill_provider_embeddings(db_path, batch_size=1, embedding_transport=transport)
+
+            self.assertEqual(summary["embedded_chunks"], 1)
+            self.assertEqual(summary["truncated_chunks"], 1)
+            self.assertEqual(len(transport.requests[0]["payload"]["input"][0]), 4096)
+            con = sqlite3.connect(db_path)
+            metadata_json = con.execute("select metadata_json from embeddings").fetchone()[0]
+            metadata = json.loads(metadata_json)
+            self.assertEqual(metadata["source"], "provider")
+            self.assertTrue(metadata["embedding_text_truncated"])
+            self.assertEqual(metadata["embedding_text_chars"], 4096)
+            self.assertEqual(metadata["original_text_chars"], 5000)
 
     def test_query_evidence_uses_configured_vector_limit(self):
         with tempfile.TemporaryDirectory() as tmpdir:

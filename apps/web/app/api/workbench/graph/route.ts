@@ -10,7 +10,12 @@ export function GET(request: NextRequest) {
   const hops = request.nextUrl.searchParams.get("hops") ?? String(limits.graph?.defaultHops ?? "");
   const requestedLimit = request.nextUrl.searchParams.get("limit")?.trim();
   const requestedAll = requestedLimit === "all" || requestedLimit === "full";
-  const edgeBudget = configuredInt(requestedLimit) ?? limits.graph?.edgeBudget;
+  const configuredEdgeBudget = configuredInt(requestedLimit) ?? limits.graph?.edgeBudget;
+  const maxEdgeBudget = limits.graph?.maxEdgeBudget;
+  const edgeBudget =
+    configuredEdgeBudget !== undefined && maxEdgeBudget !== undefined
+      ? Math.min(configuredEdgeBudget, maxEdgeBudget)
+      : configuredEdgeBudget;
   const includeEvidenceDerived = ["1", "true", "yes"].includes(
     (request.nextUrl.searchParams.get("includeEvidenceDerived") ?? "").toLowerCase()
   );

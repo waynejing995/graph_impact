@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import urllib.error
 import urllib.request
 from dataclasses import dataclass, field
 from typing import Any, Dict, List, Mapping, Optional, Protocol, Sequence
@@ -48,8 +49,13 @@ class UrlLibEmbeddingTransport:
             headers=dict(headers),
             method="POST",
         )
-        with urllib.request.urlopen(request, timeout=timeout) as response:
-            data = json.loads(response.read().decode("utf-8"))
+        try:
+            with urllib.request.urlopen(request, timeout=timeout) as response:
+                data = json.loads(response.read().decode("utf-8"))
+        except urllib.error.HTTPError as exc:
+            body = exc.read().decode("utf-8", errors="replace").strip()
+            detail = f": {body}" if body else ""
+            raise RuntimeError(f"embedding request failed with HTTP {exc.code}{detail}") from exc
         if not isinstance(data, dict):
             raise ValueError("embedding response must be a JSON object")
         return data

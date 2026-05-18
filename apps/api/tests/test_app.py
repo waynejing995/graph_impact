@@ -19,7 +19,12 @@ class ApiAppTests(unittest.TestCase):
         self.client = TestClient(app)
 
     def test_query_endpoint_returns_real_evidence(self):
-        response = self.client.get("/query", params={"q": "doorbell interrupt disable"})
+        with TemporaryDirectory() as tmpdir:
+            db_path = _create_live_smoke_sqlite_db(Path(tmpdir) / "live.db")
+            response = self.client.get(
+                "/query",
+                params={"q": "doorbell interrupt disable", "db_path": db_path},
+            )
 
         self.assertEqual(response.status_code, 200)
         payload = response.json()
@@ -45,7 +50,12 @@ class ApiAppTests(unittest.TestCase):
             self.assertFalse(Path(db_path).exists())
 
     def test_graph_endpoint_expands_query_edges(self):
-        response = self.client.get("/graph", params={"query_id": "GCVM_L2_CNTL"})
+        with TemporaryDirectory() as tmpdir:
+            db_path = _create_live_smoke_sqlite_db(Path(tmpdir) / "live.db")
+            response = self.client.get(
+                "/graph",
+                params={"query_id": "GCVM_L2_CNTL", "db_path": db_path},
+            )
 
         self.assertEqual(response.status_code, 200)
         payload = response.json()
@@ -73,6 +83,28 @@ class ApiAppTests(unittest.TestCase):
             self.assertEqual(response.status_code, 200)
             self.assertFalse(db_path.exists())
             self.assertEqual(response.json()["rows"], [])
+
+    def test_query_endpoint_applies_ip_and_asic_filters(self):
+        with TemporaryDirectory() as tmpdir:
+            db_path = _create_filter_sqlite_db(Path(tmpdir) / "filters.db")
+
+            response = self.client.get(
+                "/query",
+                params={
+                    "q": "FILTER_REG",
+                    "db_path": db_path,
+                    "ip_block": "GC",
+                    "asic": "gc_11_0",
+                },
+            )
+
+            self.assertEqual(response.status_code, 200)
+            payload = response.json()
+            self.assertEqual([row["symbol"] for row in payload["rows"]], ["FILTER_REG"])
+            self.assertEqual({row["ip_block"] for row in payload["rows"]}, {"GC"})
+            self.assertEqual({row["asic_or_generation"] for row in payload["rows"]}, {"gc_11_0"})
+            self.assertEqual(payload["filters"]["ip_block"], "GC")
+            self.assertEqual(payload["filters"]["asic_or_generation"], "gc_11_0")
 
     def test_evidence_endpoint_explicit_missing_db_returns_404_without_creating_db(self):
         with TemporaryDirectory() as tmpdir:
@@ -429,8 +461,18 @@ class ApiAppTests(unittest.TestCase):
             self.assertEqual(detail.json()["id"], evidence_id)
             self.assertEqual(detail.json()["symbol"], "API_DETAIL_REGISTER")
             self.assertIn("resolved_chain", detail.json())
+            self.assertEqual(detail.json()["resolved_chain_explanation"]["evidence_id"], evidence_id)
+            self.assertEqual(
+                [step["label"] for step in detail.json()["resolved_chain_explanation"]["steps"]],
+                ["source mention", "API_DETAIL_REGISTER"],
+            )
+            self.assertEqual(detail.json()["resolved_chain_explanation"]["source"]["path"], "note.md")
             self.assertTrue(any(row["id"] == evidence_id for row in entity.json()["evidence"]))
             self.assertIn("graph", entity.json())
+            self.assertEqual(
+                entity.json()["resolved_chain_explanations"][0]["steps"][-1]["label"],
+                "API_DETAIL_REGISTER",
+            )
 
     def test_provider_settings_endpoints_round_trip_edge_and_embedding_settings(self):
         with TemporaryDirectory() as tmpdir:
@@ -589,6 +631,69 @@ def _create_empty_sqlite_db(db_path: str) -> None:
     con.execute("create table marker(id integer)")
     con.commit()
     con.close()
+
+
+def _create_filter_sqlite_db(db_path: Path) -> str:
+    from asip.storage import AsipStore
+
+    store = AsipStore.connect(str(db_path))
+    store.migrate()
+    for ip_block, asic, path, line in (
+        ("GC", "gc_11_0", "drivers/gpu/drm/amd/amdgpu/gc.c", 11),
+        ("SDMA", "sdma_5_0", "drivers/gpu/drm/amd/amdgpu/sdma.c", 22),
+    ):
+        document_id = store.add_document("fixture", "code", path)
+        chunk_id = store.add_chunk(document_id, f"FILTER_REG evidence for {ip_block}", line, line)
+        store.add_evidence(
+            chunk_id,
+            "fixture",
+            "code",
+            "local",
+            path,
+            "FILTER_REG",
+            "register",
+            "write",
+            0.9,
+            f"FILTER_REG evidence for {ip_block}",
+            f"{ip_block} writes FILTER_REG",
+            line_start=line,
+            line_end=line,
+            ip_block=ip_block,
+            asic_or_generation=asic,
+        )
+    return str(db_path)
+
+
+def _create_live_smoke_sqlite_db(db_path: Path) -> str:
+    from asip.storage import AsipStore
+
+    store = AsipStore.connect(str(db_path))
+    store.migrate()
+    document_id = store.add_document("fixture", "code", "drivers/gpu/drm/amd/amdgpu/doorbell.c")
+    chunk_id = store.add_chunk(
+        document_id,
+        "DOORBELL_INTERRUPT_DISABLE evidence and GCVM_L2_CNTL ENABLE_L2_CACHE field programming.",
+        10,
+        12,
+    )
+    store.add_evidence(
+        chunk_id,
+        "fixture",
+        "code",
+        "local",
+        "drivers/gpu/drm/amd/amdgpu/doorbell.c",
+        "DOORBELL_INTERRUPT_DISABLE",
+        "field",
+        "mention",
+        0.95,
+        "DOORBELL_INTERRUPT_DISABLE evidence",
+        "fixture -> DOORBELL_INTERRUPT_DISABLE",
+        line_start=10,
+        line_end=12,
+        query_id="fixture_doorbell_interrupt_disable",
+    )
+    store.add_edge("program_gcvm_l2", "GCVM_L2_CNTL", "sets_field", 0.95, provenance={"fields": ["ENABLE_L2_CACHE"]})
+    return str(db_path)
 
 
 if __name__ == "__main__":

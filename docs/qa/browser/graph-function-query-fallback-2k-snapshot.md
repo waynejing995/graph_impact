@@ -1,0 +1,118 @@
+- generic [ref=e1]:
+  - generic [ref=e2]:
+    - banner [ref=e3]:
+      - generic [ref=e5]: ASIP Evidence Workbench
+      - generic [ref=e6]:
+        - img
+        - textbox "Global symbol search" [ref=e7]:
+          - /placeholder: Search indexed symbols
+      - generic "Workbench status" [ref=e8]:
+        - generic [ref=e9]: "Provider: unverified"
+        - generic [ref=e11]: "Edge: Ollama / gemma4:e4b"
+        - generic [ref=e12]: "Index: ready"
+      - button "Switch to dark theme" [ref=e107] [cursor=pointer]:
+        - img
+        - text: Dark
+    - main [ref=e14]:
+      - navigation "ASIP sections" [ref=e15]:
+        - link "Evidence Search" [ref=e16] [cursor=pointer]:
+          - /url: /
+        - link "Graph Explorer" [ref=e17] [cursor=pointer]:
+          - /url: /graph
+        - link "Corpus" [ref=e18] [cursor=pointer]:
+          - /url: /corpus
+        - link "Resolver Profiles" [ref=e19] [cursor=pointer]:
+          - /url: /resolver-profiles
+        - link "Acceptance Tests" [ref=e20] [cursor=pointer]:
+          - /url: /acceptance
+        - link "Settings" [ref=e21] [cursor=pointer]:
+          - /url: /settings
+      - region "Graph relationship workspace" [ref=e22]:
+        - generic [ref=e23]:
+          - generic [ref=e24]:
+            - img
+            - textbox "Evidence query" [ref=e25]:
+              - /placeholder: Query live evidence
+          - textbox "IP block filter" [ref=e27]:
+            - /placeholder: IP
+          - textbox "ASIC or generation filter" [ref=e29]:
+            - /placeholder: ASIC
+          - button "Run query" [active] [ref=e30] [cursor=pointer]
+        - generic "Page metrics" [ref=e31]:
+          - generic [ref=e32]: "matches: 0"
+          - generic [ref=e33]: "graph edges: 36"
+          - generic [ref=e34]: "query: live"
+        - generic "Evidence source filters" [ref=e35]:
+          - button "Source filter 1 hop" [ref=e36] [cursor=pointer]:
+            - img
+            - text: 1 hop
+          - button "Source filter 2 hops" [ref=e37] [cursor=pointer]:
+            - img
+            - text: 2 hops
+          - button "Source filter writes" [ref=e38] [cursor=pointer]:
+            - img
+            - text: writes
+          - button "Source filter has_field" [ref=e39] [cursor=pointer]:
+            - img
+            - text: has_field
+        - generic [ref=e40]:
+          - generic [ref=e41]:
+            - generic [ref=e42]: Global Relation Graph
+            - generic [ref=e43]: weighted connections
+            - generic [ref=e180]: "layers deterministic: 36"
+          - generic "Graph display controls" [ref=e44]:
+            - generic [ref=e45]
+            - generic [ref=e50]
+            - generic [ref=e55]
+            - generic [ref=e60]
+          - img "Global weighted network graph" [ref=e181]:
+            - generic [ref=e185]
+        - table "Evidence results" [ref=e70]:
+          - rowgroup [ref=e71]:
+            - row "Type Symbol Source Relation Score Location" [ref=e72]
+          - rowgroup [ref=e79]:
+            - 'row "No evidence matched query: gfx_v11_0_hw_init empty empty 0 live SQLite query returned no rows" [ref=e213]'
+      - complementary [ref=e90]:
+        - generic [ref=e91]:
+          - heading "Global Graph" [level=2] [ref=e92]
+          - generic [ref=e93]:
+            - img
+            - text: live / run 2
+        - heading "Relationship Panel" [level=3] [ref=e95]
+        - generic [ref=e96]:
+          - paragraph [ref=e215]:
+            - code [ref=e216]: function:linux-amdgpu:drivers/gpu/drm/amd/amdgpu/gfx_v11_0.c:gfx_v11_0_hw_init calls function:linux-amdgpu:drivers/gpu/drm/amd/amdgpu/amdgpu_gfx.c:amdgpu_gfx_cleaner_shader_init
+          - paragraph [ref=e217]:
+            - code [ref=e218]: function:linux-amdgpu:drivers/gpu/drm/amd/amdgpu/gfx_v11_0.c:gfx_v11_0_hw_init calls function:linux-amdgpu:drivers/gpu/drm/amd/amdgpu/gfx_v11_0.c:get_gb_addr_config
+          - paragraph [ref=e219]:
+            - code [ref=e220]: function:linux-amdgpu:drivers/gpu/drm/amd/amdgpu/gfx_v11_0.c:gfx_v11_0_hw_init calls function:linux-amdgpu:drivers/gpu/drm/amd/amdgpu/gfx_v11_0.c:gfx_v11_0_config_gfx_rs64
+          - paragraph [ref=e221]:
+            - code [ref=e222]: function:linux-amdgpu:drivers/gpu/drm/amd/amdgpu/gfx_v11_0.c:gfx_v11_0_hw_init calls function:linux-amdgpu:drivers/gpu/drm/amd/amdgpu/gfx_v11_0.c:gfx_v11_0_constants_init
+          - paragraph [ref=e223]:
+            - code [ref=e224]: function:linux-amdgpu:drivers/gpu/drm/amd/amdgpu/gfx_v11_0.c:gfx_v11_0_hw_init calls function:linux-amdgpu:drivers/gpu/drm/amd/amdgpu/gfx_v11_0.c:gfx_v11_0_cp_resume
+          - paragraph [ref=e225]:
+            - code [ref=e226]: function:linux-amdgpu:drivers/gpu/drm/amd/amdgpu/gfx_v11_0.c:gfx_v11_0_hw_init calls function:linux-amdgpu:drivers/gpu/drm/amd/amdgpu/gfx_v11_0.c:gfx_v11_0_disable_gpa_mode
+          - paragraph [ref=e227]:
+            - code [ref=e228]: function:linux-amdgpu:drivers/gpu/drm/amd/amdgpu/gfx_v11_0.c:gfx_v11_0_hw_init calls function:linux-amdgpu:drivers/gpu/drm/amd/amdgpu/gfx_v11_0.c:gfx_v11_0_gfxhub_enable
+          - paragraph [ref=e229]:
+            - code [ref=e230]: function:linux-amdgpu:drivers/gpu/drm/amd/amdgpu/gfx_v11_0.c:gfx_v11_0_hw_init calls function:linux-amdgpu:drivers/gpu/drm/amd/amdgpu/gfx_v11_0.c:gfx_v11_0_init_golden_registers
+          - paragraph [ref=e231]:
+            - code [ref=e232]: function:linux-amdgpu:drivers/gpu/drm/amd/amdgpu/gfx_v11_0.c:gfx_v11_0_hw_init calls function:linux-amdgpu:drivers/gpu/drm/amd/amdgpu/gfx_v11_0.c:gfx_v11_0_rlc_backdoor_autoload_enable
+          - paragraph [ref=e233]:
+            - code [ref=e234]: function:linux-amdgpu:drivers/gpu/drm/amd/amdgpu/gfx_v11_0.c:gfx_v11_0_hw_init calls function:linux-amdgpu:drivers/gpu/drm/amd/amdgpu/gfx_v11_0.c:gfx_v11_0_rlc_resume
+          - paragraph [ref=e235]:
+            - code [ref=e236]: function:linux-amdgpu:drivers/gpu/drm/amd/amdgpu/gfx_v11_0.c:gfx_v11_0_hw_init calls function:linux-amdgpu:drivers/gpu/drm/amd/amdgpu/gfx_v11_0.c:gfx_v11_0_select_cp_fw_arch
+          - paragraph [ref=e237]:
+            - code [ref=e238]: function:linux-amdgpu:drivers/gpu/drm/amd/amdgpu/gfx_v11_0.c:gfx_v11_0_hw_init calls function:linux-amdgpu:drivers/gpu/drm/amd/amdgpu/gfx_v11_0.c:gfx_v11_0_tcp_harvest
+        - button "Generate semantic edges" [ref=e99] [cursor=pointer]
+        - button "Generate batch semantic edges" [ref=e100] [cursor=pointer]
+        - button "Extract document nodes" [ref=e101] [cursor=pointer]
+        - paragraph [ref=e239]: "Query ran: gfx_v11_0_hw_init"
+        - generic "Semantic generation controls" [ref=e102]:
+          - generic [ref=e103]:
+            - text: Semantic candidate limit
+            - spinbutton "Semantic candidate limit" [ref=e104]
+          - generic [ref=e105]:
+            - text: Semantic batch size
+            - spinbutton "Semantic batch size" [ref=e106]
+  - alert [ref=e179]

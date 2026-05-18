@@ -41,10 +41,12 @@ Index-time embedding backfill was intentionally disabled for this graph rebuild,
 
 Final edge counts in `data/asip.db`:
 
-- `deterministic | clang_ast`: `37526`
+- historical pre-correction label `deterministic | clang_ast`: `37526`
 - `deterministic | clang_preprocess`: `356`
 - `deterministic | text_fallback`: `39`
 - `semantic | ollama`: `3`
+
+The `clang_ast` source label above is historical and superseded by later G03 QA. Current deterministic provenance uses `clang_text_spans`, `clang_preprocess`, `clang_callback`, and `text_fallback`; AST JSON appears only as narrow `type_flow` or callback-initializer provenance.
 
 Real Stage 2 command:
 
@@ -161,11 +163,11 @@ edges=10108
 Current Stage 1 edge table:
 
 ```text
-deterministic|clang_ast|reads|2536
-deterministic|clang_ast|writes|4955
-deterministic|clang_ast|sets_field|995
-deterministic|clang_ast|maps_base|1616
-deterministic|clang_ast|field_shift|6
+historical pre-correction label|deterministic|clang_ast|reads|2536
+historical pre-correction label|deterministic|clang_ast|writes|4955
+historical pre-correction label|deterministic|clang_ast|sets_field|995
+historical pre-correction label|deterministic|clang_ast|maps_base|1616
+historical pre-correction label|deterministic|clang_ast|field_shift|6
 ```
 
 Current Stage 2 LLM overlay:

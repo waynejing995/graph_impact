@@ -1,6 +1,6 @@
 # G04 Corpus Management
 
-Status: Partial; backend/API/MCP add/list/index, selected UI indexing, invalid-source failure, durable job lifecycle visibility, and UI add-index-query proof exist; final clean-DB closure remains blocking
+Status: Current clean corpus flow verified; background/remote orchestration deferred
 
 ## Requirement
 
@@ -29,13 +29,14 @@ PDF corpus type must be represented.
 - Legacy job rows created before `job_events` existed now normalize at read time, so old `indexed`/`rebuilt` style rows do not leak non-lifecycle statuses into CLI/API/Web/MCP. The original result name is preserved as `metadata.result_status`, and a synthetic historical event is shown when no durable event rows exist.
 - Core exposes `get_job()` and `list_jobs()`, CLI exposes `asip jobs`, Next BFF exposes `GET /api/workbench/jobs` and `GET /api/workbench/jobs/{id}`, FastAPI exposes `GET /jobs` and `GET /jobs/{job_id}`, and MCP exposes `jobs_list()` and `job_detail()`.
 - Corpus UI now shows a recent Index Jobs panel with job id, terminal status, message, and event chain such as `queued -> indexing -> succeeded`.
-- QA evidence for this slice is recorded in `docs/qa/2026-05-17-g04-corpus-job-lifecycle-qa.md`.
+- QA evidence for the lifecycle slice is recorded in `docs/qa/2026-05-17-g04-corpus-job-lifecycle-qa.md`.
+- 2026-05-18 clean flow QA `docs/qa/2026-05-18-g04-clean-corpus-flow-qa.md` proves a clean named DB Web BFF add/index/query flow where the newly indexed corpus drives query rows and a `doc_section -> register` graph edge, and proves the real Corpus/Evidence UI full-loop shows graph and inspector evidence from the new corpus while leaving default `data/asip.db` byte-identical to the clean-final artifact at the time of that QA. Default `data/asip.db` was later intentionally rebuilt for G03 graph QA.
 
 ## Remaining Gap
 
-The backend/API/MCP state path exists, and the Corpus UI now has explicit selection controls, selected-index status update, invalid-source failed-state proof, and a browser add-index-query proof for a temporary local corpus.
+The backend/API/MCP state path exists, and the Corpus UI now has explicit selection controls, selected-index status update, invalid-source failed-state proof, a clean named DB BFF add-index-query graph proof, and a browser add-index-query graph/inspector proof for a temporary local corpus.
 
-The remaining G04 work is narrower but still blocking: final QA must repeat the flow against a clean named DB/corpus, and graph/inspector evidence for the newly indexed corpus remains part of the broader G02/G03/G10 closure. The current lifecycle implementation is durable event history for synchronous local jobs; it is not a background worker, streaming progress channel, or cancellation system.
+The remaining G04 boundary is no longer the MVP corpus flow itself. The current lifecycle implementation is durable event history for synchronous local jobs; it is not a background worker, streaming progress channel, cancellation system, or remote clone orchestration layer.
 
 Default and fallback corpora remain in the UI. They are acceptable as seed/fallback display only if product paths prefer backend state and failures are visible.
 
@@ -54,11 +55,12 @@ Default and fallback corpora remain in the UI. They are acceptable as seed/fallb
 - API test: index selected corpus and query a unique symbol from it.
 - MCP test: add/list/index corpus with a temp DB and query a unique symbol from it.
 - E2E test: selected corpus rows are the only ids sent to the index endpoint, and the selected row shows returned `indexed` status. Implemented.
-- E2E test: add corpus, run index, observe status transition, query new evidence. Implemented for a temporary local corpus through the Web UI; final clean DB acceptance repetition remains open.
+- E2E test: add corpus, run index, observe status transition, query new evidence, and show graph/inspector provenance. Implemented for a temporary local corpus through the Web UI using an isolated DB so the clean-final default DB is not dirtied.
+- Web BFF test: add/index/query a user corpus against a clean named DB and assert graph provenance for the newly indexed corpus. Implemented.
 - E2E/API/MCP tests: durable job lifecycle events are exposed after index. Implemented for core, Web BFF, FastAPI, MCP, and Corpus UI.
 - Failure-state test: invalid source root returns a visible failed/error state. Implemented in core and Web UI smoke coverage.
 - Failure-state test: configured missing source roots and unknown selected corpus ids cannot return `indexed` with zero documents. Implemented in core coverage.
 
 ## Not Closed Until
 
-User-added corpora can participate in indexing and query results through the UI, and final clean acceptance evidence proves the same flow without relying on the dirty development DB.
+User-added corpora can participate in indexing, query results, graph output, and inspector detail through the UI, and clean named DB evidence proves the same BFF/core flow without relying on the dirty development DB.

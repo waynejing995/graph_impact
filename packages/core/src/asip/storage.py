@@ -1533,6 +1533,87 @@ class AsipStore:
         return graph
 
 
+def section_overlay_graph_for_evidence_rows(rows: Iterable[Mapping[str, object]]) -> Dict[str, object]:
+    node_payloads: Dict[str, Dict[str, object]] = {}
+    edges: Dict[tuple[str, str, str], Dict[str, object]] = {}
+
+    def remember(node: Mapping[str, object], weight: float = 1.0) -> None:
+        node_id = str(node.get("id") or "")
+        if not node_id:
+            return
+        existing = node_payloads.get(node_id)
+        payload = _boxmatrix_node_payload(
+            node_id,
+            str(node.get("kind") or _kind_for_graph_symbol(node_id)),
+            weight,
+            node,
+        )
+        if existing is not None:
+            _merge_boxmatrix_metadata(existing, payload)
+            existing["weight"] = round(float(existing.get("weight") or 1.0) + weight, 4)
+            return
+        node_payloads[node_id] = payload
+
+    for row in rows:
+        source_type = str(row.get("source_type") or row.get("source") or "").strip().lower()
+        if source_type not in {"doc", "pdf"}:
+            continue
+        path = str(row.get("path") or "").strip()
+        if not path:
+            continue
+        symbol = str(row.get("symbol") or "").strip()
+        if not symbol:
+            continue
+        section_id, section_kind, section_metadata = _section_node_for_graph_mapping(row)
+        if not section_id:
+            continue
+        section_node = _product_graph_node(section_id, section_kind, section_metadata)
+        if section_node is None:
+            continue
+        confidence = max(0.05, min(1.0, float(row.get("confidence") or 0.5)))
+        remember(section_node, confidence)
+
+        symbol_kind = _kind_for_graph_evidence(
+            source_type,
+            str(row.get("entity_type") or ""),
+            symbol,
+        )
+        symbol_metadata = _metadata_for_graph_mapping(row, symbol)
+        symbol_node = _product_graph_node(symbol, symbol_kind, symbol_metadata)
+        relation = _normalize_graph_relation("section_mentions")
+        if symbol_node is None or not relation:
+            continue
+        remember(symbol_node, confidence)
+        edge = {
+            "src": str(section_node["id"]),
+            "dst": str(symbol_node["id"]),
+            "relation": relation,
+            "confidence": round(confidence * 0.92, 4),
+            "stage": "evidence",
+            "source": "query_matched_section",
+            "attr": {
+                "source": _dedupe_source_records(
+                    [
+                        *_source_records_for_graph(section_metadata),
+                        *_source_records_for_graph(symbol_metadata),
+                    ]
+                ),
+                "fields": [],
+                "resolver_wrappers": [],
+            },
+        }
+        edges[(str(edge["src"]), str(edge["relation"]), str(edge["dst"]))] = edge
+
+    return {
+        "nodes": [node_payloads[node] for node in sorted(node_payloads)],
+        "edges": sorted(
+            edges.values(),
+            key=lambda edge: (-float(edge["confidence"]), str(edge["src"]), str(edge["dst"]), str(edge["relation"])),
+        ),
+        "graph_runtime": "networkx",
+    }
+
+
 def _product_graph_node(
     symbol: str,
     kind: str,
@@ -2169,6 +2250,63 @@ def _section_metadata_for_graph_row(row: sqlite3.Row, section_id: str) -> Dict[s
     return metadata
 
 
+def _section_node_for_graph_mapping(row: Mapping[str, object]) -> tuple[str, str, Dict[str, object]]:
+    source_type = str(row.get("source_type") or row.get("source") or "")
+    if source_type not in {"doc", "pdf"}:
+        return "", "", {}
+    path = str(row.get("path") or "").strip()
+    if not path:
+        return "", "", {}
+    chunk_text = str(row.get("chunk_text") or row.get("snippet") or "")
+    heading = _first_markdown_heading(chunk_text)
+    page = _int_graph_value(row.get("page"))
+    line_start = _int_graph_value(row.get("line_start"))
+    if heading:
+        section_id = f"{path}#{_slug_for_graph_heading(heading)}"
+    elif source_type == "pdf" and page:
+        section_id = f"{path}#page-{page}"
+    elif line_start:
+        section_id = f"{path}#lines-{line_start}"
+    else:
+        section_id = f"{path}#section"
+    section_kind = "doc_section" if source_type == "doc" else "pdf_section"
+    anchor = _anchor_for_graph_symbol(section_id)
+    metadata: Dict[str, object] = {
+        "source_type": source_type,
+        "path": path,
+        "anchor": anchor,
+        "label": _section_label_for_graph(path, source_type, anchor, heading, page, line_start),
+        "corpus_id": str(row.get("corpus_id") or ""),
+        "repo": str(row.get("repo") or ""),
+    }
+    if heading:
+        metadata["heading"] = heading
+    if page:
+        metadata["page"] = page
+    if line_start:
+        metadata["line_start"] = line_start
+    line_end = _int_graph_value(row.get("line_end"))
+    if line_end:
+        metadata["line_end"] = line_end
+    return section_id, section_kind, {key: value for key, value in metadata.items() if value not in ("", None, 0)}
+
+
+def _metadata_for_graph_mapping(row: Mapping[str, object], endpoint: str) -> Dict[str, object]:
+    metadata: Dict[str, object] = {
+        "path": str(row.get("path") or ""),
+        "line_start": row.get("line_start"),
+        "line_end": row.get("line_end"),
+        "page": row.get("page"),
+        "corpus_id": str(row.get("corpus_id") or ""),
+        "repo": str(row.get("repo") or ""),
+        "source_type": str(row.get("source_type") or row.get("source") or ""),
+        "symbol": endpoint,
+    }
+    if _looks_like_function_symbol(endpoint):
+        metadata["function_name"] = endpoint
+    return {key: value for key, value in metadata.items() if value not in ("", None, 0)}
+
+
 def _metadata_for_graph_symbol(symbol: str) -> Dict[str, object]:
     kind = _kind_for_graph_symbol(symbol)
     if kind not in {"doc_section", "pdf_section", "doc", "pdf", "doc_box"}:
@@ -2189,6 +2327,13 @@ def _metadata_for_graph_symbol(symbol: str) -> Dict[str, object]:
     if page:
         metadata["page"] = page
     return metadata
+
+
+def _int_graph_value(value: object) -> int:
+    try:
+        return int(value or 0)
+    except (TypeError, ValueError):
+        return 0
 
 
 def _metadata_from_networkx_edge_data(data: Mapping[str, object], endpoint: str) -> Dict[str, object]:
@@ -2382,9 +2527,10 @@ def _select_global_graph_edges(edges: List[Dict[str, object]], edge_limit: int) 
     remaining_budget = max(0, limit - protected_budget)
     call_backbone_budget = max(1, remaining_budget - max(0, remaining_budget // 5)) if remaining_budget else 0
     call_backbone = _largest_call_backbone_edges(edges, call_backbone_budget)
+    operation_backbone = _operation_edges_adjacent_to_backbone(edges, call_backbone, remaining_budget - len(call_backbone))
     selected: List[Dict[str, object]] = []
     seen: set[tuple[str, str, str]] = set()
-    for edge in [*protected, *call_backbone, *edges]:
+    for edge in [*protected, *call_backbone, *operation_backbone, *edges]:
         key = (str(edge["src"]), str(edge["dst"]), str(edge["relation"]))
         if key in seen:
             continue
@@ -2485,6 +2631,40 @@ def _largest_call_backbone_edges(edges: List[Dict[str, object]], budget: int) ->
         selected.append(edge)
         selected_keys.add(key)
     return selected
+
+
+def _operation_edges_adjacent_to_backbone(
+    edges: List[Dict[str, object]],
+    backbone_edges: List[Dict[str, object]],
+    budget: int,
+) -> List[Dict[str, object]]:
+    if budget <= 0 or not backbone_edges:
+        return []
+    backbone_nodes = {
+        str(value)
+        for edge in backbone_edges
+        for value in (edge.get("src"), edge.get("dst"))
+        if str(value or "")
+    }
+    operation_edges = [
+        edge
+        for edge in edges
+        if str(edge.get("relation") or "") in {"reads", "writes", "sets_field", "maps_base"}
+        and (
+            str(edge.get("src") or "") in backbone_nodes
+            or str(edge.get("dst") or "") in backbone_nodes
+        )
+        and not _is_protected_global_edge(edge)
+    ]
+    return sorted(
+        operation_edges,
+        key=lambda edge: (
+            _graph_relation_priority(str(edge.get("relation") or "")),
+            -float(edge.get("weight") or edge.get("confidence") or 0),
+            str(edge.get("src") or ""),
+            str(edge.get("dst") or ""),
+        ),
+    )[: max(0, int(budget))]
 
 
 def _call_backbone_priority(edge: Mapping[str, object]) -> tuple[int, float, int]:
