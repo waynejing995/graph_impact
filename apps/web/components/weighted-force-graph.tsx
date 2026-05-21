@@ -309,8 +309,8 @@ export function WeightedForceGraph({
         width={size.width}
       />
       <div className="graph-accessibility-summary" id={summaryId}>
-        <span>nodes {graphData.nodes.length}</span>
-        <span>edges {graphData.links.length}</span>
+        <span>visible nodes {graphData.nodes.length} / loaded {graph.nodes.length}</span>
+        <span>visible edges {graphData.links.length} / loaded {graph.edges.length}</span>
         <span>shared registers {sharedRegisterCount}</span>
         {kindCounts.map(([kind, count]) => (
           <span key={`kind-${kind}`}>{kind} {count}</span>

@@ -4090,7 +4090,7 @@ function GraphDisplayControls({
       </label>
       <label className="graph-control">
         <span>Visible nodes</span>
-        <strong>{Math.min(maxNodes, nodeTotal || maxNodes)} / {nodeTotal}</strong>
+        <strong>{Math.min(maxNodes, nodeTotal || maxNodes)} visible / {nodeTotal} loaded</strong>
         <Slider
           aria-label="Visible nodes"
           max={nodeMax}
@@ -4102,7 +4102,7 @@ function GraphDisplayControls({
       </label>
       <label className="graph-control">
         <span>Visible edges</span>
-        <strong>{Math.min(maxEdges, edgeTotal || maxEdges)} / {edgeTotal}</strong>
+        <strong>{Math.min(maxEdges, edgeTotal || maxEdges)} visible / {edgeTotal} loaded</strong>
         <Slider
           aria-label="Visible edges"
           max={edgeMax}

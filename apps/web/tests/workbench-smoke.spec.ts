@@ -1914,6 +1914,68 @@ test("graph page relationship panel is API-backed when graph API succeeds", asyn
   await expect(relationshipPanel).not.toContainText("Weighted global graph emphasizes");
 });
 
+test("graph page separates visible node caps from loaded function-view totals", async ({ page }) => {
+  const requestedFunctionViews: string[] = [];
+
+  await page.route("**/api/workbench/limits", async (route) => {
+    await route.fulfill({
+      contentType: "application/json",
+      body: JSON.stringify({
+        graph: {
+          edgeBudget: 2000,
+          maxEdgeBudget: 2000,
+          visibleNodeBudget: 1000,
+          visibleEdgeBudget: 2000,
+          minimumEdgeWeight: 0,
+          accessibilitySummaryLimit: 8
+        }
+      })
+    });
+  });
+  await page.route(/\/api\/workbench\/graph(?:\?|$)/, async (route) => {
+    const url = new URL(route.request().url());
+    const functionView = url.searchParams.get("functionView") === "implementation" ? "implementation" : "concept";
+    const totalNodes = functionView === "implementation" ? 1008 : 1005;
+    const nodes = Array.from({ length: totalNodes }, (_, index) => ({
+      id: `function:test:${functionView}:node_${index}`,
+      kind: "function",
+      label: `${functionView}_node_${index}`,
+      weight: index === 0 ? 4 : 1
+    }));
+    const edges = Array.from({ length: totalNodes - 1 }, (_, index) => ({
+      src: `function:test:${functionView}:node_${index}`,
+      relation: "calls",
+      dst: `function:test:${functionView}:node_${index + 1}`,
+      confidence: 0.9,
+      weight: 0.9,
+      stage: "deterministic",
+      source: "test"
+    }));
+
+    requestedFunctionViews.push(functionView);
+    await route.fulfill({
+      contentType: "application/json",
+      body: JSON.stringify({ queryId: "global", nodes, edges, source: "networkx" })
+    });
+  });
+
+  await page.goto("/graph");
+
+  const controls = page.locator('[aria-label="Graph display controls"]');
+  const forceGraph = page.getByTestId("force-graph");
+  await expect(forceGraph).toHaveAttribute("data-ready", "true", { timeout: 20_000 });
+  await expect(controls).toContainText("1000 visible / 1005 loaded");
+  await expect(forceGraph).toContainText("visible nodes 1000 / loaded 1005");
+
+  await chooseSelectOption(page, "Function view", "Implementation", true);
+
+  await expect.poll(async () => Number(await forceGraph.getAttribute("data-node-total"))).toBe(1008);
+  await expect(controls).toContainText("1000 visible / 1008 loaded");
+  await expect(forceGraph).toContainText("visible nodes 1000 / loaded 1008");
+  expect(requestedFunctionViews).toContain("concept");
+  expect(requestedFunctionViews).toContain("implementation");
+});
+
 test("graph page uses URL dbPath for no-mock graph and query requests", async ({ page }) => {
   test.setTimeout(90_000);
   const root = mkdtempSync(path.join(tmpdir(), "asip-graph-no-mock-"));
