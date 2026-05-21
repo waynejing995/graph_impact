@@ -226,6 +226,51 @@ textarea {
   margin-bottom: 12px;
 }
 
+.impact-hop-control {
+  display: grid;
+  grid-template-columns: minmax(150px, 220px) minmax(220px, 1fr) 48px;
+  gap: 12px;
+  align-items: center;
+  margin-bottom: 12px;
+  padding: 10px 12px;
+  border: 1px solid color-mix(in srgb, var(--impact-color) 45%, var(--border));
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--impact-color) 12%, var(--surface-1));
+}
+
+.impact-hop-control__header {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+}
+
+.impact-hop-control__header span,
+.impact-hop-control__scale {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 650;
+}
+
+.impact-hop-control__header strong {
+  color: var(--impact-color);
+  font-size: 14px;
+  font-weight: 800;
+}
+
+.impact-hop-control [data-slot="slider-range"] {
+  background: var(--impact-color);
+}
+
+.impact-hop-control [data-slot="slider-thumb"] {
+  border-color: var(--impact-color);
+}
+
+.impact-hop-control__scale {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+}
+
 .metric-row {
   display: flex;
   flex-wrap: wrap;
@@ -409,12 +454,12 @@ textarea {
   overflow: hidden;
   border: 1px solid var(--border);
   border-radius: 8px;
-  background: radial-gradient(circle at 50% 50%, color-mix(in srgb, var(--graph-edge) 10%, transparent), transparent 42%),
+  background: radial-gradient(circle at 50% 50%, color-mix(in srgb, var(--graph-impact-color, var(--graph-edge)) 12%, transparent), transparent 42%),
     #0a0d0e;
 }
 
 :root[data-theme="light"] .force-graph-shell {
-  background: radial-gradient(circle at 50% 50%, color-mix(in srgb, var(--graph-edge) 12%, transparent), transparent 42%),
+  background: radial-gradient(circle at 50% 50%, color-mix(in srgb, var(--graph-impact-color, var(--graph-edge)) 14%, transparent), transparent 42%),
     #f9fcfb;
 }
 
@@ -901,6 +946,10 @@ code {
 
   .evidence-row--corpus {
     grid-template-columns: 10px 18px minmax(120px, 1fr) 74px 88px;
+  }
+
+  .impact-hop-control {
+    grid-template-columns: 1fr;
   }
 
   .force-graph-shell {

@@ -1,6 +1,6 @@
 {
   "graph": {
-    "defaultHops": 2,
+    "defaultHops": 3,
     "edgeBudget": 3000,
     "maxEdgeBudget": 20000,
     "visibleNodeBudget": 1000,

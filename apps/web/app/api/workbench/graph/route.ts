@@ -8,7 +8,7 @@ export function GET(request: NextRequest) {
     request.nextUrl.searchParams.get("seed") ??
     request.nextUrl.searchParams.get("queryId");
   const limits = readWorkbenchLimits();
-  const hops = request.nextUrl.searchParams.get("hops") ?? String(limits.graph?.defaultHops ?? "");
+  const hops = clampedHops(request.nextUrl.searchParams.get("hops"), limits.graph?.defaultHops);
   const requestedLimit = request.nextUrl.searchParams.get("limit")?.trim();
   const requestedAll = requestedLimit === "all" || requestedLimit === "full";
   const configuredEdgeBudget = configuredInt(requestedLimit) ?? limits.graph?.edgeBudget;
@@ -42,7 +42,7 @@ export function GET(request: NextRequest) {
   }
   try {
     const args = seed
-      ? ["graph", "--db", dbPath, "--seed", seed, "--function-view", functionView, ...(hops ? ["--hops", hops] : [])]
+      ? ["graph", "--db", dbPath, "--seed", seed, "--function-view", functionView, "--hops", String(hops)]
       : ["graph", "--db", dbPath, "--function-view", functionView, "--compact"];
     if (!seed && requestedAll) {
       args.push("--all");
@@ -62,4 +62,9 @@ export function GET(request: NextRequest) {
       { status: 500 }
     );
   }
+}
+
+function clampedHops(value: string | null, fallback = 3) {
+  const parsed = configuredInt(value) ?? fallback;
+  return Math.max(1, Math.min(10, parsed));
 }

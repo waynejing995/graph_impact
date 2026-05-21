@@ -10,6 +10,7 @@ import {
   useRef,
   useState,
   type ComponentProps,
+  type CSSProperties,
   type FormEvent
 } from "react";
 import { WeightedForceGraph, type WeightedGraphNode, type WeightedGraphPayload } from "@/components/weighted-force-graph";
@@ -59,6 +60,9 @@ const providerSettingsStorageKey = "asip-provider-settings";
 const themeStorageKey = "asip-theme";
 const defaultTheme = "dark";
 const sourceFilterTypes = ["code", "register", "doc", "pdf"] as const;
+const graphHopMin = 1;
+const graphHopMax = 10;
+const defaultGraphHopLevel = 3;
 const defaultConceptRuleId = "custom-ip-versioned-functions";
 const defaultConceptMatch = "^(?P<ip_block>gfxhub)_v(?P<ip_version>\\d+(?:_\\d+){0,2})_(?P<operation>.+)$";
 const defaultConceptCanonical = "{ip_block}_{operation}";
@@ -379,6 +383,7 @@ export function WorkbenchPage({ pageId }: WorkbenchPageProps) {
   const [workbenchLimits, setWorkbenchLimits] = useState<WorkbenchLimits>({});
   const [limitsReady, setLimitsReady] = useState(false);
   const [graphEdgeBudget, setGraphEdgeBudget] = useState<number | null>(null);
+  const [graphHopLevel, setGraphHopLevel] = useState(defaultGraphHopLevel);
   const [graphFunctionView, setGraphFunctionView] = useState<GraphFunctionView>("concept");
   const providerSettingsDirtyRef = useRef(false);
   const initialSearchHandledRef = useRef(false);
@@ -594,6 +599,7 @@ export function WorkbenchPage({ pageId }: WorkbenchPageProps) {
       params.set("limit", String(graphEdgeBudget));
     }
     appendWorkbenchDbPath(params);
+    params.set("hops", String(graphHopLevel));
     params.set("functionView", graphFunctionView);
     const queryString = params.toString();
     fetch(`/api/workbench/graph${queryString ? `?${queryString}` : ""}`)
@@ -620,7 +626,7 @@ export function WorkbenchPage({ pageId }: WorkbenchPageProps) {
     return () => {
       cancelled = true;
     };
-  }, [config.id, graphEdgeBudget, graphFunctionView, limitsReady, workbenchDbPath, workbenchDbPathExplicit, workbenchDbPathReady]);
+  }, [config.id, graphEdgeBudget, graphFunctionView, graphHopLevel, limitsReady, workbenchDbPath, workbenchDbPathExplicit, workbenchDbPathReady]);
 
   useEffect(() => {
     if (!workbenchDbPathReady) {
@@ -982,6 +988,7 @@ export function WorkbenchPage({ pageId }: WorkbenchPageProps) {
         params.set("sourceTypes", selectedSourceTypes.length ? selectedSourceTypes.join(",") : "__none__");
       }
       appendWorkbenchDbPath(params);
+      params.set("hops", String(graphHopLevel));
       params.set("functionView", graphFunctionView);
       const response = await fetch(`/api/workbench/query?${params.toString()}`);
       if (!response.ok) {
@@ -1663,21 +1670,27 @@ export function WorkbenchPage({ pageId }: WorkbenchPageProps) {
             ))}
           </div>
 
-          <div className="filter-row" aria-label="Evidence source filters">
-            {config.filters.map(({ icon: Icon, label }) => (
-              <Button
-                aria-label={`Source filter ${label}`}
-                aria-pressed={selectedSourceTypes.includes(label.toLowerCase())}
-                key={label}
-                onClick={() => toggleSourceType(label.toLowerCase())}
-                type="button"
-                variant={selectedSourceTypes.includes(label.toLowerCase()) ? "secondary" : "ghost"}
-              >
-                <Icon aria-hidden="true" size={14} />
-                {label}
-              </Button>
-            ))}
-          </div>
+          {config.id === "graph-explorer" || config.id === "evidence-workbench" ? (
+            <ImpactHopControl level={graphHopLevel} onChange={(value) => setGraphHopLevel(clampGraphHopLevel(value))} />
+          ) : null}
+
+          {config.filters.length ? (
+            <div className="filter-row" aria-label="Evidence source filters">
+              {config.filters.map(({ icon: Icon, label }) => (
+                <Button
+                  aria-label={`Source filter ${label}`}
+                  aria-pressed={selectedSourceTypes.includes(label.toLowerCase())}
+                  key={label}
+                  onClick={() => toggleSourceType(label.toLowerCase())}
+                  type="button"
+                  variant={selectedSourceTypes.includes(label.toLowerCase()) ? "secondary" : "ghost"}
+                >
+                  <Icon aria-hidden="true" size={14} />
+                  {label}
+                </Button>
+              ))}
+            </div>
+          ) : null}
 
           {config.id === "settings" ? (
             <ProviderSettingsPanel
@@ -1734,6 +1747,7 @@ export function WorkbenchPage({ pageId }: WorkbenchPageProps) {
             <GlobalNetworkGraph
               emptyMessage={graphEmptyMessage || queryEmptyMessage}
               graph={apiGraph}
+              impactLevel={graphHopLevel}
               functionView={graphFunctionView}
               limits={workbenchLimits}
               loadedEdgeBudget={graphEdgeBudget}
@@ -3683,10 +3697,47 @@ function JobRunsPanel({ jobs }: { jobs: JobRun[] }) {
   );
 }
 
+function ImpactHopControl({
+  level,
+  onChange
+}: {
+  level: number;
+  onChange: (level: number) => void;
+}) {
+  const clampedLevel = clampGraphHopLevel(level);
+  const impactStyle = { "--impact-color": impactColorForHopLevel(clampedLevel) } as CSSProperties;
+  return (
+    <section
+      aria-label="Impact hop level"
+      className="impact-hop-control"
+      data-impact-level={clampedLevel}
+      style={impactStyle}
+    >
+      <div className="impact-hop-control__header">
+        <span>Impact level</span>
+        <strong>{clampedLevel} hop{clampedLevel === 1 ? "" : "s"}</strong>
+      </div>
+      <Slider
+        aria-label="Impact hop level"
+        max={graphHopMax}
+        min={graphHopMin}
+        onValueChange={([value]) => onChange(clampGraphHopLevel(Number(value ?? defaultGraphHopLevel)))}
+        step={1}
+        value={[clampedLevel]}
+      />
+      <div className="impact-hop-control__scale" aria-hidden="true">
+        <span>{graphHopMin}</span>
+        <span>{graphHopMax}</span>
+      </div>
+    </section>
+  );
+}
+
 function GlobalNetworkGraph({
   emptyMessage,
   functionView,
   graph,
+  impactLevel,
   limits,
   loadedEdgeBudget,
   onFunctionViewChange,
@@ -3698,6 +3749,7 @@ function GlobalNetworkGraph({
   emptyMessage?: string;
   functionView: GraphFunctionView;
   graph: GraphPayload | null;
+  impactLevel: number;
   limits: WorkbenchLimits;
   loadedEdgeBudget: number | null;
   onFunctionViewChange: (value: GraphFunctionView) => void;
@@ -3707,6 +3759,7 @@ function GlobalNetworkGraph({
   testId: string;
 }) {
   const graphData = buildGraphData(graph);
+  const impactStyle = { "--graph-impact-color": impactColorForHopLevel(impactLevel) } as CSSProperties;
   const filterOptions = useMemo(() => graphFilterOptions(graphData.edges), [graphData.edges]);
   const [selectedRelations, setSelectedRelations] = useState<string[]>([]);
   const [selectedStages, setSelectedStages] = useState<string[]>([]);
@@ -3744,7 +3797,12 @@ function GlobalNetworkGraph({
   const provenanceSummary = graphProvenanceSummary(filteredGraphData.edges);
 
   return (
-    <div className="network-preview network-preview--global" data-testid={testId}>
+    <div
+      className="network-preview network-preview--global"
+      data-impact-level={impactLevel}
+      data-testid={testId}
+      style={impactStyle}
+    >
       <div className="network-preview__header">
         <span>Global Relation Graph</span>
         <ToneBadge tone="code">weighted connections</ToneBadge>
@@ -3998,6 +4056,18 @@ function dedupeStrings(values: string[]): string[] {
 
 function sameStringList(left: string[], right: string[]): boolean {
   return left.length === right.length && left.every((value, index) => value === right[index]);
+}
+
+function clampGraphHopLevel(value: number): number {
+  const parsed = Number.isFinite(value) ? Math.round(value) : defaultGraphHopLevel;
+  return Math.max(graphHopMin, Math.min(graphHopMax, parsed));
+}
+
+function impactColorForHopLevel(level: number): string {
+  const clamped = clampGraphHopLevel(level);
+  const ratio = (clamped - graphHopMin) / (graphHopMax - graphHopMin);
+  const hue = Math.round(152 - ratio * 140);
+  return `hsl(${hue} 82% 43%)`;
 }
 
 function GraphDisplayControls({

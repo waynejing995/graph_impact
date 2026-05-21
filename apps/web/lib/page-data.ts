@@ -112,12 +112,7 @@ export const pageConfigs: Record<PageId, PageConfig> = {
     globalSymbol: "",
     workspaceLabel: "Graph relationship workspace",
     composerIcon: Network,
-    filters: [
-      { label: "1 hop", tone: "success", icon: Network },
-      { label: "2 hops", tone: "code", icon: GitBranch },
-      { label: "writes", tone: "register", icon: Braces },
-      { label: "has_field", tone: "doc", icon: Database }
-    ],
+    filters: [],
     metrics: [],
     rows: [],
     inspectorTitle: "Global Graph",

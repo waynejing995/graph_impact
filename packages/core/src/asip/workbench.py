@@ -336,6 +336,7 @@ def query_evidence(
     source_types: Optional[Iterable[str]] = None,
     embedding_transport: Optional[EmbeddingTransport] = None,
     function_view: str = "concept",
+    graph_hops: Optional[int] = None,
     compact_graph: bool = False,
 ) -> Dict[str, Any]:
     function_view = _normalize_function_view(function_view)
@@ -343,6 +344,10 @@ def query_evidence(
     result_limit = limit if limit is not None else limits.int_value("retrieval", "result_limit", minimum=1)
     if result_limit is None:
         raise ValueError(f"retrieval.resultLimit is missing from {limits.path}")
+    configured_graph_hops = limits.int_value("graph", "default_hops", minimum=1)
+    if configured_graph_hops is None:
+        raise ValueError(f"graph.defaultHops is missing from {limits.path}")
+    effective_graph_hops = _normalize_graph_hops(graph_hops if graph_hops is not None else configured_graph_hops)
     candidate_multiplier = limits.int_value("retrieval", "candidate_multiplier", minimum=1)
     candidate_floor = limits.int_value("retrieval", "candidate_floor", minimum=1)
     max_query_tokens = limits.int_value("retrieval", "max_query_tokens", minimum=1)
@@ -510,14 +515,20 @@ def query_evidence(
     rows.sort(key=lambda item: (-float(item["rank_score"]), str(item["symbol"]), int(item["id"])))
     rows = _select_diverse_rows(_dedupe_rows(rows), result_limit)
     if rows:
-        graph = graph_for_rows(rows, db_path, function_view=function_view, compact=compact_graph)
+        graph = graph_for_rows(rows, db_path, function_view=function_view, hops=effective_graph_hops, compact=compact_graph)
         rows = _merge_access_intent_edge_rows(rows, graph, symbol_prefixes, access_intents, result_limit)
     else:
         graph_seed = query.strip()
         graph = (
-            expand_query_graph(db_path, graph_seed, function_view=function_view, compact=compact_graph)
+            expand_query_graph(
+                db_path,
+                graph_seed,
+                hops=effective_graph_hops,
+                function_view=function_view,
+                compact=compact_graph,
+            )
             if graph_seed and is_graph_entity_endpoint(graph_seed) and _sqlite_table_exists(db_path, "edges")
-            else graph_for_rows(rows, db_path, function_view=function_view)
+            else graph_for_rows(rows, db_path, function_view=function_view, hops=effective_graph_hops)
         )
     return {
         "query": query,
@@ -787,7 +798,7 @@ def expand_query_graph(
             "graph_runtime": "networkx",
         }
     store = AsipStore.connect(str(db_path))
-    graph = store.expand_graph_networkx(graph_seed, hops=hops, function_view=function_view)
+    graph = store.expand_graph_networkx(graph_seed, hops=_normalize_graph_hops(hops), function_view=function_view)
     return {
         "queryId": symbol,
         "nodes": [_graph_node_payload(node, compact=compact) for node in graph["nodes"]],
@@ -855,6 +866,7 @@ def graph_for_rows(
     rows: List[Dict[str, Any]],
     db_path: Path,
     function_view: str = "concept",
+    hops: Optional[int] = None,
     compact: bool = False,
 ) -> Dict[str, Any]:
     function_view = _normalize_function_view(function_view)
@@ -864,9 +876,10 @@ def graph_for_rows(
     query_seed_limit = limits.int_value("graph", "query_seed_limit", minimum=1)
     if query_seed_limit is None:
         raise ValueError(f"graph.querySeedLimit is missing from {limits.path}")
-    query_hops = limits.int_value("graph", "default_hops", minimum=1)
-    if query_hops is None:
+    configured_hops = limits.int_value("graph", "default_hops", minimum=1)
+    if configured_hops is None:
         raise ValueError(f"graph.defaultHops is missing from {limits.path}")
+    query_hops = _normalize_graph_hops(hops if hops is not None else configured_hops)
     node_by_id: Dict[str, Dict[str, Any]] = {}
     edge_by_key: Dict[tuple[str, str, str], Dict[str, Any]] = {}
     seeds: List[str] = []
@@ -925,6 +938,10 @@ def _normalize_function_view(function_view: str) -> str:
     if view not in {"concept", "implementation"}:
         raise ValueError("function_view must be concept or implementation")
     return view
+
+
+def _normalize_graph_hops(value: int) -> int:
+    return max(1, min(10, int(value)))
 
 
 def _remember_graph_node_payload(
@@ -4296,6 +4313,7 @@ def main(argv: Optional[List[str]] = None) -> int:
     query_parser.add_argument("--ip-block", default="")
     query_parser.add_argument("--asic", default="")
     query_parser.add_argument("--compact-graph", action="store_true")
+    query_parser.add_argument("--hops", type=int)
 
     graph_parser = subparsers.add_parser("graph")
     graph_parser.add_argument("--db", default=str(DEFAULT_DB))
@@ -4327,6 +4345,7 @@ def main(argv: Optional[List[str]] = None) -> int:
             args.q,
             ip_block=args.ip_block,
             asic_or_generation=args.asic,
+            graph_hops=args.hops,
             compact_graph=args.compact_graph,
         )
     elif args.command == "graph":

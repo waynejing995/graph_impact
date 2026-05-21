@@ -1,9 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
 import { defaultDbPath, runAsipCli } from "@/lib/asip-cli";
 import { explicitTextOrError } from "@/lib/request-paths";
+import { configuredInt, readWorkbenchLimits } from "@/lib/workbench-limits";
 
 export function GET(request: NextRequest) {
   const query = request.nextUrl.searchParams.get("q") ?? "";
+  const limits = readWorkbenchLimits();
+  const hops = clampedHops(request.nextUrl.searchParams.get("hops"), limits.graph?.defaultHops);
   let dbPath = defaultDbPath;
   try {
     dbPath = explicitTextOrError(request.nextUrl.searchParams.get("dbPath"), "dbPath") ?? defaultDbPath;
@@ -37,7 +40,7 @@ export function GET(request: NextRequest) {
     );
   }
   try {
-    const args = ["query", "--db", dbPath, "--q", query, "--function-view", functionView, "--compact-graph"];
+    const args = ["query", "--db", dbPath, "--q", query, "--function-view", functionView, "--hops", String(hops), "--compact-graph"];
     if (ipBlock) {
       args.push("--ip-block", ipBlock);
     }
@@ -55,4 +58,9 @@ export function GET(request: NextRequest) {
       { status: 500 }
     );
   }
+}
+
+function clampedHops(value: string | null, fallback = 3) {
+  const parsed = configuredInt(value) ?? fallback;
+  return Math.max(1, Math.min(10, parsed));
 }

@@ -111,6 +111,7 @@ def main(argv: Optional[List[str]] = None) -> int:
     query.add_argument("--source-type", action="append", default=[])
     query.add_argument("--limit", type=int)
     query.add_argument("--function-view", choices=["concept", "implementation"], default="concept")
+    query.add_argument("--hops", type=int)
     query.add_argument("--compact-graph", action="store_true", help="Return compact graph metadata for UI rendering")
     query.add_argument("--limits-config", default=str(DEFAULT_WORKBENCH_LIMITS_PATH))
 
@@ -419,6 +420,7 @@ def main(argv: Optional[List[str]] = None) -> int:
                     asic_or_generation=args.asic,
                     source_types=args.source_type,
                     function_view=args.function_view,
+                    graph_hops=args.hops,
                     compact_graph=args.compact_graph,
                 ),
                 indent=2,
