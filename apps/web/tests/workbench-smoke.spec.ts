@@ -2217,7 +2217,7 @@ test("graph page loads current data/asip.db through browser and API", async ({ p
       latest_graph_rebuild_job_id: latestGraphRebuildJobId
     },
     {
-      surface: "direct_api_document_request",
+      surface: "direct_api_graph_request",
       url: directApiResponse?.url() ?? "",
       db_path: dbPath,
       status: directApiResponse?.status() ?? 0,

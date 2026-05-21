@@ -55,7 +55,7 @@ _REQUIRED_BROWSER_E2E_TESTS = (
 _REQUIRED_BROWSER_E2E_TEST_FILE = "workbench-smoke.spec.ts"
 _REQUIRED_BROWSER_CURRENT_DB_PROBE_SURFACES = (
     "graph_page_api_request",
-    "direct_api_document_request",
+    "direct_api_graph_request",
     "graph_page_concept_detail_selection",
 )
 _REQUIRED_HOSTED_OPENAI_COMPATIBLE_CHECKS = (

@@ -2830,7 +2830,7 @@ class CompletionGateTests(unittest.TestCase):
                     "latest_graph_rebuild_job_id": 2,
                 },
                 {
-                    "surface": "direct_api_document_request",
+                    "surface": "direct_api_graph_request",
                     "url": f"http://127.0.0.1:3100/api/workbench/graph?dbPath={db_path}",
                     "db_path": str(db_path),
                     "status": 200,

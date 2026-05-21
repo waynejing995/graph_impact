@@ -155,7 +155,7 @@ if (browserArtifactIsE2e) {
   assert.ok((browserGate.required_tests ?? []).every((test) => String(test.file ?? "").includes("workbench-smoke.spec.ts")));
   const currentDbProbeSurfaces = new Set((browserGate.current_db_probes ?? []).map((probe) => probe.surface));
   assert.ok(currentDbProbeSurfaces.has("graph_page_api_request"));
-  assert.ok(currentDbProbeSurfaces.has("direct_api_document_request"));
+  assert.ok(currentDbProbeSurfaces.has("direct_api_graph_request"));
   assert.ok(currentDbProbeSurfaces.has("graph_page_concept_detail_selection"));
   assert.ok((browserGate.current_db_probes ?? []).every((probe) => String(probe.url ?? "").includes("dbPath=")));
   assert.ok((browserGate.current_db_probes ?? []).every((probe) => Number(probe.status ?? 0) === 200));

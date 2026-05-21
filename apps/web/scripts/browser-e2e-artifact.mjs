@@ -16,7 +16,7 @@ const requiredBrowserE2eTestFile = "workbench-smoke.spec.ts";
 const currentDbProbePrefix = "ASIP_BROWSER_CURRENT_DB_PROBE ";
 const requiredCurrentDbProbeSurfaces = [
   "graph_page_api_request",
-  "direct_api_document_request",
+  "direct_api_graph_request",
   "graph_page_concept_detail_selection"
 ];
 

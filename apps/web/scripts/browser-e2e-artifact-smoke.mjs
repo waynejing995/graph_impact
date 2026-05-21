@@ -71,7 +71,7 @@ const currentDbProbes = [
     latest_graph_rebuild_job_id: "13"
   },
   {
-    surface: "direct_api_document_request",
+    surface: "direct_api_graph_request",
     url: "http://127.0.0.1:3100/api/workbench/graph?dbPath=data%2Fasip.db",
     db_path: "data/asip.db",
     status: 200,
