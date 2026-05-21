@@ -89,6 +89,7 @@ PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=packages/core/src:packages/core/tests:. \
   python3 -m unittest packages.core.tests.test_completion_gate -v
 PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=packages/core/src:. \
   python3 -m asip.cli git-gate --repo-root . --output-json /tmp/asip-git-gate.json --full
+pnpm gate:postpush
 ```
 
 The aggregate completion gate may remain blocked by hosted credentials or explicit residual acceptance. That is a real project boundary, not a bootstrap failure.

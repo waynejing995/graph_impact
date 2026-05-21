@@ -84,6 +84,12 @@ PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=packages/core/src:. \
   --full
 ```
 
+Run the standard post-push completion bundle out of tree:
+
+```bash
+pnpm gate:postpush
+```
+
 ## Remote
 
 At the time this guide was written, `main` tracks:
