@@ -474,14 +474,19 @@ function collectProbeUrlPathFailureReasons(surface, probe) {
     return reasons;
   }
   let actualPath = "";
+  let parsedUrl;
   try {
-    actualPath = new URL(String(probe.url ?? "")).pathname;
+    parsedUrl = new URL(String(probe.url ?? ""));
+    actualPath = parsedUrl.pathname;
   } catch {
     reasons.push(`browser e2e ${surface} url is invalid: ${probe.url ?? "missing"}`);
     return reasons;
   }
   if (actualPath !== expectedPath) {
     reasons.push(`browser e2e ${surface} url path=${actualPath} does not match ${expectedPath}`);
+  }
+  if (surface === "graph_page_api_request" && parsedUrl.searchParams.get("functionView") !== "concept") {
+    reasons.push("browser e2e graph_page_api_request url is missing functionView=concept");
   }
   return reasons;
 }
@@ -490,6 +495,9 @@ function collectConceptDetailProbeFailureReasons(probe) {
   const reasons = [];
   if (!String(probe.selected_node_id ?? "").includes(":concept:")) {
     reasons.push("browser e2e concept detail selected_node_id is not a concept node");
+  }
+  if (probe.selected_is_concept !== true) {
+    reasons.push(`browser e2e concept detail selected_is_concept=${probe.selected_is_concept ?? "missing"}`);
   }
   if (String(probe.selected_kind ?? "") !== "function") {
     reasons.push(`browser e2e concept detail selected_kind=${probe.selected_kind ?? "missing"}`);

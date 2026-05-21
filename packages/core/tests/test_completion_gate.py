@@ -111,6 +111,54 @@ class CompletionGateTests(unittest.TestCase):
             self.assertEqual(by_id["callback_edge_audit"]["status"], "missing")
             self.assertIn("callback audit artifact is missing", by_id["callback_edge_audit"]["failure_reasons"])
 
+    def test_completion_gate_blocks_stale_semantic_quality_repo_head(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            db_path = self._write_gate_db(root / "asip.db")
+            semantic_quality_json = self._write_json(
+                root / "semantic-quality.json",
+                self._semantic_quality_payload("pass", db_path=db_path, repo_head="old-head"),
+            )
+            git_json = self._write_json(root / "git.json", self._git_payload("pass", head="new-head"))
+
+            result = run_completion_gate(
+                db_path,
+                semantic_quality_json=semantic_quality_json,
+                git_gate_json=git_json,
+            )
+
+            by_id = {item["id"]: item for item in result["requirements"]}
+            self.assertEqual(by_id["semantic_quality"]["status"], "blocked")
+            self.assertIn(
+                "semantic-quality repo_head=old-head does not match git_gate head=new-head",
+                by_id["semantic_quality"]["failure_reasons"],
+            )
+
+    def test_completion_gate_blocks_semantic_quality_stale_db_and_eval_set(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            db_path = self._write_gate_db(root / "asip.db")
+            payload = self._semantic_quality_payload("pass", db_path=db_path)
+            payload["db_sha256"] = "0" * 64
+            payload["eval_set_sha256"] = "1" * 64
+            semantic_quality_json = self._write_json(root / "semantic-quality.json", payload)
+
+            result = run_completion_gate(
+                db_path,
+                semantic_quality_json=semantic_quality_json,
+            )
+
+            by_id = {item["id"]: item for item in result["requirements"]}
+            self.assertEqual(by_id["semantic_quality"]["status"], "blocked")
+            self.assertIn(
+                "semantic-quality db_sha256 does not match current database",
+                by_id["semantic_quality"]["failure_reasons"],
+            )
+            self.assertIn(
+                "semantic-quality eval_set_sha256 does not match current eval set",
+                by_id["semantic_quality"]["failure_reasons"],
+            )
+
     def test_completion_gate_blocks_real_final_mode_without_hosted_openai_artifact(self):
         with tempfile.TemporaryDirectory() as tmpdir:
             root = Path(tmpdir)
@@ -333,6 +381,52 @@ class CompletionGateTests(unittest.TestCase):
             self.assertEqual(by_id["browser_e2e"]["status"], "blocked")
             self.assertIn(
                 "browser e2e concept detail selection_input=summary-button is not canvas-node-click",
+                by_id["browser_e2e"]["failure_reasons"],
+            )
+
+    def test_completion_gate_blocks_concept_detail_probe_without_backend_concept_flag(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            db_path = self._write_gate_db(root / "asip.db")
+            payload = self._browser_e2e_payload("pass", db_path=db_path)
+            for probe in payload["current_db_probes"]:
+                if probe["surface"] == "graph_page_concept_detail_selection":
+                    probe["selected_is_concept"] = False
+            browser_json = self._write_json(root / "browser.json", payload)
+
+            result = run_completion_gate(
+                db_path,
+                browser_json=browser_json,
+                minimum_counts=self._fixture_minimum_counts(),
+            )
+
+            by_id = {item["id"]: item for item in result["requirements"]}
+            self.assertEqual(by_id["browser_e2e"]["status"], "blocked")
+            self.assertIn(
+                "browser e2e concept detail selected_is_concept=False",
+                by_id["browser_e2e"]["failure_reasons"],
+            )
+
+    def test_completion_gate_blocks_graph_page_probe_without_concept_function_view(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            db_path = self._write_gate_db(root / "asip.db")
+            payload = self._browser_e2e_payload("pass", db_path=db_path)
+            for probe in payload["current_db_probes"]:
+                if probe["surface"] == "graph_page_api_request":
+                    probe["url"] = f"http://127.0.0.1:3100/api/workbench/graph?dbPath={db_path}"
+            browser_json = self._write_json(root / "browser.json", payload)
+
+            result = run_completion_gate(
+                db_path,
+                browser_json=browser_json,
+                minimum_counts=self._fixture_minimum_counts(),
+            )
+
+            by_id = {item["id"]: item for item in result["requirements"]}
+            self.assertEqual(by_id["browser_e2e"]["status"], "blocked")
+            self.assertIn(
+                "browser e2e graph_page_api_request url is missing functionView=concept",
                 by_id["browser_e2e"]["failure_reasons"],
             )
 
@@ -2683,11 +2777,21 @@ class CompletionGateTests(unittest.TestCase):
             "checks": checks,
         }
 
-    def _semantic_quality_payload(self, gate_status, *, db_path):
+    def _semantic_quality_payload(self, gate_status, *, db_path, repo_head="current-git-head"):
         case_status = "pass" if gate_status == "pass" else "fail"
+        eval_set_path = db_path.parent / "semantic-eval-set.jsonl"
+        eval_set_path.write_text(
+            '{"id":"SQ01","query":"find register writer"}\n'
+            '{"id":"SQ02","query":"find graph target"}\n',
+            encoding="utf-8",
+        )
         return {
             "source": "asip.semantic_quality_eval",
+            "repo_head": repo_head,
             "db_path": str(db_path),
+            "db_sha256": hashlib.sha256(db_path.read_bytes()).hexdigest(),
+            "eval_set_path": str(eval_set_path),
+            "eval_set_sha256": hashlib.sha256(eval_set_path.read_bytes()).hexdigest(),
             "gate_status": gate_status,
             "summary": {
                 "total": 2,
@@ -2843,7 +2947,7 @@ class CompletionGateTests(unittest.TestCase):
             "current_db_probes": [
                 {
                     "surface": "graph_page_api_request",
-                    "url": f"http://127.0.0.1:3100/api/workbench/graph?dbPath={db_path}",
+                    "url": f"http://127.0.0.1:3100/api/workbench/graph?dbPath={db_path}&functionView=concept",
                     "db_path": str(db_path),
                     "status": 200,
                     "node_count": 2,
@@ -2874,6 +2978,7 @@ class CompletionGateTests(unittest.TestCase):
                     "latest_index_job_id": 1,
                     "latest_graph_rebuild_job_id": 2,
                     "selected_node_id": "function:linux-amdgpu:concept:linux-amdgpu:amd-ip-versioned-functions:gfx_hw_init",
+                    "selected_is_concept": True,
                     "selected_kind": "function",
                     "selected_label": "gfx_hw_init",
                     "implementation_count": 2,

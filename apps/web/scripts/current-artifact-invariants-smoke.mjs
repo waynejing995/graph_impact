@@ -164,6 +164,7 @@ if (browserArtifactIsE2e) {
     (probe) => probe.surface === "direct_api_graph_request"
   );
   assert.equal(new URL(String(graphPageApiProbe?.url ?? "")).pathname, "/api/workbench/graph");
+  assert.equal(new URL(String(graphPageApiProbe?.url ?? "")).searchParams.get("functionView"), "concept");
   assert.equal(new URL(String(directGraphProbe?.url ?? "")).pathname, "/api/workbench/graph");
   assert.ok((browserGate.current_db_probes ?? []).every((probe) => String(probe.url ?? "").includes("dbPath=")));
   assert.ok((browserGate.current_db_probes ?? []).every((probe) => Number(probe.status ?? 0) === 200));
@@ -173,6 +174,7 @@ if (browserArtifactIsE2e) {
     (probe) => probe.surface === "graph_page_concept_detail_selection"
   );
   assert.ok(String(conceptDetailProbe?.selected_node_id ?? "").includes(":concept:"));
+  assert.equal(conceptDetailProbe?.selected_is_concept, true);
   assert.equal(conceptDetailProbe?.selected_kind, "function");
   assert.ok(Number(conceptDetailProbe?.implementation_count ?? 0) > 1);
   assert.equal(

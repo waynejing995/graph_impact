@@ -2069,6 +2069,7 @@ test("graph page loads current data/asip.db through browser and API", async ({ p
   );
   await page.goto(`/graph?dbPath=${encodeURIComponent(dbPath)}`);
   const graphResponse = await graphResponsePromise;
+  expect(new URL(graphResponse.url()).searchParams.get("functionView")).toBe("concept");
   const graphPayloadText = await graphResponse.text();
   const graphPayload = JSON.parse(graphPayloadText) as {
     source?: string;
@@ -2173,6 +2174,7 @@ test("graph page loads current data/asip.db through browser and API", async ({ p
     latest_index_job_id: latestIndexJobId,
     latest_graph_rebuild_job_id: latestGraphRebuildJobId,
     selected_node_id: currentDbConcept?.id,
+    selected_is_concept: currentDbConcept?.attr?.is_concept,
     selected_kind: currentDbConcept?.kind,
     selected_label: currentDbConceptLabel,
     implementation_count: currentDbConcept?.attr?.concept_implementation_count,

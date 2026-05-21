@@ -23,6 +23,11 @@ The artifact records the current `repo_head`, `data/asip.db` SHA-256, and the
 latest index/graph rebuild job ids; the completion gate rejects stale callback
 audit proof that does not match the current DB or git head.
 
+2026-05-21 semantic-quality evidence hardening: the post-push runner also
+regenerates the labeled semantic-quality eval under `$out_dir` after the git
+gate passes. The completion gate now rejects stale semantic-quality proof whose
+`repo_head`, DB SHA-256, or eval-set SHA-256 does not match the current tree.
+
 ## Requirement
 
 The active goal must not be marked complete until the implementation has been reviewed against the design docs and every blocking gap is closed or explicitly accepted by the user.
@@ -559,20 +564,27 @@ Commit and push happen only after verification.
 
 ## Remaining Gap
 
-Completion evidence is now separated in the final-candidate QA package and the
-2026-05-18 graph/UI/acceptance-detail/design-review blocker pass is documented.
-The branch is not complete until the 2026-05-19/2026-05-20 current graph final
-gate is executed for the latest audit changes: artifact hygiene, final diff
-review, commit, push, and explicit acceptance or implementation of residual
-boundaries such as full clangd/libclang cross-TU type-flow, credentialed
-OpenAI-compatible live QA, live semantic-edge provider smoke, final Stage 2
-refresh if required, and browser/e2e evidence. Current product schema
-validation, document subtype projection, default-DB indexing, stale-job
-hygiene, and CLI/API/MCP acceptance evidence now exist for the current tree,
-but they must not be overstated as proof of the full final gate until
-browser/provider evidence is verified against the selected final DB candidate
-or explicitly accepted as residuals. The fixture-scale performance smoke is
-currently recorded as passing and is not one of the seven aggregate blockers.
+Completion evidence is now separated in the final-candidate QA package, the
+historical graph/UI/acceptance-detail/design-review passes, and the current
+post-push aggregate runner. The 2026-05-21 post-push path verifies the latest
+tree with live regenerated browser e2e, callback/vtable audit, provider gate,
+semantic-quality eval, no-server smoke, and git closure artifacts under
+`$out_dir`; committed browser/callback/semantic-quality JSON snapshots are not
+authoritative final proof after a new commit because their `repo_head` would be
+stale by construction.
+
+The current remaining blockers are:
+
+- credentialed hosted OpenAI-compatible provider smoke, because
+  `OPENAI_API_KEY` (or the configured hosted credential env var) is not present;
+- explicit user acceptance of the G13 residual rows for broad production
+  semantic ranking quality and hosted/provider boundary evidence.
+
+Live semantic-edge provider smoke, Stage 2 freshness, current DB indexing,
+product schema validation, no-mock browser/e2e evidence, and git push hygiene
+are no longer listed as separate current blockers when the post-push aggregate
+has been rerun against the current head. They should still be treated as
+required checks inside `pnpm gate:postpush`, not as manually waived prose.
 
 The final gate must also distinguish design completion from implementation
 completion. The V2 plan can be complete as a document, but the active goal is

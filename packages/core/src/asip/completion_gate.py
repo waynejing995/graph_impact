@@ -145,7 +145,12 @@ def run_completion_gate(
         _provider_requirement(provider_payload),
         _stage2_requirement(provider_payload),
         _runtime_semantic_freshness_requirement(runtime_semantic_payload),
-        _semantic_quality_requirement(semantic_quality_payload, required=minimum_counts is None),
+        _semantic_quality_requirement(
+            semantic_quality_payload,
+            required=minimum_counts is None,
+            db_path=db_path,
+            git_payload=git_payload,
+        ),
         _callback_audit_requirement(
             callback_audit_payload,
             required=minimum_counts is None,
@@ -1042,7 +1047,13 @@ def _runtime_semantic_freshness_requirement(payload: Optional[Mapping[str, Any]]
     )
 
 
-def _semantic_quality_requirement(payload: Optional[Mapping[str, Any]], *, required: bool) -> Dict[str, Any]:
+def _semantic_quality_requirement(
+    payload: Optional[Mapping[str, Any]],
+    *,
+    required: bool,
+    db_path: Path,
+    git_payload: Optional[Mapping[str, Any]] = None,
+) -> Dict[str, Any]:
     if not isinstance(payload, Mapping):
         if not required:
             return _requirement(
@@ -1062,6 +1073,40 @@ def _semantic_quality_requirement(payload: Optional[Mapping[str, Any]], *, requi
     failures: List[str] = []
     if payload.get("source") != "asip.semantic_quality_eval":
         failures.append(f"source={payload.get('source', 'missing')} does not match asip.semantic_quality_eval")
+    if required:
+        artifact_db_path = payload.get("db_path")
+        if not artifact_db_path:
+            failures.append("semantic-quality db_path is missing")
+        elif not _same_path(db_path, Path(str(artifact_db_path))):
+            failures.append(f"semantic-quality db_path={artifact_db_path} does not match current db_path={db_path}")
+
+        recorded_db_sha = str(payload.get("db_sha256") or "").strip()
+        if not recorded_db_sha:
+            failures.append("semantic-quality db_sha256 is missing")
+        else:
+            actual_db_sha = _file_sha256(db_path)
+            if recorded_db_sha != actual_db_sha:
+                failures.append("semantic-quality db_sha256 does not match current database")
+
+        eval_set_path = str(payload.get("eval_set_path") or "").strip()
+        eval_set_sha = str(payload.get("eval_set_sha256") or "").strip()
+        if not eval_set_path:
+            failures.append("semantic-quality eval_set_path is missing")
+        elif not eval_set_sha:
+            failures.append("semantic-quality eval_set_sha256 is missing")
+        else:
+            actual_eval_set_sha = _file_sha256(Path(eval_set_path))
+            if not actual_eval_set_sha:
+                failures.append(f"semantic-quality eval_set_path is unreadable: {eval_set_path}")
+            elif eval_set_sha != actual_eval_set_sha:
+                failures.append("semantic-quality eval_set_sha256 does not match current eval set")
+
+        repo_head = str(payload.get("repo_head") or "").strip()
+        git_head = str(git_payload.get("head") or "").strip() if isinstance(git_payload, Mapping) else ""
+        if not repo_head:
+            failures.append("semantic-quality repo_head is missing")
+        elif git_head and repo_head != git_head:
+            failures.append(f"semantic-quality repo_head={repo_head} does not match git_gate head={git_head}")
     if payload.get("gate_status") != "pass":
         failures.append(f"gate_status={payload.get('gate_status')}")
         failures.extend(str(reason) for reason in payload.get("failure_reasons", []))
@@ -1099,7 +1144,8 @@ def _semantic_quality_requirement(payload: Optional[Mapping[str, Any]], *, requi
         f"passed={summary.get('passed', 0)}/{summary.get('total', 0)}; "
         f"provider_vector_cases={summary.get('provider_vector_cases', 0)}; "
         f"graph_target_cases={summary.get('graph_target_cases', 0)}; "
-        f"mrr={summary.get('mean_reciprocal_rank', 0)}"
+        f"mrr={summary.get('mean_reciprocal_rank', 0)}; "
+        f"repo_head={_short_sha(str(payload.get('repo_head') or ''))}"
     )
     return _requirement(
         "semantic_quality",
@@ -1610,9 +1656,14 @@ def _browser_probe_url_path_failures(surface: str, url: str) -> List[str]:
     parsed = urlparse(url)
     if not parsed.scheme or not parsed.netloc:
         return [f"browser e2e {surface} url is invalid: {url or 'missing'}"]
+    failures = []
     if parsed.path != expected_path:
-        return [f"browser e2e {surface} url path={parsed.path} does not match {expected_path}"]
-    return []
+        failures.append(f"browser e2e {surface} url path={parsed.path} does not match {expected_path}")
+    if surface == "graph_page_api_request":
+        function_view = parse_qs(parsed.query).get("functionView", [])
+        if "concept" not in function_view:
+            failures.append("browser e2e graph_page_api_request url is missing functionView=concept")
+    return failures
 
 
 def _browser_concept_detail_probe_failures(probe: Mapping[str, Any]) -> List[str]:
@@ -1620,6 +1671,8 @@ def _browser_concept_detail_probe_failures(probe: Mapping[str, Any]) -> List[str
     selected_node_id = str(probe.get("selected_node_id") or "")
     if ":concept:" not in selected_node_id:
         failures.append("browser e2e concept detail selected_node_id is not a concept node")
+    if probe.get("selected_is_concept") is not True:
+        failures.append(f"browser e2e concept detail selected_is_concept={probe.get('selected_is_concept', 'missing')}")
     if str(probe.get("selected_kind") or "") != "function":
         failures.append(f"browser e2e concept detail selected_kind={probe.get('selected_kind')}")
     if not str(probe.get("selected_label") or "").strip():

@@ -61,7 +61,7 @@ assert.match(JSON.stringify(allSkippedArtifact.failure_reasons), /no passed test
 const currentDbProbes = [
   {
     surface: "graph_page_api_request",
-    url: "http://127.0.0.1:3100/api/workbench/graph?dbPath=data%2Fasip.db",
+    url: "http://127.0.0.1:3100/api/workbench/graph?dbPath=data%2Fasip.db&functionView=concept",
     db_path: "data/asip.db",
     status: 200,
     node_count: 2552,
@@ -80,6 +80,31 @@ const currentDbProbes = [
     response_sha256: "b".repeat(64),
     latest_index_job_id: "10",
     latest_graph_rebuild_job_id: "13"
+  },
+  {
+    surface: "graph_page_concept_detail_selection",
+    url: "http://127.0.0.1:3100/graph?dbPath=data%2Fasip.db",
+    db_path: "data/asip.db",
+    status: 200,
+    node_count: 2552,
+    edge_count: 3000,
+    response_sha256: "c".repeat(64),
+    latest_index_job_id: "10",
+    latest_graph_rebuild_job_id: "13",
+    selected_node_id: "function:linux-amdgpu:concept:linux-amdgpu:amd-ip-versioned-functions:gfx_hw_init",
+    selected_is_concept: true,
+    selected_kind: "function",
+    selected_label: "gfx_hw_init",
+    implementation_count: 9,
+    listed_implementation_count: 9,
+    raw_implementation_record_count: 92,
+    selected_implementation: "gfx_v10_0_hw_init",
+    selection_input: "canvas-node-click",
+    hovered_canvas_node_id: "function:linux-amdgpu:concept:linux-amdgpu:amd-ip-versioned-functions:gfx_hw_init",
+    canvas_click_x: 704,
+    canvas_click_y: 491,
+    detail_heading: "Concept Generated From",
+    detail_truncated: false
   }
 ];
 
@@ -189,6 +214,8 @@ for (const test of boundOfflineArtifact.required_tests) {
 assert.match(JSON.stringify(boundOfflineArtifact.failure_reasons), /offline Playwright JSON report cannot satisfy live browser e2e proof/);
 assert.doesNotMatch(JSON.stringify(boundOfflineArtifact.failure_reasons), /db_path is missing/);
 assert.doesNotMatch(JSON.stringify(boundOfflineArtifact.failure_reasons), /target_urls do not include current dbPath/);
+assert.doesNotMatch(JSON.stringify(boundOfflineArtifact.failure_reasons), /current_db_probes missing surface/);
+assert.doesNotMatch(JSON.stringify(boundOfflineArtifact.failure_reasons), /functionView=concept/);
 
 const wrongProbePathReport = writeReport("wrong-probe-path.json", {
   ...JSON.parse(readFileSync(passingReport, "utf8")),
@@ -260,6 +287,142 @@ assert.match(
   JSON.stringify(wrongProbePathArtifact.failure_reasons),
   /direct_api_graph_request url path=\/api\/workbench\/documents does not match \/api\/workbench\/graph/
 );
+
+const missingConceptViewReport = writeReport("missing-concept-view.json", {
+  ...JSON.parse(readFileSync(passingReport, "utf8")),
+  suites: [
+    {
+      title: "workbench-smoke.spec.ts",
+      suites: [],
+      specs: [
+        {
+          title: "acceptance page runs no-mock AQ01 through the real workbench API",
+          file: "tests/workbench-smoke.spec.ts",
+          tests: [{ outcome: "expected" }]
+        },
+        {
+          title: "graph page uses URL dbPath for no-mock graph and query requests",
+          file: "tests/workbench-smoke.spec.ts",
+          tests: [{ outcome: "expected" }]
+        },
+        {
+          title: "graph page loads current data/asip.db through browser and API",
+          file: "tests/workbench-smoke.spec.ts",
+          tests: [
+            {
+              outcome: "expected",
+              results: [
+                {
+                  stdout: [
+                    {
+                      text: `ASIP_BROWSER_CURRENT_DB_PROBE ${JSON.stringify(
+                        currentDbProbes.map((probe) =>
+                          probe.surface === "graph_page_api_request"
+                            ? { ...probe, url: "http://127.0.0.1:3100/api/workbench/graph?dbPath=data%2Fasip.db" }
+                            : probe
+                        )
+                      )}\n`
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        },
+        {
+          title: "graph page filters no-mock graph layers and shows edge provenance",
+          file: "tests/workbench-smoke.spec.ts",
+          tests: [{ outcome: "expected" }]
+        },
+        {
+          title: "evidence page initial query uses URL dbPath without default DB fallback",
+          file: "tests/workbench-smoke.spec.ts",
+          tests: [{ outcome: "expected" }]
+        }
+      ]
+    }
+  ]
+});
+const missingConceptViewArtifact = runArtifact(missingConceptViewReport, "missing-concept-view-artifact.json", [
+  "--db-path",
+  "data/asip.db",
+  "--latest-index-job-id",
+  "10",
+  "--latest-graph-rebuild-job-id",
+  "13",
+  "--target-url",
+  "http://127.0.0.1:3100/graph?dbPath=data%2Fasip.db"
+]);
+assert.equal(missingConceptViewArtifact.gate_status, "blocked");
+assert.match(JSON.stringify(missingConceptViewArtifact.failure_reasons), /functionView=concept/);
+
+const fakeConceptDetailReport = writeReport("fake-concept-detail.json", {
+  ...JSON.parse(readFileSync(passingReport, "utf8")),
+  suites: [
+    {
+      title: "workbench-smoke.spec.ts",
+      suites: [],
+      specs: [
+        {
+          title: "acceptance page runs no-mock AQ01 through the real workbench API",
+          file: "tests/workbench-smoke.spec.ts",
+          tests: [{ outcome: "expected" }]
+        },
+        {
+          title: "graph page uses URL dbPath for no-mock graph and query requests",
+          file: "tests/workbench-smoke.spec.ts",
+          tests: [{ outcome: "expected" }]
+        },
+        {
+          title: "graph page loads current data/asip.db through browser and API",
+          file: "tests/workbench-smoke.spec.ts",
+          tests: [
+            {
+              outcome: "expected",
+              results: [
+                {
+                  stdout: [
+                    {
+                      text: `ASIP_BROWSER_CURRENT_DB_PROBE ${JSON.stringify(
+                        currentDbProbes.map((probe) =>
+                          probe.surface === "graph_page_concept_detail_selection"
+                            ? { ...probe, selected_is_concept: false }
+                            : probe
+                        )
+                      )}\n`
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        },
+        {
+          title: "graph page filters no-mock graph layers and shows edge provenance",
+          file: "tests/workbench-smoke.spec.ts",
+          tests: [{ outcome: "expected" }]
+        },
+        {
+          title: "evidence page initial query uses URL dbPath without default DB fallback",
+          file: "tests/workbench-smoke.spec.ts",
+          tests: [{ outcome: "expected" }]
+        }
+      ]
+    }
+  ]
+});
+const fakeConceptDetailArtifact = runArtifact(fakeConceptDetailReport, "fake-concept-detail-artifact.json", [
+  "--db-path",
+  "data/asip.db",
+  "--latest-index-job-id",
+  "10",
+  "--latest-graph-rebuild-job-id",
+  "13",
+  "--target-url",
+  "http://127.0.0.1:3100/graph?dbPath=data%2Fasip.db"
+]);
+assert.equal(fakeConceptDetailArtifact.gate_status, "blocked");
+assert.match(JSON.stringify(fakeConceptDetailArtifact.failure_reasons), /selected_is_concept=false/);
 
 const wrongSuiteReport = writeReport("wrong-suite.json", {
   stats: {

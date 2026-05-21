@@ -38,6 +38,7 @@ def run_semantic_quality_eval(
         "generated_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
         "repo_head": _repo_head(Path.cwd()),
         "db_path": str(db_path),
+        "db_sha256": _sha256(db_path),
         "eval_set_path": str(eval_set_path),
         "eval_set_sha256": _sha256(eval_set_path),
         "summary": {
