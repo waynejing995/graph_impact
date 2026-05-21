@@ -196,6 +196,44 @@ class ClosureGateTests(unittest.TestCase):
             self.assertEqual(payload["source"], "asip.git_gate")
             self.assertEqual(payload["gate_status"], "blocked")
 
+    def test_residual_gate_cli_require_pass_returns_nonzero_when_blocked(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            residual_doc = root / "g13.md"
+            output_json = root / "residual-gate.json"
+            residual_doc.write_text(
+                "\n".join(
+                    [
+                        "# G13",
+                        "",
+                        "Status: Partial; final user acceptance remains blocking",
+                        "",
+                        "| Spec area | MVP status | User acceptance status |",
+                        "| --- | --- | --- |",
+                        "| Full clangd/libclang | Deferred | Needs acceptance |",
+                    ]
+                ),
+                encoding="utf-8",
+            )
+
+            exit_code = cli_main(
+                [
+                    "residual-gate",
+                    "--residual-doc",
+                    str(residual_doc),
+                    "--accepted",
+                    "--accepted-residual",
+                    "Full clangd/libclang",
+                    "--output-json",
+                    str(output_json),
+                    "--require-pass",
+                ]
+            )
+
+            self.assertEqual(exit_code, 2)
+            payload = json.loads(output_json.read_text(encoding="utf-8"))
+            self.assertEqual(payload["gate_status"], "blocked")
+
     def _git(self, cwd: Path, *args: str) -> None:
         subprocess.run(["git", *args], cwd=cwd, check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
 

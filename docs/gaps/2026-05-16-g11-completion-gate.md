@@ -515,6 +515,15 @@ Commit and push happen only after verification.
   `hosted_openai_compatible` (`OPENAI_API_KEY` missing) and
   `residual_acceptance` (no explicit accepted residuals recorded) still
   blocking.
+- 2026-05-21 final evidence binding follow-up: `main@13d5079` hardens live
+  browser evidence with a `repo_head` check against the git gate, makes
+  no-server smoke fail closed when current artifact input snapshots are
+  missing, requires residual acceptance artifacts to bind the current G13
+  document SHA and an accepted status line, and removes wildcard residual
+  acceptance matching. The residual artifact has been refreshed in its blocked
+  state with `residual_doc_sha256`; it still cannot pass until the user
+  explicitly accepts the listed residual rows and the G13 status line changes
+  from `Partial` to `Accepted`.
 - Historical final-candidate evidence package exists at
   `docs/qa/2026-05-17-final-clean-evidence-package.md`, linking the clean AMD
   DB, AQ01-AQ09 9/9 artifact, six free queries, semantic-edge jobs, visual QA,

@@ -1,7 +1,9 @@
 {
   "source": "asip.residual_acceptance",
-  "generated_at": "2026-05-21T06:20:56+00:00",
+  "generated_at": "2026-05-21T09:16:06+00:00",
   "residual_doc_path": "docs/gaps/2026-05-16-g13-mvp-boundary-deferrals.md",
+  "residual_doc_sha256": "13e467c114fd0df7609b1ec35796206cb8b086bc7b54a82409d01eba35af4c58",
+  "residual_doc_bytes": 11145,
   "status_line": "Status: Partial; deferral ledger exists, final user acceptance of residual boundaries remains blocking",
   "accepted": false,
   "accepted_residuals": [],

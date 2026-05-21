@@ -295,6 +295,11 @@ def main(argv: Optional[List[str]] = None) -> int:
     residual_gate.add_argument("--accepted", action="store_true")
     residual_gate.add_argument("--accepted-residual", action="append", default=[])
     residual_gate.add_argument("--output-json")
+    residual_gate.add_argument(
+        "--require-pass",
+        action="store_true",
+        help="Exit non-zero when the residual gate is blocked",
+    )
     residual_gate.add_argument("--full", action="store_true", help="Print the full residual-gate payload")
 
     git_gate = subcommands.add_parser("git-gate", help="Record final diff, commit, and push gate state")
@@ -624,6 +629,8 @@ def main(argv: Optional[List[str]] = None) -> int:
             output_json=Path(args.output_json) if args.output_json else None,
         )
         print(json.dumps(result if args.full else {"gate_status": result["gate_status"]}, indent=2))
+        if args.require_pass and result["gate_status"] != "pass":
+            return 2
         return 0
     if args.command == "git-gate":
         result = run_git_gate(

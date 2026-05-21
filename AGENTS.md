@@ -102,6 +102,7 @@ PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=packages/core/src:. \
   --accepted-residual "Hybrid retrieval over exact, resolver, FTS5, vector, graph, rerank" \
   --accepted-residual "Embedding provider and optional semantic-edge provider via Ollama/OpenAI-compatible APIs" \
   --output-json docs/qa/2026-05-20-residual-acceptance-gate.json \
+  --require-pass \
   --full
 ```
 
