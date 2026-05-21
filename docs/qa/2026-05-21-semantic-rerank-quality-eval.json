@@ -1,0 +1,311 @@
+{
+  "source": "asip.semantic_rerank_quality_eval",
+  "generated_at": "2026-05-21T04:10:30+00:00",
+  "repo_head": "cab672d6062a5df0916c804ac6f86fc5164f1950",
+  "db_path": "/Volumes/data/User/wayne/Code/graph_impact/data/asip.db",
+  "acceptance_artifact": "/Volumes/data/User/wayne/Code/graph_impact/docs/qa/2026-05-21-acceptance-data-asip-live-web-current.json",
+  "provider_artifact": "/Volumes/data/User/wayne/Code/graph_impact/docs/qa/2026-05-21-provider-gate-current.json",
+  "summary": {
+    "checks": 3,
+    "passed": 2,
+    "partial": 1,
+    "failed": 0,
+    "queries": 9,
+    "provider_vector_queries": 1
+  },
+  "gate_status": "partial",
+  "checks": [
+    {
+      "id": "full_provider_embedding_coverage",
+      "status": "pass",
+      "total_chunks": 147841,
+      "total_embeddings": 147841,
+      "provider_embeddings": 147841,
+      "missing_embedding_chunks": 0,
+      "fallback_embeddings": 0
+    },
+    {
+      "id": "aq01_aq09_live_acceptance_quality_proxy",
+      "status": "pass",
+      "queries": 9,
+      "queries_passed": 9,
+      "surfaces_passed": true,
+      "surface_row_counts_equal": true
+    },
+    {
+      "id": "provider_vector_participation",
+      "status": "partial",
+      "queries_with_provider_vector": [
+        "AQ05"
+      ],
+      "query_count": 9,
+      "message": "provider-vector participates in current AQ evidence but not every AQ query needs vector rerank; symbol-heavy queries intentionally skip vector embedding."
+    }
+  ],
+  "queries": [
+    {
+      "id": "AQ01",
+      "status": "pass",
+      "row_count": 24,
+      "retrieval_sources": [
+        "fts5",
+        "lexical"
+      ],
+      "provider_vector_participates": false,
+      "surface_statuses": {
+        "CLI": "pass",
+        "API": "pass",
+        "API_LIVE": "pass",
+        "Web": "pass",
+        "MCP": "pass",
+        "MCP_PROTOCOL": "pass"
+      },
+      "surface_row_counts": {
+        "CLI": 24,
+        "API": 24,
+        "API_LIVE": 24,
+        "Web": 24,
+        "MCP": 24,
+        "MCP_PROTOCOL": 24
+      },
+      "surface_row_counts_equal": true,
+      "graph_node_count": 31,
+      "graph_edge_count": 91
+    },
+    {
+      "id": "AQ02",
+      "status": "pass",
+      "row_count": 24,
+      "retrieval_sources": [
+        "fts5",
+        "lexical"
+      ],
+      "provider_vector_participates": false,
+      "surface_statuses": {
+        "CLI": "pass",
+        "API": "pass",
+        "API_LIVE": "pass",
+        "Web": "pass",
+        "MCP": "pass",
+        "MCP_PROTOCOL": "pass"
+      },
+      "surface_row_counts": {
+        "CLI": 24,
+        "API": 24,
+        "API_LIVE": 24,
+        "Web": 24,
+        "MCP": 24,
+        "MCP_PROTOCOL": 24
+      },
+      "surface_row_counts_equal": true,
+      "graph_node_count": 32,
+      "graph_edge_count": 91
+    },
+    {
+      "id": "AQ03",
+      "status": "pass",
+      "row_count": 24,
+      "retrieval_sources": [
+        "fts5",
+        "lexical"
+      ],
+      "provider_vector_participates": false,
+      "surface_statuses": {
+        "CLI": "pass",
+        "API": "pass",
+        "API_LIVE": "pass",
+        "Web": "pass",
+        "MCP": "pass",
+        "MCP_PROTOCOL": "pass"
+      },
+      "surface_row_counts": {
+        "CLI": 24,
+        "API": 24,
+        "API_LIVE": 24,
+        "Web": 24,
+        "MCP": 24,
+        "MCP_PROTOCOL": 24
+      },
+      "surface_row_counts_equal": true,
+      "graph_node_count": 92,
+      "graph_edge_count": 314
+    },
+    {
+      "id": "AQ04",
+      "status": "pass",
+      "row_count": 24,
+      "retrieval_sources": [
+        "fts5",
+        "lexical"
+      ],
+      "provider_vector_participates": false,
+      "surface_statuses": {
+        "CLI": "pass",
+        "API": "pass",
+        "API_LIVE": "pass",
+        "Web": "pass",
+        "MCP": "pass",
+        "MCP_PROTOCOL": "pass"
+      },
+      "surface_row_counts": {
+        "CLI": 24,
+        "API": 24,
+        "API_LIVE": 24,
+        "Web": 24,
+        "MCP": 24,
+        "MCP_PROTOCOL": 24
+      },
+      "surface_row_counts_equal": true,
+      "graph_node_count": 73,
+      "graph_edge_count": 83
+    },
+    {
+      "id": "AQ05",
+      "status": "pass",
+      "row_count": 24,
+      "retrieval_sources": [
+        "fts5",
+        "lexical",
+        "provider-vector"
+      ],
+      "provider_vector_participates": true,
+      "surface_statuses": {
+        "CLI": "pass",
+        "API": "pass",
+        "API_LIVE": "pass",
+        "Web": "pass",
+        "MCP": "pass",
+        "MCP_PROTOCOL": "pass"
+      },
+      "surface_row_counts": {
+        "CLI": 24,
+        "API": 24,
+        "API_LIVE": 24,
+        "Web": 24,
+        "MCP": 24,
+        "MCP_PROTOCOL": 24
+      },
+      "surface_row_counts_equal": true,
+      "graph_node_count": 2,
+      "graph_edge_count": 0
+    },
+    {
+      "id": "AQ06",
+      "status": "pass",
+      "row_count": 24,
+      "retrieval_sources": [
+        "fts5",
+        "lexical"
+      ],
+      "provider_vector_participates": false,
+      "surface_statuses": {
+        "CLI": "pass",
+        "API": "pass",
+        "API_LIVE": "pass",
+        "Web": "pass",
+        "MCP": "pass",
+        "MCP_PROTOCOL": "pass"
+      },
+      "surface_row_counts": {
+        "CLI": 24,
+        "API": 24,
+        "API_LIVE": 24,
+        "Web": 24,
+        "MCP": 24,
+        "MCP_PROTOCOL": 24
+      },
+      "surface_row_counts_equal": true,
+      "graph_node_count": 32,
+      "graph_edge_count": 91
+    },
+    {
+      "id": "AQ07",
+      "status": "pass",
+      "row_count": 24,
+      "retrieval_sources": [
+        "fts5",
+        "lexical"
+      ],
+      "provider_vector_participates": false,
+      "surface_statuses": {
+        "CLI": "pass",
+        "API": "pass",
+        "API_LIVE": "pass",
+        "Web": "pass",
+        "MCP": "pass",
+        "MCP_PROTOCOL": "pass"
+      },
+      "surface_row_counts": {
+        "CLI": 24,
+        "API": 24,
+        "API_LIVE": 24,
+        "Web": 24,
+        "MCP": 24,
+        "MCP_PROTOCOL": 24
+      },
+      "surface_row_counts_equal": true,
+      "graph_node_count": 2,
+      "graph_edge_count": 0
+    },
+    {
+      "id": "AQ08",
+      "status": "pass",
+      "row_count": 24,
+      "retrieval_sources": [
+        "fts5",
+        "lexical"
+      ],
+      "provider_vector_participates": false,
+      "surface_statuses": {
+        "CLI": "pass",
+        "API": "pass",
+        "API_LIVE": "pass",
+        "Web": "pass",
+        "MCP": "pass",
+        "MCP_PROTOCOL": "pass"
+      },
+      "surface_row_counts": {
+        "CLI": 24,
+        "API": 24,
+        "API_LIVE": 24,
+        "Web": 24,
+        "MCP": 24,
+        "MCP_PROTOCOL": 24
+      },
+      "surface_row_counts_equal": true,
+      "graph_node_count": 1,
+      "graph_edge_count": 0
+    },
+    {
+      "id": "AQ09",
+      "status": "pass",
+      "row_count": 24,
+      "retrieval_sources": [
+        "fts5",
+        "lexical"
+      ],
+      "provider_vector_participates": false,
+      "surface_statuses": {
+        "CLI": "pass",
+        "API": "pass",
+        "API_LIVE": "pass",
+        "Web": "pass",
+        "MCP": "pass",
+        "MCP_PROTOCOL": "pass"
+      },
+      "surface_row_counts": {
+        "CLI": 24,
+        "API": 24,
+        "API_LIVE": 24,
+        "Web": 24,
+        "MCP": 24,
+        "MCP_PROTOCOL": 24
+      },
+      "surface_row_counts_equal": true,
+      "graph_node_count": 2,
+      "graph_edge_count": 0
+    }
+  ],
+  "residual_boundary": "This evaluates current default-DB provider-vector coverage and AQ quality proxy evidence. It does not claim hosted production semantic ranking quality across arbitrary future corpora.",
+  "failure_reasons": []
+}

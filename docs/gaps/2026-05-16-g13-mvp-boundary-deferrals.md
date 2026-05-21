@@ -26,6 +26,13 @@ ASIP has both an MVP-1 design doc and a long-range full technical spec. Long-ran
   protocol paths with real live calls. This closes protocol compatibility
   evidence, but it does not prove a hosted credentialed OpenAI-compatible
   endpoint because no credentials have been supplied.
+- 2026-05-21 semantic rerank quality evaluation narrows the hybrid-retrieval
+  residual: `docs/qa/2026-05-21-semantic-rerank-quality-eval.json` confirms
+  full current-DB provider embedding coverage (`147841 / 147841` chunks),
+  AQ01-AQ09 live acceptance consistency across product surfaces, and explicit
+  `provider-vector` participation in AQ05. The artifact is intentionally
+  `partial` because it does not claim production semantic ranking quality
+  across arbitrary future corpora.
 
 ## Remaining Gap
 
@@ -36,9 +43,9 @@ The repo now has a deferral ledger and a final-candidate residual-boundary list.
 | Spec area | MVP status | Current closest capability | User acceptance status | Completion rule |
 | --- | --- | --- | --- | --- |
 | Real AMD code/docs/register/PDF ingestion | MVP-1 | G01 and G08 track raw corpus plus text-based PDF ingestion. | Required by user. | Must close for MVP-1. |
-| Hybrid retrieval over exact, resolver, FTS5, vector, graph, rerank | MVP-1 / partial | G02 and G09 track FTS retrieval, provider embeddings, provider query-time vector rerank wiring, vector fallback, and graph expansion. | Required by user; rerank maturity not separately accepted. | Current evidence closes provider-vector wiring; production-scale semantic rerank quality remains a residual boundary needing acceptance or broader evaluation. |
+| Hybrid retrieval over exact, resolver, FTS5, vector, graph, rerank | MVP-1 / partial | G02 and G09 track FTS retrieval, provider embeddings, provider query-time vector rerank wiring, vector fallback, graph expansion, and the 2026-05-21 AQ semantic quality proxy. | Required by user; rerank maturity not separately accepted. | Current evidence closes provider-vector wiring, full current-DB provider embedding coverage, and the AQ01-AQ09 quality proxy; production-scale semantic rerank quality across arbitrary future corpora remains a residual boundary needing acceptance or broader evaluation. |
 | Configurable resolver profiles for Linux amdgpu, MxGPU, and toy Python | MVP-1 | G05 tracks config-driven resolver profiles and UI workflow. | Required by user. | Must close for MVP-1. |
-| Embedding provider and optional semantic-edge provider via Ollama/OpenAI-compatible APIs | MVP-1 / partial | G06 tracks split provider settings, safe env-based extra headers, embedding calls/backfill, query-time provider rerank wiring, semantic-edge jobs, full default-DB provider embedding coverage, and live `gemma4:e4b`/`nomic-embed-text:latest` model QA. The 2026-05-21 OpenAI-compatible live smoke proves the local `/v1` compatible protocol path. | Required by user for embeddings; semantic-edge model support requested. | Local Ollama path, safe header expansion, full current-DB provider-vector coverage, query-time provider-vector wiring, semantic/doc-node provenance, and local OpenAI-compatible `/v1` live smoke are proven; hosted credentialed OpenAI-compatible live QA and broad semantic quality remain residual boundaries needing acceptance, credentials, or implementation. |
+| Embedding provider and optional semantic-edge provider via Ollama/OpenAI-compatible APIs | MVP-1 / partial | G06 tracks split provider settings, safe env-based extra headers, embedding calls/backfill, query-time provider rerank wiring, semantic-edge jobs, full default-DB provider embedding coverage, and live `gemma4:e4b`/`nomic-embed-text:latest` model QA. The 2026-05-21 OpenAI-compatible live smoke proves the local `/v1` compatible protocol path. | Required by user for embeddings; semantic-edge model support requested. | Local Ollama path, safe header expansion, full current-DB provider-vector coverage, query-time provider-vector wiring, semantic/doc-node provenance, and local OpenAI-compatible `/v1` live smoke are proven; hosted credentialed OpenAI-compatible live QA and broad production semantic quality remain residual boundaries needing acceptance, credentials, or implementation. |
 | Web workbench and MCP as first-class surfaces | MVP-1 | G07, G16, and G17 track API/MCP/Web product surfaces. G07 now includes deterministic structured resolved-chain explanations, Web/MCP graph parity, and bundled-Python real MCP runtime smoke. | Required by user. | Product surface parity and real local MCP runtime smoke are implemented; external client interoperability beyond FastMCP construction/tool execution remains future deployment QA. |
 | Global Obsidian-style weighted graph | Active branch requirement | G03 tracks global graph after user explicitly requested it. | Required by later user request. | Must close for this active goal. |
 | Scanned PDF OCR/layout reconstruction | Deferred | G08 supports text-based PDF conversion only. | Not requested for MVP; MVP design excludes scanned-PDF OCR. | Out of MVP-1 unless user later supplies OCR requirement. |
