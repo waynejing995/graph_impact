@@ -1,6 +1,6 @@
 {
   "source": "asip.web.no_server_smoke",
-  "generated_at": "2026-05-21T05:51:27.944Z",
+  "generated_at": "2026-05-21T06:11:10.528Z",
   "gate_status": "pass",
   "current_artifact_args": [
     "--browser-json",
@@ -66,9 +66,9 @@
       "path": "docs/qa/2026-05-21-semantic-rerank-labeled-eval.json",
       "resolved_path": "/Volumes/data/User/wayne/Code/graph_impact/docs/qa/2026-05-21-semantic-rerank-labeled-eval.json",
       "status": "loaded",
-      "bytes": 15493,
+      "bytes": 18454,
       "hash_policy": "sha256",
-      "sha256": "7a3c13a8f850b2fc276a5ab9aad76f600e45958ed0930ca34175ec940545f911"
+      "sha256": "43c112b865c95c93c5c5997aa14ebca712a62da125db37b85764bfe46b770961"
     },
     {
       "option": "--callback-audit-json",
@@ -102,7 +102,7 @@
       "path": "docs/qa/2026-05-21-current-goal-completion-gate.json",
       "resolved_path": "/Volumes/data/User/wayne/Code/graph_impact/docs/qa/2026-05-21-current-goal-completion-gate.json",
       "status": "loaded",
-      "bytes": 11063,
+      "bytes": 11085,
       "hash_policy": "self-referential-not-final-gate-input",
       "sha256": ""
     },

@@ -2373,6 +2373,7 @@ class CompletionGateTests(unittest.TestCase):
                 "passed": 2 if gate_status == "pass" else 1,
                 "failed": 0 if gate_status == "pass" else 1,
                 "provider_vector_cases": 1,
+                "graph_target_cases": 1,
                 "mean_reciprocal_rank": 1.0,
             },
             "cases": [

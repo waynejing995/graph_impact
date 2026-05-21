@@ -1,9 +1,9 @@
 {
   "source": "asip.git_gate",
-  "generated_at": "2026-05-21T05:54:13+00:00",
+  "generated_at": "2026-05-21T06:11:23+00:00",
   "repo_root": "/Volumes/data/User/wayne/Code/graph_impact",
   "branch": "main",
-  "head": "77c71a7bb56d89cf952c3aa5cacd13cba0139114",
+  "head": "7be78abf7ee65eaeb9554e09e8d5a7a8fab4c58b",
   "upstream": "origin/main",
   "ahead": 0,
   "behind": 0,
@@ -11,22 +11,20 @@
   "diff_check_output": "",
   "worktree_status": "dirty",
   "changed_paths": [
-    " M apps/web/scripts/current-artifact-invariants-smoke.mjs",
-    " M docs/qa/2026-05-21-callback-edge-audit-current.json",
-    " M docs/qa/2026-05-21-callback-edge-audit-current.md",
-    " M docs/qa/2026-05-21-current-goal-completion-gate.json",
-    " M docs/qa/2026-05-21-current-goal-completion-gate.md",
+    " M docs/gaps/2026-05-16-g02-live-retrieval-evidence-schema.md",
+    " M docs/gaps/2026-05-16-g13-mvp-boundary-deferrals.md",
+    " M docs/qa/2026-05-20-residual-acceptance-gate.json",
     " M docs/qa/2026-05-21-semantic-rerank-labeled-eval.json",
     " M docs/qa/2026-05-21-semantic-rerank-labeled-eval.md",
     " M docs/qa/2026-05-21-ui-no-server-smoke.json",
     " M docs/qa/semantic-rerank-eval-set.jsonl",
-    " M packages/core/src/asip/completion_gate.py",
-    " M packages/core/tests/test_completion_gate.py"
+    " M packages/core/src/asip/semantic_quality.py",
+    " M packages/core/tests/test_semantic_quality.py"
   ],
   "committed": false,
   "pushed": true,
   "gate_status": "blocked",
   "failure_reasons": [
-    "worktree has 11 changed/untracked paths"
+    "worktree has 9 changed/untracked paths"
   ]
 }

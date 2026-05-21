@@ -150,3 +150,58 @@ class SemanticQualityTests(unittest.TestCase):
             self.assertEqual(json.loads(result.stdout)["passed"], 1)
             self.assertEqual(json.loads(output_json.read_text(encoding="utf-8"))["gate_status"], "pass")
             self.assertIn("# Semantic Quality Evaluation", output_md.read_text(encoding="utf-8"))
+
+    def test_semantic_quality_eval_checks_expected_graph_nodes(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            db_path = root / "asip.db"
+            eval_set = root / "eval.jsonl"
+            store = AsipStore.connect(str(db_path))
+            store.migrate()
+            doc = store.add_document("fixture", "code", "driver.c")
+            chunk = store.add_chunk(doc, "writer touches CP HQD", 1, 1)
+            store.add_evidence(
+                chunk,
+                "fixture",
+                "code",
+                "local",
+                "driver.c",
+                "hqd_writer",
+                "function",
+                "mention",
+                0.9,
+                "hqd_writer touches CP HQD",
+                "source mention -> hqd_writer",
+                line_start=1,
+                line_end=1,
+            )
+            store.add_edge(
+                "hqd_writer",
+                "CP_HQD_ACTIVE",
+                "writes",
+                0.9,
+                path="driver.c",
+                line_start=1,
+                line_end=1,
+            )
+            eval_set.write_text(
+                json.dumps(
+                    {
+                        "id": "SQ_GRAPH",
+                        "query": "hqd_writer",
+                        "limit": 5,
+                        "expected_symbols_any": ["hqd_writer"],
+                        "expected_graph_node_terms_all": ["CP_HQD_ACTIVE"],
+                        "expected_graph_node_kinds": ["register"],
+                        "min_graph_nodes": 2,
+                    }
+                )
+                + "\n",
+                encoding="utf-8",
+            )
+
+            result = run_semantic_quality_eval(db_path, eval_set)
+
+            self.assertEqual(result["gate_status"], "pass")
+            self.assertEqual(result["summary"]["graph_target_cases"], 1)
+            self.assertTrue(result["cases"][0]["expected_graph_node_terms_found"]["CP_HQD_ACTIVE"])

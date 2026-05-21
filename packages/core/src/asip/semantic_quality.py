@@ -45,6 +45,7 @@ def run_semantic_quality_eval(
             "passed": passed,
             "failed": failed,
             "provider_vector_cases": sum(1 for case in case_results if case["provider_vector_rows"] > 0),
+            "graph_target_cases": sum(1 for case in case_results if case["expected_graph_node_terms_found"]),
             "mean_reciprocal_rank": round(
                 sum(1 / rank for rank in target_ranks) / len(target_ranks),
                 4,
@@ -153,6 +154,19 @@ def _run_case(
     graph_node_count = len(graph.get("nodes", [])) if isinstance(graph, Mapping) else 0
     if graph_node_count < min_graph_nodes:
         failures.append(f"graph_node_count {graph_node_count} below {min_graph_nodes}")
+    graph_nodes = list(graph.get("nodes", [])) if isinstance(graph, Mapping) else []
+    graph_node_matches = _graph_node_term_matches(graph_nodes, case)
+    for term, matched in graph_node_matches["required_all"].items():
+        if not matched:
+            failures.append(f"missing graph node term: {term}")
+    if graph_node_matches["required_any"] and not any(graph_node_matches["required_any"].values()):
+        failures.append(
+            "missing any graph node term: "
+            + ", ".join(graph_node_matches["required_any"].keys())
+        )
+    for kind in _list(case.get("expected_graph_node_kinds")):
+        if kind not in graph_node_matches["kinds"]:
+            failures.append(f"missing graph node kind: {kind}")
     return {
         "id": str(case["id"]),
         "query": str(case["query"]),
@@ -166,6 +180,11 @@ def _run_case(
         "query_embedding": {key: value for key, value in query_embedding.items() if key != "vector"},
         "graph_node_count": graph_node_count,
         "graph_edge_count": len(graph.get("edges", [])) if isinstance(graph, Mapping) else 0,
+        "expected_graph_node_terms_found": {
+            **graph_node_matches["required_all"],
+            **graph_node_matches["required_any"],
+        },
+        "graph_node_kinds": sorted(graph_node_matches["kinds"]),
         "top_rows": [
             {
                 "rank": index,
@@ -191,6 +210,33 @@ def _first_expected_rank(rows: Iterable[Mapping[str, Any]], case: Mapping[str, A
         if any(path.endswith(suffix) for suffix in expected_path_suffixes):
             return index
     return None
+
+
+def _graph_node_term_matches(
+    graph_nodes: Iterable[Mapping[str, Any]],
+    case: Mapping[str, Any],
+) -> Dict[str, Any]:
+    nodes = list(graph_nodes)
+    searchable = [
+        " ".join(
+            str(node.get(field) or "")
+            for field in ("id", "label", "kind")
+        )
+        for node in nodes
+    ]
+    required_all = {
+        term: any(term in value for value in searchable)
+        for term in _list(case.get("expected_graph_node_terms_all"))
+    }
+    required_any = {
+        term: any(term in value for value in searchable)
+        for term in _list(case.get("expected_graph_node_terms_any"))
+    }
+    return {
+        "required_all": required_all,
+        "required_any": required_any,
+        "kinds": {str(node.get("kind") or "") for node in nodes if node.get("kind")},
+    }
 
 
 def _has_rank_target(case: Mapping[str, Any]) -> bool:
@@ -224,6 +270,7 @@ def _render_markdown(result: Mapping[str, Any]) -> str:
         f"- Passed: {summary.get('passed', 0)}",
         f"- Failed: {summary.get('failed', 0)}",
         f"- Provider-vector cases: {summary.get('provider_vector_cases', 0)}",
+        f"- Graph-target cases: {summary.get('graph_target_cases', 0)}",
         f"- Mean reciprocal rank: {summary.get('mean_reciprocal_rank', 0)}",
         "",
         "## Cases",

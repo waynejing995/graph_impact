@@ -1,15 +1,16 @@
 {
   "source": "asip.semantic_quality_eval",
-  "generated_at": "2026-05-21T05:50:32+00:00",
-  "repo_head": "77c71a7bb56d89cf952c3aa5cacd13cba0139114",
+  "generated_at": "2026-05-21T06:10:00+00:00",
+  "repo_head": "7be78abf7ee65eaeb9554e09e8d5a7a8fab4c58b",
   "db_path": "data/asip.db",
   "eval_set_path": "docs/qa/semantic-rerank-eval-set.jsonl",
-  "eval_set_sha256": "3e07733a2b11e3dc1f1e3b56bc32de4afbac682f9cc8136e2ba4429bde5f2488",
+  "eval_set_sha256": "d0b5ddad12b0e4bee83f1398a0bd9e0698b98c9212671f3902b856d9544fbe6d",
   "summary": {
-    "total": 7,
-    "passed": 7,
+    "total": 8,
+    "passed": 8,
     "failed": 0,
     "provider_vector_cases": 2,
+    "graph_target_cases": 1,
     "mean_reciprocal_rank": 0.7643
   },
   "gate_status": "pass",
@@ -40,6 +41,10 @@
       },
       "graph_node_count": 3,
       "graph_edge_count": 0,
+      "expected_graph_node_terms_found": {},
+      "graph_node_kinds": [
+        "doc"
+      ],
       "top_rows": [
         {
           "rank": 1,
@@ -129,6 +134,11 @@
       },
       "graph_node_count": 8,
       "graph_edge_count": 0,
+      "expected_graph_node_terms_found": {},
+      "graph_node_kinds": [
+        "doc",
+        "function"
+      ],
       "top_rows": [
         {
           "rank": 1,
@@ -208,6 +218,11 @@
       },
       "graph_node_count": 31,
       "graph_edge_count": 91,
+      "expected_graph_node_terms_found": {},
+      "graph_node_kinds": [
+        "function",
+        "register"
+      ],
       "top_rows": [
         {
           "rank": 1,
@@ -289,6 +304,12 @@
       },
       "graph_node_count": 73,
       "graph_edge_count": 83,
+      "expected_graph_node_terms_found": {},
+      "graph_node_kinds": [
+        "doc",
+        "function",
+        "register"
+      ],
       "top_rows": [
         {
           "rank": 1,
@@ -369,6 +390,12 @@
       },
       "graph_node_count": 32,
       "graph_edge_count": 91,
+      "expected_graph_node_terms_found": {},
+      "graph_node_kinds": [
+        "doc",
+        "function",
+        "register"
+      ],
       "top_rows": [
         {
           "rank": 1,
@@ -447,6 +474,10 @@
       },
       "graph_node_count": 15,
       "graph_edge_count": 12,
+      "expected_graph_node_terms_found": {},
+      "graph_node_kinds": [
+        "function"
+      ],
       "top_rows": [
         {
           "rank": 1,
@@ -526,6 +557,8 @@
       },
       "graph_node_count": 0,
       "graph_edge_count": 0,
+      "expected_graph_node_terms_found": {},
+      "graph_node_kinds": [],
       "top_rows": [
         {
           "rank": 1,
@@ -579,6 +612,87 @@
           "retrieval_sources": [
             "lexical",
             "fts5"
+          ],
+          "vector_score": null
+        }
+      ]
+    },
+    {
+      "id": "SQ08_CP_HQD_NL_WILDCARD_GRAPH",
+      "query": "who will write/read CP_HQD_* regs",
+      "status": "pass",
+      "failure_reasons": [],
+      "row_count": 24,
+      "first_expected_rank": null,
+      "source_types": [
+        "code"
+      ],
+      "retrieval_sources": [
+        "graph-edge"
+      ],
+      "provider_vector_rows": 0,
+      "query_embedding": {
+        "source": "skipped-symbol-prefix"
+      },
+      "graph_node_count": 181,
+      "graph_edge_count": 615,
+      "expected_graph_node_terms_found": {
+        "CP_HQD_ACTIVE": true,
+        "CP_HQD_DEQUEUE_REQUEST": true,
+        "CP_HQD_PQ_WPTR": true
+      },
+      "graph_node_kinds": [
+        "function",
+        "register"
+      ],
+      "top_rows": [
+        {
+          "rank": 1,
+          "symbol": "gfx_deactivate_hqd",
+          "source_type": "code",
+          "path": "drivers/gpu/drm/amd/amdgpu/gfx_v8_0.c",
+          "retrieval_sources": [
+            "graph-edge"
+          ],
+          "vector_score": null
+        },
+        {
+          "rank": 2,
+          "symbol": "gfx_deactivate_hqd",
+          "source_type": "code",
+          "path": "drivers/gpu/drm/amd/amdgpu/gfx_v8_0.c",
+          "retrieval_sources": [
+            "graph-edge"
+          ],
+          "vector_score": null
+        },
+        {
+          "rank": 3,
+          "symbol": "gfx_deactivate_hqd",
+          "source_type": "code",
+          "path": "drivers/gpu/drm/amd/amdgpu/gfx_v8_0.c",
+          "retrieval_sources": [
+            "graph-edge"
+          ],
+          "vector_score": null
+        },
+        {
+          "rank": 4,
+          "symbol": "gfx_deactivate_hqd",
+          "source_type": "code",
+          "path": "drivers/gpu/drm/amd/amdgpu/gfx_v8_0.c",
+          "retrieval_sources": [
+            "graph-edge"
+          ],
+          "vector_score": null
+        },
+        {
+          "rank": 5,
+          "symbol": "gfx_kiq_fini_register",
+          "source_type": "code",
+          "path": "drivers/gpu/drm/amd/amdgpu/gfx_v9_0.c",
+          "retrieval_sources": [
+            "graph-edge"
           ],
           "vector_score": null
         }

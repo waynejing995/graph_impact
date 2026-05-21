@@ -1,6 +1,6 @@
 {
   "source": "asip.residual_acceptance",
-  "generated_at": "2026-05-21T04:46:59+00:00",
+  "generated_at": "2026-05-21T06:11:23+00:00",
   "residual_doc_path": "docs/gaps/2026-05-16-g13-mvp-boundary-deferrals.md",
   "status_line": "Status: Partial; deferral ledger exists, final user acceptance of residual boundaries remains blocking",
   "accepted": false,
@@ -19,7 +19,7 @@
       "mvp_status": "MVP-1 / partial",
       "current_closest_capability": "G02 and G09 track FTS retrieval, provider embeddings, provider query-time vector rerank wiring, vector fallback, graph expansion, provider-vector preservation under lexical candidate pressure, the 2026-05-21 AQ semantic quality proxy, and a labeled current-corpus semantic eval.",
       "user_acceptance_status": "Required by user; rerank maturity not separately accepted.",
-      "completion_rule": "Current evidence closes provider-vector wiring, visible provider-vector preservation for AQ05, full current-DB provider embedding coverage, AQ01-AQ09 quality proxy, and a `5/5` labeled current-corpus semantic eval; production-scale semantic rerank quality across arbitrary future corpora remains a residual boundary needing acceptance or broader evaluation."
+      "completion_rule": "Current evidence closes provider-vector wiring, visible provider-vector preservation for AQ05, full current-DB provider embedding coverage, AQ01-AQ09 quality proxy, and an `8/8` labeled current-corpus semantic eval including natural-language `CP_HQD_*` graph expansion; production-scale semantic rerank quality across arbitrary future corpora remains a residual boundary needing acceptance or broader evaluation."
     },
     {
       "spec_area": "Configurable resolver profiles for Linux amdgpu, MxGPU, and toy Python",

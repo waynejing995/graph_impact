@@ -1050,6 +1050,7 @@ def _semantic_quality_requirement(payload: Optional[Mapping[str, Any]], *, requi
     passed = _coerce_int(summary.get("passed"))
     failed = _coerce_int(summary.get("failed", 0) or 0)
     provider_vector_cases = _coerce_int(summary.get("provider_vector_cases", 0) or 0)
+    graph_target_cases = _coerce_int(summary.get("graph_target_cases", 0) or 0)
     if total is None or total <= 0:
         failures.append(f"summary total is missing or zero: {summary.get('total')}")
     if passed is None or total is None or passed != total:
@@ -1058,6 +1059,8 @@ def _semantic_quality_requirement(payload: Optional[Mapping[str, Any]], *, requi
         failures.append(f"summary failed={summary.get('failed')}")
     if provider_vector_cases is None or provider_vector_cases <= 0:
         failures.append(f"provider_vector_cases={summary.get('provider_vector_cases')} does not prove vector participation")
+    if graph_target_cases is None or graph_target_cases <= 0:
+        failures.append(f"graph_target_cases={summary.get('graph_target_cases')} does not prove graph-target retrieval")
     cases = payload.get("cases", [])
     if not isinstance(cases, list) or not cases:
         failures.append("cases are missing")
@@ -1075,6 +1078,7 @@ def _semantic_quality_requirement(payload: Optional[Mapping[str, Any]], *, requi
         f"gate_status={payload.get('gate_status')}; "
         f"passed={summary.get('passed', 0)}/{summary.get('total', 0)}; "
         f"provider_vector_cases={summary.get('provider_vector_cases', 0)}; "
+        f"graph_target_cases={summary.get('graph_target_cases', 0)}; "
         f"mrr={summary.get('mean_reciprocal_rank', 0)}"
     )
     return _requirement(
