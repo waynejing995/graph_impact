@@ -75,6 +75,7 @@ def run_audit(
 ) -> Dict[str, Any]:
     failures: List[str] = []
     edges = _load_callback_edges(db_path)
+    deterministic_call_edges = _load_deterministic_call_edges(db_path)
     latest_jobs = _latest_job_ids(db_path)
     call_kind_counts = Counter(str(edge["provenance"].get("call_kind") or "unknown") for edge in edges)
     type_flow_counts = Counter(str(edge["provenance"].get("type_flow") or "") for edge in edges)
@@ -103,10 +104,16 @@ def run_audit(
     ]
 
     pollution_samples: List[Dict[str, Any]] = []
+    deterministic_pollution_samples: List[Dict[str, Any]] = []
     if assert_no_parser_pollution:
         pollution_samples = _parser_pollution_samples(edges)
+        deterministic_pollution_samples = _parser_pollution_samples(deterministic_call_edges)
         if pollution_samples:
             failures.append(f"parser pollution candidates found: {len(pollution_samples)}")
+        if deterministic_pollution_samples:
+            failures.append(
+                f"deterministic parser pollution candidates found: {len(deterministic_pollution_samples)}"
+            )
 
     if max_ambiguous_fanout is not None:
         excessive = [
@@ -145,6 +152,8 @@ def run_audit(
             "unique_ambiguous_callers": len(ambiguous_by_src),
             "unique_unexplained_ambiguous_callers": len(unexplained_ambiguous_by_src),
             "parser_pollution_candidate_count": len(pollution_samples),
+            "deterministic_call_edge_count": len(deterministic_call_edges),
+            "deterministic_parser_pollution_candidate_count": len(deterministic_pollution_samples),
             "real_oracle_total": len(oracle_results),
             "real_oracle_passed": sum(1 for item in oracle_results if item["status"] == "pass"),
         },
@@ -155,6 +164,7 @@ def run_audit(
         "top_explained_dynamic_fanout": top_explained_dynamic_fanout,
         "top_unexplained_ambiguous_fanout": top_unexplained_ambiguous_fanout,
         "parser_pollution_samples": pollution_samples[:20],
+        "deterministic_parser_pollution_samples": deterministic_pollution_samples[:20],
         "real_oracles": oracle_results,
     }
 
@@ -253,6 +263,36 @@ def _load_callback_edges(db_path: Path) -> List[Dict[str, Any]]:
                     "line_start": row["line_start"],
                     "line_end": row["line_end"],
                     "provenance": provenance,
+                }
+            )
+    return rows
+
+
+def _load_deterministic_call_edges(db_path: Path) -> List[Dict[str, Any]]:
+    if not db_path.exists():
+        raise FileNotFoundError(db_path)
+    rows: List[Dict[str, Any]] = []
+    with sqlite3.connect(f"file:{db_path}?mode=ro", uri=True) as connection:
+        connection.row_factory = sqlite3.Row
+        for row in connection.execute(
+            """
+            select id, src, dst, relation, path, line_start, line_end, provenance_json
+            from edges
+            where stage = 'deterministic'
+              and relation = 'calls'
+            order by id
+            """
+        ):
+            rows.append(
+                {
+                    "id": row["id"],
+                    "src": row["src"],
+                    "dst": row["dst"],
+                    "relation": row["relation"],
+                    "path": row["path"],
+                    "line_start": row["line_start"],
+                    "line_end": row["line_end"],
+                    "provenance": _parse_json(row["provenance_json"]),
                 }
             )
     return rows

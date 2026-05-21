@@ -108,6 +108,32 @@ class CallbackEdgeAuditTests(unittest.TestCase):
             self.assertEqual(result["gate_status"], "blocked")
             self.assertIn("parser pollution candidates found: 1", result["failure_reasons"])
 
+    def test_audit_blocks_deterministic_parser_pollution_outside_callback_edges(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            db_path = Path(tmpdir) / "callbacks.db"
+            self._write_db(
+                db_path,
+                [
+                    (
+                        "else if",
+                        "valid_callee",
+                        "drivers/gpu/drm/amd/amdgpu/bad.c",
+                        {
+                            "call_kind": "direct",
+                            "function": "else if",
+                            "callee": "valid_callee",
+                        },
+                    )
+                ],
+            )
+
+            result = audit_callback_edges.run_audit(db_path, assert_no_parser_pollution=True)
+
+            self.assertEqual(result["gate_status"], "blocked")
+            self.assertEqual(result["summary"]["callback_edge_count"], 0)
+            self.assertEqual(result["summary"]["deterministic_parser_pollution_candidate_count"], 1)
+            self.assertIn("deterministic parser pollution candidates found: 1", result["failure_reasons"])
+
     def test_audit_blocks_excessive_ambiguous_fanout(self):
         with tempfile.TemporaryDirectory() as tmpdir:
             db_path = Path(tmpdir) / "callbacks.db"

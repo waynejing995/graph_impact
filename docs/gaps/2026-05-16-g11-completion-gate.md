@@ -21,7 +21,11 @@ the final `$out_dir/completion-gate.json` summary.
 regenerates callback audit evidence under `$out_dir` after the git gate passes.
 The artifact records the current `repo_head`, `data/asip.db` SHA-256, and the
 latest index/graph rebuild job ids; the completion gate rejects stale callback
-audit proof that does not match the current DB or git head.
+audit proof that does not match the current DB or git head. The audit also
+records `deterministic_call_edge_count` and requires
+`deterministic_parser_pollution_candidate_count=0`, so parser pollution such as
+`else if` leaking into ordinary deterministic call edges cannot hide outside the
+callback/vtable subset.
 
 2026-05-21 semantic-quality evidence hardening: the post-push runner also
 regenerates the labeled semantic-quality eval under `$out_dir` after the git
@@ -509,10 +513,11 @@ Commit and push happen only after verification.
   `--callback-audit-json` and requires `source=asip.callback_edge_audit` in
   real final mode. The audit is recorded in
   `docs/qa/2026-05-21-callback-edge-audit-current.json` and `.md`; it passes
-  with `4601` callback/vtable edges, `0` parser-pollution candidates, and `0`
-  unexplained ambiguous callback fanout. The `aca_bank_parser` and
-  `aca_bank_is_valid` fanout is treated as typed `aca_bank_ops` dynamic
-  dispatch instead of unexplained overlinking.
+  with `4601` callback/vtable edges, `20222` deterministic call edges, `0`
+  callback parser-pollution candidates, `0` deterministic parser-pollution
+  candidates, and `0` unexplained ambiguous callback fanout. The
+  `aca_bank_parser` and `aca_bank_is_valid` fanout is treated as typed
+  `aca_bank_ops` dynamic dispatch instead of unexplained overlinking.
 - 2026-05-21 hosted OpenAI-compatible binding: the completion gate now accepts
   `--hosted-openai-json` and adds `hosted_openai_compatible` as a first-class
   real-final requirement. It requires `source=asip.openai_compatible_live_smoke`,

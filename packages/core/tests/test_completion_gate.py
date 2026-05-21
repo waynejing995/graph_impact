@@ -78,6 +78,26 @@ class CompletionGateTests(unittest.TestCase):
             self.assertEqual(by_id["callback_edge_audit"]["status"], "blocked")
             self.assertIn("real_oracle_total=0", by_id["callback_edge_audit"]["failure_reasons"])
 
+    def test_completion_gate_blocks_callback_audit_without_deterministic_pollution_count(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            db_path = self._write_gate_db(root / "asip.db")
+            payload = self._callback_audit_payload("pass", db_path=db_path)
+            payload["summary"].pop("deterministic_parser_pollution_candidate_count", None)
+            callback_audit_json = self._write_json(root / "callback-audit.json", payload)
+
+            result = run_completion_gate(
+                db_path,
+                callback_audit_json=callback_audit_json,
+            )
+
+            by_id = {item["id"]: item for item in result["requirements"]}
+            self.assertEqual(by_id["callback_edge_audit"]["status"], "blocked")
+            self.assertIn(
+                "deterministic_parser_pollution_candidate_count=missing",
+                by_id["callback_edge_audit"]["failure_reasons"],
+            )
+
     def test_completion_gate_blocks_real_final_mode_without_semantic_quality_artifact(self):
         with tempfile.TemporaryDirectory() as tmpdir:
             root = Path(tmpdir)
@@ -2825,6 +2845,7 @@ class CompletionGateTests(unittest.TestCase):
                 "unique_ambiguous_callers": 1,
                 "unique_unexplained_ambiguous_callers": 0 if gate_status == "pass" else 1,
                 "parser_pollution_candidate_count": 0,
+                "deterministic_parser_pollution_candidate_count": 0,
                 "real_oracle_total": 3,
                 "real_oracle_passed": 3 if gate_status == "pass" else 2,
             },
