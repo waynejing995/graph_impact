@@ -28,6 +28,7 @@ class CompletionGateTests(unittest.TestCase):
             )
             no_server_json = self._write_json(root / "no-server.json", self._no_server_payload("pass"))
             performance_json = self._write_json(root / "performance.json", self._performance_payload("pass"))
+            hosted_openai_json = self._write_json(root / "hosted-openai.json", self._hosted_openai_payload("pass"))
             residual_json = self._write_json(root / "residual.json", self._residual_payload("pass"))
             git_json = self._write_json(root / "git.json", self._git_payload("pass"))
 
@@ -42,6 +43,7 @@ class CompletionGateTests(unittest.TestCase):
                 browser_json=browser_json,
                 no_server_json=no_server_json,
                 performance_json=performance_json,
+                hosted_openai_json=hosted_openai_json,
                 residual_acceptance_json=residual_json,
                 git_gate_json=git_json,
                 minimum_counts=self._fixture_minimum_counts(),
@@ -56,6 +58,7 @@ class CompletionGateTests(unittest.TestCase):
             self.assertIn("4/4 DB/job-bound artifacts checked", by_id["artifact_binding"]["evidence"])
             self.assertEqual(by_id["semantic_quality"]["status"], "pass")
             self.assertEqual(by_id["callback_edge_audit"]["status"], "pass")
+            self.assertEqual(by_id["hosted_openai_compatible"]["status"], "pass")
 
     def test_completion_gate_blocks_callback_audit_without_real_oracles(self):
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -107,6 +110,117 @@ class CompletionGateTests(unittest.TestCase):
             self.assertIn("semantic-quality artifact is missing", by_id["semantic_quality"]["failure_reasons"])
             self.assertEqual(by_id["callback_edge_audit"]["status"], "missing")
             self.assertIn("callback audit artifact is missing", by_id["callback_edge_audit"]["failure_reasons"])
+
+    def test_completion_gate_blocks_real_final_mode_without_hosted_openai_artifact(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            db_path = self._write_gate_db(root / "asip.db")
+            acceptance_json = self._write_json(root / "acceptance.json", self._acceptance_payload(["CLI", "API", "MCP"], db_path=db_path))
+            web_json = self._write_json(root / "web-acceptance.json", self._acceptance_payload(["CLI", "API", "Web", "MCP"], db_path=db_path))
+            provider_json = self._write_json(root / "provider.json", self._provider_payload("pass", db_path=db_path))
+            runtime_json = self._write_json(root / "runtime-semantic.json", self._runtime_semantic_payload("pass", db_path=db_path))
+            semantic_quality_json = self._write_json(root / "semantic-quality.json", self._semantic_quality_payload("pass", db_path=db_path))
+            callback_audit_json = self._write_json(root / "callback-audit.json", self._callback_audit_payload("pass", db_path=db_path))
+            browser_json = self._write_json(root / "browser.json", self._browser_e2e_payload("pass", db_path=db_path))
+            no_server_json = self._write_json(root / "no-server.json", self._no_server_payload("pass"))
+            performance_json = self._write_json(root / "performance.json", self._performance_payload("pass"))
+            residual_json = self._write_json(root / "residual.json", self._residual_payload("pass"))
+            git_json = self._write_json(root / "git.json", self._git_payload("pass"))
+
+            result = run_completion_gate(
+                db_path,
+                acceptance_json=acceptance_json,
+                web_acceptance_json=web_json,
+                provider_json=provider_json,
+                runtime_semantic_json=runtime_json,
+                semantic_quality_json=semantic_quality_json,
+                callback_audit_json=callback_audit_json,
+                browser_json=browser_json,
+                no_server_json=no_server_json,
+                performance_json=performance_json,
+                residual_acceptance_json=residual_json,
+                git_gate_json=git_json,
+            )
+
+            by_id = {item["id"]: item for item in result["requirements"]}
+            self.assertEqual(by_id["hosted_openai_compatible"]["status"], "missing")
+            self.assertIn(
+                "hosted OpenAI-compatible artifact is missing",
+                by_id["hosted_openai_compatible"]["failure_reasons"],
+            )
+
+    def test_completion_gate_blocks_local_compatible_openai_smoke_as_hosted_proof(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            db_path = self._write_gate_db(root / "asip.db")
+            hosted_openai_json = self._write_json(
+                root / "hosted-openai.json",
+                self._hosted_openai_payload("pass", credential_mode="local-compatible-no-secret"),
+            )
+
+            result = run_completion_gate(
+                db_path,
+                hosted_openai_json=hosted_openai_json,
+            )
+
+            by_id = {item["id"]: item for item in result["requirements"]}
+            self.assertEqual(by_id["hosted_openai_compatible"]["status"], "blocked")
+            self.assertIn(
+                "credential_mode=local-compatible-no-secret does not satisfy hosted-credentialed",
+                by_id["hosted_openai_compatible"]["failure_reasons"],
+            )
+
+    def test_completion_gate_blocks_private_network_openai_smoke_as_hosted_proof(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            db_path = self._write_gate_db(root / "asip.db")
+            payload = self._hosted_openai_payload("pass")
+            for check in payload["checks"]:
+                check["base_url"] = "http://10.0.0.12:11434"
+            hosted_openai_json = self._write_json(root / "hosted-openai.json", payload)
+
+            result = run_completion_gate(
+                db_path,
+                hosted_openai_json=hosted_openai_json,
+            )
+
+            by_id = {item["id"]: item for item in result["requirements"]}
+            self.assertEqual(by_id["hosted_openai_compatible"]["status"], "blocked")
+            self.assertIn(
+                "openai_compatible_embeddings_live: base_url=http://10.0.0.12:11434 is local/private, not hosted",
+                by_id["hosted_openai_compatible"]["failure_reasons"],
+            )
+            self.assertIn(
+                "openai_compatible_chat_completions_live: base_url=http://10.0.0.12:11434 is local/private, not hosted",
+                by_id["hosted_openai_compatible"]["failure_reasons"],
+            )
+
+    def test_completion_gate_blocks_malformed_hosted_openai_counts_without_crashing(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            db_path = self._write_gate_db(root / "asip.db")
+            payload = self._hosted_openai_payload("pass")
+            payload["checks"][0]["embedding_count"] = "unknown"
+            payload["checks"][0]["vector_dimension"] = "unknown"
+            payload["checks"][1]["edge_count"] = "unknown"
+            payload["checks"][1]["persistable_edge_count"] = "unknown"
+            hosted_openai_json = self._write_json(root / "hosted-openai.json", payload)
+
+            result = run_completion_gate(
+                db_path,
+                hosted_openai_json=hosted_openai_json,
+            )
+
+            by_id = {item["id"]: item for item in result["requirements"]}
+            self.assertEqual(by_id["hosted_openai_compatible"]["status"], "blocked")
+            self.assertIn(
+                "openai_compatible_embeddings_live: embedding_count=unknown",
+                by_id["hosted_openai_compatible"]["failure_reasons"],
+            )
+            self.assertIn(
+                "openai_compatible_chat_completions_live: edge_count=unknown",
+                by_id["hosted_openai_compatible"]["failure_reasons"],
+            )
 
     def test_completion_gate_blocks_non_indexed_corpus_status_in_current_db(self):
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -2062,6 +2176,7 @@ class CompletionGateTests(unittest.TestCase):
                 {"source": "asip.web.browser_e2e", "gate_status": "pass", "e2e_status": "pass"},
             )
             in_app_json = self._write_json(root / "in-app-browser.json", self._in_app_browser_payload())
+            hosted_openai_json = self._write_json(root / "hosted-openai.json", self._hosted_openai_payload("pass"))
             output_json = root / "completion.json"
             output_md = root / "completion.md"
 
@@ -2082,6 +2197,8 @@ class CompletionGateTests(unittest.TestCase):
                     str(browser_json),
                     "--in-app-browser-json",
                     str(in_app_json),
+                    "--hosted-openai-json",
+                    str(hosted_openai_json),
                     "--output-json",
                     str(output_json),
                     "--output-md",
@@ -2093,6 +2210,7 @@ class CompletionGateTests(unittest.TestCase):
             payload = json.loads(output_json.read_text(encoding="utf-8"))
             self.assertEqual(payload["gate_status"], "blocked")
             self.assertEqual(payload["artifacts"]["in_app_browser"]["source"], "asip.web.in_app_browser_probe")
+            self.assertEqual(payload["artifacts"]["hosted_openai_compatible"]["source"], "asip.openai_compatible_live_smoke")
             self.assertEqual(payload["artifacts"]["runtime_semantic_freshness"]["source"], "asip.runtime_semantic_freshness_qa")
             self.assertIn("ASIP Current Completion Gate", output_md.read_text(encoding="utf-8"))
 
@@ -2399,6 +2517,45 @@ class CompletionGateTests(unittest.TestCase):
                 "real_oracle_total": 3,
                 "real_oracle_passed": 3 if gate_status == "pass" else 2,
             },
+        }
+
+    def _hosted_openai_payload(self, gate_status, *, credential_mode="hosted-credentialed"):
+        checks = [
+            {
+                "id": "openai_compatible_embeddings_live",
+                "status": "pass",
+                "provider": "openai-compatible",
+                "base_url": "https://api.openai.com",
+                "api_path": "/v1/embeddings",
+                "model": "text-embedding-3-small",
+                "failure_reasons": [],
+                "embedding_count": 1,
+                "vector_dimension": 1536,
+            },
+            {
+                "id": "openai_compatible_chat_completions_live",
+                "status": "pass",
+                "provider": "openai-compatible",
+                "base_url": "https://api.openai.com",
+                "api_path": "/v1/chat/completions",
+                "model": "gpt-4.1-mini",
+                "failure_reasons": [],
+                "edge_count": 1,
+                "persistable_edge_count": 1,
+            },
+        ]
+        if gate_status != "pass":
+            checks[0]["status"] = "fail"
+            checks[0]["failure_reasons"] = ["credential env var is missing: OPENAI_API_KEY"]
+        passed = len([check for check in checks if check["status"] == "pass"])
+        return {
+            "source": "asip.openai_compatible_live_smoke",
+            "gate_status": gate_status,
+            "credential_mode": credential_mode,
+            "require_credentialed": True,
+            "summary": {"total": len(checks), "passed": passed, "failed": len(checks) - passed},
+            "checks": checks if gate_status == "pass" else [],
+            "failure_reasons": [] if gate_status == "pass" else ["credential env var is missing: OPENAI_API_KEY"],
         }
 
     def _browser_e2e_payload(self, gate_status, *, db_path):

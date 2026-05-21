@@ -94,6 +94,30 @@ class OpenAICompatibleSmokeTests(unittest.TestCase):
         self.assertEqual(embedding_transport.requests, [])
         self.assertEqual(edge_provider.calls, [])
 
+    def test_openai_compatible_smoke_rejects_private_network_endpoint_as_hosted(self):
+        embedding_transport = FakeEmbeddingTransport()
+        edge_provider = FakeEdgeProvider()
+
+        with patch.dict(os.environ, {"ASIP_TEST_OPENAI_KEY": "secret"}, clear=False):
+            result = run_openai_compatible_live_smoke(
+                base_url="http://192.168.1.25:11434",
+                embedding_model="text-embedding-3-small",
+                chat_model="gpt-4.1-mini",
+                api_key_env="ASIP_TEST_OPENAI_KEY",
+                require_credentialed=True,
+                embedding_transport=embedding_transport,
+                edge_provider=edge_provider,
+            )
+
+        self.assertEqual(result["gate_status"], "blocked")
+        self.assertEqual(result["credential_mode"], "local-compatible-credentialed")
+        self.assertIn(
+            "credential_mode=local-compatible-credentialed does not satisfy hosted-credentialed",
+            result["failure_reasons"],
+        )
+        self.assertEqual(embedding_transport.requests, [])
+        self.assertEqual(edge_provider.calls, [])
+
     def test_openai_compatible_smoke_cli_writes_blocked_json_without_secret(self):
         with tempfile.TemporaryDirectory() as tmpdir:
             output_json = Path(tmpdir) / "smoke.json"

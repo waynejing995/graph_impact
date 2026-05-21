@@ -32,6 +32,12 @@ ASIP has both an MVP-1 design doc and a long-range full technical spec. Long-ran
   because `OPENAI_API_KEY` is not present in the environment. This makes the
   remaining hosted-provider residual reproducible rather than a prose-only
   statement.
+- 2026-05-21 completion-gate follow-up: the final aggregate gate now consumes
+  that readiness artifact through `--hosted-openai-json` and exposes a
+  first-class `hosted_openai_compatible` requirement. Local `/v1` compatible
+  smoke and private-network compatible smoke are not accepted as hosted proof;
+  the current readiness artifact remains blocked until a non-local credentialed
+  OpenAI-compatible endpoint is supplied.
 - 2026-05-21 semantic rerank quality evaluation narrows the hybrid-retrieval
   residual: `docs/qa/2026-05-21-semantic-rerank-quality-eval.json` confirms
   full current-DB provider embedding coverage (`147841 / 147841` chunks),

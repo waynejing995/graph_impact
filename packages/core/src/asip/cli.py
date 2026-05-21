@@ -275,6 +275,7 @@ def main(argv: Optional[List[str]] = None) -> int:
     completion_gate.add_argument("--in-app-browser-json")
     completion_gate.add_argument("--no-server-json")
     completion_gate.add_argument("--performance-json")
+    completion_gate.add_argument("--hosted-openai-json")
     completion_gate.add_argument("--residual-acceptance-json")
     completion_gate.add_argument("--git-gate-json")
     completion_gate.add_argument("--output-json")
@@ -606,6 +607,7 @@ def main(argv: Optional[List[str]] = None) -> int:
             in_app_browser_json=Path(args.in_app_browser_json) if args.in_app_browser_json else None,
             no_server_json=Path(args.no_server_json) if args.no_server_json else None,
             performance_json=Path(args.performance_json) if args.performance_json else None,
+            hosted_openai_json=Path(args.hosted_openai_json) if args.hosted_openai_json else None,
             residual_acceptance_json=Path(args.residual_acceptance_json) if args.residual_acceptance_json else None,
             git_gate_json=Path(args.git_gate_json) if args.git_gate_json else None,
             output_json=Path(args.output_json) if args.output_json else None,

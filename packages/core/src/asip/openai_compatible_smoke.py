@@ -5,9 +5,11 @@ from __future__ import annotations
 import json
 import os
 import subprocess
+import ipaddress
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, Mapping, Optional
+from urllib.parse import urlparse
 
 from .providers import EmbeddingProviderConfig, EmbeddingTransport, OpenAICompatibleEmbeddingProvider
 from .semantic_edges import EdgeModelConfig, OpenAICompatibleEdgeProvider
@@ -206,8 +208,7 @@ def _run_chat_check(
 
 
 def _credential_mode(base_url: str, *, api_key_env: str, has_key: bool) -> str:
-    host = base_url.rstrip("/").lower()
-    is_local = any(token in host for token in ("localhost", "127.0.0.1", "::1"))
+    is_local = _is_local_or_private_url(base_url)
     if has_key and not is_local:
         return "hosted-credentialed"
     if has_key:
@@ -217,6 +218,18 @@ def _credential_mode(base_url: str, *, api_key_env: str, has_key: bool) -> str:
     if api_key_env:
         return "hosted-missing-credential"
     return "hosted-no-secret"
+
+
+def _is_local_or_private_url(url: str) -> bool:
+    parsed = urlparse(url)
+    host = (parsed.hostname or url).lower()
+    if host in {"localhost", "host.docker.internal"} or host.endswith(".localhost") or host.endswith(".local"):
+        return True
+    try:
+        address = ipaddress.ip_address(host)
+    except ValueError:
+        return False
+    return address.is_loopback or address.is_private or address.is_link_local or address.is_unspecified
 
 
 def _note_for_credential_mode(mode: str) -> str:

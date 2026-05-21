@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 import sqlite3
 import hashlib
+import ipaddress
 import subprocess
 from datetime import datetime, timezone
 from pathlib import Path
@@ -56,6 +57,10 @@ _REQUIRED_BROWSER_CURRENT_DB_PROBE_SURFACES = (
     "direct_api_document_request",
     "graph_page_concept_detail_selection",
 )
+_REQUIRED_HOSTED_OPENAI_COMPATIBLE_CHECKS = (
+    "openai_compatible_embeddings_live",
+    "openai_compatible_chat_completions_live",
+)
 _NO_SERVER_ARTIFACT_INPUT_OPTIONS = {
     "--browser-json": "browser_gate",
     "--in-app-browser-json": "in_app_browser",
@@ -85,6 +90,7 @@ def run_completion_gate(
     in_app_browser_json: Optional[Path] = None,
     no_server_json: Optional[Path] = None,
     performance_json: Optional[Path] = None,
+    hosted_openai_json: Optional[Path] = None,
     residual_acceptance_json: Optional[Path] = None,
     git_gate_json: Optional[Path] = None,
     output_json: Optional[Path] = None,
@@ -107,6 +113,7 @@ def run_completion_gate(
         "in_app_browser": _load_json_artifact(in_app_browser_json),
         "no_server_smoke": _load_json_artifact(no_server_json),
         "performance_smoke": _load_json_artifact(performance_json),
+        "hosted_openai_compatible": _load_json_artifact(hosted_openai_json),
         "residual_acceptance": _load_json_artifact(residual_acceptance_json),
         "git_gate": _load_json_artifact(git_gate_json),
     }
@@ -120,6 +127,7 @@ def run_completion_gate(
     in_app_browser_payload = artifacts["in_app_browser"].get("payload")
     no_server_payload = artifacts["no_server_smoke"].get("payload")
     performance_payload = artifacts["performance_smoke"].get("payload")
+    hosted_openai_payload = artifacts["hosted_openai_compatible"].get("payload")
     residual_payload = artifacts["residual_acceptance"].get("payload")
     git_payload = artifacts["git_gate"].get("payload")
 
@@ -138,6 +146,7 @@ def run_completion_gate(
         _runtime_semantic_freshness_requirement(runtime_semantic_payload),
         _semantic_quality_requirement(semantic_quality_payload, required=minimum_counts is None),
         _callback_audit_requirement(callback_audit_payload, required=minimum_counts is None),
+        _hosted_openai_compatible_requirement(hosted_openai_payload, required=minimum_counts is None),
         _browser_requirement(browser_payload, in_app_browser_payload, db_path, db_health),
         _no_server_requirement(no_server_payload, artifacts),
         _performance_requirement(performance_payload),
@@ -1150,6 +1159,125 @@ def _callback_audit_requirement(payload: Optional[Mapping[str, Any]], *, require
         evidence,
         failures,
     )
+
+
+def _hosted_openai_compatible_requirement(payload: Optional[Mapping[str, Any]], *, required: bool) -> Dict[str, Any]:
+    if not isinstance(payload, Mapping):
+        if not required:
+            return _requirement(
+                "hosted_openai_compatible",
+                "Credentialed hosted OpenAI-compatible provider smoke",
+                "pass",
+                "hosted OpenAI-compatible artifact is optional for fixture completion gates",
+                [],
+            )
+        return _requirement(
+            "hosted_openai_compatible",
+            "Credentialed hosted OpenAI-compatible provider smoke",
+            "missing",
+            "hosted OpenAI-compatible artifact is missing",
+            ["hosted OpenAI-compatible artifact is missing"],
+        )
+
+    failures: List[str] = []
+    if payload.get("source") != "asip.openai_compatible_live_smoke":
+        failures.append(f"source={payload.get('source', 'missing')} does not match asip.openai_compatible_live_smoke")
+    if payload.get("gate_status") != "pass":
+        failures.append(f"gate_status={payload.get('gate_status')}")
+        for reason in payload.get("failure_reasons", []):
+            reason_text = str(reason)
+            if reason_text not in failures:
+                failures.append(reason_text)
+    credential_mode = str(payload.get("credential_mode") or "")
+    if credential_mode != "hosted-credentialed":
+        reason = f"credential_mode={credential_mode or 'missing'} does not satisfy hosted-credentialed"
+        if reason not in failures:
+            failures.append(reason)
+    if payload.get("require_credentialed") is not True:
+        failures.append(f"require_credentialed={payload.get('require_credentialed')} is not true")
+
+    summary = payload.get("summary", {})
+    total = _coerce_int(summary.get("total"))
+    passed = _coerce_int(summary.get("passed"))
+    failed = _coerce_int(summary.get("failed", 0) or 0)
+    if total is None or total < len(_REQUIRED_HOSTED_OPENAI_COMPATIBLE_CHECKS):
+        failures.append(
+            f"summary total={summary.get('total')} is below required hosted check count "
+            f"{len(_REQUIRED_HOSTED_OPENAI_COMPATIBLE_CHECKS)}"
+        )
+    if passed is None or total is None or passed != total:
+        failures.append(f"summary passed={summary.get('passed')} does not match total={summary.get('total')}")
+    if failed is None or failed != 0:
+        failures.append(f"summary failed={summary.get('failed')}")
+
+    checks = payload.get("checks", [])
+    if not isinstance(checks, list) or not checks:
+        failures.append("hosted OpenAI-compatible checks are missing")
+        checks_by_id: Dict[str, Mapping[str, Any]] = {}
+    else:
+        checks_by_id = {
+            str(check.get("id")): check
+            for check in checks
+            if isinstance(check, Mapping)
+        }
+    for check_id in _REQUIRED_HOSTED_OPENAI_COMPATIBLE_CHECKS:
+        check = checks_by_id.get(check_id)
+        if not check:
+            failures.append(f"{check_id}: check is missing")
+            continue
+        if check.get("status") != "pass":
+            failures.append(f"{check_id}: status={check.get('status')}")
+            failures.extend(f"{check_id}: {reason}" for reason in check.get("failure_reasons", []))
+        if check.get("provider") != "openai-compatible":
+            failures.append(f"{check_id}: provider={check.get('provider')}")
+        base_url = str(check.get("base_url") or payload.get("base_url") or "")
+        if _is_local_openai_compatible_url(base_url):
+            failures.append(f"{check_id}: base_url={base_url} is local/private, not hosted")
+        if check_id == "openai_compatible_embeddings_live":
+            if check.get("api_path") != "/v1/embeddings":
+                failures.append(f"{check_id}: api_path={check.get('api_path')}")
+            embedding_count = _coerce_int(check.get("embedding_count", 0) or 0)
+            vector_dimension = _coerce_int(check.get("vector_dimension", 0) or 0)
+            if embedding_count is None or embedding_count <= 0:
+                failures.append(f"{check_id}: embedding_count={check.get('embedding_count')}")
+            if vector_dimension is None or vector_dimension <= 0:
+                failures.append(f"{check_id}: vector_dimension={check.get('vector_dimension')}")
+        if check_id == "openai_compatible_chat_completions_live":
+            if check.get("api_path") != "/v1/chat/completions":
+                failures.append(f"{check_id}: api_path={check.get('api_path')}")
+            edge_count = _coerce_int(check.get("edge_count", 0) or 0)
+            persistable_edge_count = _coerce_int(check.get("persistable_edge_count", 0) or 0)
+            if edge_count is None or edge_count <= 0:
+                failures.append(f"{check_id}: edge_count={check.get('edge_count')}")
+            if persistable_edge_count is None or persistable_edge_count <= 0:
+                failures.append(f"{check_id}: persistable_edge_count={check.get('persistable_edge_count')}")
+
+    status = "pass" if not failures else "blocked"
+    evidence = (
+        f"gate_status={payload.get('gate_status')}; credential_mode={credential_mode or 'missing'}; "
+        f"checks={summary.get('passed', 0)}/{summary.get('total', 0)}"
+    )
+    return _requirement(
+        "hosted_openai_compatible",
+        "Credentialed hosted OpenAI-compatible provider smoke",
+        status,
+        evidence,
+        failures,
+    )
+
+
+def _is_local_openai_compatible_url(url: str) -> bool:
+    if not url:
+        return False
+    parsed = urlparse(url)
+    host = (parsed.hostname or url).lower()
+    if host in {"localhost", "host.docker.internal"} or host.endswith(".localhost") or host.endswith(".local"):
+        return True
+    try:
+        address = ipaddress.ip_address(host)
+    except ValueError:
+        return False
+    return address.is_loopback or address.is_private or address.is_link_local or address.is_unspecified
 
 
 def _browser_requirement(

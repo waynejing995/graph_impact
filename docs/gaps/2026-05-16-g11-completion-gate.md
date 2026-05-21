@@ -1,11 +1,12 @@
 # G11 Completion Gate And Documentation Review
 
-Status: 2026-05-21 aggregate completion gate remains blocked only by
-explicit residual-boundary acceptance and the current uncommitted git state;
-expanded DB, artifact binding, Stage 1 graph, product graph schema,
-CLI/API/API_LIVE/Web/MCP/MCP_PROTOCOL probes, provider live checks, Stage 2
-semantic freshness/live generation, labeled semantic quality, callback/vtable
-audit, browser e2e, Web no-server smoke, and performance smoke pass
+Status: 2026-05-21 aggregate completion gate remains blocked by explicit
+residual-boundary acceptance, hosted credentialed OpenAI-compatible readiness,
+and the current uncommitted git state; expanded DB, artifact binding, Stage 1
+graph, product graph schema, CLI/API/API_LIVE/Web/MCP/MCP_PROTOCOL probes,
+provider live checks, Stage 2 semantic freshness/live generation, labeled
+semantic quality, callback/vtable audit, browser e2e, Web no-server smoke, and
+performance smoke pass
 
 ## Requirement
 
@@ -492,12 +493,19 @@ Commit and push happen only after verification.
   unexplained ambiguous callback fanout. The `aca_bank_parser` and
   `aca_bank_is_valid` fanout is treated as typed `aca_bank_ops` dynamic
   dispatch instead of unexplained overlinking.
+- 2026-05-21 hosted OpenAI-compatible binding: the completion gate now accepts
+  `--hosted-openai-json` and adds `hosted_openai_compatible` as a first-class
+  real-final requirement. It requires `source=asip.openai_compatible_live_smoke`,
+  `credential_mode=hosted-credentialed`, `require_credentialed=true`, and
+  passing `/v1/embeddings` plus `/v1/chat/completions` checks; local
+  and private-network OpenAI-compatible smoke is rejected as hosted proof.
 - 2026-05-21 current aggregate refresh:
   `docs/qa/2026-05-21-current-goal-completion-gate.json` and `.md` now record
-  `17/19` requirements passing before commit. The only blockers in that
-  pre-commit artifact are explicit residual-boundary acceptance and the dirty
-  git gate for the changes in flight; Web/browser/provider/Stage 2/semantic
-  quality/callback audit/no-server gates are green.
+  `17/20` requirements passing before commit. The blockers in that pre-commit
+  artifact are hosted credentialed OpenAI-compatible readiness, explicit
+  residual-boundary acceptance, and the dirty git gate for the changes in
+  flight; Web/browser/provider/Stage 2/semantic quality/callback
+  audit/no-server gates are green.
 - Historical final-candidate evidence package exists at
   `docs/qa/2026-05-17-final-clean-evidence-package.md`, linking the clean AMD
   DB, AQ01-AQ09 9/9 artifact, six free queries, semantic-edge jobs, visual QA,
