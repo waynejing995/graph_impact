@@ -3,8 +3,9 @@
 Date: 2026-05-16
 Status: Current user-review blocker pass verified; 2026-05-19 graph
 integration and finalization contracts added; 2026-05-21 expanded-DB
-acceptance/browser/provider/Stage 2/callback gates pass, with residual
-acceptance and current git closure still blocking final completion
+acceptance/browser/provider/Stage 2/callback/git gates pass, with only
+residual-boundary acceptance and hosted OpenAI-compatible credentials still
+blocking final completion
 
 ## Purpose
 

@@ -31,6 +31,7 @@ browser_json="$out_dir/browser-e2e-current-live.json"
 browser_report_json="${browser_json%.json}.playwright-report.json"
 pre_no_server_completion_json="$out_dir/completion-pre-no-server.json"
 pre_no_server_completion_md="$out_dir/completion-pre-no-server.md"
+pre_no_server_completion_stdout="$out_dir/completion-pre-no-server.summary.json"
 no_server_json="$out_dir/ui-no-server-smoke.json"
 completion_json="$out_dir/completion-gate.json"
 completion_md="$out_dir/completion-gate.md"
@@ -167,6 +168,8 @@ run_live_browser_e2e
 # It gives current-artifact-invariants-smoke a complete completion artifact to
 # inspect before the fresh no-server artifact exists. The final aggregate below
 # consumes the fresh no-server artifact generated from the same provider file.
+# Keep this internal bootstrap summary out of the main terminal stream so it is
+# not mistaken for the post-push result.
 python3 -m asip.cli completion-gate \
   --db data/asip.db \
   --acceptance-json "$acceptance_json" \
@@ -184,7 +187,7 @@ python3 -m asip.cli completion-gate \
   --git-gate-json "$git_gate_json" \
   --output-json "$pre_no_server_completion_json" \
   --output-md "$pre_no_server_completion_md" \
-  --full
+  >"$pre_no_server_completion_stdout"
 
 node apps/web/scripts/no-server-smoke.mjs \
   --output-json "$no_server_json" \

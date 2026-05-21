@@ -11,6 +11,12 @@ provider live checks, Stage 2 semantic freshness/live generation, labeled
 semantic quality, callback/vtable audit, browser e2e, Web no-server smoke, and
 performance smoke pass.
 
+2026-05-21 post-push runner note: `pnpm gate:postpush` creates an internal
+`completion-pre-no-server.*` artifact only so no-server smoke can verify fresh
+artifact path/SHA bindings before the final no-server artifact exists. That
+bootstrap aggregate is not the post-push result; the authoritative result is
+the final `$out_dir/completion-gate.json` summary.
+
 ## Requirement
 
 The active goal must not be marked complete until the implementation has been reviewed against the design docs and every blocking gap is closed or explicitly accepted by the user.
