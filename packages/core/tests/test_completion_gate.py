@@ -243,6 +243,28 @@ class CompletionGateTests(unittest.TestCase):
                 by_id["hosted_openai_compatible"]["failure_reasons"],
             )
 
+    def test_completion_gate_blocks_stale_passing_browser_head_binding(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            db_path = self._write_gate_db(root / "asip.db")
+            browser_payload = self._browser_e2e_payload("pass", db_path=db_path, repo_head="old-browser-head")
+            browser_json = self._write_json(root / "browser.json", browser_payload)
+            git_json = self._write_json(root / "git.json", self._git_payload("pass", head="current-git-head"))
+
+            result = run_completion_gate(
+                db_path,
+                browser_json=browser_json,
+                git_gate_json=git_json,
+                minimum_counts=self._fixture_minimum_counts(),
+            )
+
+            by_id = {item["id"]: item for item in result["requirements"]}
+            self.assertEqual(by_id["browser_e2e"]["status"], "blocked")
+            self.assertIn(
+                "browser e2e repo_head=old-browser-head does not match git_gate head=current-git-head",
+                by_id["browser_e2e"]["failure_reasons"],
+            )
+
     def test_completion_gate_blocks_concept_detail_probe_without_canvas_node_click(self):
         with tempfile.TemporaryDirectory() as tmpdir:
             root = Path(tmpdir)
@@ -1419,6 +1441,72 @@ class CompletionGateTests(unittest.TestCase):
             self.assertIn(
                 "no-server --provider-json sha256 does not match current artifact",
                 by_id["web_no_server_smoke"]["failure_reasons"],
+            )
+
+    def test_completion_gate_blocks_no_server_smoke_with_args_but_missing_artifact_inputs(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            db_path = self._write_gate_db(root / "asip.db")
+            acceptance_json = self._write_json(root / "acceptance.json", self._acceptance_payload(["CLI", "API", "MCP"], db_path=db_path))
+            web_json = self._write_json(root / "web-acceptance.json", self._acceptance_payload(["CLI", "API", "Web", "MCP"], db_path=db_path))
+            provider_json = self._write_json(root / "provider.json", self._provider_payload("pass", db_path=db_path))
+            runtime_json = self._write_json(root / "runtime-semantic.json", self._runtime_semantic_payload("pass", db_path=db_path))
+            browser_json = self._write_json(root / "browser.json", self._browser_e2e_payload("pass", db_path=db_path))
+            no_server_payload = self._no_server_payload("pass")
+            no_server_payload["current_artifact_args"] = ["--browser-json", str(browser_json)]
+            no_server_payload["current_artifact_inputs"] = []
+            no_server_json = self._write_json(root / "no-server.json", no_server_payload)
+            performance_json = self._write_json(root / "performance.json", self._performance_payload("pass"))
+            residual_json = self._write_json(root / "residual.json", self._residual_payload("pass"))
+            git_json = self._write_json(root / "git.json", self._git_payload("pass"))
+
+            result = run_completion_gate(
+                db_path,
+                acceptance_json=acceptance_json,
+                web_acceptance_json=web_json,
+                provider_json=provider_json,
+                runtime_semantic_json=runtime_json,
+                browser_json=browser_json,
+                no_server_json=no_server_json,
+                performance_json=performance_json,
+                residual_acceptance_json=residual_json,
+                git_gate_json=git_json,
+                minimum_counts=self._fixture_minimum_counts(),
+            )
+
+            by_id = {item["id"]: item for item in result["requirements"]}
+            self.assertEqual(by_id["web_no_server_smoke"]["status"], "blocked")
+            self.assertIn(
+                "no-server current_artifact_inputs are missing for declared current_artifact_args",
+                by_id["web_no_server_smoke"]["failure_reasons"],
+            )
+
+    def test_completion_gate_blocks_residual_acceptance_with_stale_document_hash(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            db_path = self._write_gate_db(root / "asip.db")
+            residual_payload = self._residual_payload("pass")
+            Path(residual_payload["residual_doc_path"]).write_text(
+                "# G13\n\nStatus: Partial; acceptance reopened\n",
+                encoding="utf-8",
+            )
+            residual_json = self._write_json(root / "residual.json", residual_payload)
+
+            result = run_completion_gate(
+                db_path,
+                residual_acceptance_json=residual_json,
+                minimum_counts=self._fixture_minimum_counts(),
+            )
+
+            by_id = {item["id"]: item for item in result["requirements"]}
+            self.assertEqual(by_id["residual_acceptance"]["status"], "blocked")
+            self.assertIn(
+                "residual document sha256 does not match artifact",
+                by_id["residual_acceptance"]["failure_reasons"],
+            )
+            self.assertIn(
+                "current residual document status is not accepted: Status: Partial; acceptance reopened",
+                by_id["residual_acceptance"]["failure_reasons"],
             )
 
     def test_completion_gate_blocks_stale_runtime_semantic_generation_job_binding(self):
@@ -2605,7 +2693,7 @@ class CompletionGateTests(unittest.TestCase):
             "failure_reasons": [] if gate_status == "pass" else ["credential env var is missing: OPENAI_API_KEY"],
         }
 
-    def _browser_e2e_payload(self, gate_status, *, db_path):
+    def _browser_e2e_payload(self, gate_status, *, db_path, repo_head="current-git-head"):
         required_tests = [
             {
                 "title": "acceptance page runs no-mock AQ01 through the real workbench API",
@@ -2668,6 +2756,7 @@ class CompletionGateTests(unittest.TestCase):
             "source": "asip.web.browser_e2e",
             "gate_status": gate_status,
             "e2e_status": gate_status,
+            "repo_head": repo_head,
             "db_path": str(db_path),
             "latest_index_job_id": 1,
             "latest_graph_rebuild_job_id": 2,
@@ -2788,11 +2877,33 @@ class CompletionGateTests(unittest.TestCase):
         }
 
     def _residual_payload(self, gate_status):
+        doc_status = "Accepted" if gate_status == "pass" else "Partial; final user acceptance remains blocking"
+        doc = Path(tempfile.NamedTemporaryFile(prefix="asip-residual-", suffix=".md", delete=False).name)
+        doc.write_text(
+            "\n".join(
+                [
+                    "# G13",
+                    "",
+                    f"Status: {doc_status}",
+                    "",
+                    "| Spec area | MVP status | User acceptance status |",
+                    "| --- | --- | --- |",
+                    "| full clangd/libclang cross-TU type-flow | Deferred | Accepted |",
+                ]
+            ),
+            encoding="utf-8",
+        )
+        doc_bytes = doc.read_bytes()
         return {
             "source": "asip.residual_acceptance",
             "gate_status": gate_status,
+            "residual_doc_path": str(doc),
+            "residual_doc_sha256": hashlib.sha256(doc_bytes).hexdigest(),
+            "residual_doc_bytes": len(doc_bytes),
+            "status_line": f"Status: {doc_status}",
             "accepted": gate_status == "pass",
             "accepted_residuals": ["full clangd/libclang cross-TU type-flow"],
+            "acceptance_required_rows": ["full clangd/libclang cross-TU type-flow"],
         }
 
     def _git_payload(self, gate_status, *, repo_root=None, branch=None, head=None):

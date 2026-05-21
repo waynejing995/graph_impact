@@ -92,7 +92,20 @@ PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=packages/core/src:. \
 pnpm gate:postpush
 ```
 
-`pnpm gate:postpush` probes for a clean local browser port, regenerates the live no-mock browser e2e artifact against the current `data/asip.db`, then runs the aggregate completion gate with that fresh artifact.
+`pnpm gate:postpush` probes for a clean local browser port, regenerates the live no-mock browser e2e artifact against the current `data/asip.db`, records the artifact git `repo_head`, and runs the aggregate completion gate with fresh no-server input path/SHA bindings.
+
+If the user explicitly accepts residual boundaries, update the G13 status line from `Partial` to an accepted status and regenerate the residual artifact with every acceptance-required row:
+
+```bash
+PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=packages/core/src:. \
+  python3 -m asip.cli residual-gate \
+  --residual-doc docs/gaps/2026-05-16-g13-mvp-boundary-deferrals.md \
+  --accepted \
+  --accepted-residual "Hybrid retrieval over exact, resolver, FTS5, vector, graph, rerank" \
+  --accepted-residual "Embedding provider and optional semantic-edge provider via Ollama/OpenAI-compatible APIs" \
+  --output-json docs/qa/2026-05-20-residual-acceptance-gate.json \
+  --full
+```
 
 The aggregate completion gate may remain blocked by hosted credentials or explicit residual acceptance. That is a real project boundary, not a bootstrap failure.
 

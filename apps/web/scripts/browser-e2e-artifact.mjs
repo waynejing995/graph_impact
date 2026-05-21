@@ -4,6 +4,7 @@ import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
 
 const appRoot = path.resolve(import.meta.dirname, "..");
+const repoRoot = path.resolve(appRoot, "../..");
 const requiredBrowserE2eTests = [
   "acceptance page runs no-mock AQ01 through the real workbench API",
   "graph page uses URL dbPath for no-mock graph and query requests",
@@ -121,6 +122,15 @@ function tail(text, limit = 4000) {
 
 function sha256(text) {
   return createHash("sha256").update(text).digest("hex");
+}
+
+function currentRepoHead() {
+  const result = spawnSync("git", ["rev-parse", "HEAD"], {
+    cwd: repoRoot,
+    encoding: "utf8",
+    stdio: "pipe"
+  });
+  return result.status === 0 ? result.stdout.trim() : "";
 }
 
 function summarizePlaywrightReport(report) {
@@ -588,6 +598,7 @@ const passed = exitCode === 0 && failureReasons.length === 0 && summary.failed =
 const artifact = {
   source: "asip.web.browser_e2e",
   generated_at: new Date().toISOString(),
+  repo_head: currentRepoHead(),
   base_url: args.baseUrl,
   db_path: args.dbPath,
   latest_index_job_id: args.latestIndexJobId,

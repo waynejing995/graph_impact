@@ -289,7 +289,7 @@ def main(argv: Optional[List[str]] = None) -> int:
 
     residual_gate = subcommands.add_parser(
         "residual-gate",
-        help="Record whether G13 residual boundaries have explicit user acceptance",
+        help="Record whether G13 residual boundaries have explicit user acceptance and an accepted residual document status",
     )
     residual_gate.add_argument("--residual-doc", default="docs/gaps/2026-05-16-g13-mvp-boundary-deferrals.md")
     residual_gate.add_argument("--accepted", action="store_true")

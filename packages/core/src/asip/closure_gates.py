@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import hashlib
 import re
 import subprocess
 from datetime import datetime, timezone
@@ -23,10 +24,15 @@ def run_residual_acceptance_gate(
     failure_reasons: List[str] = []
     ledger_items = []
     status_line = ""
+    residual_doc_sha256 = ""
+    residual_doc_bytes = 0
     if not residual_doc.exists():
         failure_reasons.append(f"residual document is missing: {residual_doc}")
     else:
-        text = residual_doc.read_text(encoding="utf-8")
+        doc_bytes = residual_doc.read_bytes()
+        residual_doc_bytes = len(doc_bytes)
+        residual_doc_sha256 = hashlib.sha256(doc_bytes).hexdigest()
+        text = doc_bytes.decode("utf-8")
         status_line = _first_status_line(text)
         ledger_items = _markdown_table_rows(text)
         if "acceptance" not in text.lower():
@@ -35,6 +41,8 @@ def run_residual_acceptance_gate(
             failure_reasons.append("residual deferral ledger has no parsed rows")
         if "blocking" in status_line.lower() or "partial" in status_line.lower():
             failure_reasons.append(f"residual document status remains open: {status_line}")
+        if accepted and not _status_line_is_accepted(status_line):
+            failure_reasons.append(f"residual document status is not accepted: {status_line or 'missing'}")
 
     rows_requiring_acceptance = _rows_requiring_explicit_acceptance(ledger_items)
     if not accepted:
@@ -53,6 +61,8 @@ def run_residual_acceptance_gate(
         "source": "asip.residual_acceptance",
         "generated_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
         "residual_doc_path": str(residual_doc),
+        "residual_doc_sha256": residual_doc_sha256,
+        "residual_doc_bytes": residual_doc_bytes,
         "status_line": status_line,
         "accepted": accepted,
         "accepted_residuals": accepted_items,
@@ -144,6 +154,12 @@ def _first_status_line(text: str) -> str:
     return ""
 
 
+def _status_line_is_accepted(status_line: str) -> bool:
+    if not status_line.startswith("Status:"):
+        return False
+    return status_line.split(":", 1)[1].strip().lower().startswith("accepted")
+
+
 def _markdown_table_rows(text: str) -> List[Dict[str, str]]:
     rows: List[Dict[str, str]] = []
     in_table = False
@@ -199,14 +215,8 @@ def _residual_row_label(row: Dict[str, str]) -> str:
 
 def _accepted_residual_matches(label: str, accepted_items: List[str]) -> bool:
     accepted_normalized = [_normalize_residual_text(item) for item in accepted_items]
-    if any(item in {"*", "all", "all_residuals", "all_residual_boundaries"} for item in accepted_normalized):
-        return True
     label_normalized = _normalize_residual_text(label)
-    return any(
-        item == label_normalized or item in label_normalized or label_normalized in item
-        for item in accepted_normalized
-        if item
-    )
+    return any(item == label_normalized for item in accepted_normalized if item)
 
 
 def _normalize_residual_text(value: str) -> str:

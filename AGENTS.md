@@ -90,7 +90,20 @@ Run the standard post-push completion bundle out of tree:
 pnpm gate:postpush
 ```
 
-This bundle starts a clean browser port, regenerates the current live browser e2e artifact, and feeds that artifact into the aggregate completion gate. Use `ASIP_POSTPUSH_BROWSER_PORT=3130` only when you need to steer the first candidate port; the script will probe forward from there.
+This bundle starts a clean browser port, regenerates the current live browser e2e artifact, records its git `repo_head`, and feeds that artifact into the aggregate completion gate. It also binds no-server smoke inputs by path and SHA so stale committed artifacts do not masquerade as current proof. Use `ASIP_POSTPUSH_BROWSER_PORT=3130` only when you need to steer the first candidate port; the script will probe forward from there.
+
+Close residual-boundary acceptance only after the user explicitly accepts the residuals. The residual gate requires both an accepted status line in `docs/gaps/2026-05-16-g13-mvp-boundary-deferrals.md` and every row that needs acceptance listed on the command line:
+
+```bash
+PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=packages/core/src:. \
+  python3 -m asip.cli residual-gate \
+  --residual-doc docs/gaps/2026-05-16-g13-mvp-boundary-deferrals.md \
+  --accepted \
+  --accepted-residual "Hybrid retrieval over exact, resolver, FTS5, vector, graph, rerank" \
+  --accepted-residual "Embedding provider and optional semantic-edge provider via Ollama/OpenAI-compatible APIs" \
+  --output-json docs/qa/2026-05-20-residual-acceptance-gate.json \
+  --full
+```
 
 ## Remote
 

@@ -63,6 +63,37 @@ class ClosureGateTests(unittest.TestCase):
             self.assertEqual(result["gate_status"], "pass")
             self.assertEqual(result["accepted_residuals"], ["Full clangd/libclang"])
 
+    def test_residual_gate_requires_accepted_document_status_even_with_user_acceptance(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            residual_doc = root / "g13.md"
+            residual_doc.write_text(
+                "\n".join(
+                    [
+                        "# G13",
+                        "",
+                        "Status: Partial; final user acceptance remains blocking",
+                        "",
+                        "| Spec area | MVP status | User acceptance status |",
+                        "| --- | --- | --- |",
+                        "| Full clangd/libclang | Deferred | Needs acceptance |",
+                    ]
+                ),
+                encoding="utf-8",
+            )
+
+            result = run_residual_acceptance_gate(
+                residual_doc,
+                accepted=True,
+                accepted_residuals=["Full clangd/libclang"],
+            )
+
+            self.assertEqual(result["gate_status"], "blocked")
+            self.assertIn(
+                "residual document status remains open: Status: Partial; final user acceptance remains blocking",
+                result["failure_reasons"],
+            )
+
     def test_residual_gate_blocks_when_only_some_acceptance_required_rows_are_accepted(self):
         with tempfile.TemporaryDirectory() as tmpdir:
             root = Path(tmpdir)
@@ -92,6 +123,37 @@ class ClosureGateTests(unittest.TestCase):
             self.assertEqual(result["gate_status"], "blocked")
             self.assertIn(
                 "residual row needs acceptance but is not listed in accepted_residuals: Credentialed live QA",
+                result["failure_reasons"],
+            )
+
+    def test_residual_gate_does_not_accept_wildcard_residual_names(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            residual_doc = root / "g13.md"
+            residual_doc.write_text(
+                "\n".join(
+                    [
+                        "# G13",
+                        "",
+                        "Status: Accepted",
+                        "",
+                        "| Spec area | MVP status | User acceptance status |",
+                        "| --- | --- | --- |",
+                        "| Full clangd/libclang | Deferred | Needs acceptance |",
+                    ]
+                ),
+                encoding="utf-8",
+            )
+
+            result = run_residual_acceptance_gate(
+                residual_doc,
+                accepted=True,
+                accepted_residuals=["all"],
+            )
+
+            self.assertEqual(result["gate_status"], "blocked")
+            self.assertIn(
+                "residual row needs acceptance but is not listed in accepted_residuals: Full clangd/libclang",
                 result["failure_reasons"],
             )
 

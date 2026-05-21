@@ -6,6 +6,7 @@ import json
 import sqlite3
 import hashlib
 import ipaddress
+import re
 import subprocess
 from datetime import datetime, timezone
 from pathlib import Path
@@ -151,7 +152,7 @@ def run_completion_gate(
             required=minimum_counts is None,
             git_payload=git_payload,
         ),
-        _browser_requirement(browser_payload, in_app_browser_payload, db_path, db_health),
+        _browser_requirement(browser_payload, in_app_browser_payload, db_path, db_health, git_payload),
         _no_server_requirement(no_server_payload, artifacts),
         _performance_requirement(performance_payload),
         _residual_acceptance_requirement(residual_payload),
@@ -1302,6 +1303,7 @@ def _browser_requirement(
     in_app_payload: Optional[Mapping[str, Any]] = None,
     db_path: Optional[Path] = None,
     db_health: Optional[Mapping[str, Any]] = None,
+    git_payload: Optional[Mapping[str, Any]] = None,
 ) -> Dict[str, Any]:
     blocker_reasons: List[str] = []
     evidence_parts: List[str] = []
@@ -1314,7 +1316,7 @@ def _browser_requirement(
         if source != "asip.web.browser_e2e":
             artifact_failures.append(f"browser artifact source={source or 'missing'} is not no-mock browser e2e proof")
         else:
-            artifact_failures.extend(_browser_e2e_artifact_failures(payload, db_path, db_health))
+            artifact_failures.extend(_browser_e2e_artifact_failures(payload, db_path, db_health, git_payload))
         browser_proof_passed = (
             payload.get("gate_status") in _PASS
             and e2e_status in _PASS
@@ -1341,7 +1343,7 @@ def _browser_requirement(
                 f"in-app browser artifact source={in_app_source or 'missing'} is not no-mock browser e2e proof"
             )
         else:
-            in_app_failures.extend(_browser_e2e_artifact_failures(in_app_payload, db_path, db_health))
+            in_app_failures.extend(_browser_e2e_artifact_failures(in_app_payload, db_path, db_health, git_payload))
         for reason in in_app_payload.get("failure_reasons", []):
             in_app_failures.append(f"in-app browser: {reason}")
         for attempt in in_app_payload.get("attempts", []):
@@ -1382,6 +1384,7 @@ def _browser_e2e_artifact_failures(
     payload: Mapping[str, Any],
     db_path: Optional[Path],
     db_health: Optional[Mapping[str, Any]],
+    git_payload: Optional[Mapping[str, Any]] = None,
 ) -> List[str]:
     failures: List[str] = []
     command = payload.get("command", [])
@@ -1389,6 +1392,13 @@ def _browser_e2e_artifact_failures(
         failures.append("browser e2e command is missing")
     elif command[:4] != ["pnpm", "exec", "playwright", "test"]:
         failures.append(f"browser e2e command is not a live Playwright test run: {command}")
+    git_head = str(git_payload.get("head") or "").strip() if isinstance(git_payload, Mapping) else ""
+    if git_head and payload.get("gate_status") == "pass":
+        repo_head = str(payload.get("repo_head") or "").strip()
+        if not repo_head:
+            failures.append("browser e2e repo_head is missing")
+        elif repo_head != git_head:
+            failures.append(f"browser e2e repo_head={repo_head} does not match git_gate head={git_head}")
     if db_path is not None:
         artifact_db_path = payload.get("db_path")
         if not artifact_db_path:
@@ -1762,6 +1772,8 @@ def _no_server_current_artifact_input_failures(
 ) -> List[str]:
     inputs_value = payload.get("current_artifact_inputs", [])
     if inputs_value in (None, []):
+        if payload.get("current_artifact_args"):
+            return ["no-server current_artifact_inputs are missing for declared current_artifact_args"]
         return []
     if not isinstance(inputs_value, list):
         return ["no-server current_artifact_inputs is not a list"]
@@ -1865,9 +1877,53 @@ def _residual_acceptance_requirement(payload: Optional[Mapping[str, Any]]) -> Di
         failures.append("accepted is not true")
     if not residuals:
         failures.append("accepted_residuals is empty")
+    status_line = str(payload.get("status_line") or "")
+    if not _residual_status_line_is_accepted(status_line):
+        failures.append(f"residual document status is not accepted: {status_line or 'missing'}")
+    doc_path = str(payload.get("residual_doc_path") or "").strip()
+    expected_sha256 = str(payload.get("residual_doc_sha256") or "").strip()
+    if not doc_path:
+        failures.append("residual_doc_path is missing")
+    if not expected_sha256:
+        failures.append("residual_doc_sha256 is missing")
+    if doc_path and expected_sha256:
+        try:
+            doc_bytes = Path(doc_path).read_bytes()
+        except OSError as exc:
+            failures.append(f"residual document is unreadable: {exc}")
+        else:
+            actual_sha256 = hashlib.sha256(doc_bytes).hexdigest()
+            if actual_sha256 != expected_sha256:
+                failures.append("residual document sha256 does not match artifact")
+            current_status_line = _first_status_line(doc_bytes.decode("utf-8"))
+            if not _residual_status_line_is_accepted(current_status_line):
+                failures.append(f"current residual document status is not accepted: {current_status_line or 'missing'}")
+    required_rows = [str(item) for item in payload.get("acceptance_required_rows", []) if str(item).strip()]
+    accepted_normalized = {_normalize_residual_text(str(item)) for item in residuals}
+    for row in required_rows:
+        if _normalize_residual_text(row) not in accepted_normalized:
+            failures.append(f"acceptance_required_row is not listed in accepted_residuals: {row}")
     status = "pass" if not failures else "blocked"
     evidence = f"gate_status={payload.get('gate_status')}; accepted_residuals={len(residuals)}"
     return _requirement("residual_acceptance", "Explicit residual-boundary acceptance", status, evidence, failures)
+
+
+def _first_status_line(text: str) -> str:
+    for line in text.splitlines():
+        if line.startswith("Status:"):
+            return line.strip()
+    return ""
+
+
+def _residual_status_line_is_accepted(status_line: str) -> bool:
+    if not status_line.startswith("Status:"):
+        return False
+    return status_line.split(":", 1)[1].strip().lower().startswith("accepted")
+
+
+def _normalize_residual_text(value: str) -> str:
+    normalized = re.sub(r"[^a-z0-9]+", "_", value.lower()).strip("_")
+    return re.sub(r"_+", "_", normalized)
 
 
 def _git_gate_requirement(payload: Optional[Mapping[str, Any]]) -> Dict[str, Any]:
