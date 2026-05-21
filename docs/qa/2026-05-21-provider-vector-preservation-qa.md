@@ -31,4 +31,4 @@ This narrows the current ASIP semantic-rerank evidence boundary. It does not cla
 
 ## Current Boundary
 
-The fix proves provider-vector participation can survive lexical candidate pressure in unit coverage and in the real AQ05 multi-surface path. Broad production semantic-ranking quality still needs either a larger labeled semantic-quality evaluation set or explicit residual acceptance.
+The fix proves provider-vector participation can survive lexical candidate pressure in unit coverage and in the real AQ05 multi-surface path. A follow-up labeled current-corpus semantic-quality gate is recorded in `docs/qa/2026-05-21-semantic-rerank-labeled-eval.json` and `.md`; broad production semantic-ranking quality across arbitrary future corpora still needs explicit residual acceptance or future corpus-specific evaluation.

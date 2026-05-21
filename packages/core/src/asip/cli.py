@@ -12,6 +12,7 @@ from .closure_gates import run_git_gate, run_residual_acceptance_gate
 from .completion_gate import run_completion_gate
 from .limits import DEFAULT_WORKBENCH_LIMITS_PATH, load_workbench_limits
 from .performance_smoke import run_fixture_performance_smoke
+from .semantic_quality import run_semantic_quality_eval
 from .semantic_edges import run_full_corpus_generation, run_generation
 from .workbench import (
     add_corpus,
@@ -232,6 +233,16 @@ def main(argv: Optional[List[str]] = None) -> int:
     provider_gate.add_argument("--db", required=True)
     provider_gate.add_argument("--output-json")
     provider_gate.add_argument("--full", action="store_true", help="Print the full provider-gate payload")
+
+    semantic_quality = subcommands.add_parser(
+        "semantic-quality",
+        help="Run labeled semantic retrieval quality checks against a SQLite store",
+    )
+    semantic_quality.add_argument("--db", required=True)
+    semantic_quality.add_argument("--eval-set", required=True)
+    semantic_quality.add_argument("--output-json")
+    semantic_quality.add_argument("--output-md")
+    semantic_quality.add_argument("--full", action="store_true", help="Print the full semantic-quality payload")
 
     completion_gate = subcommands.add_parser(
         "completion-gate",
@@ -538,6 +549,15 @@ def main(argv: Optional[List[str]] = None) -> int:
         result = run_provider_gate(
             Path(args.db),
             output_json=Path(args.output_json) if args.output_json else None,
+        )
+        print(json.dumps(result if args.full else result["summary"], indent=2))
+        return 0
+    if args.command == "semantic-quality":
+        result = run_semantic_quality_eval(
+            Path(args.db),
+            Path(args.eval_set),
+            output_json=Path(args.output_json) if args.output_json else None,
+            output_md=Path(args.output_md) if args.output_md else None,
         )
         print(json.dumps(result if args.full else result["summary"], indent=2))
         return 0

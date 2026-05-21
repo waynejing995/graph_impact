@@ -31,12 +31,13 @@ MVP-1 is SQLite-first:
 - Query-time provider rerank proof: `docs/qa/2026-05-18-g06-query-time-provider-rerank-qa.md` records RED/GREEN coverage for provider query embedding, same-provider/model vector filtering, `provider-vector` retrieval-source metadata, and a local Ollama smoke over a throwaway DB.
 - Current default-DB quality proxy: `docs/qa/2026-05-21-semantic-rerank-quality-eval.json` and `.md` confirm full provider embedding coverage (`147841 / 147841` chunks), AQ01-AQ09 live acceptance consistency across product surfaces, and explicit `provider-vector` participation in AQ05.
 - Provider-vector preservation proof: `docs/qa/2026-05-21-provider-vector-preservation-qa.md` records a regression fix for lexical/FTS candidate pressure plus AQ05 six-surface QA with visible `provider-vector` retrieval source and code/doc/pdf/register diversity.
+- Labeled semantic quality proof: `docs/qa/2026-05-21-semantic-rerank-labeled-eval.json` and `.md` record a repeatable current-corpus eval over `docs/qa/semantic-rerank-eval-set.jsonl`: `5/5` cases pass, two provider-vector cases participate, and MRR is `0.67`.
 
 ## Remaining Gap
 
 Storage pieces exist, graph expansion now uses NetworkX, and the product retrieval path now combines vector adapter matches into ranking.
 
-The deterministic fallback and provider embedding paths prove schema/provenance wiring and retrieval integration. Query-time provider-vector wiring is now proven, the current default workbench DB has full local provider embedding coverage, and provider-vector evidence is preserved when lexical rows otherwise fill the candidate window. Semantic rerank quality at scale remains a product-quality boundary. The bundled Python runtime proves the native sqlite-vec extension can load and the product `search_vector()` path can use it. The native adapter is intentionally temp-table based for now, with JSON vectors retained as source of truth; a persistent sqlite-vec sidecar/table-per-dimension remains a future performance improvement rather than an MVP requirement.
+The deterministic fallback and provider embedding paths prove schema/provenance wiring and retrieval integration. Query-time provider-vector wiring is now proven, the current default workbench DB has full local provider embedding coverage, provider-vector evidence is preserved when lexical rows otherwise fill the candidate window, and a labeled current-corpus semantic eval passes. Semantic rerank quality across arbitrary future corpora remains a product-quality boundary. The bundled Python runtime proves the native sqlite-vec extension can load and the product `search_vector()` path can use it. The native adapter is intentionally temp-table based for now, with JSON vectors retained as source of truth; a persistent sqlite-vec sidecar/table-per-dimension remains a future performance improvement rather than an MVP requirement.
 
 ## Acceptance Criteria
 

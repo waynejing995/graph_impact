@@ -1,0 +1,432 @@
+{
+  "source": "asip.semantic_quality_eval",
+  "generated_at": "2026-05-21T04:45:26+00:00",
+  "repo_head": "6d127fa9fc90f17814a1e63952ef7362133c0ef7",
+  "db_path": "data/asip.db",
+  "eval_set_path": "docs/qa/semantic-rerank-eval-set.jsonl",
+  "eval_set_sha256": "0bc73ef7aa1ccdbae3dd4b742bcca322c3a84530c099834a9a5d748c403aec80",
+  "summary": {
+    "total": 5,
+    "passed": 5,
+    "failed": 0,
+    "provider_vector_cases": 2,
+    "mean_reciprocal_rank": 0.67
+  },
+  "gate_status": "pass",
+  "cases": [
+    {
+      "id": "SQ01_DOC_SOURCE_TREE",
+      "query": "Show evidence connecting amdgpu documentation to the amdgpu driver source tree.",
+      "status": "pass",
+      "failure_reasons": [],
+      "row_count": 24,
+      "first_expected_rank": 1,
+      "source_types": [
+        "code",
+        "doc",
+        "pdf",
+        "register"
+      ],
+      "retrieval_sources": [
+        "fts5",
+        "lexical",
+        "provider-vector"
+      ],
+      "provider_vector_rows": 10,
+      "query_embedding": {
+        "source": "provider",
+        "provider": "ollama",
+        "model": "nomic-embed-text:latest"
+      },
+      "graph_node_count": 3,
+      "graph_edge_count": 0,
+      "top_rows": [
+        {
+          "rank": 1,
+          "symbol": "ASIP",
+          "source_type": "pdf",
+          "path": "amdgpu-driver-source-tree.pdf",
+          "retrieval_sources": [
+            "lexical",
+            "fts5",
+            "provider-vector"
+          ],
+          "vector_score": 0.8568
+        },
+        {
+          "rank": 2,
+          "symbol": "GPU",
+          "source_type": "pdf",
+          "path": "amdgpu-driver-source-tree.pdf",
+          "retrieval_sources": [
+            "lexical",
+            "fts5",
+            "provider-vector"
+          ],
+          "vector_score": 0.8568
+        },
+        {
+          "rank": 3,
+          "symbol": "PDF",
+          "source_type": "pdf",
+          "path": "amdgpu-driver-source-tree.pdf",
+          "retrieval_sources": [
+            "lexical",
+            "fts5",
+            "provider-vector"
+          ],
+          "vector_score": 0.8568
+        },
+        {
+          "rank": 4,
+          "symbol": "QA",
+          "source_type": "pdf",
+          "path": "amdgpu-driver-source-tree.pdf",
+          "retrieval_sources": [
+            "lexical",
+            "fts5",
+            "provider-vector"
+          ],
+          "vector_score": 0.8568
+        },
+        {
+          "rank": 5,
+          "symbol": "ASIP",
+          "source_type": "doc",
+          "path": "amdgpu-driver-source-tree.md",
+          "retrieval_sources": [
+            "lexical",
+            "fts5",
+            "provider-vector"
+          ],
+          "vector_score": 0.8511
+        }
+      ]
+    },
+    {
+      "id": "SQ02_MANUAL_DRIVER_IMPL",
+      "query": "manual pages related to amdgpu kernel driver implementation",
+      "status": "pass",
+      "failure_reasons": [],
+      "row_count": 24,
+      "first_expected_rank": 10,
+      "source_types": [
+        "code",
+        "doc",
+        "pdf",
+        "register"
+      ],
+      "retrieval_sources": [
+        "fts5",
+        "lexical",
+        "provider-vector"
+      ],
+      "provider_vector_rows": 7,
+      "query_embedding": {
+        "source": "provider",
+        "provider": "ollama",
+        "model": "nomic-embed-text:latest"
+      },
+      "graph_node_count": 8,
+      "graph_edge_count": 0,
+      "top_rows": [
+        {
+          "rank": 1,
+          "symbol": "amdgpu_amdkfd",
+          "source_type": "code",
+          "path": "drivers/gpu/drm/amd/amdgpu/aldebaran.c",
+          "retrieval_sources": [
+            "lexical",
+            "fts5"
+          ],
+          "vector_score": null
+        },
+        {
+          "rank": 2,
+          "symbol": "amdgpu_asic_reset_method",
+          "source_type": "code",
+          "path": "drivers/gpu/drm/amd/amdgpu/aldebaran.c",
+          "retrieval_sources": [
+            "lexical",
+            "fts5"
+          ],
+          "vector_score": null
+        },
+        {
+          "rank": 3,
+          "symbol": "amdgpu_device",
+          "source_type": "code",
+          "path": "drivers/gpu/drm/amd/amdgpu/aldebaran.c",
+          "retrieval_sources": [
+            "lexical",
+            "fts5"
+          ],
+          "vector_score": null
+        },
+        {
+          "rank": 4,
+          "symbol": "amdgpu_dpm",
+          "source_type": "code",
+          "path": "drivers/gpu/drm/amd/amdgpu/aldebaran.c",
+          "retrieval_sources": [
+            "lexical",
+            "fts5"
+          ],
+          "vector_score": null
+        },
+        {
+          "rank": 5,
+          "symbol": "AMDGPUV",
+          "source_type": "doc",
+          "path": "smi-lib/cli/cpp/docs/external/README.md",
+          "retrieval_sources": [
+            "lexical",
+            "fts5"
+          ],
+          "vector_score": null
+        }
+      ]
+    },
+    {
+      "id": "SQ03_GCVM_EXACT",
+      "query": "Who reads or writes regGCVM_L2_CNTL?",
+      "status": "pass",
+      "failure_reasons": [],
+      "row_count": 24,
+      "first_expected_rank": 1,
+      "source_types": [
+        "code",
+        "register"
+      ],
+      "retrieval_sources": [
+        "fts5",
+        "lexical"
+      ],
+      "provider_vector_rows": 0,
+      "query_embedding": {
+        "source": "skipped-symbol-token"
+      },
+      "graph_node_count": 31,
+      "graph_edge_count": 91,
+      "top_rows": [
+        {
+          "rank": 1,
+          "symbol": "regGCVM_L2_CNTL",
+          "source_type": "code",
+          "path": "libgv/core/hw/navi3/gfx_v11_0.c",
+          "retrieval_sources": [
+            "lexical",
+            "fts5"
+          ],
+          "vector_score": null
+        },
+        {
+          "rank": 2,
+          "symbol": "regGCVM_L2_CNTL",
+          "source_type": "code",
+          "path": "drivers/gpu/drm/amd/amdgpu/gfxhub_v11_5_0.c",
+          "retrieval_sources": [
+            "lexical",
+            "fts5"
+          ],
+          "vector_score": null
+        },
+        {
+          "rank": 3,
+          "symbol": "regGCVM_L2_CNTL",
+          "source_type": "code",
+          "path": "drivers/gpu/drm/amd/amdgpu/gfxhub_v12_0.c",
+          "retrieval_sources": [
+            "lexical",
+            "fts5"
+          ],
+          "vector_score": null
+        },
+        {
+          "rank": 4,
+          "symbol": "regGCVM_L2_CNTL",
+          "source_type": "code",
+          "path": "drivers/gpu/drm/amd/amdgpu/gfxhub_v12_1.c",
+          "retrieval_sources": [
+            "lexical",
+            "fts5"
+          ],
+          "vector_score": null
+        },
+        {
+          "rank": 5,
+          "symbol": "regGCVM_L2_CNTL",
+          "source_type": "code",
+          "path": "drivers/gpu/drm/amd/amdgpu/gfxhub_v12_1.c",
+          "retrieval_sources": [
+            "lexical",
+            "fts5"
+          ],
+          "vector_score": null
+        }
+      ]
+    },
+    {
+      "id": "SQ04_SDMA_EXACT",
+      "query": "Which code paths reference SDMA0_QUEUE0_RB_CNTL or SDMA1_QUEUE0_RB_CNTL?",
+      "status": "pass",
+      "failure_reasons": [],
+      "row_count": 24,
+      "first_expected_rank": 1,
+      "source_types": [
+        "code",
+        "doc",
+        "pdf",
+        "register"
+      ],
+      "retrieval_sources": [
+        "fts5",
+        "lexical"
+      ],
+      "provider_vector_rows": 0,
+      "query_embedding": {
+        "source": "skipped-symbol-token"
+      },
+      "graph_node_count": 73,
+      "graph_edge_count": 83,
+      "top_rows": [
+        {
+          "rank": 1,
+          "symbol": "SDMA0_QUEUE0_RB_CNTL",
+          "source_type": "code",
+          "path": "libgv/core/hw/navi3/navi32_sdma.c",
+          "retrieval_sources": [
+            "lexical",
+            "fts5"
+          ],
+          "vector_score": null
+        },
+        {
+          "rank": 2,
+          "symbol": "SDMA1_QUEUE0_RB_CNTL",
+          "source_type": "code",
+          "path": "libgv/core/hw/navi3/navi32_sdma.c",
+          "retrieval_sources": [
+            "lexical",
+            "fts5"
+          ],
+          "vector_score": null
+        },
+        {
+          "rank": 3,
+          "symbol": "regSDMA0_QUEUE0_RB_CNTL",
+          "source_type": "code",
+          "path": "libgv/core/hw/navi3/navi32_sdma.c",
+          "retrieval_sources": [
+            "lexical",
+            "fts5"
+          ],
+          "vector_score": null
+        },
+        {
+          "rank": 4,
+          "symbol": "regSDMA1_QUEUE0_RB_CNTL",
+          "source_type": "code",
+          "path": "libgv/core/hw/navi3/navi32_sdma.c",
+          "retrieval_sources": [
+            "lexical",
+            "fts5"
+          ],
+          "vector_score": null
+        },
+        {
+          "rank": 5,
+          "symbol": "AFMT0_AFMT_60958_0__AFMT_60958_CS_CATEGORY_CODE_MASK",
+          "source_type": "register",
+          "path": "libgv/core/hw/navi3/asic_reg/navi3/DCN/dcn_3_2_0_sh_mask.h",
+          "retrieval_sources": [
+            "lexical",
+            "fts5"
+          ],
+          "vector_score": null
+        }
+      ]
+    },
+    {
+      "id": "SQ05_MACRO_CHAIN",
+      "query": "Given WREG32_SOC15(GC, 0, regGCVM_L2_CNTL, tmp), explain the resolved register entity and macro expansion chain.",
+      "status": "pass",
+      "failure_reasons": [],
+      "row_count": 24,
+      "first_expected_rank": 4,
+      "source_types": [
+        "code",
+        "doc",
+        "register"
+      ],
+      "retrieval_sources": [
+        "fts5",
+        "lexical"
+      ],
+      "provider_vector_rows": 0,
+      "query_embedding": {
+        "source": "skipped-symbol-token"
+      },
+      "graph_node_count": 32,
+      "graph_edge_count": 91,
+      "top_rows": [
+        {
+          "rank": 1,
+          "symbol": "CONTEXT1_IDENTITY_ACCESS_MODE",
+          "source_type": "code",
+          "path": "libgv/core/hw/navi3/gfx_v11_0.c",
+          "retrieval_sources": [
+            "lexical",
+            "fts5"
+          ],
+          "vector_score": null
+        },
+        {
+          "rank": 2,
+          "symbol": "IDENTITY_MODE_FRAGMENT_SIZE",
+          "source_type": "code",
+          "path": "libgv/core/hw/navi3/gfx_v11_0.c",
+          "retrieval_sources": [
+            "lexical",
+            "fts5"
+          ],
+          "vector_score": null
+        },
+        {
+          "rank": 3,
+          "symbol": "regGCVM_L2_CNTL",
+          "source_type": "code",
+          "path": "libgv/core/hw/navi3/gfx_v11_0.c",
+          "retrieval_sources": [
+            "lexical",
+            "fts5"
+          ],
+          "vector_score": null
+        },
+        {
+          "rank": 4,
+          "symbol": "GCVM_L2_CNTL",
+          "source_type": "code",
+          "path": "libgv/core/hw/navi3/gfx_v11_0.c",
+          "retrieval_sources": [
+            "lexical",
+            "fts5"
+          ],
+          "vector_score": null
+        },
+        {
+          "rank": 5,
+          "symbol": "BIFC_A2S_CNTL_SW0__SDP_DYNAMIC_VC_WR_CHAIN_DIS_MASK",
+          "source_type": "register",
+          "path": "libgv/core/hw/AI/asic_reg/mi300/NBIO/nbio_7_9_0_sh_mask.h",
+          "retrieval_sources": [
+            "lexical",
+            "fts5"
+          ],
+          "vector_score": null
+        }
+      ]
+    }
+  ],
+  "boundary": "This evaluates a labeled current-corpus semantic retrieval set. It does not claim quality across arbitrary future corpora."
+}
