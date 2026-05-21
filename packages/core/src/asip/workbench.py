@@ -429,16 +429,33 @@ def query_evidence(
             vector_chunk_models = {}
             vector_chunk_embedding_sources = {}
 
+    vector_chunk_ids = list(vector_chunk_scores)
+    candidate_chunk_ids = [
+        *vector_chunk_ids,
+        *[chunk_id for chunk_id in fts_chunk_ids if chunk_id not in vector_chunk_scores],
+    ]
     candidates = (
         store.find_evidence_candidates(
             tokens,
-            fts_chunk_ids | set(vector_chunk_scores),
+            candidate_chunk_ids,
             limit=max(result_limit * candidate_multiplier, candidate_floor),
             max_query_tokens=max_query_tokens,
         )
         if tokens
         else store.all_evidence()
     )
+    if vector_chunk_ids:
+        existing_candidate_ids = {
+            int(row["id"])
+            for row in candidates
+            if row.get("id") not in (None, "")
+        }
+        for row in store.evidence_for_chunks(vector_chunk_ids):
+            row_id = int(row["id"])
+            if row_id in existing_candidate_ids:
+                continue
+            candidates.append(row)
+            existing_candidate_ids.add(row_id)
     rows: List[Dict[str, Any]] = []
     for row in candidates:
         if not is_graph_entity_endpoint(str(row.get("symbol") or "")):
@@ -3962,6 +3979,23 @@ def _select_diverse_rows(rows: List[Dict[str, Any]], limit: int) -> List[Dict[st
         selected_ids = {row.get("id") for row in selected}
         protected_ids.add(candidate.get("id"))
         selected_sources.add(source_type)
+    if not any("provider-vector" in row.get("retrieval_sources", []) for row in selected):
+        candidate = next(
+            (
+                row
+                for row in rows
+                if "provider-vector" in row.get("retrieval_sources", [])
+                and row.get("id") not in selected_ids
+            ),
+            None,
+        )
+        if candidate is not None:
+            if len(selected) < limit:
+                selected.append(candidate)
+            else:
+                replace_index = _diverse_replacement_index(selected, protected_ids)
+                selected[replace_index] = candidate
+            protected_ids.add(candidate.get("id"))
     return selected
 
 

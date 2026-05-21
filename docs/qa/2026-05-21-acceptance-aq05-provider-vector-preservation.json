@@ -1,0 +1,268 @@
+{
+  "source": "asip.acceptance",
+  "generated_at": "2026-05-21T04:35:10+00:00",
+  "db_path": "data/asip.db",
+  "database_health": {
+    "status": "pass",
+    "failure_reasons": []
+  },
+  "provider_settings": {
+    "edge": {
+      "provider": "ollama",
+      "base_url": "http://localhost:11434",
+      "api_path": "/api/chat",
+      "model": "gemma4:e4b",
+      "fallback_model": "",
+      "extra_headers": {},
+      "think": false,
+      "timeout_seconds": 900,
+      "num_ctx": 2048,
+      "num_predict": 1024,
+      "temperature": 0
+    },
+    "embedding": {
+      "provider": "ollama",
+      "base_url": "http://localhost:11434",
+      "api_path": "/api/embeddings",
+      "model": "nomic-embed-text:latest",
+      "extra_headers": {},
+      "timeout_seconds": 900
+    }
+  },
+  "provider_checks": {
+    "embedding": {
+      "status": "pass",
+      "provenance_status": "pass",
+      "coverage_status": "pass",
+      "message": "provider embedding provenance exists",
+      "provider": "ollama",
+      "model": "nomic-embed-text:latest",
+      "embedding_count": 147841,
+      "total_count": 147841,
+      "provider_embedding_count": 147841,
+      "fallback_count": 0,
+      "total_chunks": 147841,
+      "embedded_chunks": 147841,
+      "missing_embedding_chunks": 0
+    },
+    "embedding_live": {
+      "status": "pass",
+      "provider": "ollama",
+      "model": "nomic-embed-text:latest",
+      "embedding_count": 1,
+      "vector_dimension": 768
+    },
+    "semantic_edge_provenance": {
+      "status": "pass",
+      "provider": "ollama",
+      "model": "gemma4:e4b",
+      "edge_count": 10,
+      "extractor_edge_count": 10,
+      "job_ids": [
+        45
+      ],
+      "latest_index_job_id": 10,
+      "latest_graph_rebuild_job_id": 44,
+      "stale_edge_count": 0,
+      "stale_job_ids": [],
+      "ignored_edge_count": 4,
+      "missing_or_invalid_job_edge_count": 0
+    },
+    "doc_node_provenance": {
+      "status": "pass",
+      "provider": "ollama",
+      "model": "gemma4:e4b",
+      "edge_count": 4,
+      "extractor_edge_count": 4,
+      "job_ids": [
+        49
+      ],
+      "latest_index_job_id": 10,
+      "latest_graph_rebuild_job_id": 44,
+      "stale_edge_count": 0,
+      "stale_job_ids": [],
+      "ignored_edge_count": 10,
+      "missing_or_invalid_job_edge_count": 0
+    },
+    "semantic_edge": {
+      "status": "pass",
+      "provider": "ollama",
+      "model": "gemma4:e4b",
+      "edge_count": 1,
+      "persistable_edge_count": 1
+    }
+  },
+  "surfaces_checked": [
+    "CLI",
+    "API",
+    "API_LIVE",
+    "Web",
+    "MCP",
+    "MCP_PROTOCOL"
+  ],
+  "summary": {
+    "total": 1,
+    "passed": 1,
+    "partial": 0,
+    "failed": 0
+  },
+  "gate_status": "pass",
+  "queries": [
+    {
+      "id": "AQ05",
+      "query": "Show evidence connecting amdgpu documentation to the amdgpu driver source tree.",
+      "gap_ids": [
+        "G01",
+        "G02",
+        "G08",
+        "G10"
+      ],
+      "required_surfaces": [
+        "CLI",
+        "API",
+        "Web"
+      ],
+      "required_source_types": [
+        "code",
+        "doc",
+        "pdf"
+      ],
+      "surfaces_checked": [
+        "CLI",
+        "API",
+        "API_LIVE",
+        "Web",
+        "MCP",
+        "MCP_PROTOCOL"
+      ],
+      "surface_results": [
+        {
+          "surface": "CLI",
+          "transport": "core.query_evidence",
+          "status": "pass",
+          "db_path": "data/asip.db",
+          "row_count": 24,
+          "graph_node_count": 3,
+          "graph_edge_count": 0,
+          "message": "ok"
+        },
+        {
+          "surface": "API",
+          "transport": "fastapi.testclient.query",
+          "status": "pass",
+          "db_path": "data/asip.db",
+          "row_count": 24,
+          "graph_node_count": 3,
+          "graph_edge_count": 0,
+          "message": "ok"
+        },
+        {
+          "surface": "API_LIVE",
+          "transport": "fastapi.uvicorn.http.query",
+          "status": "pass",
+          "db_path": "data/asip.db",
+          "row_count": 24,
+          "graph_node_count": 2,
+          "graph_edge_count": 0,
+          "message": "ok",
+          "base_url": "http://127.0.0.1:8124",
+          "url": "http://127.0.0.1:8124/query?q=Show+evidence+connecting+amdgpu+documentation+to+the+amdgpu+driver+source+tree.&db_path=data%2Fasip.db&compact_graph=true",
+          "endpoint": "/query"
+        },
+        {
+          "surface": "Web",
+          "transport": "next-bff.query",
+          "status": "pass",
+          "db_path": "data/asip.db",
+          "row_count": 24,
+          "graph_node_count": 3,
+          "graph_edge_count": 0,
+          "message": "ok"
+        },
+        {
+          "surface": "MCP",
+          "transport": "mcp.tool-direct.search_evidence",
+          "status": "pass",
+          "db_path": "data/asip.db",
+          "row_count": 24,
+          "graph_node_count": 3,
+          "graph_edge_count": 0,
+          "message": "ok",
+          "server_registered": true
+        },
+        {
+          "surface": "MCP_PROTOCOL",
+          "transport": "mcp.stdio.protocol.search_evidence",
+          "status": "pass",
+          "db_path": "data/asip.db",
+          "row_count": 24,
+          "graph_node_count": 3,
+          "graph_edge_count": 0,
+          "message": "ok",
+          "tool_count": 22,
+          "server_registered": true,
+          "command": "/Users/chenjingwen/.cache/codex-runtimes/codex-primary-runtime/dependencies/python/bin/python3",
+          "server_args": [
+            "-m",
+            "apps.mcp.server"
+          ],
+          "tool": "search_evidence"
+        }
+      ],
+      "missing_surfaces": [],
+      "failure_reasons": [],
+      "provider_checks": {},
+      "status": "pass",
+      "row_count": 24,
+      "schema_status": "pass",
+      "schema_failure_reasons": [],
+      "evidence_ids": [
+        860513,
+        860514,
+        860515,
+        860516,
+        860508,
+        860509,
+        860510,
+        860511,
+        860512,
+        860507,
+        860517,
+        359108,
+        359109,
+        359110,
+        359111,
+        359112,
+        359148,
+        359113,
+        359149,
+        359150,
+        359151,
+        359152,
+        359153,
+        359154
+      ],
+      "source_paths": [
+        "amdgpu-driver-source-tree.md",
+        "amdgpu-driver-source-tree.pdf",
+        "drivers/gpu/drm/amd/amdgpu/ObjectID.h",
+        "libgv/core/hw/AI/asic_reg/mi300/NBIO/nbio_7_9_0_sh_mask.h"
+      ],
+      "source_types": [
+        "code",
+        "doc",
+        "pdf",
+        "register"
+      ],
+      "retrieval_sources": [
+        "fts5",
+        "lexical",
+        "provider-vector"
+      ],
+      "graph_node_count": 3,
+      "graph_edge_count": 0,
+      "graph_runtime": "networkx",
+      "empty_state": ""
+    }
+  ]
+}

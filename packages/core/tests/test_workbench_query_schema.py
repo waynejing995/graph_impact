@@ -753,6 +753,104 @@ class WorkbenchQuerySchemaTests(unittest.TestCase):
             self.assertEqual(result["rows"][0]["vector_provider"], "ollama")
             self.assertEqual(result["rows"][0]["vector_model"], "provider-rerank")
 
+    def test_query_evidence_keeps_provider_vector_row_when_lexical_chunks_fill_candidates(self):
+        class QueryEmbeddingTransport:
+            def post_json(self, url, payload, headers, timeout):
+                return {"embeddings": [[1.0, 0.0]]}
+
+        class TightLimits:
+            path = Path("unit-test-workbench-limits.json")
+
+            def int_value(self, section, key, *, minimum=None):
+                values = {
+                    ("retrieval", "result_limit"): 3,
+                    ("retrieval", "candidate_multiplier"): 1,
+                    ("retrieval", "candidate_floor"): 3,
+                    ("retrieval", "max_query_tokens"): 8,
+                    ("retrieval", "vector_limit"): 1,
+                    ("graph", "query_seed_limit"): 3,
+                    ("graph", "default_hops"): 1,
+                }
+                value = values[(section, key)]
+                return max(minimum, value) if minimum is not None else value
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            db_path = Path(tmpdir) / "asip.db"
+            store = AsipStore.connect(str(db_path))
+            store.migrate()
+            store.save_provider_settings(
+                {
+                    "embedding": {
+                        "provider": "ollama",
+                        "model": "provider-rerank",
+                        "api_base_url": "http://localhost:11434",
+                        "api_path": "/api/embed",
+                    }
+                }
+            )
+            for index in range(5):
+                lexical_doc = store.add_document("fixture", "doc", f"docs/lexical-{index}.md")
+                lexical_chunk = store.add_chunk(
+                    lexical_doc,
+                    f"semantic nearest lookup lexical filler {index}",
+                    index + 1,
+                    index + 1,
+                )
+                store.add_evidence(
+                    lexical_chunk,
+                    "fixture",
+                    "doc",
+                    "local",
+                    f"docs/lexical-{index}.md",
+                    f"REG_LEXICAL_{index}",
+                    "register",
+                    "mention",
+                    0.99,
+                    f"semantic nearest lookup lexical filler {index}",
+                    f"lexical filler -> REG_LEXICAL_{index}",
+                    line_start=index + 1,
+                    line_end=index + 1,
+                )
+            provider_doc = store.add_document("fixture", "doc", "docs/provider-vector.md")
+            provider_chunk = store.add_chunk(provider_doc, "hardware relation described without query terms", 20, 20)
+            store.add_evidence(
+                provider_chunk,
+                "fixture",
+                "doc",
+                "local",
+                "docs/provider-vector.md",
+                "REG_PROVIDER_VECTOR_KEPT",
+                "register",
+                "mention",
+                0.5,
+                "hardware relation described without query terms",
+                "provider vector -> REG_PROVIDER_VECTOR_KEPT",
+                line_start=20,
+                line_end=20,
+            )
+            store.add_embedding(
+                provider_chunk,
+                provider="ollama",
+                model="provider-rerank",
+                vector=[1.0, 0.0],
+                metadata={"source": "provider"},
+            )
+
+            with patch("asip.workbench.load_workbench_limits", return_value=TightLimits()):
+                result = query_evidence(
+                    db_path,
+                    "semantic nearest lookup",
+                    embedding_transport=QueryEmbeddingTransport(),
+                )
+
+            self.assertFalse(result["empty"])
+            provider_rows = [
+                row
+                for row in result["rows"]
+                if "provider-vector" in row.get("retrieval_sources", [])
+            ]
+            self.assertEqual([row["symbol"] for row in provider_rows], ["REG_PROVIDER_VECTOR_KEPT"])
+
     def test_query_evidence_reports_provider_query_embedding_fallback_metadata(self):
         class FailingQueryEmbeddingTransport:
             def post_json(self, url, payload, headers, timeout):
