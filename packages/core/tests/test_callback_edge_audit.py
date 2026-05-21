@@ -42,6 +42,7 @@ class CallbackEdgeAuditTests(unittest.TestCase):
             )
 
             self.assertEqual(result["gate_status"], "pass")
+            self.assertEqual(result["ambiguous_fanout_limit_scope"], "unexplained_ambiguous_only")
             self.assertEqual(result["summary"]["callback_edge_count"], 1)
             self.assertEqual(result["summary"]["real_oracle_passed"], 1)
 
@@ -125,6 +126,7 @@ class CallbackEdgeAuditTests(unittest.TestCase):
             result = audit_callback_edges.run_audit(db_path, max_ambiguous_fanout=2)
 
             self.assertEqual(result["gate_status"], "pass")
+            self.assertEqual(result["ambiguous_fanout_limit_scope"], "unexplained_ambiguous_only")
             self.assertEqual(result["summary"]["explained_dynamic_dispatch_edge_count"], 3)
             self.assertEqual(result["summary"]["unexplained_ambiguous_callback_edge_count"], 0)
 

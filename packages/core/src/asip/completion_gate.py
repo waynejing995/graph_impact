@@ -146,7 +146,11 @@ def run_completion_gate(
         _runtime_semantic_freshness_requirement(runtime_semantic_payload),
         _semantic_quality_requirement(semantic_quality_payload, required=minimum_counts is None),
         _callback_audit_requirement(callback_audit_payload, required=minimum_counts is None),
-        _hosted_openai_compatible_requirement(hosted_openai_payload, required=minimum_counts is None),
+        _hosted_openai_compatible_requirement(
+            hosted_openai_payload,
+            required=minimum_counts is None,
+            git_payload=git_payload,
+        ),
         _browser_requirement(browser_payload, in_app_browser_payload, db_path, db_health),
         _no_server_requirement(no_server_payload, artifacts),
         _performance_requirement(performance_payload),
@@ -1161,7 +1165,12 @@ def _callback_audit_requirement(payload: Optional[Mapping[str, Any]], *, require
     )
 
 
-def _hosted_openai_compatible_requirement(payload: Optional[Mapping[str, Any]], *, required: bool) -> Dict[str, Any]:
+def _hosted_openai_compatible_requirement(
+    payload: Optional[Mapping[str, Any]],
+    *,
+    required: bool,
+    git_payload: Optional[Mapping[str, Any]] = None,
+) -> Dict[str, Any]:
     if not isinstance(payload, Mapping):
         if not required:
             return _requirement(
@@ -1195,6 +1204,14 @@ def _hosted_openai_compatible_requirement(payload: Optional[Mapping[str, Any]], 
             failures.append(reason)
     if payload.get("require_credentialed") is not True:
         failures.append(f"require_credentialed={payload.get('require_credentialed')} is not true")
+    if payload.get("gate_status") == "pass":
+        repo_head = str(payload.get("repo_head") or "").strip()
+        git_head = str(git_payload.get("head") or "").strip() if isinstance(git_payload, Mapping) else ""
+        if git_head:
+            if not repo_head:
+                failures.append("repo_head is missing from hosted OpenAI-compatible artifact")
+            elif repo_head != git_head:
+                failures.append(f"repo_head={repo_head} does not match git_gate head={git_head}")
 
     summary = payload.get("summary", {})
     total = _coerce_int(summary.get("total"))
@@ -1542,6 +1559,17 @@ def _browser_concept_detail_probe_failures(probe: Mapping[str, Any]) -> List[str
         )
     if not str(probe.get("selected_implementation") or "").strip():
         failures.append("browser e2e concept detail selected_implementation is missing")
+    if str(probe.get("selection_input") or "") != "canvas-node-click":
+        failures.append(
+            f"browser e2e concept detail selection_input={probe.get('selection_input', 'missing')} "
+            "is not canvas-node-click"
+        )
+    canvas_click_x = _coerce_int(probe.get("canvas_click_x"))
+    canvas_click_y = _coerce_int(probe.get("canvas_click_y"))
+    if canvas_click_x is None or canvas_click_x < 0:
+        failures.append(f"browser e2e concept detail canvas_click_x={probe.get('canvas_click_x')}")
+    if canvas_click_y is None or canvas_click_y < 0:
+        failures.append(f"browser e2e concept detail canvas_click_y={probe.get('canvas_click_y')}")
     if str(probe.get("detail_heading") or "") != "Concept Generated From":
         failures.append(f"browser e2e concept detail heading={probe.get('detail_heading')}")
     if probe.get("detail_truncated") is not False:

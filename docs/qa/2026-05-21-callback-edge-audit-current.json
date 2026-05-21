@@ -1,4 +1,5 @@
 {
+  "ambiguous_fanout_limit_scope": "unexplained_ambiguous_only",
   "call_kind_counts": {
     "vtable_callback": 47,
     "vtable_dispatch": 4538,
@@ -12,7 +13,7 @@
   },
   "failure_reasons": [],
   "gate_status": "pass",
-  "generated_at": "2026-05-21T05:48:11+00:00",
+  "generated_at": "2026-05-21T07:11:04+00:00",
   "parser_pollution_samples": [],
   "real_oracles": [
     {

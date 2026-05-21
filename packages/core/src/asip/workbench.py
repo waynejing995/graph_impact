@@ -4067,6 +4067,12 @@ def _graph_edge_payload(edge: Mapping[str, object], compact: bool = False) -> Di
             "callback_candidate_count",
             "callback_ambiguous",
             "call_kind",
+            "receiver",
+            "slot",
+            "receiver_tables",
+            "callback_table",
+            "callback_table_type",
+            "callback_path",
             "original_relation",
             "evidence",
         ):

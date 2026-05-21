@@ -1,12 +1,15 @@
 # G11 Completion Gate And Documentation Review
 
 Status: 2026-05-21 aggregate completion gate remains blocked by explicit
-residual-boundary acceptance, hosted credentialed OpenAI-compatible readiness,
-and the current uncommitted git state; expanded DB, artifact binding, Stage 1
+residual-boundary acceptance and hosted credentialed OpenAI-compatible
+readiness. The committed `current-goal-completion-gate` artifact is a
+pre-commit snapshot and therefore still records the dirty git gate for the
+in-flight diff; post-push git closure proof is recorded out of tree to avoid a
+self-invalidating committed artifact. Expanded DB, artifact binding, Stage 1
 graph, product graph schema, CLI/API/API_LIVE/Web/MCP/MCP_PROTOCOL probes,
 provider live checks, Stage 2 semantic freshness/live generation, labeled
 semantic quality, callback/vtable audit, browser e2e, Web no-server smoke, and
-performance smoke pass
+performance smoke pass.
 
 ## Requirement
 
@@ -506,6 +509,12 @@ Commit and push happen only after verification.
   residual-boundary acceptance, and the dirty git gate for the changes in
   flight; Web/browser/provider/Stage 2/semantic quality/callback
   audit/no-server gates are green.
+- 2026-05-21 post-push aggregate verification is run out of tree to avoid
+  committing a self-invalidating git artifact. The expected post-push shape is
+  `18/20` requirements passing: git closure clean/pushed, with only
+  `hosted_openai_compatible` (`OPENAI_API_KEY` missing) and
+  `residual_acceptance` (no explicit accepted residuals recorded) still
+  blocking.
 - Historical final-candidate evidence package exists at
   `docs/qa/2026-05-17-final-clean-evidence-package.md`, linking the clean AMD
   DB, AQ01-AQ09 9/9 artifact, six free queries, semantic-edge jobs, visual QA,

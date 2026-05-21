@@ -568,6 +568,12 @@ class WorkbenchQuerySchemaTests(unittest.TestCase):
                     ],
                     "implementations": [{"raw_function_name": f"impl_{index}"} for index in range(20)],
                     "dispatch": "matched_slot",
+                    "receiver": "adev->ip_blocks[i].version->funcs",
+                    "slot": "hw_init",
+                    "receiver_tables": ["gfx_v10_0_ip_funcs"],
+                    "callback_table": "gfx_v10_0_ip_funcs",
+                    "callback_table_type": "amd_ip_funcs",
+                    "callback_path": "drivers/gpu/drm/amd/amdgpu/gfx_v10_0.c",
                     "callback_candidate_count": 1,
                 },
             )
@@ -578,6 +584,12 @@ class WorkbenchQuerySchemaTests(unittest.TestCase):
             self.assertEqual(result["graph"]["metadata_mode"], "compact")
             [edge] = result["graph"]["edges"]
             self.assertEqual(edge["attr"]["callback_candidate_count"], 1)
+            self.assertEqual(edge["attr"]["receiver"], "adev->ip_blocks[i].version->funcs")
+            self.assertEqual(edge["attr"]["slot"], "hw_init")
+            self.assertEqual(edge["attr"]["receiver_tables"], ["gfx_v10_0_ip_funcs"])
+            self.assertEqual(edge["attr"]["callback_table"], "gfx_v10_0_ip_funcs")
+            self.assertEqual(edge["attr"]["callback_table_type"], "amd_ip_funcs")
+            self.assertEqual(edge["attr"]["callback_path"], "drivers/gpu/drm/amd/amdgpu/gfx_v10_0.c")
             self.assertEqual(edge["attr"]["source"][0]["path"], "drivers/gpu/drm/amd/amdgpu/gfx_v10_0.c")
             self.assertNotIn("implementations", edge["attr"])
 

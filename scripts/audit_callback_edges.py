@@ -33,7 +33,11 @@ def main(argv: List[str] | None = None) -> int:
     parser.add_argument("--db", required=True, type=Path)
     parser.add_argument("--output-json", type=Path)
     parser.add_argument("--assert-no-parser-pollution", action="store_true")
-    parser.add_argument("--max-ambiguous-fanout", type=int)
+    parser.add_argument(
+        "--max-ambiguous-fanout",
+        type=int,
+        help="Maximum allowed unexplained ambiguous callback fanout per caller.",
+    )
     parser.add_argument(
         "--require-real-oracle",
         action="append",
@@ -123,6 +127,7 @@ def run_audit(
         "source": "asip.callback_edge_audit",
         "generated_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
         "db_path": str(db_path),
+        "ambiguous_fanout_limit_scope": "unexplained_ambiguous_only",
         "gate_status": "pass" if not failures else "blocked",
         "failure_reasons": failures,
         "summary": {

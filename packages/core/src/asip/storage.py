@@ -25,6 +25,16 @@ from .resolver_profiles import (
 )
 
 
+_CALLBACK_PROVENANCE_GRAPH_KEYS = (
+    "receiver",
+    "slot",
+    "receiver_tables",
+    "callback_table",
+    "callback_table_type",
+    "callback_path",
+)
+
+
 @dataclass
 class AsipStore:
     con: sqlite3.Connection
@@ -2779,6 +2789,7 @@ def _merge_edge_attr_stats(stats: Dict[str, object], node: Mapping[str, object])
         stats.setdefault("dispatch_scopes", set()).add(dispatch_scope)
     for candidate_count in _string_values(attr.get("callback_candidate_count")):
         stats.setdefault("callback_candidate_counts", set()).add(candidate_count)
+    _merge_callback_provenance_stats(stats, attr)
     if _bool_graph_value(attr.get("callback_ambiguous")):
         stats["callback_ambiguous"] = True
 
@@ -2795,8 +2806,15 @@ def _merge_callback_dispatch_stats(
             stats.setdefault("dispatch_scopes", set()).add(dispatch_scope)
         for candidate_count in _string_values(metadata.get("callback_candidate_count")):
             stats.setdefault("callback_candidate_counts", set()).add(candidate_count)
+        _merge_callback_provenance_stats(stats, metadata)
         if _bool_graph_value(metadata.get("callback_ambiguous")):
             stats["callback_ambiguous"] = True
+
+
+def _merge_callback_provenance_stats(stats: Dict[str, object], metadata: Mapping[str, object]) -> None:
+    for key in _CALLBACK_PROVENANCE_GRAPH_KEYS:
+        for value in _string_values(metadata.get(key)):
+            stats.setdefault(f"{key}_values", set()).add(value)
 
 
 def _edge_attr_payload(stats: Mapping[str, object]) -> Dict[str, object]:
@@ -2832,6 +2850,7 @@ def _edge_attr_payload(stats: Mapping[str, object]) -> Dict[str, object]:
         payload["callback_candidate_count"] = max(candidate_counts)
     if stats.get("callback_ambiguous"):
         payload["callback_ambiguous"] = True
+    _apply_callback_provenance_payload(payload, stats)
     return payload
 
 
@@ -2868,6 +2887,22 @@ def _apply_callback_dispatch_edge_attr(
         edge_attr["callback_candidate_count"] = max(candidate_counts)
     if _bool_graph_value(src_metadata.get("callback_ambiguous")) or _bool_graph_value(dst_metadata.get("callback_ambiguous")):
         edge_attr["callback_ambiguous"] = True
+    _apply_callback_provenance_payload(
+        edge_attr,
+        {
+            f"{key}_values": set(
+                _string_values(src_metadata.get(key)) + _string_values(dst_metadata.get(key))
+            )
+            for key in _CALLBACK_PROVENANCE_GRAPH_KEYS
+        },
+    )
+
+
+def _apply_callback_provenance_payload(payload: Dict[str, object], stats: Mapping[str, object]) -> None:
+    for key in _CALLBACK_PROVENANCE_GRAPH_KEYS:
+        values = _dedupe_strings(_string_values(stats.get(f"{key}_values")))
+        if values:
+            payload[key] = values[0] if len(values) == 1 and key != "receiver_tables" else values
 
 
 def _dedupe_graph_payload_edges(edges: Iterable[Mapping[str, object]]) -> List[Dict[str, object]]:
@@ -2938,6 +2973,10 @@ def _merge_graph_edge_payload_attr(
         merged["callback_candidate_count"] = max(candidate_counts)
     if _bool_graph_value(existing.get("callback_ambiguous")) or _bool_graph_value(incoming.get("callback_ambiguous")):
         merged["callback_ambiguous"] = True
+    for key in _CALLBACK_PROVENANCE_GRAPH_KEYS:
+        values = _dedupe_strings([*_string_values(existing.get(key)), *_string_values(incoming.get(key))])
+        if values:
+            merged[key] = values[0] if len(values) == 1 and key != "receiver_tables" else values
     return {key: value for key, value in merged.items() if value not in ("", None, [], {})}
 
 
@@ -3586,6 +3625,7 @@ def _metadata_from_networkx_edge_data(data: Mapping[str, object], endpoint: str)
         "dispatch_scope",
         "callback_ambiguous",
         "callback_candidate_count",
+        *_CALLBACK_PROVENANCE_GRAPH_KEYS,
     ):
         value = provenance.get(key)
         if value not in ("", None, 0):
@@ -3630,6 +3670,7 @@ def _metadata_from_edge_provenance(row: sqlite3.Row, endpoint: str) -> Dict[str,
         "dispatch_scope",
         "callback_ambiguous",
         "callback_candidate_count",
+        *_CALLBACK_PROVENANCE_GRAPH_KEYS,
     ):
         value = provenance.get(key)
         if value not in ("", None, 0):

@@ -222,6 +222,52 @@ class CompletionGateTests(unittest.TestCase):
                 by_id["hosted_openai_compatible"]["failure_reasons"],
             )
 
+    def test_completion_gate_blocks_stale_passing_hosted_openai_head_binding(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            db_path = self._write_gate_db(root / "asip.db")
+            payload = self._hosted_openai_payload("pass", repo_head="old-hosted-head")
+            hosted_openai_json = self._write_json(root / "hosted-openai.json", payload)
+            git_json = self._write_json(root / "git.json", self._git_payload("pass", head="current-git-head"))
+
+            result = run_completion_gate(
+                db_path,
+                hosted_openai_json=hosted_openai_json,
+                git_gate_json=git_json,
+            )
+
+            by_id = {item["id"]: item for item in result["requirements"]}
+            self.assertEqual(by_id["hosted_openai_compatible"]["status"], "blocked")
+            self.assertIn(
+                "repo_head=old-hosted-head does not match git_gate head=current-git-head",
+                by_id["hosted_openai_compatible"]["failure_reasons"],
+            )
+
+    def test_completion_gate_blocks_concept_detail_probe_without_canvas_node_click(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            db_path = self._write_gate_db(root / "asip.db")
+            payload = self._browser_e2e_payload("pass", db_path=db_path)
+            for probe in payload["current_db_probes"]:
+                if probe["surface"] == "graph_page_concept_detail_selection":
+                    probe["selection_input"] = "summary-button"
+                    probe["canvas_click_x"] = None
+                    probe["canvas_click_y"] = None
+            browser_json = self._write_json(root / "browser.json", payload)
+
+            result = run_completion_gate(
+                db_path,
+                browser_json=browser_json,
+                minimum_counts=self._fixture_minimum_counts(),
+            )
+
+            by_id = {item["id"]: item for item in result["requirements"]}
+            self.assertEqual(by_id["browser_e2e"]["status"], "blocked")
+            self.assertIn(
+                "browser e2e concept detail selection_input=summary-button is not canvas-node-click",
+                by_id["browser_e2e"]["failure_reasons"],
+            )
+
     def test_completion_gate_blocks_non_indexed_corpus_status_in_current_db(self):
         with tempfile.TemporaryDirectory() as tmpdir:
             root = Path(tmpdir)
@@ -2519,7 +2565,7 @@ class CompletionGateTests(unittest.TestCase):
             },
         }
 
-    def _hosted_openai_payload(self, gate_status, *, credential_mode="hosted-credentialed"):
+    def _hosted_openai_payload(self, gate_status, *, credential_mode="hosted-credentialed", repo_head="current-git-head"):
         checks = [
             {
                 "id": "openai_compatible_embeddings_live",
@@ -2551,6 +2597,7 @@ class CompletionGateTests(unittest.TestCase):
         return {
             "source": "asip.openai_compatible_live_smoke",
             "gate_status": gate_status,
+            "repo_head": repo_head,
             "credential_mode": credential_mode,
             "require_credentialed": True,
             "summary": {"total": len(checks), "passed": passed, "failed": len(checks) - passed},
@@ -2671,6 +2718,9 @@ class CompletionGateTests(unittest.TestCase):
                     "listed_implementation_count": 2,
                     "raw_implementation_record_count": 3,
                     "selected_implementation": "gfx_v11_0_hw_init",
+                    "selection_input": "canvas-node-click",
+                    "canvas_click_x": 24.5,
+                    "canvas_click_y": 31.5,
                     "detail_heading": "Concept Generated From",
                     "detail_truncated": False,
                 },

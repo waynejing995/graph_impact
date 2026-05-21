@@ -33,8 +33,11 @@ test("corpora API reads configured raw corpus state", async ({ request }) => {
 });
 
 test("corpora API persists user-added corpus state", async ({ request }) => {
+  const root = mkdtempSync(path.join(tmpdir(), "asip-api-corpus-state-"));
+  const dbPath = path.join(root, "corpus-state.db");
   const create = await request.post("/api/workbench/corpora", {
     data: {
+      dbPath,
       id: "local-amd-docs",
       repo: "local",
       sourceRoot: "/docs/amd",
@@ -47,7 +50,7 @@ test("corpora API persists user-added corpus state", async ({ request }) => {
   expect(created).toMatchObject({ id: "local-amd-docs", status: "not_indexed" });
   expect(created.include).toEqual(["**/*.md", "**/*.pdf"]);
 
-  const list = await request.get("/api/workbench/corpora");
+  const list = await request.get(`/api/workbench/corpora?dbPath=${encodeURIComponent(dbPath)}`);
   const body = (await list.json()) as { corpora: Array<{ id: string; source_root: string; status: string }> };
   expect(body.corpora).toEqual(
     expect.arrayContaining([

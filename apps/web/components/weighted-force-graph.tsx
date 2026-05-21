@@ -56,6 +56,7 @@ type ForceLink = LinkObject<
 
 type ForceGraphMethods = {
   d3Force?: (forceName: string) => unknown;
+  graph2ScreenCoords?: (x: number, y: number) => { x: number; y: number };
   zoomToFit?: (durationMs?: number, padding?: number) => void;
 };
 
@@ -106,8 +107,12 @@ export function WeightedForceGraph({
   const containerRef = useRef<HTMLDivElement | null>(null);
   const graphRef = useRef<ForceGraphMethods | null>(null);
   const fitPendingRef = useRef(true);
+  const hitTargetRefreshTimerRef = useRef<number | null>(null);
   const [size, setSize] = useState({ width: 1280, height: 720 });
   const [ready, setReady] = useState(false);
+  const [canvasHitTargets, setCanvasHitTargets] = useState("[]");
+  const [hoveredCanvasNodeId, setHoveredCanvasNodeId] = useState("");
+  const [lastNodeSelectSource, setLastNodeSelectSource] = useState("");
   const [palette, setPalette] = useState<GraphPalette>(fallbackPalette);
 
   useEffect(() => {
@@ -122,6 +127,12 @@ export function WeightedForceGraph({
     });
     observer.observe(element);
     return () => observer.disconnect();
+  }, []);
+
+  useEffect(() => () => {
+    if (hitTargetRefreshTimerRef.current !== null) {
+      window.clearTimeout(hitTargetRefreshTimerRef.current);
+    }
   }, []);
 
   useEffect(() => {
@@ -181,6 +192,9 @@ export function WeightedForceGraph({
   useEffect(() => {
     fitPendingRef.current = true;
     setReady(false);
+    setCanvasHitTargets("[]");
+    setHoveredCanvasNodeId("");
+    setLastNodeSelectSource("");
     configureForceLayout(graphRef.current, layoutProfile);
   }, [graphData.nodes.length, graphData.links.length, layoutProfile]);
 
@@ -208,6 +222,16 @@ export function WeightedForceGraph({
     [graphData.nodes]
   );
 
+  function selectNodeFromCanvas(node: ForceNode) {
+    setLastNodeSelectSource("canvas-node-click");
+    onNodeSelect?.(forceNodeToPayload(node));
+  }
+
+  function selectNodeFromSummary(node: ForceNode) {
+    setLastNodeSelectSource("summary-button");
+    onNodeSelect?.(forceNodeToPayload(node));
+  }
+
   return (
     <div
       aria-describedby={summaryId}
@@ -220,6 +244,9 @@ export function WeightedForceGraph({
       data-max-nodes={maxNodes}
       data-min-edge-weight={minEdgeWeight.toFixed(2)}
       data-ready={ready ? "true" : "false"}
+      data-canvas-hit-targets={canvasHitTargets}
+      data-hovered-canvas-node-id={hoveredCanvasNodeId}
+      data-last-node-select-source={lastNodeSelectSource}
       data-shared-register-count={sharedRegisterCount}
       data-strongest-weight={topLinks[0]?.weight.toFixed(2) ?? "0.00"}
       data-testid="force-graph"
@@ -254,15 +281,25 @@ export function WeightedForceGraph({
         nodeColor={(node) => colorForKind(node.kind, palette)}
         nodeId="id"
         nodeLabel={(node) => `${node.label} (${node.kind}, weight ${node.weight})`}
-        onNodeClick={(node) => onNodeSelect?.(forceNodeToPayload(node))}
+        onNodeHover={(node) => setHoveredCanvasNodeId(node?.id ? String(node.id) : "")}
+        onNodeClick={(node) => selectNodeFromCanvas(node)}
         nodeRelSize={4}
         nodeVal={(node) => Math.max(2, node.weight)}
         onEngineStop={() => {
+          if (hitTargetRefreshTimerRef.current !== null) {
+            window.clearTimeout(hitTargetRefreshTimerRef.current);
+          }
+          const publishHitTargets = () => {
+            setCanvasHitTargets(buildCanvasHitTargets(graphRef.current, summaryNodes));
+            setReady(true);
+          };
           if (fitPendingRef.current) {
             graphRef.current?.zoomToFit?.(450, 72);
             fitPendingRef.current = false;
+            hitTargetRefreshTimerRef.current = window.setTimeout(publishHitTargets, 500);
+            return;
           }
-          setReady(true);
+          publishHitTargets();
         }}
         ref={(instance) => {
           graphRef.current = instance;
@@ -284,7 +321,7 @@ export function WeightedForceGraph({
               aria-pressed={node.id === selectedNodeId}
               className="graph-summary-node"
               key={`node-${node.id}`}
-              onClick={() => onNodeSelect(forceNodeToPayload(node))}
+              onClick={() => selectNodeFromSummary(node)}
               type="button"
             >
               {node.label}
@@ -298,6 +335,31 @@ export function WeightedForceGraph({
         ))}
       </div>
     </div>
+  );
+}
+
+function buildCanvasHitTargets(instance: ForceGraphMethods | null, nodes: ForceNode[]) {
+  if (!instance?.graph2ScreenCoords) {
+    return "[]";
+  }
+  return JSON.stringify(
+    nodes.flatMap((node) => {
+      const x = Number(node.x);
+      const y = Number(node.y);
+      if (!Number.isFinite(x) || !Number.isFinite(y)) {
+        return [];
+      }
+      const point = instance.graph2ScreenCoords?.(x, y);
+      if (!point || !Number.isFinite(point.x) || !Number.isFinite(point.y)) {
+        return [];
+      }
+      return [{
+        id: node.id,
+        label: node.label,
+        x: Math.round(point.x),
+        y: Math.round(point.y)
+      }];
+    })
   );
 }
 

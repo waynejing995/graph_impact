@@ -1547,7 +1547,9 @@ test("acceptance API failure shows explicit empty state without static QA seed r
 });
 
 test("corpus page adds user corpus rows", async ({ page }) => {
-  await page.goto("/corpus");
+  const root = mkdtempSync(path.join(tmpdir(), "asip-ui-corpus-state-"));
+  const dbPath = path.join(root, "corpus-state.db");
+  await page.goto(`/corpus?dbPath=${encodeURIComponent(dbPath)}`);
 
   await page.getByRole("textbox", { name: "Corpus id" }).fill("amd-docs");
   await page.getByRole("textbox", { name: "Repository URL" }).fill("https://example.test/amd-docs");
@@ -2131,7 +2133,27 @@ test("graph page loads current data/asip.db through browser and API", async ({ p
   await expect.poll(async () => Number(await forceGraph.getAttribute("data-node-total"))).toBe(graphPayload.nodes.length);
   await expect.poll(async () => Number(await forceGraph.getAttribute("data-edge-total"))).toBe(graphPayload.edges.length);
   const currentDbConceptLabel = String(currentDbConcept?.label ?? currentDbConcept?.id ?? "");
-  await forceGraph.getByRole("button", { name: currentDbConceptLabel, exact: true }).click();
+  const readConceptHitTarget = async (): Promise<{ id?: string; label?: string; x?: number; y?: number } | null> => {
+    const rawTargets = await forceGraph.getAttribute("data-canvas-hit-targets");
+    const targets = rawTargets ? JSON.parse(rawTargets) : [];
+    return targets.find(
+      (target: { id?: string; label?: string; x?: number; y?: number }) =>
+        target.id === currentDbConcept?.id || target.label === currentDbConceptLabel
+    ) ?? null;
+  };
+  await expect
+    .poll(async () => Boolean(await readConceptHitTarget()), { timeout: 30_000 })
+    .toBe(true);
+  const conceptHitTarget = await readConceptHitTarget();
+  if (!conceptHitTarget || conceptHitTarget.x === undefined || conceptHitTarget.y === undefined) {
+    throw new Error(`No canvas hit target for ${currentDbConceptLabel}`);
+  }
+  const conceptPoint = { x: conceptHitTarget.x, y: conceptHitTarget.y };
+  const graphCanvas = forceGraph.locator("canvas");
+  await graphCanvas.hover({ position: { x: conceptPoint.x, y: conceptPoint.y } });
+  await expect(forceGraph).toHaveAttribute("data-hovered-canvas-node-id", String(currentDbConcept?.id));
+  await graphCanvas.click({ position: { x: conceptPoint.x, y: conceptPoint.y } });
+  await expect(forceGraph).toHaveAttribute("data-last-node-select-source", "canvas-node-click");
   await expect(page.getByRole("heading", { name: `Graph Node: ${currentDbConceptLabel}` })).toBeVisible();
   await expect(page.getByRole("heading", { name: "Node Detail" })).toBeVisible();
   await expect(page.getByRole("heading", { name: "Concept Generated From" })).toBeVisible();
@@ -2155,6 +2177,9 @@ test("graph page loads current data/asip.db through browser and API", async ({ p
     listed_implementation_count: currentDbConcept?.attr?.concept_implementations?.length,
     raw_implementation_record_count: currentDbConcept?.attr?.raw_implementation_count,
     selected_implementation: currentDbConceptImplementation?.function_name,
+    selection_input: "canvas-node-click",
+    canvas_click_x: conceptPoint.x,
+    canvas_click_y: conceptPoint.y,
     detail_heading: "Concept Generated From",
     detail_truncated: false
   };

@@ -481,6 +481,17 @@ function collectConceptDetailProbeFailureReasons(probe) {
   if (!String(probe.selected_implementation ?? "").trim()) {
     reasons.push("browser e2e concept detail selected_implementation is missing");
   }
+  if (String(probe.selection_input ?? "") !== "canvas-node-click") {
+    reasons.push(
+      `browser e2e concept detail selection_input=${probe.selection_input ?? "missing"} is not canvas-node-click`
+    );
+  }
+  if (!Number.isFinite(Number(probe.canvas_click_x)) || Number(probe.canvas_click_x) < 0) {
+    reasons.push(`browser e2e concept detail canvas_click_x=${probe.canvas_click_x ?? "missing"}`);
+  }
+  if (!Number.isFinite(Number(probe.canvas_click_y)) || Number(probe.canvas_click_y) < 0) {
+    reasons.push(`browser e2e concept detail canvas_click_y=${probe.canvas_click_y ?? "missing"}`);
+  }
   if (String(probe.detail_heading ?? "") !== "Concept Generated From") {
     reasons.push(`browser e2e concept detail heading=${probe.detail_heading ?? "missing"}`);
   }

@@ -1,14 +1,14 @@
 {
   "source": "asip.web.browser_e2e",
-  "generated_at": "2026-05-21T03:04:08.927Z",
-  "base_url": "http://127.0.0.1:3112",
+  "generated_at": "2026-05-21T07:29:19.329Z",
+  "base_url": "http://127.0.0.1:3118",
   "db_path": "/Volumes/data/User/wayne/Code/graph_impact/data/asip.db",
   "latest_index_job_id": "10",
   "latest_graph_rebuild_job_id": "44",
   "target_urls": [
-    "http://127.0.0.1:3112/graph?dbPath=/Volumes/data/User/wayne/Code/graph_impact/data/asip.db"
+    "http://127.0.0.1:3118/graph?dbPath=/Volumes/data/User/wayne/Code/graph_impact/data/asip.db"
   ],
-  "skip_web_server": true,
+  "skip_web_server": false,
   "command": [
     "pnpm",
     "exec",
@@ -17,8 +17,8 @@
     "--reporter=json"
   ],
   "report_json": "/Volumes/data/User/wayne/Code/graph_impact/docs/qa/2026-05-21-browser-e2e-current.playwright-report.json",
-  "report_sha256": "ded5238201d567e9aa0447bb278e91283e14e46f6065943e0d0e0d6e961da088",
-  "report_bytes": 124650,
+  "report_sha256": "05f345317d6791d8e3cc8c4ca13642d3e32b88234f070e6e7b1244e0b110b171",
+  "report_bytes": 125038,
   "exit_code": 0,
   "gate_status": "pass",
   "e2e_status": "pass",
@@ -28,7 +28,7 @@
     "failed": 0,
     "flaky": 0,
     "skipped": 0,
-    "duration_ms": 189162.691
+    "duration_ms": 211699.423
   },
   "required_tests": [
     {
@@ -60,34 +60,34 @@
   "current_db_probes": [
     {
       "surface": "graph_page_api_request",
-      "url": "http://127.0.0.1:3112/api/workbench/graph?limit=3000&dbPath=%2FVolumes%2Fdata%2FUser%2Fwayne%2FCode%2Fgraph_impact%2Fdata%2Fasip.db&functionView=concept",
+      "url": "http://127.0.0.1:3118/api/workbench/graph?limit=3000&dbPath=%2FVolumes%2Fdata%2FUser%2Fwayne%2FCode%2Fgraph_impact%2Fdata%2Fasip.db&functionView=concept",
       "db_path": "/Volumes/data/User/wayne/Code/graph_impact/data/asip.db",
       "status": 200,
       "node_count": 2557,
       "edge_count": 3000,
-      "response_sha256": "9c74470a3ed7db3747fbbb8c8d73338248af64479aabf54e6b084228dcd210c7",
+      "response_sha256": "1de6f5aba02d9113652972b765a5f2fd47ddb7e3f24cea1f7fb8e4a72b01ad7d",
       "latest_index_job_id": "10",
       "latest_graph_rebuild_job_id": "44"
     },
     {
       "surface": "direct_api_document_request",
-      "url": "http://127.0.0.1:3112/api/workbench/graph?dbPath=%2FVolumes%2Fdata%2FUser%2Fwayne%2FCode%2Fgraph_impact%2Fdata%2Fasip.db",
+      "url": "http://127.0.0.1:3118/api/workbench/graph?dbPath=%2FVolumes%2Fdata%2FUser%2Fwayne%2FCode%2Fgraph_impact%2Fdata%2Fasip.db",
       "db_path": "/Volumes/data/User/wayne/Code/graph_impact/data/asip.db",
       "status": 200,
       "node_count": 2557,
       "edge_count": 3000,
-      "response_sha256": "9c74470a3ed7db3747fbbb8c8d73338248af64479aabf54e6b084228dcd210c7",
+      "response_sha256": "b5cfe59663ab162bf121405e699fded9059a78521cf687cdefcf1cddde52cd9f",
       "latest_index_job_id": "10",
       "latest_graph_rebuild_job_id": "44"
     },
     {
       "surface": "graph_page_concept_detail_selection",
-      "url": "http://127.0.0.1:3112/graph?dbPath=%2FVolumes%2Fdata%2FUser%2Fwayne%2FCode%2Fgraph_impact%2Fdata%2Fasip.db",
+      "url": "http://127.0.0.1:3118/graph?dbPath=%2FVolumes%2Fdata%2FUser%2Fwayne%2FCode%2Fgraph_impact%2Fdata%2Fasip.db",
       "db_path": "/Volumes/data/User/wayne/Code/graph_impact/data/asip.db",
       "status": 200,
       "node_count": 2557,
       "edge_count": 3000,
-      "response_sha256": "9c74470a3ed7db3747fbbb8c8d73338248af64479aabf54e6b084228dcd210c7",
+      "response_sha256": "1de6f5aba02d9113652972b765a5f2fd47ddb7e3f24cea1f7fb8e4a72b01ad7d",
       "latest_index_job_id": "10",
       "latest_graph_rebuild_job_id": "44",
       "selected_node_id": "function:linux-amdgpu:concept:linux-amdgpu:amd-ip-versioned-functions:gfx_hw_init",
@@ -97,6 +97,9 @@
       "listed_implementation_count": 9,
       "raw_implementation_record_count": 92,
       "selected_implementation": "gfx_v10_0_hw_init",
+      "selection_input": "canvas-node-click",
+      "canvas_click_x": 704,
+      "canvas_click_y": 491,
       "detail_heading": "Concept Generated From",
       "detail_truncated": false
     }

@@ -176,6 +176,9 @@ if (browserArtifactIsE2e) {
       Number(conceptDetailProbe?.implementation_count ?? 0)
   );
   assert.ok(String(conceptDetailProbe?.selected_implementation ?? "").trim());
+  assert.equal(conceptDetailProbe?.selection_input, "canvas-node-click");
+  assert.ok(Number(conceptDetailProbe?.canvas_click_x ?? -1) >= 0);
+  assert.ok(Number(conceptDetailProbe?.canvas_click_y ?? -1) >= 0);
   assert.equal(conceptDetailProbe?.detail_heading, "Concept Generated From");
   assert.equal(conceptDetailProbe?.detail_truncated, false);
   assert.ok((browserGate.command ?? []).join(" ").includes("pnpm exec playwright test"));
@@ -265,7 +268,7 @@ assertProviderChecks(
 
 const completionGate = readJson(args.completionJson);
 assert.equal(completionGate.source, "asip.completion_gate");
-assert.equal(completionGate.summary?.total, 19);
+assert.equal(completionGate.summary?.total, 20);
 assert.equal(completionGate.summary?.missing ?? 0, 0);
 assert.equal(completionGate.artifacts?.runtime_semantic_freshness?.status, "loaded");
 assert.equal(completionGate.artifacts?.runtime_semantic_freshness?.source, "asip.runtime_semantic_freshness_qa");
@@ -273,6 +276,8 @@ assert.equal(completionGate.artifacts?.semantic_quality?.status, "loaded");
 assert.equal(completionGate.artifacts?.semantic_quality?.source, "asip.semantic_quality_eval");
 assert.equal(completionGate.artifacts?.callback_audit?.status, "loaded");
 assert.equal(completionGate.artifacts?.callback_audit?.source, "asip.callback_edge_audit");
+assert.equal(completionGate.artifacts?.hosted_openai_compatible?.status, "loaded");
+assert.equal(completionGate.artifacts?.hosted_openai_compatible?.source, "asip.openai_compatible_live_smoke");
 assert.equal(completionGate.artifacts?.in_app_browser?.status, "loaded");
 assert.equal(completionGate.artifacts?.in_app_browser?.source, "asip.web.in_app_browser_probe");
 assert.equal(completionGate.artifacts?.residual_acceptance?.status, "loaded");
@@ -297,6 +302,7 @@ for (const requirementId of [
   "runtime_semantic_freshness",
   "semantic_quality",
   "callback_edge_audit",
+  "hosted_openai_compatible",
   "browser_e2e",
   "web_no_server_smoke",
   "performance_smoke",
@@ -328,6 +334,7 @@ if (completionGate.gate_status === "pass") {
   assert.equal(completionRequirements.get("runtime_semantic_freshness")?.status, "pass");
   assert.equal(completionRequirements.get("semantic_quality")?.status, "pass");
   assert.equal(completionRequirements.get("callback_edge_audit")?.status, "pass");
+  assert.equal(completionRequirements.get("hosted_openai_compatible")?.status, "blocked");
   const webNoServerRequirement = completionRequirements.get("web_no_server_smoke");
   if (webNoServerRequirement?.status === "pass") {
     assert.equal(webNoServerRequirement.status, "pass");
