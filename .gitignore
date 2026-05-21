@@ -5,6 +5,7 @@ coverage/
 playwright-report/
 test-results/
 .playwright-mcp/
+*.tsbuildinfo
 data/
 .env
 .env.*
