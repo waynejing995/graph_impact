@@ -616,6 +616,33 @@ def _api_live_surface_requirement(payload: Optional[Mapping[str, Any]], db_path:
             failures.append(
                 f"{query.get('id', 'unknown')}: API_LIVE db_path={result_db_path} does not match current db_path={db_path}"
             )
+        base_url = str(live_result.get("base_url") or "").strip()
+        url = str(live_result.get("url") or "").strip()
+        if not base_url:
+            failures.append(f"{query.get('id', 'unknown')}: API_LIVE base_url is missing")
+        if not url:
+            failures.append(f"{query.get('id', 'unknown')}: API_LIVE url is missing")
+        else:
+            parsed_url = urlparse(url)
+            if parsed_url.path != "/query":
+                failures.append(f"{query.get('id', 'unknown')}: API_LIVE url path={parsed_url.path or 'missing'}")
+            params = parse_qs(parsed_url.query)
+            url_db_path = (params.get("db_path") or [""])[0]
+            if not url_db_path:
+                failures.append(f"{query.get('id', 'unknown')}: API_LIVE url db_path is missing")
+            elif not _same_path(db_path, Path(str(url_db_path))):
+                failures.append(
+                    f"{query.get('id', 'unknown')}: API_LIVE url db_path={url_db_path} "
+                    f"does not match current db_path={db_path}"
+                )
+            if (params.get("compact_graph") or [""])[0] != "true":
+                failures.append(f"{query.get('id', 'unknown')}: API_LIVE url compact_graph is not true")
+            if base_url:
+                parsed_base = urlparse(base_url)
+                if parsed_base.scheme and parsed_url.scheme != parsed_base.scheme:
+                    failures.append(f"{query.get('id', 'unknown')}: API_LIVE url scheme does not match base_url")
+                if parsed_base.netloc and parsed_url.netloc != parsed_base.netloc:
+                    failures.append(f"{query.get('id', 'unknown')}: API_LIVE url host does not match base_url")
         row_count = _coerce_int(live_result.get("row_count"))
         graph_node_count = _coerce_int(live_result.get("graph_node_count"))
         if row_count is None or row_count <= 0:
@@ -679,6 +706,15 @@ def _mcp_protocol_surface_requirement(payload: Optional[Mapping[str, Any]], db_p
                 f"{query.get('id', 'unknown')}: MCP_PROTOCOL graph_node_count="
                 f"{protocol_result.get('graph_node_count', 'missing')}"
             )
+        command = str(protocol_result.get("command") or "").strip()
+        if not command:
+            failures.append(f"{query.get('id', 'unknown')}: MCP_PROTOCOL command is missing")
+        server_args = protocol_result.get("server_args")
+        if not isinstance(server_args, list) or server_args != ["-m", "apps.mcp.server"]:
+            failures.append(f"{query.get('id', 'unknown')}: MCP_PROTOCOL server_args={server_args or 'missing'}")
+        tool = str(protocol_result.get("tool") or "").strip()
+        if tool != "search_evidence":
+            failures.append(f"{query.get('id', 'unknown')}: MCP_PROTOCOL tool={tool or 'missing'}")
         if protocol_result.get("server_registered") is not True:
             failures.append(f"{query.get('id', 'unknown')}: MCP_PROTOCOL search_evidence was not registered")
     status = "pass" if query_count and not failures else "blocked"

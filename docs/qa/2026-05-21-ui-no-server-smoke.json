@@ -1,6 +1,6 @@
 {
   "source": "asip.web.no_server_smoke",
-  "generated_at": "2026-05-21T01:22:29.803Z",
+  "generated_at": "2026-05-21T02:02:01.227Z",
   "gate_status": "pass",
   "current_artifact_args": [
     "--browser-json",
@@ -46,7 +46,7 @@
       "status": "loaded",
       "bytes": 2660,
       "hash_policy": "sha256",
-      "sha256": "cb343307c2ff51111f1484df4d02f9e9c4825b8f12eb59c4105be3017b955043"
+      "sha256": "3d8784af66b33b57581b3076a91f688ca4c6cb7c257077b3c878bc516ffe2c56"
     },
     {
       "option": "--runtime-semantic-json",
@@ -62,18 +62,18 @@
       "path": "docs/qa/2026-05-21-acceptance-data-asip-live-web-current.json",
       "resolved_path": "/Volumes/data/User/wayne/Code/graph_impact/docs/qa/2026-05-21-acceptance-data-asip-live-web-current.json",
       "status": "loaded",
-      "bytes": 39599,
+      "bytes": 44771,
       "hash_policy": "sha256",
-      "sha256": "1fa0bb6a13be708bb7f41e858cd859c17e3c9817ffa203ca03404621f09c7589"
+      "sha256": "d7c0b8e6b36b4405789098291dcc792825f409bce0eaf9cad2189abd99992667"
     },
     {
       "option": "--web-acceptance-json",
       "path": "docs/qa/2026-05-21-acceptance-data-asip-live-web-current.json",
       "resolved_path": "/Volumes/data/User/wayne/Code/graph_impact/docs/qa/2026-05-21-acceptance-data-asip-live-web-current.json",
       "status": "loaded",
-      "bytes": 39599,
+      "bytes": 44771,
       "hash_policy": "sha256",
-      "sha256": "1fa0bb6a13be708bb7f41e858cd859c17e3c9817ffa203ca03404621f09c7589"
+      "sha256": "d7c0b8e6b36b4405789098291dcc792825f409bce0eaf9cad2189abd99992667"
     },
     {
       "option": "--completion-json",

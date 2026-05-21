@@ -269,6 +269,18 @@ class CompletionGateTests(unittest.TestCase):
                     {"status": "not_configured", "message": "ASIP_API_BASE_URL missing"},
                     "API_LIVE status=not_configured",
                 ),
+                "missing_base_url": (
+                    {"base_url": ""},
+                    "API_LIVE base_url is missing",
+                ),
+                "missing_url": (
+                    {"url": ""},
+                    "API_LIVE url is missing",
+                ),
+                "wrong_url_db_path": (
+                    {"url": f"http://127.0.0.1:8124/query?db_path={root / 'wrong.db'}&compact_graph=true"},
+                    "API_LIVE url db_path",
+                ),
             }
 
             for name, (updates, expected_reason) in variants.items():
@@ -336,6 +348,18 @@ class CompletionGateTests(unittest.TestCase):
                 "unregistered_tool": (
                     {"server_registered": False},
                     "MCP_PROTOCOL search_evidence was not registered",
+                ),
+                "missing_command": (
+                    {"command": ""},
+                    "MCP_PROTOCOL command is missing",
+                ),
+                "wrong_tool": (
+                    {"tool": "query_evidence"},
+                    "MCP_PROTOCOL tool=query_evidence",
+                ),
+                "wrong_server_args": (
+                    {"server_args": ["apps.mcp.server"]},
+                    "MCP_PROTOCOL server_args",
                 ),
             }
 
@@ -2012,6 +2036,16 @@ class CompletionGateTests(unittest.TestCase):
                         "graph_node_count": 1 if status == "pass" else 0,
                         "graph_edge_count": 1 if status == "pass" else 0,
                         "server_registered": True if surface == "MCP_PROTOCOL" else None,
+                        "base_url": "http://127.0.0.1:8124" if surface == "API_LIVE" else None,
+                        "url": (
+                            f"http://127.0.0.1:8124/query?db_path={db_path}&compact_graph=true"
+                            if surface == "API_LIVE"
+                            else None
+                        ),
+                        "endpoint": "/query" if surface == "API_LIVE" else None,
+                        "command": "/usr/bin/python3" if surface == "MCP_PROTOCOL" else None,
+                        "server_args": ["-m", "apps.mcp.server"] if surface == "MCP_PROTOCOL" else None,
+                        "tool": "search_evidence" if surface == "MCP_PROTOCOL" else None,
                     }
                 )
             query_status = "pass" if all(result["status"] == "pass" for result in surface_results) else "fail"

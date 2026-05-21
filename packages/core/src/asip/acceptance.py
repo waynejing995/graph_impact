@@ -280,13 +280,20 @@ def _run_surface_probe(surface: str, db_path: Path, query_text: str) -> Dict[str
                     "transport": "fastapi.uvicorn.http.query",
                     "status": "not_configured",
                     "db_path": str(db_path),
+                    "base_url": "",
+                    "url": "",
+                    "endpoint": "/query",
                     "row_count": 0,
                     "graph_node_count": 0,
                     "graph_edge_count": 0,
                     "message": "ASIP_API_BASE_URL is not configured; start a live uvicorn API server for API_LIVE proof",
                 }
             payload = _query_live_api(base_url, db_path, query_text)
-            return _surface_probe_result(normalized, "fastapi.uvicorn.http.query", db_path, payload)
+            result = _surface_probe_result(normalized, "fastapi.uvicorn.http.query", db_path, payload)
+            result["base_url"] = base_url.rstrip("/")
+            result["url"] = _live_api_query_url(base_url, db_path, query_text)
+            result["endpoint"] = "/query"
+            return result
         if normalized_key == "mcp":
             from apps.mcp import server as mcp_server
             from apps.mcp import tools as mcp_tools
@@ -303,6 +310,9 @@ def _run_surface_probe(surface: str, db_path: Path, query_text: str) -> Dict[str
                     "transport": "mcp.stdio.protocol.search_evidence",
                     "status": "not_configured",
                     "db_path": str(db_path),
+                    "command": "",
+                    "server_args": ["-m", "apps.mcp.server"],
+                    "tool": "search_evidence",
                     "row_count": 0,
                     "graph_node_count": 0,
                     "graph_edge_count": 0,
@@ -316,6 +326,9 @@ def _run_surface_probe(surface: str, db_path: Path, query_text: str) -> Dict[str
             result = _surface_probe_result(normalized, "mcp.stdio.protocol.search_evidence", db_path, payload)
             result["tool_count"] = protocol_result.get("tool_count", 0)
             result["server_registered"] = bool(protocol_result.get("tool_registered"))
+            result["command"] = protocol_python
+            result["server_args"] = ["-m", "apps.mcp.server"]
+            result["tool"] = "search_evidence"
             return result
         if normalized_key == "web":
             base_url = os.environ.get("ASIP_WEB_BASE_URL", "").strip()
@@ -363,10 +376,17 @@ def _query_web_bff(base_url: str, db_path: Path, query_text: str) -> Dict[str, A
 
 
 def _query_live_api(base_url: str, db_path: Path, query_text: str) -> Dict[str, Any]:
-    url = f"{base_url.rstrip('/')}/query?{urllib.parse.urlencode({'q': query_text, 'db_path': str(db_path), 'compact_graph': 'true'})}"
+    url = _live_api_query_url(base_url, db_path, query_text)
     request = urllib.request.Request(url, method="GET")
     with urllib.request.urlopen(request, timeout=_live_query_timeout_seconds()) as response:
         return json.loads(response.read().decode("utf-8"))
+
+
+def _live_api_query_url(base_url: str, db_path: Path, query_text: str) -> str:
+    return (
+        f"{base_url.rstrip('/')}/query?"
+        f"{urllib.parse.urlencode({'q': query_text, 'db_path': str(db_path), 'compact_graph': 'true'})}"
+    )
 
 
 def _live_query_timeout_seconds() -> int:

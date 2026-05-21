@@ -490,6 +490,9 @@ class AcceptanceRunnerTests(unittest.TestCase):
             self.assertEqual(result["transport"], "fastapi.uvicorn.http.query")
             self.assertEqual(result["db_path"], str(db_path))
             self.assertEqual(result["row_count"], 1)
+            self.assertEqual(result["base_url"], "http://127.0.0.1:8123")
+            self.assertEqual(result["endpoint"], "/query")
+            self.assertTrue(result["url"].startswith("http://127.0.0.1:8123/query?"))
             parsed = acceptance.urllib.parse.urlparse(seen_urls[0])
             params = acceptance.urllib.parse.parse_qs(parsed.query)
             self.assertEqual(parsed.path, "/query")
@@ -520,6 +523,9 @@ class AcceptanceRunnerTests(unittest.TestCase):
             self.assertEqual(result["db_path"], str(db_path))
             self.assertEqual(result["row_count"], 1)
             self.assertEqual(result["tool_count"], 22)
+            self.assertEqual(result["command"], "/fake/python")
+            self.assertEqual(result["server_args"], ["-m", "apps.mcp.server"])
+            self.assertEqual(result["tool"], "search_evidence")
             self.assertTrue(result["server_registered"])
 
     def test_runner_uses_workbench_configured_query_limit(self):

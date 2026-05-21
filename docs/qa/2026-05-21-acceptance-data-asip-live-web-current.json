@@ -1,6 +1,6 @@
 {
   "source": "asip.acceptance",
-  "generated_at": "2026-05-21T01:17:26+00:00",
+  "generated_at": "2026-05-21T02:01:35+00:00",
   "db_path": "/Volumes/data/User/wayne/Code/graph_impact/data/asip.db",
   "database_health": {
     "status": "pass",
@@ -161,7 +161,10 @@
           "row_count": 24,
           "graph_node_count": 31,
           "graph_edge_count": 91,
-          "message": "ok"
+          "message": "ok",
+          "base_url": "http://127.0.0.1:8124",
+          "url": "http://127.0.0.1:8124/query?q=Who+reads+or+writes+regGCVM_L2_CNTL%3F&db_path=%2FVolumes%2Fdata%2FUser%2Fwayne%2FCode%2Fgraph_impact%2Fdata%2Fasip.db&compact_graph=true",
+          "endpoint": "/query"
         },
         {
           "surface": "Web",
@@ -194,7 +197,13 @@
           "graph_edge_count": 214,
           "message": "ok",
           "tool_count": 22,
-          "server_registered": true
+          "server_registered": true,
+          "command": "/Users/chenjingwen/.cache/codex-runtimes/codex-primary-runtime/dependencies/python/bin/python3",
+          "server_args": [
+            "-m",
+            "apps.mcp.server"
+          ],
+          "tool": "search_evidence"
         }
       ],
       "missing_surfaces": [],
@@ -307,7 +316,10 @@
           "row_count": 24,
           "graph_node_count": 32,
           "graph_edge_count": 91,
-          "message": "ok"
+          "message": "ok",
+          "base_url": "http://127.0.0.1:8124",
+          "url": "http://127.0.0.1:8124/query?q=Which+fields+of+GCVM_L2_CNTL+are+set+in+MxGPU+gfx_v11_0.c%3F&db_path=%2FVolumes%2Fdata%2FUser%2Fwayne%2FCode%2Fgraph_impact%2Fdata%2Fasip.db&compact_graph=true",
+          "endpoint": "/query"
         },
         {
           "surface": "Web",
@@ -340,7 +352,13 @@
           "graph_edge_count": 214,
           "message": "ok",
           "tool_count": 22,
-          "server_registered": true
+          "server_registered": true,
+          "command": "/Users/chenjingwen/.cache/codex-runtimes/codex-primary-runtime/dependencies/python/bin/python3",
+          "server_args": [
+            "-m",
+            "apps.mcp.server"
+          ],
+          "tool": "search_evidence"
         }
       ],
       "missing_surfaces": [],
@@ -448,7 +466,10 @@
           "row_count": 24,
           "graph_node_count": 92,
           "graph_edge_count": 314,
-          "message": "ok"
+          "message": "ok",
+          "base_url": "http://127.0.0.1:8124",
+          "url": "http://127.0.0.1:8124/query?q=Where+is+IH_RB_CNTL+configured%2C+and+which+fields+are+modified%3F&db_path=%2FVolumes%2Fdata%2FUser%2Fwayne%2FCode%2Fgraph_impact%2Fdata%2Fasip.db&compact_graph=true",
+          "endpoint": "/query"
         },
         {
           "surface": "Web",
@@ -481,7 +502,13 @@
           "graph_edge_count": 352,
           "message": "ok",
           "tool_count": 22,
-          "server_registered": true
+          "server_registered": true,
+          "command": "/Users/chenjingwen/.cache/codex-runtimes/codex-primary-runtime/dependencies/python/bin/python3",
+          "server_args": [
+            "-m",
+            "apps.mcp.server"
+          ],
+          "tool": "search_evidence"
         }
       ],
       "missing_surfaces": [],
@@ -593,7 +620,10 @@
           "row_count": 24,
           "graph_node_count": 73,
           "graph_edge_count": 83,
-          "message": "ok"
+          "message": "ok",
+          "base_url": "http://127.0.0.1:8124",
+          "url": "http://127.0.0.1:8124/query?q=Which+code+paths+reference+SDMA0_QUEUE0_RB_CNTL+or+SDMA1_QUEUE0_RB_CNTL%3F&db_path=%2FVolumes%2Fdata%2FUser%2Fwayne%2FCode%2Fgraph_impact%2Fdata%2Fasip.db&compact_graph=true",
+          "endpoint": "/query"
         },
         {
           "surface": "Web",
@@ -626,7 +656,13 @@
           "graph_edge_count": 109,
           "message": "ok",
           "tool_count": 22,
-          "server_registered": true
+          "server_registered": true,
+          "command": "/Users/chenjingwen/.cache/codex-runtimes/codex-primary-runtime/dependencies/python/bin/python3",
+          "server_args": [
+            "-m",
+            "apps.mcp.server"
+          ],
+          "tool": "search_evidence"
         }
       ],
       "missing_surfaces": [],
@@ -745,7 +781,10 @@
           "row_count": 24,
           "graph_node_count": 2,
           "graph_edge_count": 0,
-          "message": "ok"
+          "message": "ok",
+          "base_url": "http://127.0.0.1:8124",
+          "url": "http://127.0.0.1:8124/query?q=Show+evidence+connecting+amdgpu+documentation+to+the+amdgpu+driver+source+tree.&db_path=%2FVolumes%2Fdata%2FUser%2Fwayne%2FCode%2Fgraph_impact%2Fdata%2Fasip.db&compact_graph=true",
+          "endpoint": "/query"
         },
         {
           "surface": "Web",
@@ -778,7 +817,13 @@
           "graph_edge_count": 0,
           "message": "ok",
           "tool_count": 22,
-          "server_registered": true
+          "server_registered": true,
+          "command": "/Users/chenjingwen/.cache/codex-runtimes/codex-primary-runtime/dependencies/python/bin/python3",
+          "server_args": [
+            "-m",
+            "apps.mcp.server"
+          ],
+          "tool": "search_evidence"
         }
       ],
       "missing_surfaces": [],
@@ -892,7 +937,10 @@
           "row_count": 24,
           "graph_node_count": 32,
           "graph_edge_count": 91,
-          "message": "ok"
+          "message": "ok",
+          "base_url": "http://127.0.0.1:8124",
+          "url": "http://127.0.0.1:8124/query?q=Given+WREG32_SOC15%28GC%2C+0%2C+regGCVM_L2_CNTL%2C+tmp%29%2C+explain+the+resolved+register+entity+and+macro+expansion+chain.&db_path=%2FVolumes%2Fdata%2FUser%2Fwayne%2FCode%2Fgraph_impact%2Fdata%2Fasip.db&compact_graph=true",
+          "endpoint": "/query"
         },
         {
           "surface": "Web",
@@ -925,7 +973,13 @@
           "graph_edge_count": 214,
           "message": "ok",
           "tool_count": 22,
-          "server_registered": true
+          "server_registered": true,
+          "command": "/Users/chenjingwen/.cache/codex-runtimes/codex-primary-runtime/dependencies/python/bin/python3",
+          "server_args": [
+            "-m",
+            "apps.mcp.server"
+          ],
+          "tool": "search_evidence"
         }
       ],
       "missing_surfaces": [],
@@ -1033,7 +1087,10 @@
           "row_count": 24,
           "graph_node_count": 2,
           "graph_edge_count": 0,
-          "message": "ok"
+          "message": "ok",
+          "base_url": "http://127.0.0.1:8124",
+          "url": "http://127.0.0.1:8124/query?q=Change+resolver+profile+to+add+or+rename+one+C%2FC%2B%2B+register+access+wrapper%2C+then+verify+the+same+resolver+engine+resolves+it+without+code+changes.&db_path=%2FVolumes%2Fdata%2FUser%2Fwayne%2FCode%2Fgraph_impact%2Fdata%2Fasip.db&compact_graph=true",
+          "endpoint": "/query"
         },
         {
           "surface": "Web",
@@ -1066,7 +1123,13 @@
           "graph_edge_count": 0,
           "message": "ok",
           "tool_count": 22,
-          "server_registered": true
+          "server_registered": true,
+          "command": "/Users/chenjingwen/.cache/codex-runtimes/codex-primary-runtime/dependencies/python/bin/python3",
+          "server_args": [
+            "-m",
+            "apps.mcp.server"
+          ],
+          "tool": "search_evidence"
         }
       ],
       "missing_surfaces": [],
@@ -1177,7 +1240,10 @@
           "row_count": 24,
           "graph_node_count": 1,
           "graph_edge_count": 0,
-          "message": "ok"
+          "message": "ok",
+          "base_url": "http://127.0.0.1:8124",
+          "url": "http://127.0.0.1:8124/query?q=Add+a+toy+Python+resolver+profile+extracting+a+configured+function-call+or+string-symbol+reference%2C+proving+profiles+are+not+macro-only.&db_path=%2FVolumes%2Fdata%2FUser%2Fwayne%2FCode%2Fgraph_impact%2Fdata%2Fasip.db&compact_graph=true",
+          "endpoint": "/query"
         },
         {
           "surface": "Web",
@@ -1210,7 +1276,13 @@
           "graph_edge_count": 0,
           "message": "ok",
           "tool_count": 22,
-          "server_registered": true
+          "server_registered": true,
+          "command": "/Users/chenjingwen/.cache/codex-runtimes/codex-primary-runtime/dependencies/python/bin/python3",
+          "server_args": [
+            "-m",
+            "apps.mcp.server"
+          ],
+          "tool": "search_evidence"
         }
       ],
       "missing_surfaces": [],
@@ -1318,7 +1390,10 @@
           "row_count": 24,
           "graph_node_count": 2,
           "graph_edge_count": 0,
-          "message": "ok"
+          "message": "ok",
+          "base_url": "http://127.0.0.1:8124",
+          "url": "http://127.0.0.1:8124/query?q=Run+embedding+and+optional+semantic-edge+extraction+through+a+configured+Ollama+provider%2C+then+switch+to+an+OpenAI-compatible+provider+without+changing+retrieval+or+resolver+code.&db_path=%2FVolumes%2Fdata%2FUser%2Fwayne%2FCode%2Fgraph_impact%2Fdata%2Fasip.db&compact_graph=true",
+          "endpoint": "/query"
         },
         {
           "surface": "Web",
@@ -1351,7 +1426,13 @@
           "graph_edge_count": 0,
           "message": "ok",
           "tool_count": 22,
-          "server_registered": true
+          "server_registered": true,
+          "command": "/Users/chenjingwen/.cache/codex-runtimes/codex-primary-runtime/dependencies/python/bin/python3",
+          "server_args": [
+            "-m",
+            "apps.mcp.server"
+          ],
+          "tool": "search_evidence"
         }
       ],
       "missing_surfaces": [],
