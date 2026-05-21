@@ -66,6 +66,7 @@ PYTHONPATH=packages/core/src:. \
   python3 scripts/audit_callback_edges.py \
   --db data/asip.db \
   --assert-no-parser-pollution \
+  --require-version-funcs-receiver-table \
   --max-ambiguous-fanout 2
 ```
 

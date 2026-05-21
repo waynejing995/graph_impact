@@ -218,6 +218,7 @@ def build_deterministic_code_graph(
         known_receiver_table_aliases or {},
         _direct_receiver_table_aliases_from_text(scan_source_text),
         _receiver_table_aliases_from_version_sink_calls(scan_source_text, spans, version_field_sinks),
+        _receiver_table_aliases_from_known_ip_block_registration_calls(scan_source_text),
     )
     slot_calls: List[CodeGraphSlotCall] = []
     for span in spans:
@@ -460,6 +461,7 @@ def collect_code_graph_receiver_table_aliases(
     return _merge_table_field_aliases(
         _direct_receiver_table_aliases_from_text(scan_source_text),
         _receiver_table_aliases_from_version_sink_calls(scan_source_text, spans, known_version_field_sinks),
+        _receiver_table_aliases_from_known_ip_block_registration_calls(scan_source_text),
     )
 
 
@@ -1558,6 +1560,14 @@ def _slot_calls_for_function(
                     receiver_table_aliases,
                     active_table_field_aliases,
                 )
+                if receiver_tables and not alias_type_flow:
+                    alias_type_flow = _type_flow_for_receiver_alias(receiver, alias_type_flows)
+                    if not alias_type_flow:
+                        alias_type_flow = _registered_ip_block_type_flow_for_receiver(
+                            receiver,
+                            receiver_table_aliases,
+                            receiver_tables,
+                        )
             if not alias_type_flow:
                 alias_type_flow = _type_flow_for_receiver_alias(receiver, alias_type_flows)
             slots.append((
@@ -1574,10 +1584,11 @@ def _slot_calls_for_function(
 def _table_field_aliases_from_text(source_text: str) -> dict[str, tuple[str, ...]]:
     field_aliases: dict[str, list[str]] = {}
     table_name = ""
+    pending_table_name = ""
     table_depth = 0
     table_matcher = re.compile(
         r"\b(?:static\s+)?(?:const\s+)?(?:struct\s+)?(?P<table_type>[A-Za-z_]\w*)\s+"
-        r"(?P<table>[A-Za-z_]\w*)\s*=\s*\{"
+        r"(?P<table>[A-Za-z_]\w*)\s*=\s*(?:\{)?\s*$"
     )
     assignment = re.compile(
         r"\.(?P<field>[A-Za-z_]\w*)\s*=\s*&?\s*(?P<table>[A-Za-z_]\w*)\b"
@@ -1587,8 +1598,16 @@ def _table_field_aliases_from_text(source_text: str) -> dict[str, tuple[str, ...
         if match:
             table_name = match.group("table")
             table_depth = line.count("{") - line.count("}")
+            pending_table_name = table_name if "{" not in line else ""
+            if pending_table_name:
+                table_name = ""
+        elif pending_table_name and "{" in line:
+            table_name = pending_table_name
+            pending_table_name = ""
+            table_depth = line.count("{") - line.count("}")
         elif table_depth <= 0:
             table_name = ""
+            pending_table_name = ""
         if table_name:
             for assignment_match in assignment.finditer(line):
                 target = assignment_match.group("table")
@@ -1948,6 +1967,44 @@ def _receiver_table_aliases_from_version_sink_calls(
         function_text = source_text[span.offset_start : span.offset_end + 1]
         _collect_version_sink_call_aliases(function_text, version_field_sinks, aliases)
     return {key: tuple(values) for key, values in aliases.items()}
+
+
+def _receiver_table_aliases_from_known_ip_block_registration_calls(
+    source_text: str,
+) -> dict[str, tuple[str, ...]]:
+    aliases: dict[str, list[str]] = {}
+    registration_call = re.compile(
+        r"\bamdgpu_device_ip_block_add\s*\(\s*(?P<receiver>[A-Za-z_]\w*)\s*,\s*&\s*(?P<table>[A-Za-z_]\w*)",
+        re.DOTALL,
+    )
+    for match in registration_call.finditer(source_text):
+        receiver = match.group("receiver")
+        table = match.group("table")
+        if not table.endswith(("_ip_block", "_ip_block_version")):
+            continue
+        alias = f"{receiver}->ip_blocks->version"
+        aliases.setdefault(alias, [])
+        if table not in aliases[alias]:
+            aliases[alias].append(table)
+    return {key: tuple(values) for key, values in aliases.items()}
+
+
+def _registered_ip_block_type_flow_for_receiver(
+    receiver: str,
+    receiver_table_aliases: Mapping[str, Iterable[str]],
+    receiver_tables: Iterable[str],
+) -> str:
+    normalized_receiver = _normalize_receiver_path(receiver)
+    if ".version.funcs" not in normalized_receiver:
+        return ""
+    version_receiver = normalized_receiver.rsplit(".funcs", 1)[0]
+    for alias_receiver, alias_tables in receiver_table_aliases.items():
+        normalized_alias = _normalize_receiver_path(alias_receiver)
+        if normalized_alias != version_receiver:
+            continue
+        if any(str(table).endswith(("_ip_block", "_ip_block_version")) for table in alias_tables):
+            return _receiver_alias_type_flow("registered_ip_block", receiver_tables)
+    return ""
 
 
 def _collect_version_sink_call_aliases(

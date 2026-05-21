@@ -1230,6 +1230,7 @@ def _callback_audit_requirement(
     callback_count = _coerce_int(summary.get("callback_edge_count"))
     parser_pollution = _coerce_int(summary.get("parser_pollution_candidate_count", 0) or 0)
     deterministic_parser_pollution = _coerce_int(summary.get("deterministic_parser_pollution_candidate_count"))
+    version_funcs_receiver_table_count = _coerce_int(summary.get("version_funcs_receiver_table_edge_count"))
     unexplained_ambiguous = _coerce_int(summary.get("unexplained_ambiguous_callback_edge_count", 0) or 0)
     real_oracle_total = _coerce_int(summary.get("real_oracle_total", 0) or 0)
     real_oracle_passed = _coerce_int(summary.get("real_oracle_passed", 0) or 0)
@@ -1245,6 +1246,11 @@ def _callback_audit_requirement(
             "deterministic_parser_pollution_candidate_count="
             f"{summary.get('deterministic_parser_pollution_candidate_count')}"
         )
+    if version_funcs_receiver_table_count is None:
+        if required:
+            failures.append("version_funcs_receiver_table_edge_count=missing")
+    elif version_funcs_receiver_table_count <= 0:
+        failures.append(f"version_funcs_receiver_table_edge_count={summary.get('version_funcs_receiver_table_edge_count')}")
     if unexplained_ambiguous is None or unexplained_ambiguous != 0:
         failures.append(
             f"unexplained_ambiguous_callback_edge_count={summary.get('unexplained_ambiguous_callback_edge_count')}"
@@ -1263,6 +1269,7 @@ def _callback_audit_requirement(
         f"parser_pollution={summary.get('parser_pollution_candidate_count', 0)}; "
         f"deterministic_parser_pollution="
         f"{summary.get('deterministic_parser_pollution_candidate_count', 'missing')}; "
+        f"version_funcs_receiver_tables={summary.get('version_funcs_receiver_table_edge_count', 'missing')}; "
         f"unexplained_ambiguous={summary.get('unexplained_ambiguous_callback_edge_count', 0)}; "
         f"real_oracles={summary.get('real_oracle_passed', 0)}/{summary.get('real_oracle_total', 0)}; "
         f"graph_job={payload.get('latest_graph_rebuild_job_id', 'missing')}; "

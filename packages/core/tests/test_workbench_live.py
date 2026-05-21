@@ -2436,6 +2436,104 @@ class WorkbenchLiveTests(unittest.TestCase):
             self.assertEqual(dispatch["callback_table"], "gfx_v11_0_ip_funcs")
             self.assertEqual(dispatch["type_flow"], "local_receiver_path_alias")
 
+    def test_index_registered_corpus_resolves_ip_block_registration_without_helper_body(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            source_root = root / "corpus"
+            source_root.mkdir()
+            (source_root / "gfx.c").write_text(
+                "\n".join(
+                    [
+                        "static int gfx_v11_0_hw_init(void *block) {",
+                        "  WREG32(mmGCVM_L2_CNTL, 1);",
+                        "  return 0;",
+                        "}",
+                        "static const struct amd_ip_funcs gfx_v11_0_ip_funcs = {",
+                        "  .hw_init = gfx_v11_0_hw_init,",
+                        "};",
+                        "const struct amdgpu_ip_block_version gfx_v11_0_ip_block =",
+                        "{",
+                        "  .funcs = &gfx_v11_0_ip_funcs,",
+                        "};",
+                    ]
+                ),
+                encoding="utf-8",
+            )
+            (source_root / "sdma.c").write_text(
+                "\n".join(
+                    [
+                        "static int sdma_v5_0_hw_init(void *block) {",
+                        "  WREG32(mmSDMA0_RLC0_RB_CNTL, 1);",
+                        "  return 0;",
+                        "}",
+                        "static const struct amd_ip_funcs sdma_v5_0_ip_funcs = {",
+                        "  .hw_init = sdma_v5_0_hw_init,",
+                        "};",
+                    ]
+                ),
+                encoding="utf-8",
+            )
+            (source_root / "setup.c").write_text(
+                "\n".join(
+                    [
+                        "int setup_registered_blocks(struct amdgpu_device *adev) {",
+                        "  amdgpu_device_ip_block_add(adev, &gfx_v11_0_ip_block);",
+                        "  return 0;",
+                        "}",
+                    ]
+                ),
+                encoding="utf-8",
+            )
+            (source_root / "device.c").write_text(
+                "\n".join(
+                    [
+                        "int amdgpu_device_hw_init(struct amdgpu_device *adev, int i) {",
+                        "  return adev->ip_blocks[i].version->funcs->hw_init(&adev->ip_blocks[i]);",
+                        "}",
+                    ]
+                ),
+                encoding="utf-8",
+            )
+            db_path = root / "asip.db"
+            store = AsipStore.connect(str(db_path))
+            store.migrate()
+            store.upsert_corpus("linux-amdgpu", "https://github.com/torvalds/linux", str(source_root), ["**/*.c"])
+            store.upsert_resolver_profile(
+                "test-amd-ip-block-registration-without-helper",
+                "cpp",
+                ["WREG32"],
+                "reference",
+                "test.yaml",
+                config={
+                    "id": "test-amd-ip-block-registration-without-helper",
+                    "language": "cpp",
+                    "symbol_prefixes": ["reg", "mm"],
+                    "wrappers": {"WREG32": {"symbol_arg": 0, "access": "write"}},
+                },
+            )
+
+            workbench.index_registered_corpora(db_path, corpus_ids=["linux-amdgpu"])
+            rows = [
+                (row["src"], row["relation"], row["dst"], json.loads(str(row["provenance_json"])))
+                for row in AsipStore.connect(str(db_path)).con.execute(
+                    "select src, relation, dst, provenance_json from edges where src = 'amdgpu_device_hw_init'"
+                )
+            ]
+            triples = {(src, relation, dst) for src, relation, dst, _provenance in rows}
+
+            self.assertIn(("amdgpu_device_hw_init", "calls", "gfx_v11_0_hw_init"), triples)
+            self.assertNotIn(("amdgpu_device_hw_init", "calls", "sdma_v5_0_hw_init"), triples)
+            dispatch = next(
+                provenance
+                for src, relation, dst, provenance in rows
+                if (src, relation, dst) == ("amdgpu_device_hw_init", "calls", "gfx_v11_0_hw_init")
+            )
+            self.assertEqual(dispatch["call_kind"], "vtable_table_alias")
+            self.assertEqual(dispatch["receiver"], "adev->ip_blocks[i].version->funcs")
+            self.assertEqual(dispatch["receiver_tables"], ["gfx_v11_0_ip_funcs"])
+            self.assertEqual(dispatch["callback_table"], "gfx_v11_0_ip_funcs")
+            self.assertEqual(dispatch["type_flow"], "registered_ip_block")
+
     def test_index_registered_corpus_resolves_ip_block_version_suffix_common_loop_across_files(self):
         with tempfile.TemporaryDirectory() as tmpdir:
             root = Path(tmpdir)

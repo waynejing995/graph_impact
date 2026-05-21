@@ -27,6 +27,14 @@ records `deterministic_call_edge_count` and requires
 `else if` leaking into ordinary deterministic call edges cannot hide outside the
 callback/vtable subset.
 
+2026-05-21 registered IP-block receiver-table hardening: direct
+`amdgpu_device_ip_block_add(adev, &*_ip_block)` registration calls must prove
+concrete `version->funcs` receiver tables in the real deterministic graph. The
+post-push callback audit now requires
+`version_funcs_receiver_table_edge_count>0`; completion stays blocked if the
+current `data/asip.db` can only show generic `version->funcs` fanout without a
+receiver-table oracle.
+
 2026-05-21 semantic-quality evidence hardening: the post-push runner also
 regenerates the labeled semantic-quality eval under `$out_dir` after the git
 gate passes. The completion gate now rejects stale semantic-quality proof whose

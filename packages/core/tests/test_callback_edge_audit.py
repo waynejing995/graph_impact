@@ -51,6 +51,60 @@ class CallbackEdgeAuditTests(unittest.TestCase):
             self.assertEqual(result["summary"]["callback_edge_count"], 1)
             self.assertEqual(result["summary"]["real_oracle_passed"], 1)
 
+    def test_audit_counts_version_funcs_receiver_table_oracle(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            db_path = Path(tmpdir) / "callbacks.db"
+            self._write_db(
+                db_path,
+                [
+                    (
+                        "amdgpu_device_hw_init",
+                        "gfx_v11_0_hw_init",
+                        "drivers/gpu/drm/amd/amdgpu/amdgpu_device.c",
+                        {
+                            "call_kind": "vtable_table_alias",
+                            "function": "amdgpu_device_hw_init",
+                            "callee": "gfx_v11_0_hw_init",
+                            "receiver": "adev->ip_blocks[i].version->funcs",
+                            "receiver_tables": ["gfx_v11_0_ip_funcs"],
+                            "type_flow": "registered_ip_block",
+                        },
+                    )
+                ],
+            )
+
+            result = audit_callback_edges.run_audit(db_path, assert_no_parser_pollution=True)
+
+            self.assertEqual(result["gate_status"], "pass")
+            self.assertEqual(result["summary"]["version_funcs_receiver_table_edge_count"], 1)
+            self.assertEqual(result["version_funcs_receiver_table_samples"][0]["receiver"], "adev->ip_blocks[i].version->funcs")
+
+    def test_audit_blocks_missing_version_funcs_receiver_table_oracle_when_required(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            db_path = Path(tmpdir) / "callbacks.db"
+            self._write_db(
+                db_path,
+                [
+                    (
+                        "amdgpu_device_hw_init",
+                        "gfx_v11_0_hw_init",
+                        "drivers/gpu/drm/amd/amdgpu/amdgpu_device.c",
+                        {
+                            "call_kind": "vtable_dispatch",
+                            "function": "amdgpu_device_hw_init",
+                            "callee": "gfx_v11_0_hw_init",
+                            "receiver": "adev->ip_blocks[i].version->funcs",
+                            "receiver_tables": [],
+                        },
+                    )
+                ],
+            )
+
+            result = audit_callback_edges.run_audit(db_path, require_version_funcs_receiver_table=True)
+
+            self.assertEqual(result["gate_status"], "blocked")
+            self.assertIn("version->funcs receiver table oracle is missing", result["failure_reasons"])
+
     def test_audit_records_current_job_binding_when_jobs_table_exists(self):
         with tempfile.TemporaryDirectory() as tmpdir:
             db_path = Path(tmpdir) / "callbacks.db"

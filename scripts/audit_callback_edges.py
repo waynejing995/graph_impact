@@ -47,6 +47,11 @@ def main(argv: List[str] | None = None) -> int:
         metavar="PATH:FUNCTION",
         help="Require at least one callback/vtable edge from FUNCTION in PATH.",
     )
+    parser.add_argument(
+        "--require-version-funcs-receiver-table",
+        action="store_true",
+        help="Require at least one version->funcs callback edge with concrete receiver_tables.",
+    )
     parser.add_argument("--allow-blocked", action="store_true")
     args = parser.parse_args(argv)
 
@@ -55,6 +60,7 @@ def main(argv: List[str] | None = None) -> int:
         assert_no_parser_pollution=args.assert_no_parser_pollution,
         max_ambiguous_fanout=args.max_ambiguous_fanout,
         real_oracles=args.require_real_oracle,
+        require_version_funcs_receiver_table=args.require_version_funcs_receiver_table,
     )
     text = json.dumps(artifact, indent=2, sort_keys=True)
     if args.output_json:
@@ -72,6 +78,7 @@ def run_audit(
     assert_no_parser_pollution: bool = False,
     max_ambiguous_fanout: int | None = None,
     real_oracles: Iterable[str] = (),
+    require_version_funcs_receiver_table: bool = False,
 ) -> Dict[str, Any]:
     failures: List[str] = []
     edges = _load_callback_edges(db_path)
@@ -132,6 +139,9 @@ def run_audit(
     for result in oracle_results:
         if result["status"] != "pass":
             failures.append(str(result["message"]))
+    version_funcs_receiver_table_samples = _version_funcs_receiver_table_samples(edges)
+    if require_version_funcs_receiver_table and not version_funcs_receiver_table_samples:
+        failures.append("version->funcs receiver table oracle is missing")
 
     return {
         "source": "asip.callback_edge_audit",
@@ -154,6 +164,7 @@ def run_audit(
             "parser_pollution_candidate_count": len(pollution_samples),
             "deterministic_call_edge_count": len(deterministic_call_edges),
             "deterministic_parser_pollution_candidate_count": len(deterministic_pollution_samples),
+            "version_funcs_receiver_table_edge_count": len(version_funcs_receiver_table_samples),
             "real_oracle_total": len(oracle_results),
             "real_oracle_passed": sum(1 for item in oracle_results if item["status"] == "pass"),
         },
@@ -165,6 +176,7 @@ def run_audit(
         "top_unexplained_ambiguous_fanout": top_unexplained_ambiguous_fanout,
         "parser_pollution_samples": pollution_samples[:20],
         "deterministic_parser_pollution_samples": deterministic_pollution_samples[:20],
+        "version_funcs_receiver_table_samples": version_funcs_receiver_table_samples[:20],
         "real_oracles": oracle_results,
     }
 
@@ -384,6 +396,37 @@ def _parser_pollution_samples(edges: Iterable[Mapping[str, Any]]) -> List[Dict[s
                     }
                 )
                 break
+    return samples
+
+
+def _version_funcs_receiver_table_samples(edges: Iterable[Mapping[str, Any]]) -> List[Dict[str, Any]]:
+    samples: List[Dict[str, Any]] = []
+    for edge in edges:
+        provenance = edge["provenance"]
+        receiver = str(provenance.get("receiver") or "")
+        normalized_receiver = receiver.replace(".version->funcs", "->version->funcs").replace(
+            ".version.funcs",
+            "->version->funcs",
+        )
+        receiver_tables = provenance.get("receiver_tables")
+        if "->version->funcs" not in normalized_receiver:
+            continue
+        if not isinstance(receiver_tables, list) or not receiver_tables:
+            continue
+        samples.append(
+            {
+                "edge_id": edge.get("id"),
+                "src": edge.get("src"),
+                "dst": edge.get("dst"),
+                "path": edge.get("path"),
+                "line_start": edge.get("line_start"),
+                "receiver": receiver,
+                "receiver_tables": receiver_tables,
+                "type_flow": provenance.get("type_flow"),
+                "call_kind": provenance.get("call_kind"),
+                "callback_table": provenance.get("callback_table"),
+            }
+        )
     return samples
 
 

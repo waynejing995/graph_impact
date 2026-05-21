@@ -160,6 +160,7 @@ python3 scripts/audit_callback_edges.py \
   --db data/asip.db \
   --output-json "$callback_audit_json" \
   --assert-no-parser-pollution \
+  --require-version-funcs-receiver-table \
   --max-ambiguous-fanout 2 \
   --require-real-oracle drivers/gpu/drm/amd/amdgpu/gfx_v10_0.c:gfx_v10_0_ring_preempt_ib \
   --require-real-oracle drivers/gpu/drm/amd/amdgpu/amdgpu_device.c:amdgpu_device_fw_loading \

@@ -2394,6 +2394,64 @@ class DeterministicCodeGraphTests(unittest.TestCase):
                 {"local_receiver_path_alias_ambiguous"},
             )
 
+    def test_stage1_ip_block_registration_call_without_helper_body_constrains_common_loop(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            source = root / "amdgpu_device.c"
+            source.write_text(
+                "\n".join(
+                    [
+                        "static int gfx_v11_0_hw_init(void *block) {",
+                        "  WREG32(mmGCVM_L2_CNTL, 1);",
+                        "  return 0;",
+                        "}",
+                        "static int sdma_v5_0_hw_init(void *block) {",
+                        "  WREG32(mmSDMA0_RLC0_RB_CNTL, 1);",
+                        "  return 0;",
+                        "}",
+                        "static const struct amd_ip_funcs gfx_v11_0_ip_funcs = {",
+                        "  .hw_init = gfx_v11_0_hw_init,",
+                        "};",
+                        "static const struct amd_ip_funcs sdma_v5_0_ip_funcs = {",
+                        "  .hw_init = sdma_v5_0_hw_init,",
+                        "};",
+                        "const struct amdgpu_ip_block_version gfx_v11_0_ip_block =",
+                        "{",
+                        "  .funcs = &gfx_v11_0_ip_funcs,",
+                        "};",
+                        "int setup_registered_blocks(struct amdgpu_device *adev) {",
+                        "  amdgpu_device_ip_block_add(adev, &gfx_v11_0_ip_block);",
+                        "  return 0;",
+                        "}",
+                        "int amdgpu_device_hw_init(struct amdgpu_device *adev, int i) {",
+                        "  return adev->ip_blocks[i].version->funcs->hw_init(&adev->ip_blocks[i]);",
+                        "}",
+                    ]
+                ),
+                encoding="utf-8",
+            )
+            profile = ResolverProfile(
+                id="test-amd-ip-block-registration-without-helper",
+                language="cpp",
+                symbol_prefixes=["mm", "reg"],
+                wrappers={"WREG32": WrapperRule(symbol_arg=0, access="write")},
+            )
+
+            graph = build_deterministic_code_graph(source, source_root=root, resolver_profiles=[profile])
+
+            edge_triples = {(edge.src, edge.relation, edge.dst) for edge in graph.edges}
+            self.assertIn(("amdgpu_device_hw_init", "calls", "gfx_v11_0_hw_init"), edge_triples)
+            self.assertNotIn(("amdgpu_device_hw_init", "calls", "sdma_v5_0_hw_init"), edge_triples)
+            dispatch_edge = next(
+                edge
+                for edge in graph.edges
+                if (edge.src, edge.relation, edge.dst) == ("amdgpu_device_hw_init", "calls", "gfx_v11_0_hw_init")
+            )
+            self.assertEqual(dispatch_edge.provenance.get("call_kind"), "vtable_table_alias")
+            self.assertEqual(dispatch_edge.provenance.get("receiver"), "adev->ip_blocks[i].version->funcs")
+            self.assertEqual(dispatch_edge.provenance.get("receiver_tables"), ["gfx_v11_0_ip_funcs"])
+            self.assertEqual(dispatch_edge.provenance.get("type_flow"), "registered_ip_block")
+
     def test_stage1_exact_ip_block_registration_does_not_fallback_when_slot_is_absent(self):
         with tempfile.TemporaryDirectory() as tmpdir:
             root = Path(tmpdir)
