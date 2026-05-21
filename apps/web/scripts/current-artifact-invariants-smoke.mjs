@@ -345,7 +345,20 @@ if (completionGate.gate_status === "pass") {
   assert.equal(completionRequirements.get("runtime_semantic_freshness")?.status, "pass");
   assert.equal(completionRequirements.get("semantic_quality")?.status, "pass");
   assert.equal(completionRequirements.get("callback_edge_audit")?.status, "pass");
-  assert.equal(completionRequirements.get("hosted_openai_compatible")?.status, "blocked");
+  const openAiCompatibleRequirement = completionRequirements.get("hosted_openai_compatible");
+  if (openAiCompatibleRequirement?.status === "pass") {
+    assert.match(
+      textFrom(openAiCompatibleRequirement.evidence),
+      /credential_mode=hosted-credentialed|accepted_local_ollama_boundary=True/,
+      "OpenAI-compatible requirement must pass through hosted credentials or the accepted local Ollama boundary",
+    );
+  } else {
+    assert.equal(openAiCompatibleRequirement?.status, "blocked");
+    assert.match(
+      textFrom(openAiCompatibleRequirement?.failure_reasons),
+      /credential|hosted|local|OpenAI|accepted/i,
+    );
+  }
   const webNoServerRequirement = completionRequirements.get("web_no_server_smoke");
   if (webNoServerRequirement?.status === "pass") {
     assert.equal(webNoServerRequirement.status, "pass");
@@ -358,7 +371,13 @@ if (completionGate.gate_status === "pass") {
   }
   assert.equal(completionRequirements.get("performance_smoke")?.status, "pass");
   assert.equal(completionRequirements.get("browser_e2e")?.status, browserArtifactIsE2e ? "pass" : "blocked");
-  assert.equal(completionRequirements.get("residual_acceptance")?.status, "blocked");
+  const residualRequirement = completionRequirements.get("residual_acceptance");
+  if (residualRequirement?.status === "pass") {
+    assert.match(textFrom(residualRequirement.evidence), /gate_status=pass|accepted_residuals=/);
+  } else {
+    assert.equal(residualRequirement?.status, "blocked");
+    assert.match(textFrom(residualRequirement?.failure_reasons), /accepted|residual|G13/i);
+  }
   const gitGateRequirement = completionRequirements.get("git_gate");
   if (gitGateRequirement?.status === "pass") {
     assert.equal(gitGateRequirement.status, "pass");
