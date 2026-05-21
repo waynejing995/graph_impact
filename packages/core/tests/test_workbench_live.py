@@ -813,6 +813,7 @@ class WorkbenchLiveTests(unittest.TestCase):
             self.assertNotIn("raw_implementations", serialized)
             self.assertNotIn('"implementations":', serialized)
             concept_node = next(node for node in graph["nodes"] if node["kind"] == "function")
+            self.assertIs(concept_node["attr"]["is_concept"], True)
             self.assertEqual(len(concept_node["attr"]["concept_implementations"]), 8)
             self.assertEqual(concept_node["attr"]["concept_implementation_count"], 8)
             self.assertEqual(concept_node["attr"]["raw_implementation_count"], 8)

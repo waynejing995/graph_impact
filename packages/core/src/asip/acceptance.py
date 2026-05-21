@@ -552,6 +552,7 @@ def _surface_graph_contract_failures(graph: Mapping[str, Any]) -> List[str]:
         if kind not in ALLOWED_PRODUCT_NODE_KINDS:
             failures.append(f"non-product graph node kind: {kind}")
             break
+        failures.extend(_concept_function_node_contract_failures(node))
     for edge in graph.get("edges", []) or []:
         if not isinstance(edge, Mapping):
             failures.append("invalid graph edge payload")
@@ -564,6 +565,40 @@ def _surface_graph_contract_failures(graph: Mapping[str, Any]) -> List[str]:
             failures.append(f"non-product graph relation: {relation}")
             break
     return failures
+
+
+def _concept_function_node_contract_failures(node: Mapping[str, Any]) -> List[str]:
+    if str(node.get("kind") or "").strip() != "function":
+        return []
+    attr = node.get("attr") if isinstance(node.get("attr"), Mapping) else {}
+    node_id = str(node.get("id") or "")
+    is_concept = attr.get("is_concept") is True or ":concept:" in node_id
+    if not is_concept:
+        return []
+    implementations = attr.get("concept_implementations")
+    raw_implementations = attr.get("raw_implementations")
+    raw_function_names = attr.get("raw_function_names")
+    implementation_records = (
+        implementations
+        if isinstance(implementations, list) and implementations
+        else raw_implementations
+        if isinstance(raw_implementations, list) and raw_implementations
+        else []
+    )
+    implementation_count = _int_or_default(
+        attr.get("concept_implementation_count") or attr.get("raw_implementation_count"),
+        len(implementation_records),
+    )
+    if not implementation_records and not (isinstance(raw_function_names, list) and raw_function_names):
+        return [f"concept function node missing implementation list: {node_id}"]
+    if implementation_count < len(implementation_records):
+        return [f"concept function node implementation count is below listed implementations: {node_id}"]
+    for item in implementation_records:
+        if not isinstance(item, Mapping) or not str(item.get("function_name") or "").strip():
+            return [f"concept function node implementation missing function_name: {node_id}"]
+    if isinstance(raw_function_names, list) and any(not str(item or "").strip() for item in raw_function_names):
+        return [f"concept function node raw_function_names contains blank item: {node_id}"]
+    return []
 
 
 def _surface_transport_name(surface: str) -> str:

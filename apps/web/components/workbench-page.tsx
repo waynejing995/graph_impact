@@ -2897,7 +2897,8 @@ function buildSelectedNodeRelationshipLines(node: WeightedGraphNode, graph: Grap
 }
 
 function isConceptFunctionNode(node: WeightedGraphNode): boolean {
-  return node.kind === "function" && node.id.includes(":concept:");
+  const attr = isObjectRecord(node.attr) ? node.attr : {};
+  return node.kind === "function" && (attr.is_concept === true || node.id.includes(":concept:"));
 }
 
 function conceptImplementationLines(attr: Record<string, unknown>): string[] {

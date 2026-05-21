@@ -227,6 +227,7 @@ class WorkbenchQuerySchemaTests(unittest.TestCase):
 
         function_nodes = [node for node in graph["nodes"] if node["kind"] == "function"]
         self.assertEqual(len(function_nodes), 1)
+        self.assertIs(function_nodes[0]["attr"]["is_concept"], True)
         self.assertTrue(any("raw_implementations" in node["attr"] for node in function_nodes))
         self.assertCountEqual(
             function_nodes[0]["attr"]["raw_function_names"],

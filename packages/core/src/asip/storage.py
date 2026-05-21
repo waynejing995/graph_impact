@@ -2204,6 +2204,7 @@ def _function_graph_node(
         attr["normalization_rule"] = concept["rule_id"]
         attr["normalization_profile_id"] = concept.get("profile_id") or "unknown"
         attr["merge_status"] = "merged"
+        attr["is_concept"] = True
     resolver_profile_ids = _resolver_profile_ids_for_graph(metadata)
     if resolver_profile_ids:
         attr["resolver_profile_ids"] = resolver_profile_ids
@@ -2611,8 +2612,10 @@ def _remember_compact_graph_node(node_metadata: Dict[str, Dict[str, object]], no
         "job_ids",
         "raw_function_names",
         "function_name",
+        "is_concept",
         "ip_block",
         "normalization_rule",
+        "normalization_profile_id",
         "merge_status",
     ):
         value = attr.get(key)

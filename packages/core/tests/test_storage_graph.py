@@ -199,6 +199,7 @@ class StorageGraphTests(unittest.TestCase):
 
         function_nodes = [node for node in graph["nodes"] if node["kind"] == "function"]
         self.assertEqual(len(function_nodes), 1)
+        self.assertIs(function_nodes[0]["attr"]["is_concept"], True)
         self.assertEqual(function_nodes[0]["attr"]["function_name"], "gfxhub_gart_enable")
         self.assertCountEqual(
             function_nodes[0]["attr"]["raw_function_names"],
@@ -830,6 +831,7 @@ class StorageGraphTests(unittest.TestCase):
 
         function_node = next(node for node in graph["nodes"] if node["kind"] == "function")
         self.assertEqual(function_node["attr"]["normalization_rule"], "shared-gfxhub-functions")
+        self.assertIs(function_node["attr"]["is_concept"], True)
         self.assertEqual(function_node["attr"]["resolver_profile_ids"], ["z-merge-profile"])
         self.assertEqual(function_node["attr"]["register_neighbor_overlap"], 0.0)
         self.assertEqual(function_node["attr"]["merge_status"], "merged")

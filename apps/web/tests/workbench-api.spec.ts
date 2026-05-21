@@ -951,6 +951,7 @@ test("graph API returns compact metadata for global UI graphs", async ({ request
       id: string;
       kind: string;
       attr?: {
+        is_concept?: boolean;
         concept_implementations?: Array<{ function_name?: string; path?: string }>;
         concept_implementation_count?: number;
         raw_function_names?: string[];
@@ -967,6 +968,7 @@ test("graph API returns compact metadata for global UI graphs", async ({ request
     (node) =>
       node.id === "function:linux-amdgpu:concept:linux-amdgpu:amd-ip-versioned-functions:gfxhub_gart_enable"
   );
+  expect(conceptFunction?.attr?.is_concept).toBe(true);
   expect(conceptFunction?.attr?.raw_implementation_count).toBeGreaterThanOrEqual(2);
   expect(conceptFunction?.attr?.concept_implementation_count).toBe(
     conceptFunction?.attr?.concept_implementations?.length

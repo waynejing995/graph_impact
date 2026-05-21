@@ -1890,6 +1890,7 @@ test("graph page uses URL dbPath for no-mock graph and query requests", async ({
       label?: string;
       attr?: {
         doc_kind?: string;
+        is_concept?: boolean;
         concept_implementations?: Array<{ function_name?: string; path?: string }>;
         raw_function_names?: string[];
         raw_implementation_count?: number;
@@ -1910,6 +1911,7 @@ test("graph page uses URL dbPath for no-mock graph and query requests", async ({
   const conceptFunction = graphPayload.nodes.find((node) =>
     node.id === "function:linux-amdgpu:concept:linux-amdgpu:amd-ip-versioned-functions:gfxhub_gart_enable"
   );
+  expect(conceptFunction?.attr?.is_concept).toBe(true);
   expect(conceptFunction?.attr?.raw_implementation_count).toBeGreaterThanOrEqual(2);
   expect(conceptFunction?.attr?.concept_implementations).toEqual(
     expect.arrayContaining([
@@ -1939,6 +1941,7 @@ test("graph page uses URL dbPath for no-mock graph and query requests", async ({
   await expect(forceGraph).not.toContainText("gfxhub_v11_5_0_gart_enable");
   await forceGraph.getByRole("button", { name: "gfxhub_gart_enable" }).click();
   await expect(page.getByRole("heading", { name: "Graph Node: gfxhub_gart_enable" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Node Detail" })).toBeVisible();
   await expect(page.getByRole("heading", { name: "Concept Generated From" })).toBeVisible();
   await expect(page.locator(".details-pane")).toContainText("gfxhub_v11_5_0_gart_enable");
   await expect(page.locator(".details-pane")).toContainText("gfxhub_v12_0_gart_enable");
@@ -2073,6 +2076,7 @@ test("graph page loads current data/asip.db through browser and API", async ({ p
       kind?: string;
       label?: string;
       attr?: {
+        is_concept?: boolean;
         concept_implementations?: Array<{ function_name?: string; path?: string }>;
         concept_implementation_count?: number;
         raw_function_names?: string[];
@@ -2108,6 +2112,7 @@ test("graph page loads current data/asip.db through browser and API", async ({ p
       ((node.attr?.concept_implementations?.length ?? 0) > 0 || (node.attr?.raw_function_names?.length ?? 0) > 0)
   );
   expect(currentDbConcept).toBeTruthy();
+  expect(currentDbConcept?.attr?.is_concept).toBe(true);
   expect(currentDbConcept?.attr?.raw_implementation_count ?? 0).toBeGreaterThan(1);
   expect(currentDbConcept?.attr?.concept_implementation_count ?? 0).toBeGreaterThan(1);
   expect(currentDbConcept?.attr?.raw_implementation_count ?? 0).toBeGreaterThanOrEqual(
@@ -2128,6 +2133,7 @@ test("graph page loads current data/asip.db through browser and API", async ({ p
   const currentDbConceptLabel = String(currentDbConcept?.label ?? currentDbConcept?.id ?? "");
   await forceGraph.getByRole("button", { name: currentDbConceptLabel, exact: true }).click();
   await expect(page.getByRole("heading", { name: `Graph Node: ${currentDbConceptLabel}` })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Node Detail" })).toBeVisible();
   await expect(page.getByRole("heading", { name: "Concept Generated From" })).toBeVisible();
   await expect(page.locator(".details-pane")).toContainText(String(currentDbConceptImplementation?.function_name));
   await expect(page.locator(".details-pane")).not.toContainText("more implementations");

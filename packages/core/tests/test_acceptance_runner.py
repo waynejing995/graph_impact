@@ -372,6 +372,106 @@ class AcceptanceRunnerTests(unittest.TestCase):
             self.assertIn("missing graph relation", record["schema_failure_reasons"])
             self.assertEqual(record["status"], "fail")
 
+    def test_runner_validates_concept_function_implementation_metadata(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            db_path = Path(tmpdir) / "schema-concept-metadata.db"
+            store = AsipStore.connect(str(db_path))
+            store.migrate()
+            store.upsert_corpus("fixture", "local", str(Path(tmpdir)), ["**/*.c"], status="indexed", file_count=1)
+            original_query_evidence = acceptance.query_evidence
+
+            def fake_query_evidence(db_path, query, limit=None, **kwargs):
+                return {
+                    "rows": [{"id": 1, "source_type": "code", "symbol": "gfx_hw_init", "path": "driver.c"}],
+                    "graph": {
+                        "nodes": [
+                            {
+                                "id": "function:linux-amdgpu:concept:linux-amdgpu:amd-ip-versioned-functions:gfx_hw_init",
+                                "kind": "function",
+                                "attr": {
+                                    "is_concept": True,
+                                    "concept_implementation_count": 2,
+                                    "concept_implementations": [
+                                        {"function_name": "gfx_v11_0_hw_init", "path": "gfx_v11_0.c"},
+                                        {"function_name": "gfx_v12_0_hw_init", "path": "gfx_v12_0.c"},
+                                    ],
+                                },
+                            }
+                        ],
+                        "edges": [],
+                    },
+                }
+
+            try:
+                acceptance.query_evidence = fake_query_evidence
+                result = run_acceptance_queries(
+                    db_path,
+                    queries=[
+                        {
+                            "id": "AQ-CONCEPT",
+                            "query": "gfx_hw_init",
+                            "gap_ids": ["G10"],
+                            "required_surfaces": ["CLI"],
+                        }
+                    ],
+                    surfaces_checked=["CLI"],
+                )
+            finally:
+                acceptance.query_evidence = original_query_evidence
+
+            record = result["queries"][0]
+            self.assertEqual(record["schema_status"], "pass")
+            self.assertEqual(record["schema_failure_reasons"], [])
+            self.assertEqual(record["status"], "pass")
+
+    def test_runner_fails_concept_function_without_implementation_names(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            db_path = Path(tmpdir) / "schema-bad-concept-metadata.db"
+            store = AsipStore.connect(str(db_path))
+            store.migrate()
+            store.upsert_corpus("fixture", "local", str(Path(tmpdir)), ["**/*.c"], status="indexed", file_count=1)
+            original_query_evidence = acceptance.query_evidence
+
+            def fake_query_evidence(db_path, query, limit=None, **kwargs):
+                return {
+                    "rows": [{"id": 1, "source_type": "code", "symbol": "gfx_hw_init", "path": "driver.c"}],
+                    "graph": {
+                        "nodes": [
+                            {
+                                "id": "function:linux-amdgpu:concept:linux-amdgpu:amd-ip-versioned-functions:gfx_hw_init",
+                                "kind": "function",
+                                "attr": {"is_concept": True, "concept_implementation_count": 1, "concept_implementations": [{}]},
+                            }
+                        ],
+                        "edges": [],
+                    },
+                }
+
+            try:
+                acceptance.query_evidence = fake_query_evidence
+                result = run_acceptance_queries(
+                    db_path,
+                    queries=[
+                        {
+                            "id": "AQ-CONCEPT-BAD",
+                            "query": "gfx_hw_init",
+                            "gap_ids": ["G10"],
+                            "required_surfaces": ["CLI"],
+                        }
+                    ],
+                    surfaces_checked=["CLI"],
+                )
+            finally:
+                acceptance.query_evidence = original_query_evidence
+
+            record = result["queries"][0]
+            self.assertEqual(record["schema_status"], "fail")
+            self.assertIn(
+                "concept function node implementation missing function_name: function:linux-amdgpu:concept:linux-amdgpu:amd-ip-versioned-functions:gfx_hw_init",
+                record["schema_failure_reasons"],
+            )
+            self.assertEqual(record["status"], "fail")
+
     def test_runner_marks_web_surface_not_configured_without_base_url(self):
         with tempfile.TemporaryDirectory() as tmpdir:
             root = Path(tmpdir)
