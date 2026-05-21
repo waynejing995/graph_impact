@@ -59,6 +59,9 @@ const providerSettingsStorageKey = "asip-provider-settings";
 const themeStorageKey = "asip-theme";
 const defaultTheme = "dark";
 const sourceFilterTypes = ["code", "register", "doc", "pdf"] as const;
+const defaultConceptRuleId = "custom-ip-versioned-functions";
+const defaultConceptMatch = "^(?P<ip_block>gfxhub)_v(?P<ip_version>\\d+(?:_\\d+){0,2})_(?P<operation>.+)$";
+const defaultConceptCanonical = "{ip_block}_{operation}";
 
 type Theme = "dark" | "light";
 type ProviderVerificationState = "unverified" | "verified" | "failed";
@@ -240,6 +243,10 @@ type ResolverProfile = {
   strategy: string;
   path: string;
   enabled: boolean;
+  functionNormalizationEnabled: boolean;
+  conceptRuleId: string;
+  conceptMatch: string;
+  conceptCanonical: string;
 };
 
 type ApiResolverProfile = {
@@ -248,6 +255,19 @@ type ApiResolverProfile = {
   wrappers?: string[];
   path?: string;
   enabled?: boolean;
+  config?: {
+    graph?: {
+      function_normalization?: {
+        enabled?: boolean;
+        rules?: Array<{
+          id?: string;
+          enabled?: boolean;
+          match?: string;
+          canonical?: string;
+        }>;
+      };
+    };
+  };
 };
 
 type AcceptanceRun = {
@@ -403,7 +423,11 @@ export function WorkbenchPage({ pageId }: WorkbenchPageProps) {
     wrappers: ["RREG32"],
     strategy: "macro",
     path: "configs/resolvers/initial.yaml",
-    enabled: true
+    enabled: true,
+    functionNormalizationEnabled: false,
+    conceptRuleId: defaultConceptRuleId,
+    conceptMatch: defaultConceptMatch,
+    conceptCanonical: defaultConceptCanonical
   });
   const [resolverValidateSource, setResolverValidateSource] = useState("RREG32(mmASIP_INITIAL_STATUS);");
   const [resolverMessage, setResolverMessage] = useState("");
@@ -1391,7 +1415,11 @@ export function WorkbenchPage({ pageId }: WorkbenchPageProps) {
       wrappers: [wrapper],
       strategy: resolverDraft.strategy.trim() || "macro",
       path: resolverDraft.path.trim() || `configs/resolvers/${id}.yaml`,
-      enabled: resolverDraft.enabled
+      enabled: resolverDraft.enabled,
+      functionNormalizationEnabled: resolverDraft.functionNormalizationEnabled,
+      conceptRuleId: resolverDraft.conceptRuleId.trim(),
+      conceptMatch: resolverDraft.conceptMatch.trim(),
+      conceptCanonical: resolverDraft.conceptCanonical.trim()
     };
     try {
       const response = await fetch("/api/workbench/resolver-profiles", {
@@ -1404,6 +1432,20 @@ export function WorkbenchPage({ pageId }: WorkbenchPageProps) {
           strategy: next.strategy,
           path: next.path,
           enabled: next.enabled,
+          functionNormalization: {
+            enabled: next.functionNormalizationEnabled,
+            rules:
+              next.functionNormalizationEnabled && next.conceptRuleId && next.conceptMatch && next.conceptCanonical
+                ? [
+                    {
+                      id: next.conceptRuleId,
+                      enabled: true,
+                      match: next.conceptMatch,
+                      canonical: next.conceptCanonical
+                    }
+                  ]
+                : []
+          },
           ...workbenchDbPathPayload()
         })
       });
@@ -1420,7 +1462,11 @@ export function WorkbenchPage({ pageId }: WorkbenchPageProps) {
         wrappers: ["RREG32"],
         strategy: "macro",
         path: "configs/resolvers/initial.yaml",
-        enabled: true
+        enabled: true,
+        functionNormalizationEnabled: false,
+        conceptRuleId: defaultConceptRuleId,
+        conceptMatch: defaultConceptMatch,
+        conceptCanonical: defaultConceptCanonical
       });
       setResolverMessage(`Resolver profile ${persisted.id} saved`);
     } catch (error) {
@@ -2604,13 +2650,21 @@ function formatSubfolderFilters(value: unknown) {
 
 function normalizeApiResolverProfile(profile: ApiResolverProfile): ResolverProfile {
   const wrappers = profile.wrappers?.filter(Boolean) ?? [];
+  const functionNormalization = profile.config?.graph?.function_normalization;
+  const firstRule = functionNormalization?.rules?.find(
+    (rule) => rule.id?.trim() || rule.match?.trim() || rule.canonical?.trim()
+  );
   return {
     id: profile.id,
     wrapper: wrappers[0] ?? profile.id,
     wrappers,
     strategy: profile.language ?? "config",
     path: profile.path ?? `configs/resolvers/${profile.id}.yaml`,
-    enabled: profile.enabled ?? true
+    enabled: profile.enabled ?? true,
+    functionNormalizationEnabled: functionNormalization?.enabled ?? false,
+    conceptRuleId: firstRule?.id ?? defaultConceptRuleId,
+    conceptMatch: firstRule?.match ?? defaultConceptMatch,
+    conceptCanonical: firstRule?.canonical ?? defaultConceptCanonical
   };
 }
 
@@ -3532,8 +3586,42 @@ function ResolverProfileEditor({
           />
           <FieldContent>
             <FieldLabel>Enable resolver profile</FieldLabel>
-            <FieldDescription>Only enabled YAML-backed profiles participate in symbol resolution.</FieldDescription>
+            <FieldDescription>Only enabled profiles participate in symbol resolution.</FieldDescription>
           </FieldContent>
+        </Field>
+        <Field className="provider-settings-field--toggle" orientation="horizontal">
+          <Checkbox
+            aria-label="Enable concept normalization"
+            checked={draft.functionNormalizationEnabled}
+            onCheckedChange={(checked) => update("functionNormalizationEnabled", checked === true)}
+          />
+          <FieldContent>
+            <FieldLabel>Enable concept normalization</FieldLabel>
+          </FieldContent>
+        </Field>
+        <Field>
+          <FieldLabel>Concept rule id</FieldLabel>
+          <Input
+            aria-label="Concept rule id"
+            onChange={(event) => update("conceptRuleId", event.target.value)}
+            value={draft.conceptRuleId}
+          />
+        </Field>
+        <Field className="provider-settings-field--wide">
+          <FieldLabel>Concept match regex</FieldLabel>
+          <Input
+            aria-label="Concept match regex"
+            onChange={(event) => update("conceptMatch", event.target.value)}
+            value={draft.conceptMatch}
+          />
+        </Field>
+        <Field className="provider-settings-field--wide">
+          <FieldLabel>Concept canonical name</FieldLabel>
+          <Input
+            aria-label="Concept canonical name"
+            onChange={(event) => update("conceptCanonical", event.target.value)}
+            value={draft.conceptCanonical}
+          />
         </Field>
         <Field className="provider-settings-field--wide">
           <FieldLabel>Validation source</FieldLabel>

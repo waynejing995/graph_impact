@@ -124,6 +124,68 @@ class WorkbenchBackendStateTests(unittest.TestCase):
                     enabled=True,
                 )
 
+    def test_inline_resolver_profile_config_controls_function_concept_normalization(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            db_path = Path(tmpdir) / "asip.db"
+            added = add_resolver_profile(
+                db_path,
+                profile_id="inline-concepts",
+                language="cpp",
+                wrappers=["CUSTOM_WRITE"],
+                strategy="macro",
+                path="inline:inline-concepts",
+                enabled=True,
+                config={
+                    "id": "inline-concepts",
+                    "language": "cpp",
+                    "wrappers": {"CUSTOM_WRITE": {"symbol_arg": 0, "access": "write"}},
+                    "graph": {
+                        "function_normalization": {
+                            "enabled": True,
+                            "rules": [
+                                {
+                                    "id": "inline-ip-versioned-functions",
+                                    "enabled": True,
+                                    "match": r"^(?P<ip_block>gfxhub)_rev(?P<ip_version>\d+)_(?P<operation>.+)$",
+                                    "canonical": "inline_{operation}",
+                                }
+                            ],
+                        }
+                    },
+                },
+            )
+            store = AsipStore.connect(str(db_path))
+            store.add_edge(
+                "gfxhub_rev12_gart_enable",
+                "GCVM_L2_CNTL",
+                "writes",
+                0.95,
+                stage="deterministic",
+                source="clang_text_spans",
+                path="drivers/gpu/drm/amd/amdgpu/gfxhub_v12_0.c",
+                line_start=10,
+                line_end=10,
+                provenance={
+                    "extractor": "code_graph",
+                    "function": "gfxhub_rev12_gart_enable",
+                    "resolver_profile": "inline-concepts",
+                    "corpus_id": "custom-driver",
+                    "repo": "local",
+                    "path": "drivers/gpu/drm/amd/amdgpu/gfxhub_v12_0.c",
+                },
+            )
+
+            graph = store.global_graph_networkx(limit=100, function_view="concept")
+
+            function_node = next(node for node in graph["nodes"] if node["kind"] == "function")
+            self.assertEqual(added["path"], "inline:inline-concepts")
+            self.assertEqual(
+                function_node["id"],
+                "function:custom-driver:concept:inline-concepts:inline-ip-versioned-functions:inline_gart_enable",
+            )
+            self.assertEqual(function_node["attr"]["normalization_rule"], "inline-ip-versioned-functions")
+            self.assertEqual(function_node["attr"]["normalization_profile_id"], "inline-concepts")
+
     def test_resolver_profile_migrates_old_table_without_config_json(self):
         with tempfile.TemporaryDirectory() as tmpdir:
             root = Path(tmpdir)

@@ -2098,13 +2098,24 @@ def add_resolver_profile(
     strategy: str,
     path: str,
     enabled: bool = True,
+    config: Optional[Mapping[str, object]] = None,
 ) -> Dict[str, Any]:
-    config_path = _resolve_resolver_config_path(path or f"configs/resolvers/{profile_id}.yaml")
-    if not config_path.exists():
-        raise FileNotFoundError(f"resolver config must exist: {config_path}")
-    config_profile = load_resolver_profile(config_path)
+    if config is not None:
+        config_profile = resolver_profile_from_config(
+            config,
+            fallback_id=profile_id,
+            fallback_language=language,
+            fallback_wrappers=list(wrappers),
+            fallback_strategy=strategy,
+        )
+    else:
+        config_path = _resolve_resolver_config_path(path or f"configs/resolvers/{profile_id}.yaml")
+        if not config_path.exists():
+            raise FileNotFoundError(f"resolver config must exist: {config_path}")
+        config_profile = load_resolver_profile(config_path)
     if config_profile.id != profile_id:
         raise ValueError(f"resolver config id {config_profile.id!r} does not match profile id {profile_id!r}")
+    config_payload = resolver_profile_to_config(config_profile)
     db_path.parent.mkdir(parents=True, exist_ok=True)
     store = AsipStore.connect(str(db_path))
     store.migrate()
@@ -2116,7 +2127,7 @@ def add_resolver_profile(
         strategy,
         str(path),
         enabled,
-        config=resolver_profile_to_config(config_profile),
+        config=config_payload,
     )
     return {
         "id": profile_id,
@@ -2125,6 +2136,7 @@ def add_resolver_profile(
         "strategy": strategy,
         "path": path,
         "enabled": enabled,
+        "config": config_payload,
     }
 
 

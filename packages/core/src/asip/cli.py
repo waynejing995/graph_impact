@@ -344,6 +344,7 @@ def main(argv: Optional[List[str]] = None) -> int:
     resolver_add.add_argument("--strategy", default="macro")
     resolver_add.add_argument("--path", default="")
     resolver_add.add_argument("--disabled", action="store_true")
+    resolver_add.add_argument("--config-json", default="", help="Inline resolver profile config JSON")
 
     resolver_validate = subcommands.add_parser("resolver-validate", help="Validate a resolver profile against source text")
     resolver_validate.add_argument("--db", required=True)
@@ -703,6 +704,7 @@ def main(argv: Optional[List[str]] = None) -> int:
         print(json.dumps({"profiles": list_resolver_profiles(Path(args.db))}, indent=2))
         return 0
     if args.command == "resolver-add":
+        resolver_config = json.loads(args.config_json) if args.config_json else None
         print(
             json.dumps(
                 add_resolver_profile(
@@ -713,6 +715,7 @@ def main(argv: Optional[List[str]] = None) -> int:
                     strategy=args.strategy,
                     path=args.path or f"configs/resolvers/{args.id}.yaml",
                     enabled=not args.disabled,
+                    config=resolver_config,
                 ),
                 indent=2,
             )

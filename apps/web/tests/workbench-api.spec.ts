@@ -1766,6 +1766,57 @@ test("resolver profiles API rejects profiles without existing yaml config", asyn
   expect(body.error).toContain("existing YAML config");
 });
 
+test("resolver profiles API accepts inline concept normalization config", async ({ request }) => {
+  const root = mkdtempSync(path.join(tmpdir(), "asip-api-inline-resolver-"));
+  const dbPath = path.join(root, "inline-resolver.db");
+
+  const create = await request.post("/api/workbench/resolver-profiles", {
+    data: {
+      id: "inline-concepts",
+      language: "cpp",
+      wrappers: ["CUSTOM_WRITE"],
+      strategy: "macro",
+      path: "inline:inline-concepts",
+      enabled: true,
+      dbPath,
+      functionNormalization: {
+        enabled: true,
+        rules: [
+          {
+            id: "inline-ip-versioned-functions",
+            enabled: true,
+            match: "^(?P<ip_block>gfxhub)_rev(?P<ip_version>\\d+)_(?P<operation>.+)$",
+            canonical: "inline_{operation}"
+          }
+        ]
+      }
+    }
+  });
+
+  expect(create.ok()).toBe(true);
+  const body = (await create.json()) as {
+    id: string;
+    path: string;
+    config?: {
+      graph?: {
+        function_normalization?: {
+          enabled?: boolean;
+          rules?: Array<{ id?: string; match?: string; canonical?: string }>;
+        };
+      };
+    };
+  };
+  expect(body.id).toBe("inline-concepts");
+  expect(body.path).toBe("inline:inline-concepts");
+  expect(body.config?.graph?.function_normalization?.enabled).toBe(true);
+  expect(body.config?.graph?.function_normalization?.rules?.[0]).toEqual(
+    expect.objectContaining({
+      id: "inline-ip-versioned-functions",
+      canonical: "inline_{operation}"
+    })
+  );
+});
+
 test("index API can target user-added corpora and record provider settings", async ({ request }) => {
   const root = mkdtempSync(path.join(tmpdir(), "asip-api-corpus-"));
   const dbPath = path.join(root, "api-local-docs.db");

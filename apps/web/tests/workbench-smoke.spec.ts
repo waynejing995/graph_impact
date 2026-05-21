@@ -1653,6 +1653,62 @@ test("resolver page validates configurable profiles from user source", async ({ 
   await expect(page.getByText(`Resolver profile initial validated ${symbol}`)).toBeVisible();
 });
 
+test("resolver page sends configurable concept normalization rules", async ({ page }) => {
+  const postBodies: unknown[] = [];
+  await page.route("**/api/workbench/resolver-profiles", async (route) => {
+    if (route.request().method() === "POST") {
+      const body = route.request().postDataJSON();
+      postBodies.push(body);
+      await route.fulfill({
+        contentType: "application/json",
+        body: JSON.stringify({
+          id: body.id,
+          language: body.language,
+          wrappers: body.wrappers,
+          path: body.path,
+          enabled: body.enabled,
+          config: {
+            graph: {
+              function_normalization: body.functionNormalization
+            }
+          }
+        })
+      });
+      return;
+    }
+    await route.fulfill({ contentType: "application/json", body: JSON.stringify({ profiles: [] }) });
+  });
+
+  await page.goto("/resolver-profiles");
+
+  await page.getByRole("textbox", { name: "Profile id" }).fill("inline-concepts");
+  await page.getByRole("textbox", { name: "Wrapper symbol" }).fill("CUSTOM_WRITE");
+  await page.getByRole("checkbox", { name: "Enable concept normalization" }).check();
+  await page.getByRole("textbox", { name: "Concept rule id" }).fill("inline-ip-versioned-functions");
+  await page
+    .getByRole("textbox", { name: "Concept match regex" })
+    .fill("^(?P<ip_block>gfxhub)_rev(?P<ip_version>\\d+)_(?P<operation>.+)$");
+  await page.getByRole("textbox", { name: "Concept canonical name" }).fill("inline_{operation}");
+  await page.getByRole("button", { name: "Save resolver profile" }).click();
+
+  expect(postBodies).toContainEqual(
+    expect.objectContaining({
+      id: "inline-concepts",
+      wrappers: ["CUSTOM_WRITE"],
+      functionNormalization: {
+        enabled: true,
+        rules: [
+          expect.objectContaining({
+            id: "inline-ip-versioned-functions",
+            canonical: "inline_{operation}"
+          })
+        ]
+      }
+    })
+  );
+  await expect(page.getByText("Resolver profile inline-concepts saved")).toBeVisible();
+});
+
 test("resolver page can add disabled profiles with visible status", async ({ page }) => {
   await page.goto("/resolver-profiles");
 
