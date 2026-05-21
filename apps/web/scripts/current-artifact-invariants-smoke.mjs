@@ -238,6 +238,11 @@ assert.equal(callbackAudit.gate_status, "pass");
 assert.ok(Number(callbackAudit.summary?.callback_edge_count ?? 0) > 0);
 assert.equal(Number(callbackAudit.summary?.parser_pollution_candidate_count ?? -1), 0);
 assert.equal(Number(callbackAudit.summary?.unexplained_ambiguous_callback_edge_count ?? -1), 0);
+assert.ok(Number(callbackAudit.summary?.real_oracle_total ?? 0) >= 3);
+assert.equal(
+  Number(callbackAudit.summary?.real_oracle_passed ?? -1),
+  Number(callbackAudit.summary?.real_oracle_total ?? -2)
+);
 
 const cliAcceptance = readJson(args.acceptanceJson);
 assert.equal(cliAcceptance.source, "asip.acceptance");

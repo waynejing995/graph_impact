@@ -12,17 +12,116 @@
   },
   "failure_reasons": [],
   "gate_status": "pass",
-  "generated_at": "2026-05-21T05:11:24+00:00",
+  "generated_at": "2026-05-21T05:48:11+00:00",
   "parser_pollution_samples": [],
-  "real_oracles": [],
+  "real_oracles": [
+    {
+      "match_count": 6,
+      "message": "ok",
+      "oracle": "drivers/gpu/drm/amd/amdgpu/gfx_v10_0.c:gfx_v10_0_ring_preempt_ib",
+      "sample": {
+        "call_kind": "vtable_callback",
+        "dst": "gfx10_kiq_unmap_queues",
+        "line_start": 8877,
+        "path": "drivers/gpu/drm/amd/amdgpu/gfx_v10_0.c",
+        "src": "gfx_v10_0_ring_preempt_ib",
+        "type_flow": "clang_ast_json"
+      },
+      "status": "pass"
+    },
+    {
+      "match_count": 80,
+      "message": "ok",
+      "oracle": "drivers/gpu/drm/amd/amdgpu/amdgpu_device.c:amdgpu_device_fw_loading",
+      "sample": {
+        "call_kind": "vtable_dispatch",
+        "dst": "acp_hw_init",
+        "line_start": 2199,
+        "path": "drivers/gpu/drm/amd/amdgpu/amdgpu_device.c",
+        "src": "amdgpu_device_fw_loading",
+        "type_flow": ""
+      },
+      "status": "pass"
+    },
+    {
+      "match_count": 2,
+      "message": "ok",
+      "oracle": "drivers/gpu/drm/amd/amdgpu/amdgpu_pmu.c:amdgpu_perf_start",
+      "sample": {
+        "call_kind": "vtable_dispatch",
+        "dst": "df_v3_6_pmc_start",
+        "line_start": 247,
+        "path": "drivers/gpu/drm/amd/amdgpu/amdgpu_pmu.c",
+        "src": "amdgpu_perf_start",
+        "type_flow": ""
+      },
+      "status": "pass"
+    },
+    {
+      "match_count": 80,
+      "message": "ok",
+      "oracle": "libgv/core/amdgv_device.c:amdgv_device_func_hw_init",
+      "sample": {
+        "call_kind": "vtable_dispatch",
+        "dst": "amdgv_vfmgr_hw_init",
+        "line_start": 1447,
+        "path": "libgv/core/amdgv_device.c",
+        "src": "amdgv_device_func_hw_init",
+        "type_flow": "clang_ast_json"
+      },
+      "status": "pass"
+    },
+    {
+      "match_count": 2,
+      "message": "ok",
+      "oracle": "libgv/core/amdgv_sched_switch.c:amdgv_sched_world_switch_init",
+      "sample": {
+        "call_kind": "vtable_table_alias",
+        "dst": "amdgv_sched_manual_switch_init",
+        "line_start": 1686,
+        "path": "libgv/core/amdgv_sched_switch.c",
+        "src": "amdgv_sched_world_switch_init",
+        "type_flow": "clang_ast_json"
+      },
+      "status": "pass"
+    },
+    {
+      "match_count": 2,
+      "message": "ok",
+      "oracle": "libgv/core/amdgv_ecc.c:amdgv_ecc_import_live_data",
+      "sample": {
+        "call_kind": "vtable_table_alias",
+        "dst": "mi300_nbio_get_nps_mode",
+        "line_start": 527,
+        "path": "libgv/core/amdgv_ecc.c",
+        "src": "amdgv_ecc_import_live_data",
+        "type_flow": ""
+      },
+      "status": "pass"
+    },
+    {
+      "match_count": 1,
+      "message": "ok",
+      "oracle": "gim/gim_shim/sysfs/gim_debugfs.c:snprintf_realloc",
+      "sample": {
+        "call_kind": "vtable_callback",
+        "dst": "gim_vsnprintf",
+        "line_start": 492,
+        "path": "gim/gim_shim/sysfs/gim_debugfs.c",
+        "src": "snprintf_realloc",
+        "type_flow": ""
+      },
+      "status": "pass"
+    }
+  ],
   "source": "asip.callback_edge_audit",
   "summary": {
     "ambiguous_callback_edge_count": 4530,
     "callback_edge_count": 4601,
     "explained_dynamic_dispatch_edge_count": 4530,
     "parser_pollution_candidate_count": 0,
-    "real_oracle_passed": 0,
-    "real_oracle_total": 0,
+    "real_oracle_passed": 7,
+    "real_oracle_total": 7,
     "unexplained_ambiguous_callback_edge_count": 0,
     "unique_ambiguous_callers": 498,
     "unique_unexplained_ambiguous_callers": 0

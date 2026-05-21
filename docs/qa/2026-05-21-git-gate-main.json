@@ -1,18 +1,32 @@
 {
   "source": "asip.git_gate",
-  "generated_at": "2026-05-21T02:18:01+00:00",
+  "generated_at": "2026-05-21T05:54:13+00:00",
   "repo_root": "/Volumes/data/User/wayne/Code/graph_impact",
   "branch": "main",
-  "head": "12216b4e8dfe70c5c6ec556a4d0ec1dbfb68de84",
+  "head": "77c71a7bb56d89cf952c3aa5cacd13cba0139114",
   "upstream": "origin/main",
   "ahead": 0,
   "behind": 0,
   "diff_check": "pass",
   "diff_check_output": "",
-  "worktree_status": "clean",
-  "changed_paths": [],
-  "committed": true,
+  "worktree_status": "dirty",
+  "changed_paths": [
+    " M apps/web/scripts/current-artifact-invariants-smoke.mjs",
+    " M docs/qa/2026-05-21-callback-edge-audit-current.json",
+    " M docs/qa/2026-05-21-callback-edge-audit-current.md",
+    " M docs/qa/2026-05-21-current-goal-completion-gate.json",
+    " M docs/qa/2026-05-21-current-goal-completion-gate.md",
+    " M docs/qa/2026-05-21-semantic-rerank-labeled-eval.json",
+    " M docs/qa/2026-05-21-semantic-rerank-labeled-eval.md",
+    " M docs/qa/2026-05-21-ui-no-server-smoke.json",
+    " M docs/qa/semantic-rerank-eval-set.jsonl",
+    " M packages/core/src/asip/completion_gate.py",
+    " M packages/core/tests/test_completion_gate.py"
+  ],
+  "committed": false,
   "pushed": true,
-  "gate_status": "pass",
-  "failure_reasons": []
+  "gate_status": "blocked",
+  "failure_reasons": [
+    "worktree has 11 changed/untracked paths"
+  ]
 }

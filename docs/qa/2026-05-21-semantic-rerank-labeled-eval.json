@@ -1,16 +1,16 @@
 {
   "source": "asip.semantic_quality_eval",
-  "generated_at": "2026-05-21T04:45:26+00:00",
-  "repo_head": "6d127fa9fc90f17814a1e63952ef7362133c0ef7",
+  "generated_at": "2026-05-21T05:50:32+00:00",
+  "repo_head": "77c71a7bb56d89cf952c3aa5cacd13cba0139114",
   "db_path": "data/asip.db",
   "eval_set_path": "docs/qa/semantic-rerank-eval-set.jsonl",
-  "eval_set_sha256": "0bc73ef7aa1ccdbae3dd4b742bcca322c3a84530c099834a9a5d748c403aec80",
+  "eval_set_sha256": "3e07733a2b11e3dc1f1e3b56bc32de4afbac682f9cc8136e2ba4429bde5f2488",
   "summary": {
-    "total": 5,
-    "passed": 5,
+    "total": 7,
+    "passed": 7,
     "failed": 0,
     "provider_vector_cases": 2,
-    "mean_reciprocal_rank": 0.67
+    "mean_reciprocal_rank": 0.7643
   },
   "gate_status": "pass",
   "cases": [
@@ -419,6 +419,163 @@
           "symbol": "BIFC_A2S_CNTL_SW0__SDP_DYNAMIC_VC_WR_CHAIN_DIS_MASK",
           "source_type": "register",
           "path": "libgv/core/hw/AI/asic_reg/mi300/NBIO/nbio_7_9_0_sh_mask.h",
+          "retrieval_sources": [
+            "lexical",
+            "fts5"
+          ],
+          "vector_score": null
+        }
+      ]
+    },
+    {
+      "id": "SQ06_SMN_PREFIX_EXACT",
+      "query": "smnMP1_FIRMWARE_FLAGS",
+      "status": "pass",
+      "failure_reasons": [],
+      "row_count": 24,
+      "first_expected_rank": 1,
+      "source_types": [
+        "code"
+      ],
+      "retrieval_sources": [
+        "fts5",
+        "lexical"
+      ],
+      "provider_vector_rows": 0,
+      "query_embedding": {
+        "source": "skipped-symbol-token"
+      },
+      "graph_node_count": 15,
+      "graph_edge_count": 12,
+      "top_rows": [
+        {
+          "rank": 1,
+          "symbol": "smnMP1_FIRMWARE_FLAGS",
+          "source_type": "code",
+          "path": "drivers/gpu/drm/amd/amdgpu/psp_v3_1.c",
+          "retrieval_sources": [
+            "lexical",
+            "fts5"
+          ],
+          "vector_score": null
+        },
+        {
+          "rank": 2,
+          "symbol": "smnMP1_FIRMWARE_FLAGS",
+          "source_type": "code",
+          "path": "drivers/gpu/drm/amd/amdgpu/psp_v11_0.c",
+          "retrieval_sources": [
+            "lexical",
+            "fts5"
+          ],
+          "vector_score": null
+        },
+        {
+          "rank": 3,
+          "symbol": "smnMP1_FIRMWARE_FLAGS",
+          "source_type": "code",
+          "path": "drivers/gpu/drm/amd/amdgpu/psp_v12_0.c",
+          "retrieval_sources": [
+            "lexical",
+            "fts5"
+          ],
+          "vector_score": null
+        },
+        {
+          "rank": 4,
+          "symbol": "smnMP1_FIRMWARE_FLAGS",
+          "source_type": "code",
+          "path": "drivers/gpu/drm/amd/amdgpu/psp_v3_1.c",
+          "retrieval_sources": [
+            "lexical",
+            "fts5"
+          ],
+          "vector_score": null
+        },
+        {
+          "rank": 5,
+          "symbol": "MP1_FIRMWARE_FLAGS",
+          "source_type": "code",
+          "path": "drivers/gpu/drm/amd/amdgpu/psp_v3_1.c",
+          "retrieval_sources": [
+            "lexical",
+            "fts5"
+          ],
+          "vector_score": null
+        }
+      ]
+    },
+    {
+      "id": "SQ07_CP_HQD_FIELD_MASK_EXACT",
+      "query": "CP_HQD ACTIVE_MASK",
+      "status": "pass",
+      "failure_reasons": [],
+      "row_count": 24,
+      "first_expected_rank": 1,
+      "source_types": [
+        "code",
+        "register"
+      ],
+      "retrieval_sources": [
+        "fts5",
+        "lexical"
+      ],
+      "provider_vector_rows": 0,
+      "query_embedding": {
+        "source": "skipped-symbol-token"
+      },
+      "graph_node_count": 0,
+      "graph_edge_count": 0,
+      "top_rows": [
+        {
+          "rank": 1,
+          "symbol": "CP_HQD_ACTIVE__ACTIVE_MASK",
+          "source_type": "register",
+          "path": "libgv/core/hw/AI/asic_reg/mi200/GC/gc_9_0_sh_mask.h",
+          "retrieval_sources": [
+            "lexical",
+            "fts5"
+          ],
+          "vector_score": null
+        },
+        {
+          "rank": 2,
+          "symbol": "CP_HQD_ACTIVE__ACTIVE_MASK",
+          "source_type": "register",
+          "path": "libgv/core/hw/AI/asic_reg/mi200/GC/gc_9_4_2_sh_mask.h",
+          "retrieval_sources": [
+            "lexical",
+            "fts5"
+          ],
+          "vector_score": null
+        },
+        {
+          "rank": 3,
+          "symbol": "CP_HQD_ACTIVE__ACTIVE_MASK",
+          "source_type": "register",
+          "path": "libgv/core/hw/AI/asic_reg/mi200/GC/gc_9_4_sh_mask.h",
+          "retrieval_sources": [
+            "lexical",
+            "fts5"
+          ],
+          "vector_score": null
+        },
+        {
+          "rank": 4,
+          "symbol": "CP_HQD_ACTIVE__ACTIVE_MASK",
+          "source_type": "register",
+          "path": "libgv/core/hw/AI/asic_reg/mi300/GC/gc_9_4_3_sh_mask.h",
+          "retrieval_sources": [
+            "lexical",
+            "fts5"
+          ],
+          "vector_score": null
+        },
+        {
+          "rank": 5,
+          "symbol": "CP_HQD_IQ_TIMER__ACTIVE_MASK",
+          "source_type": "register",
+          "path": "libgv/core/hw/AI/asic_reg/mi200/GC/gc_9_0_sh_mask.h",
           "retrieval_sources": [
             "lexical",
             "fts5"

@@ -1087,6 +1087,7 @@ def _semantic_quality_requirement(payload: Optional[Mapping[str, Any]], *, requi
 
 
 def _callback_audit_requirement(payload: Optional[Mapping[str, Any]], *, required: bool) -> Dict[str, Any]:
+    minimum_real_oracles = 3 if required else 0
     if not isinstance(payload, Mapping):
         if not required:
             return _requirement(
@@ -1113,6 +1114,8 @@ def _callback_audit_requirement(payload: Optional[Mapping[str, Any]], *, require
     callback_count = _coerce_int(summary.get("callback_edge_count"))
     parser_pollution = _coerce_int(summary.get("parser_pollution_candidate_count", 0) or 0)
     unexplained_ambiguous = _coerce_int(summary.get("unexplained_ambiguous_callback_edge_count", 0) or 0)
+    real_oracle_total = _coerce_int(summary.get("real_oracle_total", 0) or 0)
+    real_oracle_passed = _coerce_int(summary.get("real_oracle_passed", 0) or 0)
     if callback_count is None or callback_count <= 0:
         failures.append(f"callback_edge_count={summary.get('callback_edge_count')}")
     if parser_pollution is None or parser_pollution != 0:
@@ -1121,12 +1124,20 @@ def _callback_audit_requirement(payload: Optional[Mapping[str, Any]], *, require
         failures.append(
             f"unexplained_ambiguous_callback_edge_count={summary.get('unexplained_ambiguous_callback_edge_count')}"
         )
+    if real_oracle_total is None or real_oracle_total < minimum_real_oracles:
+        failures.append(f"real_oracle_total={summary.get('real_oracle_total')}")
+    if real_oracle_passed is None or real_oracle_total is None or real_oracle_passed != real_oracle_total:
+        failures.append(
+            f"real_oracle_passed={summary.get('real_oracle_passed')} does not match "
+            f"real_oracle_total={summary.get('real_oracle_total')}"
+        )
     status = "pass" if not failures else "blocked"
     evidence = (
         f"gate_status={payload.get('gate_status')}; "
         f"callback_edges={summary.get('callback_edge_count', 0)}; "
         f"parser_pollution={summary.get('parser_pollution_candidate_count', 0)}; "
-        f"unexplained_ambiguous={summary.get('unexplained_ambiguous_callback_edge_count', 0)}"
+        f"unexplained_ambiguous={summary.get('unexplained_ambiguous_callback_edge_count', 0)}; "
+        f"real_oracles={summary.get('real_oracle_passed', 0)}/{summary.get('real_oracle_total', 0)}"
     )
     return _requirement(
         "callback_edge_audit",

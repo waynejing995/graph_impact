@@ -1,6 +1,6 @@
 {
   "source": "asip.completion_gate",
-  "generated_at": "2026-05-21T05:15:44+00:00",
+  "generated_at": "2026-05-21T05:55:07+00:00",
   "db_path": "data/asip.db",
   "database": {
     "status": "pass",
@@ -98,11 +98,11 @@
       "source": "asip.semantic_quality_eval",
       "gate_status": "pass",
       "summary": {
-        "total": 5,
-        "passed": 5,
+        "total": 7,
+        "passed": 7,
         "failed": 0,
         "provider_vector_cases": 2,
-        "mean_reciprocal_rank": 0.67
+        "mean_reciprocal_rank": 0.7643
       },
       "failure_reasons": []
     },
@@ -116,8 +116,8 @@
         "callback_edge_count": 4601,
         "explained_dynamic_dispatch_edge_count": 4530,
         "parser_pollution_candidate_count": 0,
-        "real_oracle_passed": 0,
-        "real_oracle_total": 0,
+        "real_oracle_passed": 7,
+        "real_oracle_total": 7,
         "unexplained_ambiguous_callback_edge_count": 0,
         "unique_ambiguous_callers": 498,
         "unique_unexplained_ambiguous_callers": 0
@@ -177,7 +177,7 @@
     },
     "git_gate": {
       "status": "loaded",
-      "path": "/tmp/asip-git-gate-current-dirty.json",
+      "path": "docs/qa/2026-05-21-git-gate-main.json",
       "source": "asip.git_gate",
       "gate_status": "blocked",
       "summary": {},
@@ -273,14 +273,14 @@
       "id": "semantic_quality",
       "title": "Labeled semantic retrieval quality gate",
       "status": "pass",
-      "evidence": "gate_status=pass; passed=5/5; provider_vector_cases=2; mrr=0.67",
+      "evidence": "gate_status=pass; passed=7/7; provider_vector_cases=2; mrr=0.7643",
       "failure_reasons": []
     },
     {
       "id": "callback_edge_audit",
       "title": "Callback/vtable parser and overlink audit",
       "status": "pass",
-      "evidence": "gate_status=pass; callback_edges=4601; parser_pollution=0; unexplained_ambiguous=0",
+      "evidence": "gate_status=pass; callback_edges=4601; parser_pollution=0; unexplained_ambiguous=0; real_oracles=7/7",
       "failure_reasons": []
     },
     {
@@ -321,13 +321,13 @@
       "id": "git_gate",
       "title": "Final diff, commit, and push gate",
       "status": "blocked",
-      "evidence": "diff_check=pass; worktree_status=dirty; committed=False; pushed=True; artifact_head=9fee2f4c0fba; current_head=9fee2f4c0fba; artifact_branch=main; current_branch=main; current_worktree=dirty:13; artifact_upstream=origin/main; current_upstream=origin/main; current_ahead=0; current_behind=0",
+      "evidence": "diff_check=pass; worktree_status=dirty; committed=False; pushed=True; artifact_head=77c71a7bb56d; current_head=77c71a7bb56d; artifact_branch=main; current_branch=main; current_worktree=dirty:12; artifact_upstream=origin/main; current_upstream=origin/main; current_ahead=0; current_behind=0",
       "failure_reasons": [
         "gate_status=blocked",
-        "worktree has 13 changed/untracked paths",
+        "worktree has 11 changed/untracked paths",
         "worktree_status=dirty",
         "committed is not true",
-        "current worktree has 13 changed/untracked paths"
+        "current worktree has 12 changed/untracked paths"
       ]
     }
   ],
@@ -346,9 +346,9 @@
     "residual_acceptance: accepted is not true",
     "residual_acceptance: accepted_residuals is empty",
     "git_gate: gate_status=blocked",
-    "git_gate: worktree has 13 changed/untracked paths",
+    "git_gate: worktree has 11 changed/untracked paths",
     "git_gate: worktree_status=dirty",
     "git_gate: committed is not true",
-    "git_gate: current worktree has 13 changed/untracked paths"
+    "git_gate: current worktree has 12 changed/untracked paths"
   ]
 }
