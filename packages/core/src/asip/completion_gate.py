@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 import sqlite3
 import hashlib
+import subprocess
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, Iterable, List, Mapping, Optional, Tuple
@@ -1527,12 +1528,128 @@ def _git_gate_requirement(payload: Optional[Mapping[str, Any]]) -> Dict[str, Any
         failures.append("committed is not true")
     if payload.get("pushed") is not True:
         failures.append("pushed is not true")
+    binding_failures, binding_evidence = _current_git_binding_failures(payload)
+    failures.extend(binding_failures)
     status = "pass" if not failures else "blocked"
     evidence = (
         f"diff_check={payload.get('diff_check')}; worktree_status={payload.get('worktree_status')}; "
         f"committed={payload.get('committed')}; pushed={payload.get('pushed')}"
     )
+    if binding_evidence:
+        evidence = f"{evidence}; {binding_evidence}"
     return _requirement("git_gate", "Final diff, commit, and push gate", status, evidence, failures)
+
+
+def _current_git_binding_failures(payload: Mapping[str, Any]) -> Tuple[List[str], str]:
+    repo_root_value = payload.get("repo_root")
+    if not isinstance(repo_root_value, str) or not repo_root_value.strip():
+        return [], ""
+
+    repo_root = Path(repo_root_value)
+    failures: List[str] = []
+    evidence: List[str] = []
+    if not repo_root.exists():
+        return [f"repo_root does not exist: {repo_root_value}"], f"repo_root={repo_root_value}"
+
+    current_head = _git_stdout(repo_root, ["rev-parse", "HEAD"], failures, "HEAD")
+    artifact_head = str(payload.get("head") or "").strip()
+    if artifact_head:
+        evidence.append(f"artifact_head={_short_sha(artifact_head)}")
+        if current_head and current_head != artifact_head:
+            failures.append(
+                f"head does not match current HEAD: artifact={artifact_head} current={current_head}"
+            )
+    elif payload.get("gate_status") == "pass":
+        failures.append("head is missing from git gate artifact")
+    if current_head:
+        evidence.append(f"current_head={_short_sha(current_head)}")
+
+    current_branch = _git_stdout(repo_root, ["rev-parse", "--abbrev-ref", "HEAD"], failures, "branch")
+    artifact_branch = str(payload.get("branch") or "").strip()
+    if artifact_branch:
+        evidence.append(f"artifact_branch={artifact_branch}")
+        if current_branch and current_branch != artifact_branch:
+            failures.append(
+                f"branch does not match current branch: artifact={artifact_branch} current={current_branch}"
+            )
+    if current_branch:
+        evidence.append(f"current_branch={current_branch}")
+
+    diff_check = _run_git(repo_root, ["diff", "--check"])
+    if diff_check.returncode != 0:
+        failures.append("current git diff --check failed")
+    status = _run_git(repo_root, ["status", "--porcelain=v1"])
+    if status.returncode != 0:
+        failures.append("current git status failed")
+    else:
+        changed_paths = [line for line in status.stdout.splitlines() if line.strip()]
+        if changed_paths:
+            failures.append(f"current worktree has {len(changed_paths)} changed/untracked paths")
+        evidence.append("current_worktree=clean" if not changed_paths else f"current_worktree=dirty:{len(changed_paths)}")
+
+    artifact_upstream = str(payload.get("upstream") or "").strip()
+    should_check_upstream = artifact_upstream or payload.get("ahead") is not None or payload.get("behind") is not None
+    if should_check_upstream:
+        current_upstream = _git_stdout(
+            repo_root,
+            ["rev-parse", "--abbrev-ref", "--symbolic-full-name", "@{u}"],
+            failures,
+            "upstream",
+        )
+        if artifact_upstream:
+            evidence.append(f"artifact_upstream={artifact_upstream}")
+            if current_upstream and current_upstream != artifact_upstream:
+                failures.append(
+                    f"upstream does not match current upstream: artifact={artifact_upstream} current={current_upstream}"
+                )
+        if current_upstream:
+            evidence.append(f"current_upstream={current_upstream}")
+            ahead_behind = _git_stdout(repo_root, ["rev-list", "--left-right", "--count", "HEAD...@{u}"], failures, "ahead/behind")
+            if ahead_behind:
+                parts = ahead_behind.split()
+                if len(parts) == 2:
+                    current_ahead = int(parts[0])
+                    current_behind = int(parts[1])
+                    if payload.get("ahead") is not None and int(payload.get("ahead") or 0) != current_ahead:
+                        failures.append(f"ahead does not match current upstream count: artifact={payload.get('ahead')} current={current_ahead}")
+                    if payload.get("behind") is not None and int(payload.get("behind") or 0) != current_behind:
+                        failures.append(f"behind does not match current upstream count: artifact={payload.get('behind')} current={current_behind}")
+                    if current_ahead != 0:
+                        failures.append(f"current branch is {current_ahead} commit(s) ahead of upstream")
+                    if current_behind != 0:
+                        failures.append(f"current branch is {current_behind} commit(s) behind upstream")
+                    evidence.append(f"current_ahead={current_ahead}")
+                    evidence.append(f"current_behind={current_behind}")
+                else:
+                    failures.append(f"current ahead/behind output is malformed: {ahead_behind}")
+
+    return failures, "; ".join(evidence)
+
+
+def _run_git(repo_root: Path, args: List[str]) -> subprocess.CompletedProcess[str]:
+    try:
+        return subprocess.run(
+            ["git", *args],
+            cwd=repo_root,
+            capture_output=True,
+            text=True,
+            timeout=10,
+        )
+    except (OSError, subprocess.TimeoutExpired) as exc:
+        return subprocess.CompletedProcess(["git", *args], 1, "", str(exc))
+
+
+def _git_stdout(repo_root: Path, args: List[str], failures: List[str], label: str) -> str:
+    result = _run_git(repo_root, args)
+    if result.returncode != 0:
+        message = (result.stderr or result.stdout or "").strip()
+        failures.append(f"current git {label} check failed" + (f": {message}" if message else ""))
+        return ""
+    return result.stdout.strip()
+
+
+def _short_sha(value: str) -> str:
+    return value[:12] if len(value) > 12 else value
 
 
 def _requirement(

@@ -1,6 +1,7 @@
 import hashlib
 import json
 import sqlite3
+import subprocess
 import tempfile
 import unittest
 from pathlib import Path
@@ -49,6 +50,56 @@ class CompletionGateTests(unittest.TestCase):
             by_id = {item["id"]: item for item in result["requirements"]}
             self.assertIn("9/9 required artifacts loaded", by_id["artifact_binding"]["evidence"])
             self.assertIn("4/4 DB/job-bound artifacts checked", by_id["artifact_binding"]["evidence"])
+
+    def test_completion_gate_blocks_stale_git_gate_head_binding(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            repo_root = root / "repo"
+            repo_root.mkdir()
+            self._run_git(repo_root, ["init", "-b", "main"])
+            self._run_git(repo_root, ["config", "user.email", "asip-test@example.com"])
+            self._run_git(repo_root, ["config", "user.name", "ASIP Test"])
+            (repo_root / "tracked.txt").write_text("initial\n", encoding="utf-8")
+            self._run_git(repo_root, ["add", "tracked.txt"])
+            self._run_git(repo_root, ["commit", "-m", "initial"])
+            old_head = self._run_git(repo_root, ["rev-parse", "HEAD"]).stdout.strip()
+
+            (repo_root / "tracked.txt").write_text("current\n", encoding="utf-8")
+            self._run_git(repo_root, ["add", "tracked.txt"])
+            self._run_git(repo_root, ["commit", "-m", "current"])
+
+            db_path = self._write_gate_db(root / "asip.db")
+            acceptance_json = self._write_json(root / "acceptance.json", self._acceptance_payload(["CLI", "API", "MCP"], db_path=db_path))
+            web_json = self._write_json(root / "web-acceptance.json", self._acceptance_payload(["CLI", "API", "Web", "MCP"], db_path=db_path))
+            provider_json = self._write_json(root / "provider.json", self._provider_payload("pass", db_path=db_path))
+            runtime_json = self._write_json(root / "runtime-semantic.json", self._runtime_semantic_payload("pass", db_path=db_path))
+            browser_json = self._write_json(root / "browser.json", self._browser_e2e_payload("pass", db_path=db_path))
+            no_server_json = self._write_json(root / "no-server.json", self._no_server_payload("pass"))
+            performance_json = self._write_json(root / "performance.json", self._performance_payload("pass"))
+            residual_json = self._write_json(root / "residual.json", self._residual_payload("pass"))
+            git_json = self._write_json(
+                root / "git.json",
+                self._git_payload("pass", repo_root=repo_root, branch="main", head=old_head),
+            )
+
+            result = run_completion_gate(
+                db_path,
+                acceptance_json=acceptance_json,
+                web_acceptance_json=web_json,
+                provider_json=provider_json,
+                runtime_semantic_json=runtime_json,
+                browser_json=browser_json,
+                no_server_json=no_server_json,
+                performance_json=performance_json,
+                residual_acceptance_json=residual_json,
+                git_gate_json=git_json,
+                minimum_counts=self._fixture_minimum_counts(),
+            )
+
+            by_id = {item["id"]: item for item in result["requirements"]}
+            self.assertEqual(result["gate_status"], "blocked")
+            self.assertEqual(by_id["git_gate"]["status"], "blocked")
+            self.assertTrue(any("head does not match current HEAD" in reason for reason in by_id["git_gate"]["failure_reasons"]))
 
     def test_completion_gate_blocks_tiny_db_with_default_expanded_thresholds(self):
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -2330,15 +2381,21 @@ class CompletionGateTests(unittest.TestCase):
             "accepted_residuals": ["full clangd/libclang cross-TU type-flow"],
         }
 
-    def _git_payload(self, gate_status):
+    def _git_payload(self, gate_status, *, repo_root=None, branch=None, head=None):
         return {
             "source": "asip.git_gate",
             "gate_status": gate_status,
+            "repo_root": str(repo_root) if repo_root is not None else "",
+            "branch": branch or "",
+            "head": head or "",
             "diff_check": "pass" if gate_status == "pass" else "fail",
             "worktree_status": "clean" if gate_status == "pass" else "dirty",
             "committed": gate_status == "pass",
             "pushed": gate_status == "pass",
         }
+
+    def _run_git(self, cwd, args):
+        return subprocess.run(["git", *args], cwd=cwd, check=True, capture_output=True, text=True)
 
     def _in_app_browser_payload(self):
         return {
