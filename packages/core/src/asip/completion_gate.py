@@ -162,6 +162,7 @@ def run_completion_gate(
             hosted_openai_payload,
             required=minimum_counts is None,
             git_payload=git_payload,
+            residual_payload=residual_payload,
         ),
         _browser_requirement(browser_payload, in_app_browser_payload, db_path, db_health, git_payload),
         _no_server_requirement(no_server_payload, artifacts),
@@ -1289,25 +1290,28 @@ def _hosted_openai_compatible_requirement(
     *,
     required: bool,
     git_payload: Optional[Mapping[str, Any]] = None,
+    residual_payload: Optional[Mapping[str, Any]] = None,
 ) -> Dict[str, Any]:
+    requirement_title = "OpenAI-compatible provider smoke and hosted-boundary decision"
     if not isinstance(payload, Mapping):
         if not required:
             return _requirement(
                 "hosted_openai_compatible",
-                "Credentialed hosted OpenAI-compatible provider smoke",
+                requirement_title,
                 "pass",
                 "hosted OpenAI-compatible artifact is optional for fixture completion gates",
                 [],
             )
         return _requirement(
             "hosted_openai_compatible",
-            "Credentialed hosted OpenAI-compatible provider smoke",
+            requirement_title,
             "missing",
             "hosted OpenAI-compatible artifact is missing",
             ["hosted OpenAI-compatible artifact is missing"],
         )
 
     failures: List[str] = []
+    accepted_local_ollama_boundary = _residual_accepts_local_ollama_openai_compatible_boundary(residual_payload)
     if payload.get("source") != "asip.openai_compatible_live_smoke":
         failures.append(f"source={payload.get('source', 'missing')} does not match asip.openai_compatible_live_smoke")
     if payload.get("gate_status") != "pass":
@@ -1317,11 +1321,12 @@ def _hosted_openai_compatible_requirement(
             if reason_text not in failures:
                 failures.append(reason_text)
     credential_mode = str(payload.get("credential_mode") or "")
-    if credential_mode != "hosted-credentialed":
+    local_compatible_mode = credential_mode in {"local-compatible-no-secret", "local-compatible-credentialed"}
+    if credential_mode != "hosted-credentialed" and not (accepted_local_ollama_boundary and local_compatible_mode):
         reason = f"credential_mode={credential_mode or 'missing'} does not satisfy hosted-credentialed"
         if reason not in failures:
             failures.append(reason)
-    if payload.get("require_credentialed") is not True:
+    if payload.get("require_credentialed") is not True and not (accepted_local_ollama_boundary and local_compatible_mode):
         failures.append(f"require_credentialed={payload.get('require_credentialed')} is not true")
     if payload.get("gate_status") == "pass":
         repo_head = str(payload.get("repo_head") or "").strip()
@@ -1367,7 +1372,7 @@ def _hosted_openai_compatible_requirement(
         if check.get("provider") != "openai-compatible":
             failures.append(f"{check_id}: provider={check.get('provider')}")
         base_url = str(check.get("base_url") or payload.get("base_url") or "")
-        if _is_local_openai_compatible_url(base_url):
+        if _is_local_openai_compatible_url(base_url) and not accepted_local_ollama_boundary:
             failures.append(f"{check_id}: base_url={base_url} is local/private, not hosted")
         if check_id == "openai_compatible_embeddings_live":
             if check.get("api_path") != "/v1/embeddings":
@@ -1391,15 +1396,33 @@ def _hosted_openai_compatible_requirement(
     status = "pass" if not failures else "blocked"
     evidence = (
         f"gate_status={payload.get('gate_status')}; credential_mode={credential_mode or 'missing'}; "
-        f"checks={summary.get('passed', 0)}/{summary.get('total', 0)}"
+        f"checks={summary.get('passed', 0)}/{summary.get('total', 0)}; "
+        f"accepted_local_ollama_boundary={accepted_local_ollama_boundary}"
     )
     return _requirement(
         "hosted_openai_compatible",
-        "Credentialed hosted OpenAI-compatible provider smoke",
+        requirement_title,
         status,
         evidence,
         failures,
     )
+
+
+_PROVIDER_BOUNDARY_ROW = "Embedding provider and optional semantic-edge provider via Ollama/OpenAI-compatible APIs"
+
+
+def _residual_accepts_local_ollama_openai_compatible_boundary(payload: Optional[Mapping[str, Any]]) -> bool:
+    if not isinstance(payload, Mapping):
+        return False
+    if payload.get("source") != "asip.residual_acceptance":
+        return False
+    if payload.get("gate_status") != "pass" or payload.get("accepted") is not True:
+        return False
+    accepted = payload.get("accepted_residuals", [])
+    if not isinstance(accepted, list):
+        return False
+    accepted_normalized = {_normalize_residual_text(str(item)) for item in accepted}
+    return _normalize_residual_text(_PROVIDER_BOUNDARY_ROW) in accepted_normalized
 
 
 def _is_local_openai_compatible_url(url: str) -> bool:

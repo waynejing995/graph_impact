@@ -1,15 +1,14 @@
 # G11 Completion Gate And Documentation Review
 
-Status: 2026-05-21 aggregate completion gate remains blocked by explicit
-residual-boundary acceptance and hosted credentialed OpenAI-compatible
-readiness. The committed `current-goal-completion-gate` artifact is a
-pre-commit snapshot and therefore still records the dirty git gate for the
-in-flight diff; post-push git closure proof is recorded out of tree to avoid a
-self-invalidating committed artifact. Expanded DB, artifact binding, Stage 1
-graph, product graph schema, CLI/API/API_LIVE/Web/MCP/MCP_PROTOCOL probes,
-provider live checks, Stage 2 semantic freshness/live generation, labeled
-semantic quality, callback/vtable audit, browser e2e, Web no-server smoke, and
-performance smoke pass.
+Status: 2026-05-21 aggregate completion gate supports the user-accepted local
+Ollama/gemma OpenAI-compatible provider path. The committed
+`current-goal-completion-gate` artifact is a pre-commit snapshot and therefore
+still records the dirty git gate for the in-flight diff; post-push git closure
+proof is recorded out of tree to avoid a self-invalidating committed artifact.
+Expanded DB, artifact binding, Stage 1 graph, product graph schema,
+CLI/API/API_LIVE/Web/MCP/MCP_PROTOCOL probes, provider live checks, Stage 2
+semantic freshness/live generation, labeled semantic quality, callback/vtable
+audit, browser e2e, Web no-server smoke, and performance smoke pass.
 
 2026-05-21 post-push runner note: `pnpm gate:postpush` creates an internal
 `completion-pre-no-server.*` artifact only so no-server smoke can verify fresh
@@ -526,12 +525,13 @@ Commit and push happen only after verification.
   candidates, and `0` unexplained ambiguous callback fanout. The
   `aca_bank_parser` and `aca_bank_is_valid` fanout is treated as typed
   `aca_bank_ops` dynamic dispatch instead of unexplained overlinking.
-- 2026-05-21 hosted OpenAI-compatible binding: the completion gate now accepts
+- 2026-05-21 OpenAI-compatible binding: the completion gate now accepts
   `--hosted-openai-json` and adds `hosted_openai_compatible` as a first-class
-  real-final requirement. It requires `source=asip.openai_compatible_live_smoke`,
-  `credential_mode=hosted-credentialed`, `require_credentialed=true`, and
-  passing `/v1/embeddings` plus `/v1/chat/completions` checks; local
-  and private-network OpenAI-compatible smoke is rejected as hosted proof.
+  real-final requirement. It requires `source=asip.openai_compatible_live_smoke`
+  and passing `/v1/embeddings` plus `/v1/chat/completions` checks. A
+  `hosted-credentialed` artifact passes directly; a local-compatible Ollama
+  artifact passes only when the G13 residual artifact records explicit user
+  acceptance of the local Ollama/gemma provider boundary.
 - 2026-05-21 current aggregate refresh:
   `docs/qa/2026-05-21-current-goal-completion-gate.json` and `.md` now record
   `17/20` requirements passing before commit. The blockers in that pre-commit
@@ -540,20 +540,19 @@ Commit and push happen only after verification.
   flight; Web/browser/provider/Stage 2/semantic quality/callback
   audit/no-server gates are green.
 - 2026-05-21 post-push aggregate verification is run out of tree to avoid
-  committing a self-invalidating git artifact. The expected post-push shape is
-  `18/20` requirements passing: git closure clean/pushed, with only
-  `hosted_openai_compatible` (`OPENAI_API_KEY` missing) and
-  `residual_acceptance` (no explicit accepted residuals recorded) still
-  blocking.
+  committing a self-invalidating git artifact. The runner now defaults the
+  OpenAI-compatible smoke to `http://localhost:11434`,
+  `nomic-embed-text:latest`, and `gemma4:e4b`; hosted-provider QA can still be
+  requested by setting `ASIP_HOSTED_OPENAI_BASE_URL`,
+  `ASIP_HOSTED_OPENAI_API_KEY_ENV`, and the hosted model variables.
 - 2026-05-21 final evidence binding follow-up: `main@13d5079` hardens live
   browser evidence with a `repo_head` check against the git gate, makes
   no-server smoke fail closed when current artifact input snapshots are
   missing, requires residual acceptance artifacts to bind the current G13
   document SHA and an accepted status line, and removes wildcard residual
-  acceptance matching. The residual artifact has been refreshed in its blocked
-  state with `residual_doc_sha256`; it still cannot pass until the user
-  explicitly accepts the listed residual rows and the G13 status line changes
-  from `Partial` to `Accepted`.
+  acceptance matching. The residual artifact is now refreshed with explicit
+  user acceptance for the hybrid retrieval semantic-quality boundary and the
+  local Ollama/gemma OpenAI-compatible provider boundary.
 - Historical final-candidate evidence package exists at
   `docs/qa/2026-05-17-final-clean-evidence-package.md`, linking the clean AMD
   DB, AQ01-AQ09 9/9 artifact, six free queries, semantic-edge jobs, visual QA,
@@ -586,12 +585,11 @@ semantic-quality eval, no-server smoke, and git closure artifacts under
 authoritative final proof after a new commit because their `repo_head` would be
 stale by construction.
 
-The current remaining blockers are:
-
-- credentialed hosted OpenAI-compatible provider smoke, because
-  `OPENAI_API_KEY` (or the configured hosted credential env var) is not present;
-- explicit user acceptance of the G13 residual rows for broad production
-  semantic ranking quality and hosted/provider boundary evidence.
+The previous blockers were hosted-provider credentials and explicit G13
+residual acceptance. The current active-goal path now uses the user-accepted
+local Ollama/gemma OpenAI-compatible proof because no hosted `OPENAI_API_KEY`
+is available. Hosted-provider QA remains an optional future check when
+credentials are supplied, not a blocker for this active goal.
 
 Live semantic-edge provider smoke, Stage 2 freshness, current DB indexing,
 product schema validation, no-mock browser/e2e evidence, and git push hygiene

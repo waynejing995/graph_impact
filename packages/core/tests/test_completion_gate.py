@@ -258,6 +258,47 @@ class CompletionGateTests(unittest.TestCase):
                 by_id["hosted_openai_compatible"]["failure_reasons"],
             )
 
+    def test_completion_gate_accepts_local_ollama_openai_smoke_when_user_accepts_boundary(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            db_path = self._write_gate_db(root / "asip.db")
+            payload = self._hosted_openai_payload("pass", credential_mode="local-compatible-no-secret")
+            payload["base_url"] = "http://localhost:11434"
+            payload["require_credentialed"] = False
+            for check in payload["checks"]:
+                check["base_url"] = "http://localhost:11434"
+            payload["checks"][0]["model"] = "nomic-embed-text:latest"
+            payload["checks"][0]["vector_dimension"] = 768
+            payload["checks"][1]["model"] = "gemma4:e4b"
+            hosted_openai_json = self._write_json(root / "hosted-openai.json", payload)
+            residual_json = self._write_json(
+                root / "residual.json",
+                self._residual_payload(
+                    "pass",
+                    accepted_residuals=[
+                        "Hybrid retrieval over exact, resolver, FTS5, vector, graph, rerank",
+                        "Embedding provider and optional semantic-edge provider via Ollama/OpenAI-compatible APIs",
+                    ],
+                    acceptance_required_rows=[
+                        "Hybrid retrieval over exact, resolver, FTS5, vector, graph, rerank",
+                        "Embedding provider and optional semantic-edge provider via Ollama/OpenAI-compatible APIs",
+                    ],
+                ),
+            )
+
+            result = run_completion_gate(
+                db_path,
+                hosted_openai_json=hosted_openai_json,
+                residual_acceptance_json=residual_json,
+            )
+
+            by_id = {item["id"]: item for item in result["requirements"]}
+            self.assertEqual(by_id["hosted_openai_compatible"]["status"], "pass")
+            self.assertIn(
+                "accepted_local_ollama_boundary=True",
+                by_id["hosted_openai_compatible"]["evidence"],
+            )
+
     def test_completion_gate_blocks_private_network_openai_smoke_as_hosted_proof(self):
         with tempfile.TemporaryDirectory() as tmpdir:
             root = Path(tmpdir)
@@ -3096,9 +3137,11 @@ class CompletionGateTests(unittest.TestCase):
             "queries": queries,
         }
 
-    def _residual_payload(self, gate_status):
+    def _residual_payload(self, gate_status, *, accepted_residuals=None, acceptance_required_rows=None):
         doc_status = "Accepted" if gate_status == "pass" else "Partial; final user acceptance remains blocking"
         doc = Path(tempfile.NamedTemporaryFile(prefix="asip-residual-", suffix=".md", delete=False).name)
+        accepted_rows = accepted_residuals or ["full clangd/libclang cross-TU type-flow"]
+        required_rows = acceptance_required_rows or ["full clangd/libclang cross-TU type-flow"]
         doc.write_text(
             "\n".join(
                 [
@@ -3108,7 +3151,7 @@ class CompletionGateTests(unittest.TestCase):
                     "",
                     "| Spec area | MVP status | User acceptance status |",
                     "| --- | --- | --- |",
-                    "| full clangd/libclang cross-TU type-flow | Deferred | Accepted |",
+                    *[f"| {row} | Deferred | Accepted |" for row in required_rows],
                 ]
             ),
             encoding="utf-8",
@@ -3122,8 +3165,8 @@ class CompletionGateTests(unittest.TestCase):
             "residual_doc_bytes": len(doc_bytes),
             "status_line": f"Status: {doc_status}",
             "accepted": gate_status == "pass",
-            "accepted_residuals": ["full clangd/libclang cross-TU type-flow"],
-            "acceptance_required_rows": ["full clangd/libclang cross-TU type-flow"],
+            "accepted_residuals": accepted_rows,
+            "acceptance_required_rows": required_rows,
         }
 
     def _git_payload(self, gate_status, *, repo_root=None, branch=None, head=None):

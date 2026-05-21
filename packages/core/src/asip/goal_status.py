@@ -174,11 +174,13 @@ def _next_actions(requirements: Dict[str, Dict[str, Any]]) -> List[Dict[str, str
         actions.append(
             {
                 "id": _HOSTED_ID,
-                "action": "Set a hosted OpenAI-compatible credential, then rerun pnpm gate:postpush.",
+                "action": (
+                    "Use the accepted local Ollama/gemma OpenAI-compatible path, or set a hosted "
+                    "OpenAI-compatible credential if you intentionally want hosted-provider QA, then rerun pnpm gate:postpush."
+                ),
                 "command": (
-                    "OPENAI_API_KEY=... "
-                    "ASIP_HOSTED_OPENAI_BASE_URL=https://api.openai.com "
-                    "pnpm gate:postpush"
+                    "pnpm gate:postpush  # defaults to http://localhost:11434 with "
+                    "nomic-embed-text:latest and gemma4:e4b"
                 ),
             }
         )

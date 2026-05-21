@@ -1,6 +1,6 @@
 # G13 MVP Boundary And Full-Spec Deferrals
 
-Status: Partial; deferral ledger exists, final user acceptance of residual boundaries remains blocking
+Status: Accepted; user accepted the remaining residual boundaries for the active goal and selected local Ollama gemma as the OpenAI-compatible provider path
 
 ## Requirement
 
@@ -11,33 +11,31 @@ ASIP has both an MVP-1 design doc and a long-range full technical spec. Long-ran
 - The MVP-1 design excludes full root-cause analysis, firmware deep modeling, runtime log reasoning, scanned-PDF OCR, and hidden hardware dependency inference.
 - The full technical spec includes broader future areas such as graph databases, logs/traces, LLM causal reasoning, incremental indexing, security/ACL/project isolation, and richer deployment concerns.
 - The current implementation is SQLite-first and Web/API/MCP oriented, matching MVP-1 more closely than the long-range architecture.
-- The final-candidate QA package records residual boundaries for system-Python sqlite-vec fallback, credentialed OpenAI-compatible live QA, partial provider embeddings, OCR, and full all-code indexing.
-- 2026-05-18 follow-up narrowed several previous residuals: G07 now has deterministic structured resolved-chain explanations, Web/MCP graph parity, and bundled-Python real MCP runtime smoke; G15 now has repeat deterministic graph rebuild timing over live AMD DB backups plus empty-DB raw timing for the current selective path; G06 now has full local temp-copy Ollama provider embedding coverage timing plus query-time provider rerank wiring. These do not close full clangd/libclang cross-TU vtable/type-flow, credentialed OpenAI-compatible live QA, production-scale semantic rerank quality, scanned-PDF OCR, or future full all-file code indexing beyond the current selective path.
+- The final-candidate QA package records residual boundaries for system-Python sqlite-vec fallback, hosted OpenAI-compatible live QA, partial provider embeddings, OCR, and full all-code indexing.
+- 2026-05-18 follow-up narrowed several previous residuals: G07 now has deterministic structured resolved-chain explanations, Web/MCP graph parity, and bundled-Python real MCP runtime smoke; G15 now has repeat deterministic graph rebuild timing over live AMD DB backups plus empty-DB raw timing for the current selective path; G06 now has full local temp-copy Ollama provider embedding coverage timing plus query-time provider rerank wiring. These do not close full clangd/libclang cross-TU vtable/type-flow, hosted OpenAI-compatible live QA, production-scale semantic rerank quality, scanned-PDF OCR, or future full all-file code indexing beyond the current selective path.
 - 2026-05-20 gate hardening: `asip residual-gate` now parses ledger rows that
   explicitly need acceptance and blocks partial acceptance where only some of
-  those rows are listed in `accepted_residuals`. The current artifact
-  `docs/qa/2026-05-20-residual-acceptance-gate.json` records
-  `acceptance_required_rows` for hybrid retrieval semantic quality and
-  provider/OpenAI-compatible live QA boundaries, and still blocks because
-  explicit user acceptance has not been recorded.
+  those rows are listed in `accepted_residuals`. The refreshed artifact
+  `docs/qa/2026-05-20-residual-acceptance-gate.json` now records explicit
+  acceptance for the hybrid retrieval semantic-quality boundary and the local
+  Ollama OpenAI-compatible provider boundary.
 - 2026-05-21 OpenAI-compatible live smoke narrows the provider residual:
   `docs/qa/2026-05-21-openai-compatible-live-smoke.json` proves the local
   Ollama OpenAI-compatible `/v1/embeddings` and `/v1/chat/completions`
   protocol paths with real live calls. This closes protocol compatibility
   evidence, but it does not prove a hosted credentialed OpenAI-compatible
   endpoint because no credentials have been supplied.
-- 2026-05-21 hosted OpenAI-compatible readiness is now executable through
-  `python3 -m asip.cli openai-compatible-smoke --require-credentialed`.
-  `docs/qa/2026-05-21-hosted-openai-compatible-readiness.json` is blocked
-  because `OPENAI_API_KEY` is not present in the environment. This makes the
-  remaining hosted-provider residual reproducible rather than a prose-only
-  statement.
+- 2026-05-21 hosted OpenAI-compatible readiness is executable through
+  `python3 -m asip.cli openai-compatible-smoke --require-credentialed` when a
+  hosted credential exists. In this run the user stated that no hosted
+  `OPENAI_API_KEY` is available and selected local Ollama/gemma instead, so
+  hosted-provider QA is deferred rather than treated as the active-goal path.
 - 2026-05-21 completion-gate follow-up: the final aggregate gate now consumes
   that readiness artifact through `--hosted-openai-json` and exposes a
-  first-class `hosted_openai_compatible` requirement. Local `/v1` compatible
-  smoke and private-network compatible smoke are not accepted as hosted proof;
-  the current readiness artifact remains blocked until a non-local credentialed
-  OpenAI-compatible endpoint is supplied.
+  first-class `hosted_openai_compatible` requirement. Credentialed hosted
+  proof still passes this requirement, while local Ollama `/v1` compatible
+  proof is accepted only when the residual artifact records explicit user
+  acceptance of the local provider boundary.
 - 2026-05-21 semantic rerank quality evaluation narrows the hybrid-retrieval
   residual: `docs/qa/2026-05-21-semantic-rerank-quality-eval.json` confirms
   full current-DB provider embedding coverage (`147841 / 147841` chunks),
@@ -56,19 +54,26 @@ ASIP has both an MVP-1 design doc and a long-range full technical spec. Long-ran
   with two provider-vector cases, one graph-target case for the natural-language
   `CP_HQD_*` wildcard query, and MRR `0.7643`. The artifact still does not
   claim quality across arbitrary future corpora.
+- 2026-05-21 user acceptance update: the user explicitly stated that no hosted
+  `OPENAI_API_KEY` is available and instructed the project to use the local
+  Ollama `gemma` model path instead. For this active goal, that accepts the
+  local Ollama OpenAI-compatible `/v1` proof and defers hosted credentialed
+  OpenAI-compatible QA. The current-corpus semantic quality boundary is also
+  accepted against the `8/8` labeled eval, with broader arbitrary-future-corpus
+  semantic ranking quality remaining a future evaluation boundary.
 
 ## Remaining Gap
 
-The repo now has a deferral ledger and a final-candidate residual-boundary list. The remaining gap is explicit user acceptance of the residual boundaries if they are to be treated as out of scope for this active goal.
+The repo now has a deferral ledger and explicit user acceptance for the remaining residual boundaries in this active goal. Future hosted-provider QA and broader arbitrary-corpus semantic ranking quality remain future work, not current completion blockers.
 
 ## Deferral Ledger
 
 | Spec area | MVP status | Current closest capability | User acceptance status | Completion rule |
 | --- | --- | --- | --- | --- |
 | Real AMD code/docs/register/PDF ingestion | MVP-1 | G01 and G08 track raw corpus plus text-based PDF ingestion. | Required by user. | Must close for MVP-1. |
-| Hybrid retrieval over exact, resolver, FTS5, vector, graph, rerank | MVP-1 / partial | G02 and G09 track FTS retrieval, provider embeddings, provider query-time vector rerank wiring, vector fallback, graph expansion, provider-vector preservation under lexical candidate pressure, the 2026-05-21 AQ semantic quality proxy, and a labeled current-corpus semantic eval. | Required by user; rerank maturity not separately accepted. | Current evidence closes provider-vector wiring, visible provider-vector preservation for AQ05, full current-DB provider embedding coverage, AQ01-AQ09 quality proxy, and an `8/8` labeled current-corpus semantic eval including natural-language `CP_HQD_*` graph expansion; production-scale semantic rerank quality across arbitrary future corpora remains a residual boundary needing acceptance or broader evaluation. |
+| Hybrid retrieval over exact, resolver, FTS5, vector, graph, rerank | MVP-1 / accepted residual | G02 and G09 track FTS retrieval, provider embeddings, provider query-time vector rerank wiring, vector fallback, graph expansion, provider-vector preservation under lexical candidate pressure, the 2026-05-21 AQ semantic quality proxy, and a labeled current-corpus semantic eval. | Accepted by user for this active goal after current-corpus `8/8` labeled eval. | Current evidence closes provider-vector wiring, visible provider-vector preservation for AQ05, full current-DB provider embedding coverage, AQ01-AQ09 quality proxy, and an `8/8` labeled current-corpus semantic eval including natural-language `CP_HQD_*` graph expansion; production-scale semantic rerank quality across arbitrary future corpora remains future evaluation work. |
 | Configurable resolver profiles for Linux amdgpu, MxGPU, and toy Python | MVP-1 | G05 tracks config-driven resolver profiles and UI workflow. | Required by user. | Must close for MVP-1. |
-| Embedding provider and optional semantic-edge provider via Ollama/OpenAI-compatible APIs | MVP-1 / partial | G06 tracks split provider settings, safe env-based extra headers, embedding calls/backfill, query-time provider rerank wiring, semantic-edge jobs, full default-DB provider embedding coverage, and live `gemma4:e4b`/`nomic-embed-text:latest` model QA. The 2026-05-21 OpenAI-compatible live smoke proves the local `/v1` compatible protocol path. | Required by user for embeddings; semantic-edge model support requested. | Local Ollama path, safe header expansion, full current-DB provider-vector coverage, query-time provider-vector wiring, semantic/doc-node provenance, and local OpenAI-compatible `/v1` live smoke are proven; hosted credentialed OpenAI-compatible live QA and broad production semantic quality remain residual boundaries needing acceptance, credentials, or implementation. |
+| Embedding provider and optional semantic-edge provider via Ollama/OpenAI-compatible APIs | MVP-1 / accepted residual | G06 tracks split provider settings, safe env-based extra headers, embedding calls/backfill, query-time provider rerank wiring, semantic-edge jobs, full default-DB provider embedding coverage, and live `gemma4:e4b`/`nomic-embed-text:latest` model QA. The 2026-05-21 OpenAI-compatible live smoke proves the local `/v1` compatible protocol path. | Accepted by user with explicit instruction to use local Ollama gemma instead of a hosted key. | Local Ollama path, safe header expansion, full current-DB provider-vector coverage, query-time provider-vector wiring, semantic/doc-node provenance, and local OpenAI-compatible `/v1` live smoke are proven; hosted credentialed OpenAI-compatible live QA is deferred because no key is available and the user selected Ollama gemma for this active goal. |
 | Web workbench and MCP as first-class surfaces | MVP-1 | G07, G16, and G17 track API/MCP/Web product surfaces. G07 now includes deterministic structured resolved-chain explanations, Web/MCP graph parity, and bundled-Python real MCP runtime smoke. | Required by user. | Product surface parity and real local MCP runtime smoke are implemented; external client interoperability beyond FastMCP construction/tool execution remains future deployment QA. |
 | Global Obsidian-style weighted graph | Active branch requirement | G03 tracks global graph after user explicitly requested it. | Required by later user request. | Must close for this active goal. |
 | Scanned PDF OCR/layout reconstruction | Deferred | G08 supports text-based PDF conversion only. | Not requested for MVP; MVP design excludes scanned-PDF OCR. | Out of MVP-1 unless user later supplies OCR requirement. |

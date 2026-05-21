@@ -131,7 +131,7 @@ If the user cannot see the repository, verify `git remote -v`, the GitHub owner,
 
 Do not mark the active ASIP graph/UI/backend goal complete until every required item is proven by current evidence. Known non-local blockers may remain:
 
-- Hosted OpenAI-compatible smoke requires a real `OPENAI_API_KEY` or equivalent credentialed hosted endpoint.
+- OpenAI-compatible smoke may close through either a real credentialed hosted endpoint or an explicitly user-accepted local Ollama/gemma `/v1` boundary recorded by G13. The current active-goal owner selected local Ollama/gemma because no hosted `OPENAI_API_KEY` is available.
 - Residual-boundary acceptance must be explicitly provided by the user or project owner.
 
 If either remains blocked, say so plainly and keep the goal active.

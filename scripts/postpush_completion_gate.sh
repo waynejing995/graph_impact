@@ -183,14 +183,20 @@ python3 -m asip.cli runtime-semantic-freshness \
   --output-json "$runtime_semantic_json" \
   --full
 
-python3 -m asip.cli openai-compatible-smoke \
-  --base-url "${ASIP_HOSTED_OPENAI_BASE_URL:-https://api.openai.com}" \
-  --embedding-model "${ASIP_HOSTED_OPENAI_EMBEDDING_MODEL:-text-embedding-3-small}" \
-  --chat-model "${ASIP_HOSTED_OPENAI_CHAT_MODEL:-gpt-4.1-mini}" \
-  --api-key-env "${ASIP_HOSTED_OPENAI_API_KEY_ENV:-OPENAI_API_KEY}" \
-  --require-credentialed \
-  --output-json "$hosted_openai_json" \
+openai_compatible_smoke_args=(
+  --base-url "${ASIP_HOSTED_OPENAI_BASE_URL:-http://localhost:11434}"
+  --embedding-model "${ASIP_HOSTED_OPENAI_EMBEDDING_MODEL:-nomic-embed-text:latest}"
+  --chat-model "${ASIP_HOSTED_OPENAI_CHAT_MODEL:-gemma4:e4b}"
+  --output-json "$hosted_openai_json"
   --full
+)
+if [[ -n "${ASIP_HOSTED_OPENAI_API_KEY_ENV:-}" ]]; then
+  openai_compatible_smoke_args+=(
+    --api-key-env "${ASIP_HOSTED_OPENAI_API_KEY_ENV}"
+    --require-credentialed
+  )
+fi
+python3 -m asip.cli openai-compatible-smoke "${openai_compatible_smoke_args[@]}"
 
 run_live_browser_e2e
 
