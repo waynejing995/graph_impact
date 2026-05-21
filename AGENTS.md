@@ -20,8 +20,10 @@ This file is the first stop for agents working in this repository.
 - `apps/web/`: Next.js workbench UI, API route helpers, Playwright tests, UI artifact scripts.
 - `apps/api/`: FastAPI product surface.
 - `configs/workbench-limits.json`: central budgets for graph, query, semantic, and embedding behavior.
+- `configs/resolvers/*.yaml`: resolver-owned wrapper extraction and graph normalization rules. Put concept/register/access normalization here unless the user is explicitly testing an inline UI profile.
 - `data/asip.db`: current real ASIP SQLite DB used for final evidence. Do not casually replace it.
 - `docs/gaps/`: source of truth for gap status and residual boundaries.
+- `docs/guides/normalization-rules.md`: how people and agents should set resolver profile normalization rules.
 - `docs/qa/`: generated or captured QA artifacts. Check freshness before citing.
 - `skills/`: repo-local skills for recurring ASIP workflows.
 
@@ -30,6 +32,7 @@ This file is the first stop for agents working in this repository.
 - ASIP must prove a real evidence chain: real `data/asip.db`, CLI/API/MCP/Web probes, browser QA, e2e tests, and gate artifacts must line up.
 - Product graph nodes shown by default should be meaningful product entities: `function`, `register`, and `doc`; raw parser/helper/provider names belong in attributes or provenance.
 - Stage 1 deterministic graph and Stage 2 semantic/doc-node edges must remain distinguishable.
+- Concept/register/access normalization must be configured through resolver profiles, not hardcoded in storage, parser, API, or UI code.
 - Concept function nodes must expose their generating implementations. Clicking a concept node in the graph should show node details and a `Concept Generated From` list.
 - Acceptance `surface_results` must be real surface probes with transport, explicit `dbPath`, schema checks, and pass/fail status.
 - Post-push git closure proof is intentionally out of tree, usually under `/tmp`, because a committed git-gate artifact self-invalidates on the next commit.

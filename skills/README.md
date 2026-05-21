@@ -5,5 +5,6 @@ These skills capture repeatable ASIP workflows for agents working in this reposi
 - `asip-use-workbench`: operate and verify the local ASIP UI/API graph workbench.
 - `asip-edit-code`: edit backend, graph, gate, or web code without weakening evidence.
 - `asip-bootstrap`: set up a fresh checkout and start local services safely.
+- `asip-set-normalization-rules`: add, edit, review, and verify resolver-owned graph normalization rules.
 
 Use these with the root `AGENTS.md`. The root guide contains mandatory repository rules; the skills contain task-specific checklists.
