@@ -1,6 +1,6 @@
 {
   "source": "asip.completion_gate",
-  "generated_at": "2026-05-21T01:26:44+00:00",
+  "generated_at": "2026-05-21T02:21:09+00:00",
   "db_path": "/Volumes/data/User/wayne/Code/graph_impact/data/asip.db",
   "database": {
     "status": "pass",
@@ -8,7 +8,7 @@
     "integrity_check_type": "quick_check",
     "integrity_check": "ok",
     "counts": {
-      "corpora": 5,
+      "corpora": 3,
       "documents": 1224,
       "chunks": 147841,
       "evidence": 5299434,
@@ -131,9 +131,9 @@
     },
     "git_gate": {
       "status": "loaded",
-      "path": "docs/qa/2026-05-20-git-gate.json",
+      "path": "docs/qa/2026-05-21-git-gate-main.json",
       "source": "asip.git_gate",
-      "gate_status": "blocked",
+      "gate_status": "pass",
       "summary": {},
       "failure_reasons": []
     }
@@ -260,22 +260,15 @@
     {
       "id": "git_gate",
       "title": "Final diff, commit, and push gate",
-      "status": "blocked",
-      "evidence": "diff_check=pass; worktree_status=dirty; committed=False; pushed=False",
-      "failure_reasons": [
-        "gate_status=blocked",
-        "worktree has 144 changed/untracked paths",
-        "branch has no upstream tracking branch",
-        "worktree_status=dirty",
-        "committed is not true",
-        "pushed is not true"
-      ]
+      "status": "pass",
+      "evidence": "diff_check=pass; worktree_status=clean; committed=True; pushed=True",
+      "failure_reasons": []
     }
   ],
   "summary": {
     "total": 17,
-    "passed": 15,
-    "blocked": 2,
+    "passed": 16,
+    "blocked": 1,
     "failed": 0,
     "missing": 0
   },
@@ -285,12 +278,6 @@
     "residual_acceptance: residual document status remains open: Status: Partial; deferral ledger exists, final user acceptance of residual boundaries remains blocking",
     "residual_acceptance: explicit user acceptance has not been recorded",
     "residual_acceptance: accepted is not true",
-    "residual_acceptance: accepted_residuals is empty",
-    "git_gate: gate_status=blocked",
-    "git_gate: worktree has 144 changed/untracked paths",
-    "git_gate: branch has no upstream tracking branch",
-    "git_gate: worktree_status=dirty",
-    "git_gate: committed is not true",
-    "git_gate: pushed is not true"
+    "residual_acceptance: accepted_residuals is empty"
   ]
 }

@@ -1,6 +1,6 @@
 {
   "source": "asip.web.no_server_smoke",
-  "generated_at": "2026-05-21T02:02:01.227Z",
+  "generated_at": "2026-05-21T02:19:46.801Z",
   "gate_status": "pass",
   "current_artifact_args": [
     "--browser-json",
@@ -80,7 +80,7 @@
       "path": "docs/qa/2026-05-21-current-goal-completion-gate.json",
       "resolved_path": "/Volumes/data/User/wayne/Code/graph_impact/docs/qa/2026-05-21-current-goal-completion-gate.json",
       "status": "loaded",
-      "bytes": 9169,
+      "bytes": 8666,
       "hash_policy": "self-referential-not-final-gate-input",
       "sha256": ""
     },

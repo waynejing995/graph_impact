@@ -1,0 +1,18 @@
+{
+  "source": "asip.git_gate",
+  "generated_at": "2026-05-21T02:18:01+00:00",
+  "repo_root": "/Volumes/data/User/wayne/Code/graph_impact",
+  "branch": "main",
+  "head": "12216b4e8dfe70c5c6ec556a4d0ec1dbfb68de84",
+  "upstream": "origin/main",
+  "ahead": 0,
+  "behind": 0,
+  "diff_check": "pass",
+  "diff_check_output": "",
+  "worktree_status": "clean",
+  "changed_paths": [],
+  "committed": true,
+  "pushed": true,
+  "gate_status": "pass",
+  "failure_reasons": []
+}

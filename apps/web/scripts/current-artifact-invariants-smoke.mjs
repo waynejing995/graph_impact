@@ -268,7 +268,13 @@ if (completionGate.gate_status === "pass") {
   assert.equal(completionRequirements.get("performance_smoke")?.status, "pass");
   assert.equal(completionRequirements.get("browser_e2e")?.status, browserArtifactIsE2e ? "pass" : "blocked");
   assert.equal(completionRequirements.get("residual_acceptance")?.status, "blocked");
-  assert.equal(completionRequirements.get("git_gate")?.status, "blocked");
+  const gitGateRequirement = completionRequirements.get("git_gate");
+  if (gitGateRequirement?.status === "pass") {
+    assert.equal(gitGateRequirement.status, "pass");
+  } else {
+    assert.equal(gitGateRequirement?.status, "blocked");
+    assert.match(textFrom(gitGateRequirement?.failure_reasons), /worktree|upstream|committed|pushed|git/i);
+  }
   if (!browserArtifactIsE2e) {
     assert.match(textFrom(completionRequirements.get("browser_e2e")?.failure_reasons), /ERR_BLOCKED_BY_CLIENT|ERR_CONNECTION_REFUSED/);
     assert.match(
