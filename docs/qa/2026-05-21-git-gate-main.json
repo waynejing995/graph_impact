@@ -1,9 +1,9 @@
 {
   "source": "asip.git_gate",
-  "generated_at": "2026-05-21T06:11:23+00:00",
+  "generated_at": "2026-05-21T06:20:56+00:00",
   "repo_root": "/Volumes/data/User/wayne/Code/graph_impact",
   "branch": "main",
-  "head": "7be78abf7ee65eaeb9554e09e8d5a7a8fab4c58b",
+  "head": "378a467d49bc3ce79a00aef93dcd7e26bfe330ff",
   "upstream": "origin/main",
   "ahead": 0,
   "behind": 0,
@@ -11,20 +11,19 @@
   "diff_check_output": "",
   "worktree_status": "dirty",
   "changed_paths": [
-    " M docs/gaps/2026-05-16-g02-live-retrieval-evidence-schema.md",
     " M docs/gaps/2026-05-16-g13-mvp-boundary-deferrals.md",
     " M docs/qa/2026-05-20-residual-acceptance-gate.json",
-    " M docs/qa/2026-05-21-semantic-rerank-labeled-eval.json",
-    " M docs/qa/2026-05-21-semantic-rerank-labeled-eval.md",
-    " M docs/qa/2026-05-21-ui-no-server-smoke.json",
-    " M docs/qa/semantic-rerank-eval-set.jsonl",
-    " M packages/core/src/asip/semantic_quality.py",
-    " M packages/core/tests/test_semantic_quality.py"
+    " M docs/qa/2026-05-21-openai-compatible-live-smoke.json",
+    " M docs/qa/2026-05-21-openai-compatible-live-smoke.md",
+    " M packages/core/src/asip/cli.py",
+    "?? docs/qa/2026-05-21-hosted-openai-compatible-readiness.json",
+    "?? packages/core/src/asip/openai_compatible_smoke.py",
+    "?? packages/core/tests/test_openai_compatible_smoke.py"
   ],
   "committed": false,
   "pushed": true,
   "gate_status": "blocked",
   "failure_reasons": [
-    "worktree has 9 changed/untracked paths"
+    "worktree has 8 changed/untracked paths"
   ]
 }

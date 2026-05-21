@@ -26,6 +26,12 @@ ASIP has both an MVP-1 design doc and a long-range full technical spec. Long-ran
   protocol paths with real live calls. This closes protocol compatibility
   evidence, but it does not prove a hosted credentialed OpenAI-compatible
   endpoint because no credentials have been supplied.
+- 2026-05-21 hosted OpenAI-compatible readiness is now executable through
+  `python3 -m asip.cli openai-compatible-smoke --require-credentialed`.
+  `docs/qa/2026-05-21-hosted-openai-compatible-readiness.json` is blocked
+  because `OPENAI_API_KEY` is not present in the environment. This makes the
+  remaining hosted-provider residual reproducible rather than a prose-only
+  statement.
 - 2026-05-21 semantic rerank quality evaluation narrows the hybrid-retrieval
   residual: `docs/qa/2026-05-21-semantic-rerank-quality-eval.json` confirms
   full current-DB provider embedding coverage (`147841 / 147841` chunks),

@@ -1,0 +1,21 @@
+{
+  "source": "asip.openai_compatible_live_smoke",
+  "generated_at": "2026-05-21T06:20:14+00:00",
+  "repo_head": "378a467d49bc3ce79a00aef93dcd7e26bfe330ff",
+  "base_url": "https://api.openai.com",
+  "credential_mode": "hosted-missing-credential",
+  "api_key_env": "OPENAI_API_KEY",
+  "require_credentialed": true,
+  "note": "Hosted endpoint requested but the configured credential environment variable is missing.",
+  "summary": {
+    "total": 0,
+    "passed": 0,
+    "failed": 0
+  },
+  "gate_status": "blocked",
+  "checks": [],
+  "failure_reasons": [
+    "credential env var is missing: OPENAI_API_KEY",
+    "credential_mode=hosted-missing-credential does not satisfy hosted-credentialed"
+  ]
+}

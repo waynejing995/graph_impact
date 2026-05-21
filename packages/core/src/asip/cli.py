@@ -11,6 +11,7 @@ from .acceptance import DEFAULT_ACCEPTANCE_QUERIES, run_acceptance_queries, run_
 from .closure_gates import run_git_gate, run_residual_acceptance_gate
 from .completion_gate import run_completion_gate
 from .limits import DEFAULT_WORKBENCH_LIMITS_PATH, load_workbench_limits
+from .openai_compatible_smoke import run_openai_compatible_live_smoke
 from .performance_smoke import run_fixture_performance_smoke
 from .semantic_quality import run_semantic_quality_eval
 from .semantic_edges import run_full_corpus_generation, run_generation
@@ -233,6 +234,21 @@ def main(argv: Optional[List[str]] = None) -> int:
     provider_gate.add_argument("--db", required=True)
     provider_gate.add_argument("--output-json")
     provider_gate.add_argument("--full", action="store_true", help="Print the full provider-gate payload")
+
+    openai_compatible_smoke = subcommands.add_parser(
+        "openai-compatible-smoke",
+        help="Run live OpenAI-compatible embedding and chat endpoint smoke checks",
+    )
+    openai_compatible_smoke.add_argument("--base-url", required=True)
+    openai_compatible_smoke.add_argument("--embedding-model", required=True)
+    openai_compatible_smoke.add_argument("--chat-model", required=True)
+    openai_compatible_smoke.add_argument("--embedding-api-path", default="/v1/embeddings")
+    openai_compatible_smoke.add_argument("--chat-api-path", default="/v1/chat/completions")
+    openai_compatible_smoke.add_argument("--api-key-env", default="")
+    openai_compatible_smoke.add_argument("--require-credentialed", action="store_true")
+    openai_compatible_smoke.add_argument("--timeout-seconds", type=int, default=60)
+    openai_compatible_smoke.add_argument("--output-json")
+    openai_compatible_smoke.add_argument("--full", action="store_true", help="Print the full smoke payload")
 
     semantic_quality = subcommands.add_parser(
         "semantic-quality",
@@ -550,6 +566,20 @@ def main(argv: Optional[List[str]] = None) -> int:
     if args.command == "provider-gate":
         result = run_provider_gate(
             Path(args.db),
+            output_json=Path(args.output_json) if args.output_json else None,
+        )
+        print(json.dumps(result if args.full else result["summary"], indent=2))
+        return 0
+    if args.command == "openai-compatible-smoke":
+        result = run_openai_compatible_live_smoke(
+            base_url=args.base_url,
+            embedding_model=args.embedding_model,
+            chat_model=args.chat_model,
+            embedding_api_path=args.embedding_api_path,
+            chat_api_path=args.chat_api_path,
+            api_key_env=args.api_key_env,
+            require_credentialed=args.require_credentialed,
+            timeout_seconds=args.timeout_seconds,
             output_json=Path(args.output_json) if args.output_json else None,
         )
         print(json.dumps(result if args.full else result["summary"], indent=2))
