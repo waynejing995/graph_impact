@@ -190,6 +190,77 @@ assert.match(JSON.stringify(boundOfflineArtifact.failure_reasons), /offline Play
 assert.doesNotMatch(JSON.stringify(boundOfflineArtifact.failure_reasons), /db_path is missing/);
 assert.doesNotMatch(JSON.stringify(boundOfflineArtifact.failure_reasons), /target_urls do not include current dbPath/);
 
+const wrongProbePathReport = writeReport("wrong-probe-path.json", {
+  ...JSON.parse(readFileSync(passingReport, "utf8")),
+  suites: [
+    {
+      title: "workbench-smoke.spec.ts",
+      suites: [],
+      specs: [
+        {
+          title: "acceptance page runs no-mock AQ01 through the real workbench API",
+          file: "tests/workbench-smoke.spec.ts",
+          tests: [{ outcome: "expected" }]
+        },
+        {
+          title: "graph page uses URL dbPath for no-mock graph and query requests",
+          file: "tests/workbench-smoke.spec.ts",
+          tests: [{ outcome: "expected" }]
+        },
+        {
+          title: "graph page loads current data/asip.db through browser and API",
+          file: "tests/workbench-smoke.spec.ts",
+          tests: [
+            {
+              outcome: "expected",
+              results: [
+                {
+                  stdout: [
+                    {
+                      text: `ASIP_BROWSER_CURRENT_DB_PROBE ${JSON.stringify(
+                        currentDbProbes.map((probe) =>
+                          probe.surface === "direct_api_graph_request"
+                            ? { ...probe, url: "http://127.0.0.1:3100/api/workbench/documents?dbPath=data%2Fasip.db" }
+                            : probe
+                        )
+                      )}\n`
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        },
+        {
+          title: "graph page filters no-mock graph layers and shows edge provenance",
+          file: "tests/workbench-smoke.spec.ts",
+          tests: [{ outcome: "expected" }]
+        },
+        {
+          title: "evidence page initial query uses URL dbPath without default DB fallback",
+          file: "tests/workbench-smoke.spec.ts",
+          tests: [{ outcome: "expected" }]
+        }
+      ]
+    }
+  ]
+});
+const wrongProbePathArtifact = runArtifact(wrongProbePathReport, "wrong-probe-path-artifact.json", [
+  "--db-path",
+  "data/asip.db",
+  "--latest-index-job-id",
+  "10",
+  "--latest-graph-rebuild-job-id",
+  "13",
+  "--target-url",
+  "http://127.0.0.1:3100/graph?dbPath=data%2Fasip.db"
+]);
+assert.equal(wrongProbePathArtifact.gate_status, "blocked");
+assert.match(
+  JSON.stringify(wrongProbePathArtifact.failure_reasons),
+  /direct_api_graph_request url path=\/api\/workbench\/documents does not match \/api\/workbench\/graph/
+);
+
 const wrongSuiteReport = writeReport("wrong-suite.json", {
   stats: {
     expected: 5,

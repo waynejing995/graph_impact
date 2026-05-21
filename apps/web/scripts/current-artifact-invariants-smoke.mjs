@@ -157,6 +157,14 @@ if (browserArtifactIsE2e) {
   assert.ok(currentDbProbeSurfaces.has("graph_page_api_request"));
   assert.ok(currentDbProbeSurfaces.has("direct_api_graph_request"));
   assert.ok(currentDbProbeSurfaces.has("graph_page_concept_detail_selection"));
+  const graphPageApiProbe = (browserGate.current_db_probes ?? []).find(
+    (probe) => probe.surface === "graph_page_api_request"
+  );
+  const directGraphProbe = (browserGate.current_db_probes ?? []).find(
+    (probe) => probe.surface === "direct_api_graph_request"
+  );
+  assert.equal(new URL(String(graphPageApiProbe?.url ?? "")).pathname, "/api/workbench/graph");
+  assert.equal(new URL(String(directGraphProbe?.url ?? "")).pathname, "/api/workbench/graph");
   assert.ok((browserGate.current_db_probes ?? []).every((probe) => String(probe.url ?? "").includes("dbPath=")));
   assert.ok((browserGate.current_db_probes ?? []).every((probe) => Number(probe.status ?? 0) === 200));
   assert.ok((browserGate.current_db_probes ?? []).every((probe) => Number(probe.node_count ?? 0) > 0));

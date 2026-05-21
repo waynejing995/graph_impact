@@ -2054,6 +2054,29 @@ class CompletionGateTests(unittest.TestCase):
                 by_id["browser_e2e"]["failure_reasons"],
             )
 
+    def test_completion_gate_blocks_browser_e2e_probe_with_wrong_surface_path(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            db_path = self._write_gate_db(root / "asip.db")
+            browser_payload = self._browser_e2e_payload("pass", db_path=db_path)
+            for probe in browser_payload["current_db_probes"]:
+                if probe["surface"] == "direct_api_graph_request":
+                    probe["url"] = f"http://127.0.0.1:3100/api/workbench/documents?dbPath={db_path}"
+            browser_json = self._write_json(root / "browser.json", browser_payload)
+
+            result = run_completion_gate(
+                db_path,
+                browser_json=browser_json,
+                minimum_counts=self._fixture_minimum_counts(),
+            )
+
+            by_id = {item["id"]: item for item in result["requirements"]}
+            self.assertEqual(by_id["browser_e2e"]["status"], "blocked")
+            self.assertIn(
+                "browser e2e direct_api_graph_request url path=/api/workbench/documents does not match /api/workbench/graph",
+                by_id["browser_e2e"]["failure_reasons"],
+            )
+
     def test_completion_gate_blocks_browser_e2e_artifact_when_raw_report_lacks_required_tests(self):
         with tempfile.TemporaryDirectory() as tmpdir:
             root = Path(tmpdir)

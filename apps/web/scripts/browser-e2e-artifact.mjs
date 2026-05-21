@@ -436,6 +436,7 @@ function collectCurrentDbProbeFailureReasons(probes, args) {
     if (!targetUrlHasDbPath(String(probe.url ?? ""), args.dbPath)) {
       reasons.push(`browser e2e ${surface} url does not include current dbPath`);
     }
+    reasons.push(...collectProbeUrlPathFailureReasons(surface, probe));
     if (Number(probe.node_count ?? 0) <= 0) {
       reasons.push(`browser e2e ${surface} node_count is zero`);
     }
@@ -457,6 +458,30 @@ function collectCurrentDbProbeFailureReasons(probes, args) {
     if (surface === "graph_page_concept_detail_selection") {
       reasons.push(...collectConceptDetailProbeFailureReasons(probe));
     }
+  }
+  return reasons;
+}
+
+function collectProbeUrlPathFailureReasons(surface, probe) {
+  const reasons = [];
+  const expectedPathBySurface = {
+    graph_page_api_request: "/api/workbench/graph",
+    direct_api_graph_request: "/api/workbench/graph",
+    graph_page_concept_detail_selection: "/graph"
+  };
+  const expectedPath = expectedPathBySurface[surface];
+  if (!expectedPath) {
+    return reasons;
+  }
+  let actualPath = "";
+  try {
+    actualPath = new URL(String(probe.url ?? "")).pathname;
+  } catch {
+    reasons.push(`browser e2e ${surface} url is invalid: ${probe.url ?? "missing"}`);
+    return reasons;
+  }
+  if (actualPath !== expectedPath) {
+    reasons.push(`browser e2e ${surface} url path=${actualPath} does not match ${expectedPath}`);
   }
   return reasons;
 }

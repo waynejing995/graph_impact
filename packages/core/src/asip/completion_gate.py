@@ -1575,6 +1575,7 @@ def _browser_current_db_probe_failures(
             failures.append(f"browser e2e {surface} db_path does not match current dbPath")
         if not _url_has_matching_db_path(str(probe.get("url") or ""), db_path):
             failures.append(f"browser e2e {surface} url does not include current dbPath")
+        failures.extend(_browser_probe_url_path_failures(surface, str(probe.get("url") or "")))
         if _coerce_int(probe.get("node_count")) is None or int(probe.get("node_count") or 0) <= 0:
             failures.append(f"browser e2e {surface} node_count is zero")
         if _coerce_int(probe.get("edge_count")) is None or int(probe.get("edge_count") or 0) <= 0:
@@ -1595,6 +1596,23 @@ def _browser_current_db_probe_failures(
         if surface == "graph_page_concept_detail_selection":
             failures.extend(_browser_concept_detail_probe_failures(probe))
     return failures
+
+
+def _browser_probe_url_path_failures(surface: str, url: str) -> List[str]:
+    expected_paths = {
+        "graph_page_api_request": "/api/workbench/graph",
+        "direct_api_graph_request": "/api/workbench/graph",
+        "graph_page_concept_detail_selection": "/graph",
+    }
+    expected_path = expected_paths.get(surface)
+    if not expected_path:
+        return []
+    parsed = urlparse(url)
+    if not parsed.scheme or not parsed.netloc:
+        return [f"browser e2e {surface} url is invalid: {url or 'missing'}"]
+    if parsed.path != expected_path:
+        return [f"browser e2e {surface} url path={parsed.path} does not match {expected_path}"]
+    return []
 
 
 def _browser_concept_detail_probe_failures(probe: Mapping[str, Any]) -> List[str]:
