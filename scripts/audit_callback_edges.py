@@ -4,9 +4,11 @@
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import re
 import sqlite3
+import subprocess
 import sys
 from collections import Counter, defaultdict
 from datetime import datetime, timezone
@@ -73,6 +75,7 @@ def run_audit(
 ) -> Dict[str, Any]:
     failures: List[str] = []
     edges = _load_callback_edges(db_path)
+    latest_jobs = _latest_job_ids(db_path)
     call_kind_counts = Counter(str(edge["provenance"].get("call_kind") or "unknown") for edge in edges)
     type_flow_counts = Counter(str(edge["provenance"].get("type_flow") or "") for edge in edges)
     dispatch_scope_counts = Counter(str(edge["provenance"].get("dispatch_scope") or "") for edge in edges)
@@ -127,6 +130,10 @@ def run_audit(
         "source": "asip.callback_edge_audit",
         "generated_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
         "db_path": str(db_path),
+        "db_sha256": _file_sha256(db_path),
+        "repo_head": _repo_head(),
+        "latest_index_job_id": latest_jobs.get("latest_index_job_id"),
+        "latest_graph_rebuild_job_id": latest_jobs.get("latest_graph_rebuild_job_id"),
         "ambiguous_fanout_limit_scope": "unexplained_ambiguous_only",
         "gate_status": "pass" if not failures else "blocked",
         "failure_reasons": failures,
@@ -150,6 +157,71 @@ def run_audit(
         "parser_pollution_samples": pollution_samples[:20],
         "real_oracles": oracle_results,
     }
+
+
+def _repo_head() -> str:
+    repo_root = Path(__file__).resolve().parents[1]
+    try:
+        result = subprocess.run(
+            ["git", "rev-parse", "HEAD"],
+            cwd=repo_root,
+            check=True,
+            capture_output=True,
+            text=True,
+        )
+    except (OSError, subprocess.CalledProcessError):
+        return ""
+    return result.stdout.strip()
+
+
+def _file_sha256(path: Path) -> str:
+    digest = hashlib.sha256()
+    with path.open("rb") as handle:
+        for chunk in iter(lambda: handle.read(1024 * 1024), b""):
+            digest.update(chunk)
+    return digest.hexdigest()
+
+
+def _latest_job_ids(db_path: Path) -> Dict[str, int | None]:
+    if not db_path.exists():
+        return {"latest_index_job_id": None, "latest_graph_rebuild_job_id": None}
+    with sqlite3.connect(f"file:{db_path}?mode=ro", uri=True) as connection:
+        if not _table_exists(connection, "jobs"):
+            return {"latest_index_job_id": None, "latest_graph_rebuild_job_id": None}
+        return {
+            "latest_index_job_id": _latest_job_id(connection, "index"),
+            "latest_graph_rebuild_job_id": _latest_job_id(connection, "graph_rebuild"),
+        }
+
+
+def _latest_job_id(connection: sqlite3.Connection, kind: str) -> int | None:
+    rows = connection.execute(
+        """
+        select id, status from jobs
+        where kind = ?
+        order by id desc
+        """,
+        (kind,),
+    ).fetchall()
+    for job_id, status in rows:
+        if _normalize_job_status(str(status or "")) == "succeeded":
+            return int(job_id)
+    return None
+
+
+def _normalize_job_status(status: str) -> str:
+    normalized = status.strip().lower()
+    if normalized in {"succeeded", "success", "done", "complete", "completed", "indexed"}:
+        return "succeeded"
+    return normalized
+
+
+def _table_exists(connection: sqlite3.Connection, table: str) -> bool:
+    row = connection.execute(
+        "select 1 from sqlite_master where type = 'table' and name = ?",
+        (table,),
+    ).fetchone()
+    return row is not None
 
 
 def _load_callback_edges(db_path: Path) -> List[Dict[str, Any]]:

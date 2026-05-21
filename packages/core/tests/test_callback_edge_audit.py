@@ -1,4 +1,5 @@
 import importlib.util
+import hashlib
 import sqlite3
 import tempfile
 import unittest
@@ -43,8 +44,45 @@ class CallbackEdgeAuditTests(unittest.TestCase):
 
             self.assertEqual(result["gate_status"], "pass")
             self.assertEqual(result["ambiguous_fanout_limit_scope"], "unexplained_ambiguous_only")
+            self.assertEqual(result["db_sha256"], hashlib.sha256(db_path.read_bytes()).hexdigest())
+            self.assertTrue(result["repo_head"])
+            self.assertIsNone(result["latest_index_job_id"])
+            self.assertIsNone(result["latest_graph_rebuild_job_id"])
             self.assertEqual(result["summary"]["callback_edge_count"], 1)
             self.assertEqual(result["summary"]["real_oracle_passed"], 1)
+
+    def test_audit_records_current_job_binding_when_jobs_table_exists(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            db_path = Path(tmpdir) / "callbacks.db"
+            self._write_db(
+                db_path,
+                [
+                    (
+                        "amdgpu_device_ip_init",
+                        "gfx_v10_0_hw_init",
+                        "drivers/gpu/drm/amd/amdgpu/amdgpu_device.c",
+                        {"call_kind": "vtable_dispatch", "function": "amdgpu_device_ip_init"},
+                    )
+                ],
+            )
+            with sqlite3.connect(db_path) as connection:
+                connection.executescript(
+                    """
+                    create table jobs (
+                        id integer primary key,
+                        kind text not null,
+                        status text not null
+                    );
+                    insert into jobs values (1, 'index', 'failed');
+                    insert into jobs values (2, 'index', 'succeeded');
+                    insert into jobs values (3, 'graph_rebuild', 'indexed');
+                    """
+                )
+
+            result = audit_callback_edges.run_audit(db_path)
+
+            self.assertEqual(result["latest_index_job_id"], 2)
+            self.assertEqual(result["latest_graph_rebuild_job_id"], 3)
 
     def test_audit_blocks_parser_pollution(self):
         with tempfile.TemporaryDirectory() as tmpdir:

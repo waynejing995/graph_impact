@@ -17,6 +17,12 @@ artifact path/SHA bindings before the final no-server artifact exists. That
 bootstrap aggregate is not the post-push result; the authoritative result is
 the final `$out_dir/completion-gate.json` summary.
 
+2026-05-21 callback/vtable evidence hardening: the post-push runner now
+regenerates callback audit evidence under `$out_dir` after the git gate passes.
+The artifact records the current `repo_head`, `data/asip.db` SHA-256, and the
+latest index/graph rebuild job ids; the completion gate rejects stale callback
+audit proof that does not match the current DB or git head.
+
 ## Requirement
 
 The active goal must not be marked complete until the implementation has been reviewed against the design docs and every blocking gap is closed or explicitly accepted by the user.

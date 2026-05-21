@@ -146,7 +146,13 @@ def run_completion_gate(
         _stage2_requirement(provider_payload),
         _runtime_semantic_freshness_requirement(runtime_semantic_payload),
         _semantic_quality_requirement(semantic_quality_payload, required=minimum_counts is None),
-        _callback_audit_requirement(callback_audit_payload, required=minimum_counts is None),
+        _callback_audit_requirement(
+            callback_audit_payload,
+            required=minimum_counts is None,
+            db_path=db_path,
+            db_health=db_health,
+            git_payload=git_payload,
+        ),
         _hosted_openai_compatible_requirement(
             hosted_openai_payload,
             required=minimum_counts is None,
@@ -1104,7 +1110,14 @@ def _semantic_quality_requirement(payload: Optional[Mapping[str, Any]], *, requi
     )
 
 
-def _callback_audit_requirement(payload: Optional[Mapping[str, Any]], *, required: bool) -> Dict[str, Any]:
+def _callback_audit_requirement(
+    payload: Optional[Mapping[str, Any]],
+    *,
+    required: bool,
+    db_path: Path,
+    db_health: Mapping[str, Any],
+    git_payload: Optional[Mapping[str, Any]] = None,
+) -> Dict[str, Any]:
     minimum_real_oracles = 3 if required else 0
     if not isinstance(payload, Mapping):
         if not required:
@@ -1125,6 +1138,45 @@ def _callback_audit_requirement(payload: Optional[Mapping[str, Any]], *, require
     failures: List[str] = []
     if payload.get("source") != "asip.callback_edge_audit":
         failures.append(f"source={payload.get('source', 'missing')} does not match asip.callback_edge_audit")
+    if required:
+        artifact_db_path = payload.get("db_path")
+        if not artifact_db_path:
+            failures.append("callback audit db_path is missing")
+        elif not _same_path(db_path, Path(str(artifact_db_path))):
+            failures.append(f"callback audit db_path={artifact_db_path} does not match current db_path={db_path}")
+
+        recorded_db_sha = str(payload.get("db_sha256") or "").strip()
+        if not recorded_db_sha:
+            failures.append("callback audit db_sha256 is missing")
+        else:
+            actual_db_sha = _file_sha256(db_path)
+            if recorded_db_sha != actual_db_sha:
+                failures.append("callback audit db_sha256 does not match current database")
+
+        jobs = db_health.get("jobs", {}) if isinstance(db_health, Mapping) else {}
+        for artifact_key, current_key in (
+            ("latest_index_job_id", "latest_index_job_id"),
+            ("latest_graph_rebuild_job_id", "latest_graph_rebuild_job_id"),
+        ):
+            artifact_job = payload.get(artifact_key)
+            current_job = jobs.get(current_key)
+            if artifact_job is None:
+                failures.append(f"callback audit {artifact_key} is missing")
+                continue
+            artifact_job_int = _coerce_int(artifact_job)
+            if artifact_job_int is None:
+                failures.append(f"callback audit {artifact_key} is not an integer: {artifact_job}")
+            elif current_job is not None and artifact_job_int != int(current_job):
+                failures.append(
+                    f"callback audit {artifact_key}={artifact_job} does not match current {current_key}={current_job}"
+                )
+
+        repo_head = str(payload.get("repo_head") or "").strip()
+        git_head = str(git_payload.get("head") or "").strip() if isinstance(git_payload, Mapping) else ""
+        if not repo_head:
+            failures.append("callback audit repo_head is missing")
+        elif git_head and repo_head != git_head:
+            failures.append(f"callback audit repo_head={repo_head} does not match git_gate head={git_head}")
     if payload.get("gate_status") != "pass":
         failures.append(f"gate_status={payload.get('gate_status')}")
         failures.extend(str(reason) for reason in payload.get("failure_reasons", []))
@@ -1155,7 +1207,9 @@ def _callback_audit_requirement(payload: Optional[Mapping[str, Any]], *, require
         f"callback_edges={summary.get('callback_edge_count', 0)}; "
         f"parser_pollution={summary.get('parser_pollution_candidate_count', 0)}; "
         f"unexplained_ambiguous={summary.get('unexplained_ambiguous_callback_edge_count', 0)}; "
-        f"real_oracles={summary.get('real_oracle_passed', 0)}/{summary.get('real_oracle_total', 0)}"
+        f"real_oracles={summary.get('real_oracle_passed', 0)}/{summary.get('real_oracle_total', 0)}; "
+        f"graph_job={payload.get('latest_graph_rebuild_job_id', 'missing')}; "
+        f"repo_head={_short_sha(str(payload.get('repo_head') or ''))}"
     )
     return _requirement(
         "callback_edge_audit",
@@ -1817,7 +1871,11 @@ def _no_server_current_artifact_input_failures(
 
 def _file_sha256(path: Path) -> str:
     try:
-        return hashlib.sha256(path.expanduser().resolve().read_bytes()).hexdigest()
+        digest = hashlib.sha256()
+        with path.expanduser().resolve().open("rb") as handle:
+            for chunk in iter(lambda: handle.read(1024 * 1024), b""):
+                digest.update(chunk)
+        return digest.hexdigest()
     except OSError:
         return ""
 

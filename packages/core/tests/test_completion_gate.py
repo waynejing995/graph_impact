@@ -265,6 +265,52 @@ class CompletionGateTests(unittest.TestCase):
                 by_id["browser_e2e"]["failure_reasons"],
             )
 
+    def test_completion_gate_blocks_stale_passing_callback_audit_head_binding(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            db_path = self._write_gate_db(root / "asip.db")
+            callback_payload = self._callback_audit_payload("pass", db_path=db_path, repo_head="old-callback-head")
+            callback_json = self._write_json(root / "callback.json", callback_payload)
+            git_json = self._write_json(root / "git.json", self._git_payload("pass", head="current-git-head"))
+
+            result = run_completion_gate(
+                db_path,
+                callback_audit_json=callback_json,
+                git_gate_json=git_json,
+            )
+
+            by_id = {item["id"]: item for item in result["requirements"]}
+            self.assertEqual(by_id["callback_edge_audit"]["status"], "blocked")
+            self.assertIn(
+                "callback audit repo_head=old-callback-head does not match git_gate head=current-git-head",
+                by_id["callback_edge_audit"]["failure_reasons"],
+            )
+
+    def test_completion_gate_blocks_stale_callback_audit_db_and_job_binding(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            db_path = self._write_gate_db(root / "asip.db")
+            callback_payload = self._callback_audit_payload("pass", db_path=db_path)
+            callback_payload["db_sha256"] = "0" * 64
+            callback_payload["latest_graph_rebuild_job_id"] = 999
+            callback_json = self._write_json(root / "callback.json", callback_payload)
+
+            result = run_completion_gate(
+                db_path,
+                callback_audit_json=callback_json,
+            )
+
+            by_id = {item["id"]: item for item in result["requirements"]}
+            self.assertEqual(by_id["callback_edge_audit"]["status"], "blocked")
+            self.assertIn(
+                "callback audit db_sha256 does not match current database",
+                by_id["callback_edge_audit"]["failure_reasons"],
+            )
+            self.assertIn(
+                "callback audit latest_graph_rebuild_job_id=999 does not match current latest_graph_rebuild_job_id=2",
+                by_id["callback_edge_audit"]["failure_reasons"],
+            )
+
     def test_completion_gate_blocks_concept_detail_probe_without_canvas_node_click(self):
         with tempfile.TemporaryDirectory() as tmpdir:
             root = Path(tmpdir)
@@ -2634,10 +2680,14 @@ class CompletionGateTests(unittest.TestCase):
             ],
         }
 
-    def _callback_audit_payload(self, gate_status, *, db_path):
+    def _callback_audit_payload(self, gate_status, *, db_path, repo_head="current-git-head"):
         return {
             "source": "asip.callback_edge_audit",
             "db_path": str(db_path),
+            "db_sha256": hashlib.sha256(db_path.read_bytes()).hexdigest(),
+            "repo_head": repo_head,
+            "latest_index_job_id": 1,
+            "latest_graph_rebuild_job_id": 2,
             "gate_status": gate_status,
             "failure_reasons": [] if gate_status == "pass" else ["unexplained ambiguous callback fanout exceeds 2"],
             "summary": {

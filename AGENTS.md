@@ -90,7 +90,7 @@ Run the standard post-push completion bundle out of tree:
 pnpm gate:postpush
 ```
 
-This bundle starts a clean browser port, regenerates the current live browser e2e artifact, records its git `repo_head`, and feeds that artifact into the aggregate completion gate. It also binds no-server smoke inputs by path and SHA so stale committed artifacts do not masquerade as current proof. Use `ASIP_POSTPUSH_BROWSER_PORT=3130` only when you need to steer the first candidate port; the script will probe forward from there.
+This bundle starts a clean browser port, regenerates the current live browser e2e artifact, regenerates the callback/vtable audit artifact, records git `repo_head` bindings, and feeds those artifacts into the aggregate completion gate. It also binds no-server smoke inputs by path and SHA so stale committed artifacts do not masquerade as current proof. Use `ASIP_POSTPUSH_BROWSER_PORT=3130` only when you need to steer the first candidate port; the script will probe forward from there.
 
 The bundle writes an internal `completion-pre-no-server.*` artifact only to bootstrap the no-server invariant smoke. Treat the terminal's final `[postpush-gate] final summary` and `$out_dir/completion-gate.json` as the authoritative post-push result.
 

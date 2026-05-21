@@ -18,12 +18,13 @@ committed_browser_json="docs/qa/2026-05-21-browser-e2e-current.json"
 in_app_browser_json="docs/qa/2026-05-20-in-app-browser-probe.json"
 runtime_semantic_json="docs/qa/2026-05-21-runtime-semantic-freshness-qa.json"
 semantic_quality_json="docs/qa/2026-05-21-semantic-rerank-labeled-eval.json"
-callback_audit_json="docs/qa/2026-05-21-callback-edge-audit-current.json"
+committed_callback_audit_json="docs/qa/2026-05-21-callback-edge-audit-current.json"
 performance_json="docs/qa/2026-05-20-performance-smoke-fixture-current.json"
 residual_acceptance_json="docs/qa/2026-05-20-residual-acceptance-gate.json"
 committed_completion_json="docs/qa/2026-05-21-current-goal-completion-gate.json"
 
 provider_json="$out_dir/provider-gate.json"
+callback_audit_json="$out_dir/callback-edge-audit-current-live.json"
 hosted_openai_json="$out_dir/hosted-openai-compatible.json"
 git_gate_json="$out_dir/git-gate.json"
 browser_preflight_json="$out_dir/browser-e2e-preflight.json"
@@ -153,6 +154,19 @@ python3 -m asip.cli provider-gate \
   --output-json "$provider_json" \
   --full
 
+python3 scripts/audit_callback_edges.py \
+  --db data/asip.db \
+  --output-json "$callback_audit_json" \
+  --assert-no-parser-pollution \
+  --max-ambiguous-fanout 2 \
+  --require-real-oracle drivers/gpu/drm/amd/amdgpu/gfx_v10_0.c:gfx_v10_0_ring_preempt_ib \
+  --require-real-oracle drivers/gpu/drm/amd/amdgpu/amdgpu_device.c:amdgpu_device_fw_loading \
+  --require-real-oracle drivers/gpu/drm/amd/amdgpu/amdgpu_pmu.c:amdgpu_perf_start \
+  --require-real-oracle libgv/core/amdgv_device.c:amdgv_device_func_hw_init \
+  --require-real-oracle libgv/core/amdgv_sched_switch.c:amdgv_sched_world_switch_init \
+  --require-real-oracle libgv/core/amdgv_ecc.c:amdgv_ecc_import_live_data \
+  --require-real-oracle gim/gim_shim/sysfs/gim_debugfs.c:snprintf_realloc
+
 python3 -m asip.cli openai-compatible-smoke \
   --base-url "${ASIP_HOSTED_OPENAI_BASE_URL:-https://api.openai.com}" \
   --embedding-model "${ASIP_HOSTED_OPENAI_EMBEDDING_MODEL:-text-embedding-3-small}" \
@@ -256,5 +270,7 @@ echo "[postpush-gate] completion md: $completion_md"
 echo "[postpush-gate] live browser e2e json: $browser_json"
 echo "[postpush-gate] live browser e2e report: $browser_report_json"
 echo "[postpush-gate] browser preflight json: $browser_preflight_json"
+echo "[postpush-gate] live callback audit json: $callback_audit_json"
 echo "[postpush-gate] committed browser e2e input was not used: $committed_browser_json"
+echo "[postpush-gate] committed callback audit input was not used: $committed_callback_audit_json"
 echo "[postpush-gate] committed docs/qa completion input was only used for no-server preflight: $committed_completion_json"

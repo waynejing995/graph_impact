@@ -4,6 +4,10 @@
 - Source: `asip.callback_edge_audit`
 - Database: `data/asip.db`
 - Gate status: `pass`
+- Post-push closure note: final `pnpm gate:postpush` regenerates a fresh
+  callback audit under `/tmp/asip-postpush-gate-*/` and binds it to the current
+  git `repo_head`, `data/asip.db` SHA-256, and latest index/graph rebuild job
+  ids. Treat that out-of-tree artifact as the final closure proof.
 
 ## Summary
 
