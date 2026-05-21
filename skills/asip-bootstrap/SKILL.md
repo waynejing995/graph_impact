@@ -92,6 +92,8 @@ PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=packages/core/src:. \
 pnpm gate:postpush
 ```
 
+`pnpm gate:postpush` probes for a clean local browser port, regenerates the live no-mock browser e2e artifact against the current `data/asip.db`, then runs the aggregate completion gate with that fresh artifact.
+
 The aggregate completion gate may remain blocked by hosted credentials or explicit residual acceptance. That is a real project boundary, not a bootstrap failure.
 
 ## Rebuilding Or Reindexing

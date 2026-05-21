@@ -90,6 +90,8 @@ Run the standard post-push completion bundle out of tree:
 pnpm gate:postpush
 ```
 
+This bundle starts a clean browser port, regenerates the current live browser e2e artifact, and feeds that artifact into the aggregate completion gate. Use `ASIP_POSTPUSH_BROWSER_PORT=3130` only when you need to steer the first candidate port; the script will probe forward from there.
+
 ## Remote
 
 At the time this guide was written, `main` tracks:
