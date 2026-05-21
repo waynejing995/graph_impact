@@ -20,10 +20,49 @@ class CompletionGateTests(unittest.TestCase):
             web_json = self._write_json(root / "web-acceptance.json", self._acceptance_payload(["CLI", "API", "Web", "MCP"], db_path=db_path))
             provider_json = self._write_json(root / "provider.json", self._provider_payload("pass", db_path=db_path))
             runtime_json = self._write_json(root / "runtime-semantic.json", self._runtime_semantic_payload("pass", db_path=db_path))
+            semantic_quality_json = self._write_json(root / "semantic-quality.json", self._semantic_quality_payload("pass", db_path=db_path))
             browser_json = self._write_json(
                 root / "browser.json",
                 self._browser_e2e_payload("pass", db_path=db_path),
             )
+            no_server_json = self._write_json(root / "no-server.json", self._no_server_payload("pass"))
+            performance_json = self._write_json(root / "performance.json", self._performance_payload("pass"))
+            residual_json = self._write_json(root / "residual.json", self._residual_payload("pass"))
+            git_json = self._write_json(root / "git.json", self._git_payload("pass"))
+
+            result = run_completion_gate(
+                db_path,
+                acceptance_json=acceptance_json,
+                web_acceptance_json=web_json,
+                provider_json=provider_json,
+                runtime_semantic_json=runtime_json,
+                semantic_quality_json=semantic_quality_json,
+                browser_json=browser_json,
+                no_server_json=no_server_json,
+                performance_json=performance_json,
+                residual_acceptance_json=residual_json,
+                git_gate_json=git_json,
+                minimum_counts=self._fixture_minimum_counts(),
+            )
+
+            self.assertEqual(result["gate_status"], "pass")
+            self.assertEqual(result["summary"]["passed"], result["summary"]["total"])
+            self.assertEqual(result["summary"]["blocked"], 0)
+            self.assertEqual(result["database"]["counts"]["linux_amdgpu_chunks"], 1)
+            by_id = {item["id"]: item for item in result["requirements"]}
+            self.assertIn("9/9 required artifacts loaded", by_id["artifact_binding"]["evidence"])
+            self.assertIn("4/4 DB/job-bound artifacts checked", by_id["artifact_binding"]["evidence"])
+            self.assertEqual(by_id["semantic_quality"]["status"], "pass")
+
+    def test_completion_gate_blocks_real_final_mode_without_semantic_quality_artifact(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            db_path = self._write_gate_db(root / "asip.db")
+            acceptance_json = self._write_json(root / "acceptance.json", self._acceptance_payload(["CLI", "API", "MCP"], db_path=db_path))
+            web_json = self._write_json(root / "web-acceptance.json", self._acceptance_payload(["CLI", "API", "Web", "MCP"], db_path=db_path))
+            provider_json = self._write_json(root / "provider.json", self._provider_payload("pass", db_path=db_path))
+            runtime_json = self._write_json(root / "runtime-semantic.json", self._runtime_semantic_payload("pass", db_path=db_path))
+            browser_json = self._write_json(root / "browser.json", self._browser_e2e_payload("pass", db_path=db_path))
             no_server_json = self._write_json(root / "no-server.json", self._no_server_payload("pass"))
             performance_json = self._write_json(root / "performance.json", self._performance_payload("pass"))
             residual_json = self._write_json(root / "residual.json", self._residual_payload("pass"))
@@ -40,16 +79,11 @@ class CompletionGateTests(unittest.TestCase):
                 performance_json=performance_json,
                 residual_acceptance_json=residual_json,
                 git_gate_json=git_json,
-                minimum_counts=self._fixture_minimum_counts(),
             )
 
-            self.assertEqual(result["gate_status"], "pass")
-            self.assertEqual(result["summary"]["passed"], result["summary"]["total"])
-            self.assertEqual(result["summary"]["blocked"], 0)
-            self.assertEqual(result["database"]["counts"]["linux_amdgpu_chunks"], 1)
             by_id = {item["id"]: item for item in result["requirements"]}
-            self.assertIn("9/9 required artifacts loaded", by_id["artifact_binding"]["evidence"])
-            self.assertIn("4/4 DB/job-bound artifacts checked", by_id["artifact_binding"]["evidence"])
+            self.assertEqual(by_id["semantic_quality"]["status"], "missing")
+            self.assertIn("semantic-quality artifact is missing", by_id["semantic_quality"]["failure_reasons"])
 
     def test_completion_gate_blocks_non_indexed_corpus_status_in_current_db(self):
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -2303,6 +2337,25 @@ class CompletionGateTests(unittest.TestCase):
             "gate_status": gate_status,
             "summary": {"checks": len(checks), "passed": passed, "failed": len(checks) - passed},
             "checks": checks,
+        }
+
+    def _semantic_quality_payload(self, gate_status, *, db_path):
+        case_status = "pass" if gate_status == "pass" else "fail"
+        return {
+            "source": "asip.semantic_quality_eval",
+            "db_path": str(db_path),
+            "gate_status": gate_status,
+            "summary": {
+                "total": 2,
+                "passed": 2 if gate_status == "pass" else 1,
+                "failed": 0 if gate_status == "pass" else 1,
+                "provider_vector_cases": 1,
+                "mean_reciprocal_rank": 1.0,
+            },
+            "cases": [
+                {"id": "SQ01", "status": "pass", "row_count": 1},
+                {"id": "SQ02", "status": case_status, "row_count": 1 if gate_status == "pass" else 0},
+            ],
         }
 
     def _browser_e2e_payload(self, gate_status, *, db_path):

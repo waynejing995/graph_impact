@@ -475,6 +475,14 @@ Commit and push happen only after verification.
   optional sqlite-vec skips, current artifact invariants pass, browser e2e
   artifact smoke pass, and no-server smoke `9/9` pass with Playwright
   discovery still at `107` tests.
+- 2026-05-21 semantic-quality completion-gate binding: the completion gate now
+  accepts `--semantic-quality-json` and requires the labeled
+  `source=asip.semantic_quality_eval` artifact in real final mode. The new
+  `semantic_quality` requirement checks gate status, per-case pass status,
+  non-empty result rows, summary totals, zero failures, and at least one
+  provider-vector case, while fixture-style completion-gate runs can still omit
+  the artifact. This binds the labeled semantic rerank evaluation to the final
+  completion gate instead of leaving it as a detached QA artifact.
 - Historical final-candidate evidence package exists at
   `docs/qa/2026-05-17-final-clean-evidence-package.md`, linking the clean AMD
   DB, AQ01-AQ09 9/9 artifact, six free queries, semantic-edge jobs, visual QA,

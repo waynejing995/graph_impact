@@ -77,6 +77,7 @@ def run_completion_gate(
     web_acceptance_json: Optional[Path] = None,
     provider_json: Optional[Path] = None,
     runtime_semantic_json: Optional[Path] = None,
+    semantic_quality_json: Optional[Path] = None,
     browser_json: Optional[Path] = None,
     in_app_browser_json: Optional[Path] = None,
     no_server_json: Optional[Path] = None,
@@ -97,6 +98,7 @@ def run_completion_gate(
         "web_acceptance": _load_json_artifact(web_acceptance_json),
         "provider_gate": _load_json_artifact(provider_json),
         "runtime_semantic_freshness": _load_json_artifact(runtime_semantic_json),
+        "semantic_quality": _load_json_artifact(semantic_quality_json),
         "browser_gate": _load_json_artifact(browser_json),
         "in_app_browser": _load_json_artifact(in_app_browser_json),
         "no_server_smoke": _load_json_artifact(no_server_json),
@@ -108,6 +110,7 @@ def run_completion_gate(
     web_payload = artifacts["web_acceptance"].get("payload")
     provider_payload = artifacts["provider_gate"].get("payload")
     runtime_semantic_payload = artifacts["runtime_semantic_freshness"].get("payload")
+    semantic_quality_payload = artifacts["semantic_quality"].get("payload")
     browser_payload = artifacts["browser_gate"].get("payload")
     in_app_browser_payload = artifacts["in_app_browser"].get("payload")
     no_server_payload = artifacts["no_server_smoke"].get("payload")
@@ -128,6 +131,7 @@ def run_completion_gate(
         _provider_requirement(provider_payload),
         _stage2_requirement(provider_payload),
         _runtime_semantic_freshness_requirement(runtime_semantic_payload),
+        _semantic_quality_requirement(semantic_quality_payload, required=minimum_counts is None),
         _browser_requirement(browser_payload, in_app_browser_payload, db_path, db_health),
         _no_server_requirement(no_server_payload, artifacts),
         _performance_requirement(performance_payload),
@@ -1006,6 +1010,70 @@ def _runtime_semantic_freshness_requirement(payload: Optional[Mapping[str, Any]]
     return _requirement(
         "runtime_semantic_freshness",
         "Runtime semantic graph freshness and provenance binding",
+        status,
+        evidence,
+        failures,
+    )
+
+
+def _semantic_quality_requirement(payload: Optional[Mapping[str, Any]], *, required: bool) -> Dict[str, Any]:
+    if not isinstance(payload, Mapping):
+        if not required:
+            return _requirement(
+                "semantic_quality",
+                "Labeled semantic retrieval quality gate",
+                "pass",
+                "semantic-quality artifact is optional for fixture completion gates",
+                [],
+            )
+        return _requirement(
+            "semantic_quality",
+            "Labeled semantic retrieval quality gate",
+            "missing",
+            "semantic-quality artifact is missing",
+            ["semantic-quality artifact is missing"],
+        )
+    failures: List[str] = []
+    if payload.get("source") != "asip.semantic_quality_eval":
+        failures.append(f"source={payload.get('source', 'missing')} does not match asip.semantic_quality_eval")
+    if payload.get("gate_status") != "pass":
+        failures.append(f"gate_status={payload.get('gate_status')}")
+        failures.extend(str(reason) for reason in payload.get("failure_reasons", []))
+    summary = payload.get("summary", {})
+    total = _coerce_int(summary.get("total"))
+    passed = _coerce_int(summary.get("passed"))
+    failed = _coerce_int(summary.get("failed", 0) or 0)
+    provider_vector_cases = _coerce_int(summary.get("provider_vector_cases", 0) or 0)
+    if total is None or total <= 0:
+        failures.append(f"summary total is missing or zero: {summary.get('total')}")
+    if passed is None or total is None or passed != total:
+        failures.append(f"summary passed={summary.get('passed')} does not match total={summary.get('total')}")
+    if failed is None or failed != 0:
+        failures.append(f"summary failed={summary.get('failed')}")
+    if provider_vector_cases is None or provider_vector_cases <= 0:
+        failures.append(f"provider_vector_cases={summary.get('provider_vector_cases')} does not prove vector participation")
+    cases = payload.get("cases", [])
+    if not isinstance(cases, list) or not cases:
+        failures.append("cases are missing")
+    else:
+        for case in cases:
+            if not isinstance(case, Mapping):
+                failures.append("semantic quality case is not an object")
+                continue
+            if case.get("status") != "pass":
+                failures.append(f"{case.get('id', 'unknown')}: status={case.get('status')}")
+            if int(case.get("row_count", 0) or 0) <= 0:
+                failures.append(f"{case.get('id', 'unknown')}: row_count={case.get('row_count')}")
+    status = "pass" if not failures else "blocked"
+    evidence = (
+        f"gate_status={payload.get('gate_status')}; "
+        f"passed={summary.get('passed', 0)}/{summary.get('total', 0)}; "
+        f"provider_vector_cases={summary.get('provider_vector_cases', 0)}; "
+        f"mrr={summary.get('mean_reciprocal_rank', 0)}"
+    )
+    return _requirement(
+        "semantic_quality",
+        "Labeled semantic retrieval quality gate",
         status,
         evidence,
         failures,
