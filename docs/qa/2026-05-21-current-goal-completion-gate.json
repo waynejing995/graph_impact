@@ -1,6 +1,6 @@
 {
   "source": "asip.completion_gate",
-  "generated_at": "2026-05-21T07:34:35+00:00",
+  "generated_at": "2026-05-21T07:54:29+00:00",
   "db_path": "data/asip.db",
   "database": {
     "status": "pass",
@@ -136,7 +136,7 @@
         "failed": 0,
         "flaky": 0,
         "skipped": 0,
-        "duration_ms": 211699.423
+        "duration_ms": 193900.294
       },
       "failure_reasons": []
     },
@@ -349,13 +349,13 @@
       "id": "git_gate",
       "title": "Final diff, commit, and push gate",
       "status": "blocked",
-      "evidence": "diff_check=pass; worktree_status=dirty; committed=False; pushed=True; artifact_head=b7c8a084cf32; current_head=b7c8a084cf32; artifact_branch=main; current_branch=main; current_worktree=dirty:21; artifact_upstream=origin/main; current_upstream=origin/main; current_ahead=0; current_behind=0",
+      "evidence": "diff_check=pass; worktree_status=dirty; committed=False; pushed=True; artifact_head=1e9e166e8201; current_head=1e9e166e8201; artifact_branch=main; current_branch=main; current_worktree=dirty:10; artifact_upstream=origin/main; current_upstream=origin/main; current_ahead=0; current_behind=0",
       "failure_reasons": [
         "gate_status=blocked",
-        "worktree has 21 changed/untracked paths",
+        "worktree has 9 changed/untracked paths",
         "worktree_status=dirty",
         "committed is not true",
-        "current worktree has 21 changed/untracked paths"
+        "current worktree has 10 changed/untracked paths"
       ]
     }
   ],
@@ -381,9 +381,9 @@
     "residual_acceptance: accepted is not true",
     "residual_acceptance: accepted_residuals is empty",
     "git_gate: gate_status=blocked",
-    "git_gate: worktree has 21 changed/untracked paths",
+    "git_gate: worktree has 9 changed/untracked paths",
     "git_gate: worktree_status=dirty",
     "git_gate: committed is not true",
-    "git_gate: current worktree has 21 changed/untracked paths"
+    "git_gate: current worktree has 10 changed/untracked paths"
   ]
 }

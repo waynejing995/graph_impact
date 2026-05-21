@@ -1,6 +1,6 @@
 # ASIP Current Completion Gate
 
-- Generated: `2026-05-21T07:34:35+00:00`
+- Generated: `2026-05-21T07:54:29+00:00`
 - Database: `data/asip.db`
 - Gate status: `blocked`
 
@@ -31,7 +31,7 @@
 | `web_no_server_smoke` | `pass` | gate_status=pass; checks=9/9 |
 | `performance_smoke` | `pass` | deterministic_counts_match=True; all_queries_under_threshold=True; queries=5 |
 | `residual_acceptance` | `blocked` | gate_status=blocked; accepted_residuals=0 |
-| `git_gate` | `blocked` | diff_check=pass; worktree_status=dirty; committed=False; pushed=True; artifact_head=b7c8a084cf32; current_head=b7c8a084cf32; artifact_branch=main; current_branch=main; current_w... |
+| `git_gate` | `blocked` | diff_check=pass; worktree_status=dirty; committed=False; pushed=True; artifact_head=1e9e166e8201; current_head=1e9e166e8201; artifact_branch=main; current_branch=main; current_w... |
 
 ## Blocking Reasons
 
@@ -48,7 +48,7 @@
 - residual_acceptance: accepted is not true
 - residual_acceptance: accepted_residuals is empty
 - git_gate: gate_status=blocked
-- git_gate: worktree has 21 changed/untracked paths
+- git_gate: worktree has 9 changed/untracked paths
 - git_gate: worktree_status=dirty
 - git_gate: committed is not true
-- git_gate: current worktree has 21 changed/untracked paths
+- git_gate: current worktree has 10 changed/untracked paths

@@ -1,9 +1,9 @@
 {
   "source": "asip.git_gate",
-  "generated_at": "2026-05-21T07:34:17+00:00",
+  "generated_at": "2026-05-21T07:54:03+00:00",
   "repo_root": "/Volumes/data/User/wayne/Code/graph_impact",
   "branch": "main",
-  "head": "b7c8a084cf32f8eca0a7449d33cb3ff2e50f6d38",
+  "head": "1e9e166e82014bdcb70689369175f1bf51cb1a02",
   "upstream": "origin/main",
   "ahead": 0,
   "behind": 0,
@@ -11,32 +11,20 @@
   "diff_check_output": "",
   "worktree_status": "dirty",
   "changed_paths": [
-    " M apps/web/components/weighted-force-graph.tsx",
     " M apps/web/scripts/browser-e2e-artifact.mjs",
     " M apps/web/scripts/current-artifact-invariants-smoke.mjs",
-    " M apps/web/tests/workbench-api.spec.ts",
+    " M apps/web/tests/visual-anchor-routes.spec.ts",
     " M apps/web/tests/workbench-smoke.spec.ts",
-    " M docs/gaps/2026-05-16-g11-completion-gate.md",
-    " M docs/gaps/README.md",
     " M docs/qa/2026-05-21-browser-e2e-current.json",
     " M docs/qa/2026-05-21-browser-e2e-current.playwright-report.json",
-    " M docs/qa/2026-05-21-callback-edge-audit-current.json",
-    " M docs/qa/2026-05-21-current-goal-completion-gate.json",
-    " M docs/qa/2026-05-21-current-goal-completion-gate.md",
-    " M docs/qa/2026-05-21-git-gate-main.json",
     " M docs/qa/2026-05-21-ui-no-server-smoke.json",
     " M packages/core/src/asip/completion_gate.py",
-    " M packages/core/src/asip/storage.py",
-    " M packages/core/src/asip/workbench.py",
-    " M packages/core/tests/test_callback_edge_audit.py",
-    " M packages/core/tests/test_completion_gate.py",
-    " M packages/core/tests/test_workbench_query_schema.py",
-    " M scripts/audit_callback_edges.py"
+    " M packages/core/tests/test_completion_gate.py"
   ],
   "committed": false,
   "pushed": true,
   "gate_status": "blocked",
   "failure_reasons": [
-    "worktree has 21 changed/untracked paths"
+    "worktree has 9 changed/untracked paths"
   ]
 }

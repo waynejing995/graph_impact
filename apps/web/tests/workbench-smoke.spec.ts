@@ -2152,8 +2152,10 @@ test("graph page loads current data/asip.db through browser and API", async ({ p
   const graphCanvas = forceGraph.locator("canvas");
   await graphCanvas.hover({ position: { x: conceptPoint.x, y: conceptPoint.y } });
   await expect(forceGraph).toHaveAttribute("data-hovered-canvas-node-id", String(currentDbConcept?.id));
+  const hoveredCanvasNodeId = await forceGraph.getAttribute("data-hovered-canvas-node-id");
   await graphCanvas.click({ position: { x: conceptPoint.x, y: conceptPoint.y } });
   await expect(forceGraph).toHaveAttribute("data-last-node-select-source", "canvas-node-click");
+  const selectionInput = await forceGraph.getAttribute("data-last-node-select-source");
   await expect(page.getByRole("heading", { name: `Graph Node: ${currentDbConceptLabel}` })).toBeVisible();
   await expect(page.getByRole("heading", { name: "Node Detail" })).toBeVisible();
   await expect(page.getByRole("heading", { name: "Concept Generated From" })).toBeVisible();
@@ -2177,7 +2179,8 @@ test("graph page loads current data/asip.db through browser and API", async ({ p
     listed_implementation_count: currentDbConcept?.attr?.concept_implementations?.length,
     raw_implementation_record_count: currentDbConcept?.attr?.raw_implementation_count,
     selected_implementation: currentDbConceptImplementation?.function_name,
-    selection_input: "canvas-node-click",
+    selection_input: selectionInput,
+    hovered_canvas_node_id: hoveredCanvasNodeId,
     canvas_click_x: conceptPoint.x,
     canvas_click_y: conceptPoint.y,
     detail_heading: "Concept Generated From",

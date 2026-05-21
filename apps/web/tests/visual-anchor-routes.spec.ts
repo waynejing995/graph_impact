@@ -265,7 +265,8 @@ test("all routes share the canonical anchor chrome baseline", async ({ page }) =
 
   const reference = new Map<string, number>();
   for (const pageCase of pages) {
-    await page.goto(pageCase.route);
+    await page.goto(pageCase.route, { waitUntil: "domcontentloaded" });
+    await expect(page.getByTestId("asip-workbench")).toHaveAttribute("data-page-id", pageCase.pageId);
 
     for (const selector of [".topbar", ".sidebar", ".center-pane", ".details-pane"]) {
       const box = await page.locator(selector).boundingBox();

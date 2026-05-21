@@ -2719,6 +2719,7 @@ class CompletionGateTests(unittest.TestCase):
                     "raw_implementation_record_count": 3,
                     "selected_implementation": "gfx_v11_0_hw_init",
                     "selection_input": "canvas-node-click",
+                    "hovered_canvas_node_id": "function:linux-amdgpu:concept:linux-amdgpu:amd-ip-versioned-functions:gfx_hw_init",
                     "canvas_click_x": 24.5,
                     "canvas_click_y": 31.5,
                     "detail_heading": "Concept Generated From",

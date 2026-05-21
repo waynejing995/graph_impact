@@ -1564,6 +1564,11 @@ def _browser_concept_detail_probe_failures(probe: Mapping[str, Any]) -> List[str
             f"browser e2e concept detail selection_input={probe.get('selection_input', 'missing')} "
             "is not canvas-node-click"
         )
+    if str(probe.get("hovered_canvas_node_id") or "") != selected_node_id:
+        failures.append(
+            f"browser e2e concept detail hovered_canvas_node_id={probe.get('hovered_canvas_node_id', 'missing')} "
+            f"does not match selected_node_id={selected_node_id or 'missing'}"
+        )
     canvas_click_x = _coerce_int(probe.get("canvas_click_x"))
     canvas_click_y = _coerce_int(probe.get("canvas_click_y"))
     if canvas_click_x is None or canvas_click_x < 0:

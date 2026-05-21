@@ -486,6 +486,11 @@ function collectConceptDetailProbeFailureReasons(probe) {
       `browser e2e concept detail selection_input=${probe.selection_input ?? "missing"} is not canvas-node-click`
     );
   }
+  if (String(probe.hovered_canvas_node_id ?? "") !== String(probe.selected_node_id ?? "")) {
+    reasons.push(
+      `browser e2e concept detail hovered_canvas_node_id=${probe.hovered_canvas_node_id ?? "missing"} does not match selected_node_id=${probe.selected_node_id ?? "missing"}`
+    );
+  }
   if (!Number.isFinite(Number(probe.canvas_click_x)) || Number(probe.canvas_click_x) < 0) {
     reasons.push(`browser e2e concept detail canvas_click_x=${probe.canvas_click_x ?? "missing"}`);
   }

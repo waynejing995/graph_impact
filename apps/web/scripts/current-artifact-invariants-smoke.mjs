@@ -177,6 +177,7 @@ if (browserArtifactIsE2e) {
   );
   assert.ok(String(conceptDetailProbe?.selected_implementation ?? "").trim());
   assert.equal(conceptDetailProbe?.selection_input, "canvas-node-click");
+  assert.equal(conceptDetailProbe?.hovered_canvas_node_id, conceptDetailProbe?.selected_node_id);
   assert.ok(Number(conceptDetailProbe?.canvas_click_x ?? -1) >= 0);
   assert.ok(Number(conceptDetailProbe?.canvas_click_y ?? -1) >= 0);
   assert.equal(conceptDetailProbe?.detail_heading, "Concept Generated From");
