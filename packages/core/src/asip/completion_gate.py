@@ -173,6 +173,7 @@ def _database_health(db_path: Path, *, full_integrity_check: bool) -> Dict[str, 
             "integrity_check": "",
             "counts": {},
             "jobs": {},
+            "corpora_statuses": [],
             "failure_reasons": ["database file is missing"],
         }
     try:
@@ -205,6 +206,7 @@ def _database_health(db_path: Path, *, full_integrity_check: bool) -> Dict[str, 
                 ),
                 "latest_doc_nodes_job_id": _latest_job_id(connection, "doc_nodes_batch"),
             }
+            corpora_statuses, corpus_status_failures = _corpus_status_failures(connection)
             blocking_job_failures = _blocking_job_failures(connection)
     except sqlite3.Error as exc:
         return {
@@ -214,6 +216,7 @@ def _database_health(db_path: Path, *, full_integrity_check: bool) -> Dict[str, 
             "integrity_check": "",
             "counts": {},
             "jobs": {},
+            "corpora_statuses": [],
             "failure_reasons": [f"database read failed: {exc}"],
         }
 
@@ -223,6 +226,7 @@ def _database_health(db_path: Path, *, full_integrity_check: bool) -> Dict[str, 
     for table in ("documents", "chunks", "evidence"):
         if counts.get(table, 0) <= 0:
             failure_reasons.append(f"{table} has no rows")
+    failure_reasons.extend(corpus_status_failures)
     failure_reasons.extend(blocking_job_failures)
     status = "pass" if not failure_reasons else "fail"
     return {
@@ -232,6 +236,7 @@ def _database_health(db_path: Path, *, full_integrity_check: bool) -> Dict[str, 
         "integrity_check": integrity,
         "counts": counts,
         "jobs": jobs,
+        "corpora_statuses": corpora_statuses,
         "failure_reasons": failure_reasons,
     }
 
@@ -307,12 +312,35 @@ def _blocking_job_failures(connection: sqlite3.Connection) -> List[str]:
     return failures
 
 
+def _corpus_status_failures(connection: sqlite3.Connection) -> Tuple[List[Dict[str, str]], List[str]]:
+    if not _table_exists(connection, "corpora"):
+        return [], ["corpora table is missing"]
+    if "status" not in _table_columns(connection, "corpora"):
+        return [], ["corpora.status column is missing"]
+
+    statuses: List[Dict[str, str]] = []
+    failures: List[str] = []
+    rows = connection.execute("select id, status from corpora order by id").fetchall()
+    for row in rows:
+        corpus_id = str(row[0])
+        status = str(row[1] or "")
+        statuses.append({"id": corpus_id, "status": status})
+        if status != "indexed":
+            failures.append(f"corpus {corpus_id} status is {status}")
+    return statuses, failures
+
+
 def _table_exists(connection: sqlite3.Connection, table: str) -> bool:
     row = connection.execute(
         "select 1 from sqlite_master where type = 'table' and name = ?",
         (table,),
     ).fetchone()
     return row is not None
+
+
+def _table_columns(connection: sqlite3.Connection, table: str) -> set[str]:
+    rows = connection.execute(f"pragma table_info({table})").fetchall()
+    return {str(row[1]) for row in rows}
 
 
 def _load_json_artifact(path: Optional[Path]) -> Dict[str, Any]:

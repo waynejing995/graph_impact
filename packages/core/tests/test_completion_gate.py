@@ -51,6 +51,51 @@ class CompletionGateTests(unittest.TestCase):
             self.assertIn("9/9 required artifacts loaded", by_id["artifact_binding"]["evidence"])
             self.assertIn("4/4 DB/job-bound artifacts checked", by_id["artifact_binding"]["evidence"])
 
+    def test_completion_gate_blocks_non_indexed_corpus_status_in_current_db(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            db_path = self._write_gate_db(root / "asip.db")
+            with sqlite3.connect(db_path) as connection:
+                connection.execute(
+                    "insert into corpora (id, status) values (?, ?)",
+                    ("local-amd-docs", "not_indexed"),
+                )
+            acceptance_json = self._write_json(root / "acceptance.json", self._acceptance_payload(["CLI", "API", "MCP"], db_path=db_path))
+            web_json = self._write_json(root / "web-acceptance.json", self._acceptance_payload(["CLI", "API", "Web", "MCP"], db_path=db_path))
+            provider_json = self._write_json(root / "provider.json", self._provider_payload("pass", db_path=db_path))
+            runtime_json = self._write_json(root / "runtime-semantic.json", self._runtime_semantic_payload("pass", db_path=db_path))
+            browser_json = self._write_json(root / "browser.json", self._browser_e2e_payload("pass", db_path=db_path))
+            no_server_json = self._write_json(root / "no-server.json", self._no_server_payload("pass"))
+            performance_json = self._write_json(root / "performance.json", self._performance_payload("pass"))
+            residual_json = self._write_json(root / "residual.json", self._residual_payload("pass"))
+            git_json = self._write_json(root / "git.json", self._git_payload("pass"))
+
+            result = run_completion_gate(
+                db_path,
+                acceptance_json=acceptance_json,
+                web_acceptance_json=web_json,
+                provider_json=provider_json,
+                runtime_semantic_json=runtime_json,
+                browser_json=browser_json,
+                no_server_json=no_server_json,
+                performance_json=performance_json,
+                residual_acceptance_json=residual_json,
+                git_gate_json=git_json,
+                minimum_counts=self._fixture_minimum_counts(),
+            )
+
+            by_id = {item["id"]: item for item in result["requirements"]}
+            self.assertEqual(result["gate_status"], "blocked")
+            self.assertEqual(by_id["real_index_db"]["status"], "fail")
+            self.assertIn("corpus local-amd-docs status is not_indexed", by_id["real_index_db"]["failure_reasons"])
+            self.assertEqual(
+                result["database"]["corpora_statuses"],
+                [
+                    {"id": "linux-amdgpu", "status": "indexed"},
+                    {"id": "local-amd-docs", "status": "not_indexed"},
+                ],
+            )
+
     def test_completion_gate_blocks_stale_git_gate_head_binding(self):
         with tempfile.TemporaryDirectory() as tmpdir:
             root = Path(tmpdir)
@@ -2052,7 +2097,10 @@ class CompletionGateTests(unittest.TestCase):
         with sqlite3.connect(db_path) as connection:
             connection.executescript(
                 """
-                create table corpora (id text primary key);
+                create table corpora (
+                    id text primary key,
+                    status text not null default 'indexed'
+                );
                 create table documents (
                     id integer primary key,
                     corpus_id text not null,
@@ -2079,7 +2127,7 @@ class CompletionGateTests(unittest.TestCase):
                     started_at text not null default current_timestamp,
                     finished_at text
                 );
-                insert into corpora values ('linux-amdgpu');
+                insert into corpora (id, status) values ('linux-amdgpu', 'indexed');
                 insert into documents values (1, 'linux-amdgpu', 'register', 'drivers/gpu/drm/amd/include/asic_reg/reg.h');
                 insert into chunks values (1, 1, 'text', 1, 1, null);
                 insert into evidence values (1);
