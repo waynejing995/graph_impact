@@ -16,7 +16,7 @@ acceptance_json="docs/qa/2026-05-21-acceptance-data-asip-live-web-current.json"
 web_acceptance_json="docs/qa/2026-05-21-acceptance-data-asip-live-web-current.json"
 committed_browser_json="docs/qa/2026-05-21-browser-e2e-current.json"
 in_app_browser_json="docs/qa/2026-05-20-in-app-browser-probe.json"
-runtime_semantic_json="docs/qa/2026-05-21-runtime-semantic-freshness-qa.json"
+committed_runtime_semantic_json="docs/qa/2026-05-21-runtime-semantic-freshness-qa.json"
 committed_semantic_quality_json="docs/qa/2026-05-21-semantic-rerank-labeled-eval.json"
 committed_callback_audit_json="docs/qa/2026-05-21-callback-edge-audit-current.json"
 performance_json="docs/qa/2026-05-20-performance-smoke-fixture-current.json"
@@ -27,6 +27,7 @@ provider_json="$out_dir/provider-gate.json"
 semantic_quality_json="$out_dir/semantic-rerank-labeled-eval-current-live.json"
 semantic_quality_md="$out_dir/semantic-rerank-labeled-eval-current-live.md"
 callback_audit_json="$out_dir/callback-edge-audit-current-live.json"
+runtime_semantic_json="$out_dir/runtime-semantic-freshness-current-live.json"
 hosted_openai_json="$out_dir/hosted-openai-compatible.json"
 git_gate_json="$out_dir/git-gate.json"
 browser_preflight_json="$out_dir/browser-e2e-preflight.json"
@@ -177,6 +178,11 @@ python3 -m asip.cli semantic-quality \
   --output-md "$semantic_quality_md" \
   --full
 
+python3 -m asip.cli runtime-semantic-freshness \
+  --db data/asip.db \
+  --output-json "$runtime_semantic_json" \
+  --full
+
 python3 -m asip.cli openai-compatible-smoke \
   --base-url "${ASIP_HOSTED_OPENAI_BASE_URL:-https://api.openai.com}" \
   --embedding-model "${ASIP_HOSTED_OPENAI_EMBEDDING_MODEL:-text-embedding-3-small}" \
@@ -284,6 +290,7 @@ echo "[postpush-gate] live callback audit json: $callback_audit_json"
 echo "[postpush-gate] live semantic quality json: $semantic_quality_json"
 echo "[postpush-gate] live semantic quality md: $semantic_quality_md"
 echo "[postpush-gate] committed browser e2e input was not used: $committed_browser_json"
+echo "[postpush-gate] committed runtime semantic input was not used: $committed_runtime_semantic_json"
 echo "[postpush-gate] committed semantic quality input was not used: $committed_semantic_quality_json"
 echo "[postpush-gate] committed callback audit input was not used: $committed_callback_audit_json"
 echo "[postpush-gate] committed docs/qa completion input was only used for no-server preflight: $committed_completion_json"

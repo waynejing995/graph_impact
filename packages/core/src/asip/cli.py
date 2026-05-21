@@ -13,6 +13,7 @@ from .completion_gate import run_completion_gate
 from .limits import DEFAULT_WORKBENCH_LIMITS_PATH, load_workbench_limits
 from .openai_compatible_smoke import run_openai_compatible_live_smoke
 from .performance_smoke import run_fixture_performance_smoke
+from .runtime_semantic_freshness import run_runtime_semantic_freshness_qa
 from .semantic_quality import run_semantic_quality_eval
 from .semantic_edges import run_full_corpus_generation, run_generation
 from .workbench import (
@@ -259,6 +260,15 @@ def main(argv: Optional[List[str]] = None) -> int:
     semantic_quality.add_argument("--output-json")
     semantic_quality.add_argument("--output-md")
     semantic_quality.add_argument("--full", action="store_true", help="Print the full semantic-quality payload")
+
+    runtime_semantic = subcommands.add_parser(
+        "runtime-semantic-freshness",
+        help="Generate current runtime semantic graph freshness QA artifact",
+    )
+    runtime_semantic.add_argument("--db", required=True)
+    runtime_semantic.add_argument("--query", default="GCVM_L2_CNTL")
+    runtime_semantic.add_argument("--output-json")
+    runtime_semantic.add_argument("--full", action="store_true", help="Print the full runtime semantic payload")
 
     completion_gate = subcommands.add_parser(
         "completion-gate",
@@ -596,6 +606,14 @@ def main(argv: Optional[List[str]] = None) -> int:
             Path(args.eval_set),
             output_json=Path(args.output_json) if args.output_json else None,
             output_md=Path(args.output_md) if args.output_md else None,
+        )
+        print(json.dumps(result if args.full else result["summary"], indent=2))
+        return 0
+    if args.command == "runtime-semantic-freshness":
+        result = run_runtime_semantic_freshness_qa(
+            Path(args.db),
+            output_json=Path(args.output_json) if args.output_json else None,
+            query=args.query,
         )
         print(json.dumps(result if args.full else result["summary"], indent=2))
         return 0
