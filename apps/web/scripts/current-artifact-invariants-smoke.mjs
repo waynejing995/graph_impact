@@ -74,6 +74,12 @@ function readJson(inputPath) {
   return JSON.parse(readFileSync(resolvePath(inputPath), "utf8"));
 }
 
+function repoRelativePath(inputPath) {
+  const resolved = resolvePath(inputPath);
+  const relative = path.relative(repoRoot, resolved);
+  return relative && !relative.startsWith("..") && !path.isAbsolute(relative) ? relative : "";
+}
+
 function textFrom(value) {
   return JSON.stringify(value);
 }
@@ -261,6 +267,16 @@ for (const requirementId of [
   "git_gate",
 ]) {
   assert.ok(completionRequirements.has(requirementId), `missing completion requirement ${requirementId}`);
+}
+const completionRelativePath = repoRelativePath(args.completionJson);
+const completionIsCommittedQaArtifact =
+  completionRelativePath.startsWith(`docs${path.sep}qa${path.sep}`) && completionRelativePath.endsWith(".json");
+if (completionIsCommittedQaArtifact) {
+  assert.notEqual(
+    completionGate.gate_status,
+    "pass",
+    "repo-local docs/qa completion artifacts are self-referential and must not be used as final post-push pass proof"
+  );
 }
 if (completionGate.gate_status === "pass") {
   assert.equal(completionGate.summary?.passed, completionGate.summary?.total);
