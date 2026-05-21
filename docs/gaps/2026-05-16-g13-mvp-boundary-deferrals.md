@@ -20,6 +20,12 @@ ASIP has both an MVP-1 design doc and a long-range full technical spec. Long-ran
   `acceptance_required_rows` for hybrid retrieval semantic quality and
   provider/OpenAI-compatible live QA boundaries, and still blocks because
   explicit user acceptance has not been recorded.
+- 2026-05-21 OpenAI-compatible live smoke narrows the provider residual:
+  `docs/qa/2026-05-21-openai-compatible-live-smoke.json` proves the local
+  Ollama OpenAI-compatible `/v1/embeddings` and `/v1/chat/completions`
+  protocol paths with real live calls. This closes protocol compatibility
+  evidence, but it does not prove a hosted credentialed OpenAI-compatible
+  endpoint because no credentials have been supplied.
 
 ## Remaining Gap
 
@@ -32,7 +38,7 @@ The repo now has a deferral ledger and a final-candidate residual-boundary list.
 | Real AMD code/docs/register/PDF ingestion | MVP-1 | G01 and G08 track raw corpus plus text-based PDF ingestion. | Required by user. | Must close for MVP-1. |
 | Hybrid retrieval over exact, resolver, FTS5, vector, graph, rerank | MVP-1 / partial | G02 and G09 track FTS retrieval, provider embeddings, provider query-time vector rerank wiring, vector fallback, and graph expansion. | Required by user; rerank maturity not separately accepted. | Current evidence closes provider-vector wiring; production-scale semantic rerank quality remains a residual boundary needing acceptance or broader evaluation. |
 | Configurable resolver profiles for Linux amdgpu, MxGPU, and toy Python | MVP-1 | G05 tracks config-driven resolver profiles and UI workflow. | Required by user. | Must close for MVP-1. |
-| Embedding provider and optional semantic-edge provider via Ollama/OpenAI-compatible APIs | MVP-1 / partial | G06 tracks split provider settings, safe env-based extra headers, embedding calls/backfill, query-time provider rerank wiring, semantic-edge jobs, full local temp-copy provider backfill timing, and live `gemma4:e4b`/`nomic-embed-text:latest` model QA. | Required by user for embeddings; semantic-edge model support requested. | Local Ollama path, safe header expansion, full local temp-copy provider-vector coverage, and query-time provider-vector wiring are proven; credentialed OpenAI-compatible live QA and broad semantic quality remain residual boundaries needing acceptance, credentials, or implementation. |
+| Embedding provider and optional semantic-edge provider via Ollama/OpenAI-compatible APIs | MVP-1 / partial | G06 tracks split provider settings, safe env-based extra headers, embedding calls/backfill, query-time provider rerank wiring, semantic-edge jobs, full default-DB provider embedding coverage, and live `gemma4:e4b`/`nomic-embed-text:latest` model QA. The 2026-05-21 OpenAI-compatible live smoke proves the local `/v1` compatible protocol path. | Required by user for embeddings; semantic-edge model support requested. | Local Ollama path, safe header expansion, full current-DB provider-vector coverage, query-time provider-vector wiring, semantic/doc-node provenance, and local OpenAI-compatible `/v1` live smoke are proven; hosted credentialed OpenAI-compatible live QA and broad semantic quality remain residual boundaries needing acceptance, credentials, or implementation. |
 | Web workbench and MCP as first-class surfaces | MVP-1 | G07, G16, and G17 track API/MCP/Web product surfaces. G07 now includes deterministic structured resolved-chain explanations, Web/MCP graph parity, and bundled-Python real MCP runtime smoke. | Required by user. | Product surface parity and real local MCP runtime smoke are implemented; external client interoperability beyond FastMCP construction/tool execution remains future deployment QA. |
 | Global Obsidian-style weighted graph | Active branch requirement | G03 tracks global graph after user explicitly requested it. | Required by later user request. | Must close for this active goal. |
 | Scanned PDF OCR/layout reconstruction | Deferred | G08 supports text-based PDF conversion only. | Not requested for MVP; MVP design excludes scanned-PDF OCR. | Out of MVP-1 unless user later supplies OCR requirement. |

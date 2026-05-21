@@ -1,0 +1,44 @@
+{
+  "source": "asip.openai_compatible_live_smoke",
+  "generated_at": "2026-05-21T04:04:01+00:00",
+  "repo_head": "593e47197e07fb24053591ccf9d0e207039dd1ff",
+  "base_url": "http://localhost:11434",
+  "credential_mode": "local-compatible-no-secret",
+  "note": "Uses Ollama OpenAI-compatible /v1 endpoints as a live compatibility surface; this is not a hosted credentialed OpenAI endpoint.",
+  "summary": {
+    "total": 2,
+    "passed": 2,
+    "failed": 0
+  },
+  "gate_status": "pass",
+  "checks": [
+    {
+      "id": "openai_compatible_embeddings_live",
+      "status": "pass",
+      "provider": "openai-compatible",
+      "base_url": "http://localhost:11434",
+      "api_path": "/v1/embeddings",
+      "model": "nomic-embed-text:latest",
+      "embedding_count": 1,
+      "vector_dimension": 768
+    },
+    {
+      "id": "openai_compatible_chat_completions_live",
+      "status": "pass",
+      "provider": "openai-compatible",
+      "base_url": "http://localhost:11434",
+      "api_path": "/v1/chat/completions",
+      "model": "gemma4:e4b",
+      "edge_count": 1,
+      "persistable_edge_count": 1,
+      "sample_edge": {
+        "src": "GCVM_L2_CNTL",
+        "relation": "sets_field",
+        "dst": "ENABLE_L2_CACHE",
+        "confidence": 1.0,
+        "evidence": "GCVM_L2_CNTL has field ENABLE_L2_CACHE."
+      }
+    }
+  ],
+  "failure_reasons": []
+}

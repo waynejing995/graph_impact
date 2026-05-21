@@ -1,6 +1,6 @@
 {
   "source": "asip.residual_acceptance",
-  "generated_at": "2026-05-20T10:25:21+00:00",
+  "generated_at": "2026-05-21T04:05:34+00:00",
   "residual_doc_path": "docs/gaps/2026-05-16-g13-mvp-boundary-deferrals.md",
   "status_line": "Status: Partial; deferral ledger exists, final user acceptance of residual boundaries remains blocking",
   "accepted": false,
@@ -31,9 +31,9 @@
     {
       "spec_area": "Embedding provider and optional semantic-edge provider via Ollama/OpenAI-compatible APIs",
       "mvp_status": "MVP-1 / partial",
-      "current_closest_capability": "G06 tracks split provider settings, safe env-based extra headers, embedding calls/backfill, query-time provider rerank wiring, semantic-edge jobs, full local temp-copy provider backfill timing, and live `gemma4:e4b`/`nomic-embed-text:latest` model QA.",
+      "current_closest_capability": "G06 tracks split provider settings, safe env-based extra headers, embedding calls/backfill, query-time provider rerank wiring, semantic-edge jobs, full default-DB provider embedding coverage, and live `gemma4:e4b`/`nomic-embed-text:latest` model QA. The 2026-05-21 OpenAI-compatible live smoke proves the local `/v1` compatible protocol path.",
       "user_acceptance_status": "Required by user for embeddings; semantic-edge model support requested.",
-      "completion_rule": "Local Ollama path, safe header expansion, full local temp-copy provider-vector coverage, and query-time provider-vector wiring are proven; credentialed OpenAI-compatible live QA and broad semantic quality remain residual boundaries needing acceptance, credentials, or implementation."
+      "completion_rule": "Local Ollama path, safe header expansion, full current-DB provider-vector coverage, query-time provider-vector wiring, semantic/doc-node provenance, and local OpenAI-compatible `/v1` live smoke are proven; hosted credentialed OpenAI-compatible live QA and broad semantic quality remain residual boundaries needing acceptance, credentials, or implementation."
     },
     {
       "spec_area": "Web workbench and MCP as first-class surfaces",
