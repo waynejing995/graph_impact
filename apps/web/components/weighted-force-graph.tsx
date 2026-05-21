@@ -202,10 +202,32 @@ export function WeightedForceGraph({
     () => [...graphData.nodes].sort((left, right) => right.weight - left.weight).slice(0, summaryLimit),
     [graphData.nodes, summaryLimit]
   );
-  const summaryNodes =
-    graphData.nodes.length <= summaryLimit
-      ? graphData.nodes
-      : uniqueNodesForSummary([...topNodes, ...graphData.nodes.slice(-summaryLimit)]);
+  const summaryNodes = useMemo(
+    () =>
+      graphData.nodes.length <= summaryLimit
+        ? graphData.nodes
+        : uniqueNodesForSummary([...topNodes, ...graphData.nodes.slice(-summaryLimit)]),
+    [graphData.nodes, summaryLimit, topNodes]
+  );
+
+  useEffect(() => {
+    if (!graphRef.current || graphData.nodes.length === 0) {
+      return undefined;
+    }
+    setReady(false);
+    const fitTimer = window.setTimeout(() => {
+      graphRef.current?.zoomToFit?.(350, 72);
+      if (hitTargetRefreshTimerRef.current !== null) {
+        window.clearTimeout(hitTargetRefreshTimerRef.current);
+      }
+      hitTargetRefreshTimerRef.current = window.setTimeout(() => {
+        setCanvasHitTargets(buildCanvasHitTargets(graphRef.current, summaryNodes));
+        setReady(true);
+      }, 420);
+    }, 120);
+    return () => window.clearTimeout(fitTimer);
+  }, [graphData.nodes.length, size.height, size.width, summaryNodes]);
+
   const topLinks = useMemo(
     () => [...graphData.links].sort((left, right) => right.weight - left.weight).slice(0, summaryLimit),
     [graphData.links, summaryLimit]

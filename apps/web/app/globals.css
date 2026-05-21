@@ -669,7 +669,8 @@ textarea {
 
 .details-pane {
   min-width: 0;
-  overflow: auto;
+  overflow-x: hidden;
+  overflow-y: auto;
   padding: var(--page-padding);
   border-left: 1px solid var(--border);
   background: var(--surface-1);
@@ -715,10 +716,29 @@ code {
 .chain {
   display: grid;
   gap: 8px;
+  min-width: 0;
+  max-width: 100%;
+  overflow: hidden;
   padding: 10px;
   border: 1px solid var(--border);
   border-radius: 8px;
   background: var(--surface-2);
+}
+
+.chain p,
+.inspector-section p,
+.node-detail-list li {
+  min-width: 0;
+  max-width: 100%;
+  overflow-wrap: anywhere;
+}
+
+.chain code,
+.inspector-section p code,
+.node-detail-list code {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  word-break: break-word;
 }
 
 .node-detail-list {
