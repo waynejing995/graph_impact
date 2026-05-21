@@ -5,13 +5,15 @@ import path from "node:path";
 const repoRoot = path.resolve(import.meta.dirname, "../../..");
 
 const defaultArtifacts = {
-  browserJson: "docs/qa/2026-05-20-browser-e2e-current.json",
+  browserJson: "docs/qa/2026-05-21-browser-e2e-current.json",
   inAppBrowserJson: "docs/qa/2026-05-20-in-app-browser-probe.json",
-  providerJson: "docs/qa/2026-05-20-provider-gate-current.json",
-  runtimeSemanticJson: "docs/qa/2026-05-20-runtime-semantic-freshness-qa.json",
-  acceptanceJson: "docs/qa/2026-05-20-acceptance-data-asip-expanded-current.json",
-  webAcceptanceJson: "docs/qa/2026-05-20-acceptance-data-asip-expanded-web-current.json",
-  completionJson: "docs/qa/2026-05-20-current-goal-completion-gate.json",
+  providerJson: "docs/qa/2026-05-21-provider-gate-current.json",
+  runtimeSemanticJson: "docs/qa/2026-05-21-runtime-semantic-freshness-qa.json",
+  semanticQualityJson: "docs/qa/2026-05-21-semantic-rerank-labeled-eval.json",
+  callbackAuditJson: "docs/qa/2026-05-21-callback-edge-audit-current.json",
+  acceptanceJson: "docs/qa/2026-05-21-acceptance-data-asip-live-web-current.json",
+  webAcceptanceJson: "docs/qa/2026-05-21-acceptance-data-asip-live-web-current.json",
+  completionJson: "docs/qa/2026-05-21-current-goal-completion-gate.json",
   webPackageJson: "apps/web/package.json"
 };
 
@@ -20,6 +22,8 @@ const optionToKey = {
   "--in-app-browser-json": "inAppBrowserJson",
   "--provider-json": "providerJson",
   "--runtime-semantic-json": "runtimeSemanticJson",
+  "--semantic-quality-json": "semanticQualityJson",
+  "--callback-audit-json": "callbackAuditJson",
   "--acceptance-json": "acceptanceJson",
   "--web-acceptance-json": "webAcceptanceJson",
   "--completion-json": "completionJson",
@@ -30,6 +34,9 @@ function parseArgs(argv) {
   const args = { ...defaultArtifacts };
   for (let index = 0; index < argv.length; index += 1) {
     const item = argv[index];
+    if (item === "--") {
+      continue;
+    }
     if (item === "--help" || item === "-h") {
       printHelp();
       process.exit(0);
@@ -58,6 +65,8 @@ Options:
   --in-app-browser-json <path>
   --provider-json <path>
   --runtime-semantic-json <path>
+  --semantic-quality-json <path>
+  --callback-audit-json <path>
   --acceptance-json <path>
   --web-acceptance-json <path>
   --completion-json <path>
@@ -213,6 +222,23 @@ assert.ok(Number(runtimeSemanticFreshness.latest_semantic_edges_job_id) > 0);
 assert.ok(Number(runtimeSemanticFreshness.latest_doc_nodes_job_id) > 0);
 assert.ok((runtimeSemanticFreshness.checks ?? []).some((check) => check.id === "storage_runtime_extractor_job_kind_binding"));
 
+const semanticQuality = readJson(args.semanticQualityJson);
+assert.equal(semanticQuality.source, "asip.semantic_quality_eval");
+assert.equal(semanticQuality.gate_status, "pass");
+assert.equal(semanticQuality.summary?.passed, semanticQuality.summary?.total);
+assert.equal(semanticQuality.summary?.failed, 0);
+assert.ok(Number(semanticQuality.summary?.provider_vector_cases ?? 0) > 0);
+assert.ok((semanticQuality.cases ?? []).length > 0);
+assert.ok((semanticQuality.cases ?? []).every((item) => item.status === "pass"));
+assert.ok((semanticQuality.cases ?? []).every((item) => Number(item.row_count ?? 0) > 0));
+
+const callbackAudit = readJson(args.callbackAuditJson);
+assert.equal(callbackAudit.source, "asip.callback_edge_audit");
+assert.equal(callbackAudit.gate_status, "pass");
+assert.ok(Number(callbackAudit.summary?.callback_edge_count ?? 0) > 0);
+assert.equal(Number(callbackAudit.summary?.parser_pollution_candidate_count ?? -1), 0);
+assert.equal(Number(callbackAudit.summary?.unexplained_ambiguous_callback_edge_count ?? -1), 0);
+
 const cliAcceptance = readJson(args.acceptanceJson);
 assert.equal(cliAcceptance.source, "asip.acceptance");
 assertLiveSurfaceResults(cliAcceptance, "live acceptance");
@@ -234,10 +260,14 @@ assertProviderChecks(
 
 const completionGate = readJson(args.completionJson);
 assert.equal(completionGate.source, "asip.completion_gate");
-assert.equal(completionGate.summary?.total, 17);
+assert.equal(completionGate.summary?.total, 19);
 assert.equal(completionGate.summary?.missing ?? 0, 0);
 assert.equal(completionGate.artifacts?.runtime_semantic_freshness?.status, "loaded");
 assert.equal(completionGate.artifacts?.runtime_semantic_freshness?.source, "asip.runtime_semantic_freshness_qa");
+assert.equal(completionGate.artifacts?.semantic_quality?.status, "loaded");
+assert.equal(completionGate.artifacts?.semantic_quality?.source, "asip.semantic_quality_eval");
+assert.equal(completionGate.artifacts?.callback_audit?.status, "loaded");
+assert.equal(completionGate.artifacts?.callback_audit?.source, "asip.callback_edge_audit");
 assert.equal(completionGate.artifacts?.in_app_browser?.status, "loaded");
 assert.equal(completionGate.artifacts?.in_app_browser?.source, "asip.web.in_app_browser_probe");
 assert.equal(completionGate.artifacts?.residual_acceptance?.status, "loaded");
@@ -260,6 +290,8 @@ for (const requirementId of [
   "provider_live_gate",
   "stage2_semantic_edges",
   "runtime_semantic_freshness",
+  "semantic_quality",
+  "callback_edge_audit",
   "browser_e2e",
   "web_no_server_smoke",
   "performance_smoke",
@@ -289,6 +321,8 @@ if (completionGate.gate_status === "pass") {
   assert.equal(completionRequirements.get("api_live_surface")?.status, "pass");
   assert.equal(completionRequirements.get("mcp_protocol_surface")?.status, "pass");
   assert.equal(completionRequirements.get("runtime_semantic_freshness")?.status, "pass");
+  assert.equal(completionRequirements.get("semantic_quality")?.status, "pass");
+  assert.equal(completionRequirements.get("callback_edge_audit")?.status, "pass");
   const webNoServerRequirement = completionRequirements.get("web_no_server_smoke");
   if (webNoServerRequirement?.status === "pass") {
     assert.equal(webNoServerRequirement.status, "pass");
@@ -296,7 +330,7 @@ if (completionGate.gate_status === "pass") {
     assert.equal(webNoServerRequirement?.status, "blocked");
     assert.match(
       textFrom(webNoServerRequirement?.failure_reasons),
-      /no-server --.* does not match|current artifact invariants smoke/,
+      /no-server --.* does not match|no-server current_artifact_inputs missing|current artifact invariants smoke/,
     );
   }
   assert.equal(completionRequirements.get("performance_smoke")?.status, "pass");

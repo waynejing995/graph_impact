@@ -1,10 +1,11 @@
 # G11 Completion Gate And Documentation Review
 
-Status: 2026-05-20 aggregate completion gate remains blocked; expanded DB,
-artifact binding, Stage 1 graph, product graph schema, CLI/API/MCP probes, Web
-no-server smoke, and performance smoke pass, but Web, final acceptance,
-provider live checks, Stage 2 semantic freshness/live generation, browser e2e,
-residual acceptance, and latest audit git gate remain open
+Status: 2026-05-21 aggregate completion gate remains blocked only by
+explicit residual-boundary acceptance and the current uncommitted git state;
+expanded DB, artifact binding, Stage 1 graph, product graph schema,
+CLI/API/API_LIVE/Web/MCP/MCP_PROTOCOL probes, provider live checks, Stage 2
+semantic freshness/live generation, labeled semantic quality, callback/vtable
+audit, browser e2e, Web no-server smoke, and performance smoke pass
 
 ## Requirement
 
@@ -483,6 +484,20 @@ Commit and push happen only after verification.
   provider-vector case, while fixture-style completion-gate runs can still omit
   the artifact. This binds the labeled semantic rerank evaluation to the final
   completion gate instead of leaving it as a detached QA artifact.
+- 2026-05-21 callback/vtable audit binding: the completion gate now accepts
+  `--callback-audit-json` and requires `source=asip.callback_edge_audit` in
+  real final mode. The audit is recorded in
+  `docs/qa/2026-05-21-callback-edge-audit-current.json` and `.md`; it passes
+  with `4601` callback/vtable edges, `0` parser-pollution candidates, and `0`
+  unexplained ambiguous callback fanout. The `aca_bank_parser` and
+  `aca_bank_is_valid` fanout is treated as typed `aca_bank_ops` dynamic
+  dispatch instead of unexplained overlinking.
+- 2026-05-21 current aggregate refresh:
+  `docs/qa/2026-05-21-current-goal-completion-gate.json` and `.md` now record
+  `17/19` requirements passing before commit. The only blockers in that
+  pre-commit artifact are explicit residual-boundary acceptance and the dirty
+  git gate for the changes in flight; Web/browser/provider/Stage 2/semantic
+  quality/callback audit/no-server gates are green.
 - Historical final-candidate evidence package exists at
   `docs/qa/2026-05-17-final-clean-evidence-package.md`, linking the clean AMD
   DB, AQ01-AQ09 9/9 artifact, six free queries, semantic-edge jobs, visual QA,

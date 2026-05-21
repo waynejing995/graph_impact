@@ -254,6 +254,7 @@ def main(argv: Optional[List[str]] = None) -> int:
     completion_gate.add_argument("--provider-json")
     completion_gate.add_argument("--runtime-semantic-json")
     completion_gate.add_argument("--semantic-quality-json")
+    completion_gate.add_argument("--callback-audit-json")
     completion_gate.add_argument("--browser-json")
     completion_gate.add_argument("--in-app-browser-json")
     completion_gate.add_argument("--no-server-json")
@@ -570,6 +571,7 @@ def main(argv: Optional[List[str]] = None) -> int:
             provider_json=Path(args.provider_json) if args.provider_json else None,
             runtime_semantic_json=Path(args.runtime_semantic_json) if args.runtime_semantic_json else None,
             semantic_quality_json=Path(args.semantic_quality_json) if args.semantic_quality_json else None,
+            callback_audit_json=Path(args.callback_audit_json) if args.callback_audit_json else None,
             browser_json=Path(args.browser_json) if args.browser_json else None,
             in_app_browser_json=Path(args.in_app_browser_json) if args.in_app_browser_json else None,
             no_server_json=Path(args.no_server_json) if args.no_server_json else None,

@@ -10,6 +10,8 @@ const currentArtifactOptions = new Set([
   "--in-app-browser-json",
   "--provider-json",
   "--runtime-semantic-json",
+  "--semantic-quality-json",
+  "--callback-audit-json",
   "--acceptance-json",
   "--web-acceptance-json",
   "--completion-json",
@@ -22,6 +24,9 @@ function parseArgs(argv) {
   const args = { outputJson: "", currentArtifactArgs: [] };
   for (let index = 0; index < argv.length; index += 1) {
     const item = argv[index];
+    if (item === "--") {
+      continue;
+    }
     if (item === "--output-json") {
       args.outputJson = argv[++index] ?? "";
     } else if (item.startsWith("--output-json=")) {
@@ -56,8 +61,9 @@ function writeArtifact(outputJson, artifact) {
   if (!outputJson) {
     return;
   }
-  mkdirSync(path.dirname(outputJson), { recursive: true });
-  writeFileSync(outputJson, `${JSON.stringify(artifact, null, 2)}\n`, "utf8");
+  const resolvedOutput = resolveArtifactPath(outputJson);
+  mkdirSync(path.dirname(resolvedOutput), { recursive: true });
+  writeFileSync(resolvedOutput, `${JSON.stringify(artifact, null, 2)}\n`, "utf8");
 }
 
 function resolveArtifactPath(inputPath) {

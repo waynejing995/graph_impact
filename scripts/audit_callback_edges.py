@@ -229,6 +229,15 @@ def _is_explainable_dynamic_dispatch(provenance: Mapping[str, Any]) -> bool:
         and int(provenance.get("callback_candidate_count") or 0) > 1
     ):
         return True
+    if (
+        receiver
+        and receiver_type
+        and receiver_type == str(provenance.get("callback_table_type") or "")
+        and receiver_type.endswith(("_funcs", "_ops", "_callbacks", "_func"))
+        and provenance.get("callback_table")
+        and int(provenance.get("callback_candidate_count") or 0) > 1
+    ):
+        return True
     return False
 
 

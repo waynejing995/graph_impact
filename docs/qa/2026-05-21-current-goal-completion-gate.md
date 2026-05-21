@@ -1,12 +1,12 @@
 # ASIP Current Completion Gate
 
-- Generated: `2026-05-21T03:04:47+00:00`
+- Generated: `2026-05-21T05:15:44+00:00`
 - Database: `data/asip.db`
 - Gate status: `blocked`
 
 ## Summary
 
-- Requirements: `15/17` passed, `2` blocked, `0` failed, `0` missing.
+- Requirements: `17/19` passed, `2` blocked, `0` failed, `0` missing.
 
 ## Requirements
 
@@ -24,11 +24,13 @@
 | `provider_live_gate` | `pass` | gate_status=pass; checks=5 |
 | `stage2_semantic_edges` | `pass` | semantic_edge_provenance=pass; doc_node_provenance=pass; semantic_edge=pass |
 | `runtime_semantic_freshness` | `pass` | gate_status=pass; checks=7/7 |
+| `semantic_quality` | `pass` | gate_status=pass; passed=5/5; provider_vector_cases=2; mrr=0.67 |
+| `callback_edge_audit` | `pass` | gate_status=pass; callback_edges=4601; parser_pollution=0; unexplained_ambiguous=0 |
 | `browser_e2e` | `pass` | browser gate_status=pass; e2e_status=pass; in-app gate_status=pass; e2e_status=missing |
 | `web_no_server_smoke` | `pass` | gate_status=pass; checks=9/9 |
 | `performance_smoke` | `pass` | deterministic_counts_match=True; all_queries_under_threshold=True; queries=5 |
 | `residual_acceptance` | `blocked` | gate_status=blocked; accepted_residuals=0 |
-| `git_gate` | `blocked` | diff_check=pass; worktree_status=clean; committed=True; pushed=True; artifact_head=12216b4e8dfe; current_head=b80b3c524d0e; artifact_branch=main; current_branch=main; current_wo... |
+| `git_gate` | `blocked` | diff_check=pass; worktree_status=dirty; committed=False; pushed=True; artifact_head=9fee2f4c0fba; current_head=9fee2f4c0fba; artifact_branch=main; current_branch=main; current_w... |
 
 ## Blocking Reasons
 
@@ -37,5 +39,8 @@
 - residual_acceptance: explicit user acceptance has not been recorded
 - residual_acceptance: accepted is not true
 - residual_acceptance: accepted_residuals is empty
-- git_gate: head does not match current HEAD: artifact=12216b4e8dfe70c5c6ec556a4d0ec1dbfb68de84 current=b80b3c524d0e32097fae911177101fdd99d7446b
-- git_gate: current worktree has 14 changed/untracked paths
+- git_gate: gate_status=blocked
+- git_gate: worktree has 13 changed/untracked paths
+- git_gate: worktree_status=dirty
+- git_gate: committed is not true
+- git_gate: current worktree has 13 changed/untracked paths

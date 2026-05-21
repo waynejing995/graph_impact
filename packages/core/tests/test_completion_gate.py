@@ -21,6 +21,7 @@ class CompletionGateTests(unittest.TestCase):
             provider_json = self._write_json(root / "provider.json", self._provider_payload("pass", db_path=db_path))
             runtime_json = self._write_json(root / "runtime-semantic.json", self._runtime_semantic_payload("pass", db_path=db_path))
             semantic_quality_json = self._write_json(root / "semantic-quality.json", self._semantic_quality_payload("pass", db_path=db_path))
+            callback_audit_json = self._write_json(root / "callback-audit.json", self._callback_audit_payload("pass", db_path=db_path))
             browser_json = self._write_json(
                 root / "browser.json",
                 self._browser_e2e_payload("pass", db_path=db_path),
@@ -37,6 +38,7 @@ class CompletionGateTests(unittest.TestCase):
                 provider_json=provider_json,
                 runtime_semantic_json=runtime_json,
                 semantic_quality_json=semantic_quality_json,
+                callback_audit_json=callback_audit_json,
                 browser_json=browser_json,
                 no_server_json=no_server_json,
                 performance_json=performance_json,
@@ -53,6 +55,7 @@ class CompletionGateTests(unittest.TestCase):
             self.assertIn("9/9 required artifacts loaded", by_id["artifact_binding"]["evidence"])
             self.assertIn("4/4 DB/job-bound artifacts checked", by_id["artifact_binding"]["evidence"])
             self.assertEqual(by_id["semantic_quality"]["status"], "pass")
+            self.assertEqual(by_id["callback_edge_audit"]["status"], "pass")
 
     def test_completion_gate_blocks_real_final_mode_without_semantic_quality_artifact(self):
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -84,6 +87,8 @@ class CompletionGateTests(unittest.TestCase):
             by_id = {item["id"]: item for item in result["requirements"]}
             self.assertEqual(by_id["semantic_quality"]["status"], "missing")
             self.assertIn("semantic-quality artifact is missing", by_id["semantic_quality"]["failure_reasons"])
+            self.assertEqual(by_id["callback_edge_audit"]["status"], "missing")
+            self.assertIn("callback audit artifact is missing", by_id["callback_edge_audit"]["failure_reasons"])
 
     def test_completion_gate_blocks_non_indexed_corpus_status_in_current_db(self):
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -2356,6 +2361,25 @@ class CompletionGateTests(unittest.TestCase):
                 {"id": "SQ01", "status": "pass", "row_count": 1},
                 {"id": "SQ02", "status": case_status, "row_count": 1 if gate_status == "pass" else 0},
             ],
+        }
+
+    def _callback_audit_payload(self, gate_status, *, db_path):
+        return {
+            "source": "asip.callback_edge_audit",
+            "db_path": str(db_path),
+            "gate_status": gate_status,
+            "failure_reasons": [] if gate_status == "pass" else ["unexplained ambiguous callback fanout exceeds 2"],
+            "summary": {
+                "callback_edge_count": 3,
+                "ambiguous_callback_edge_count": 3,
+                "explained_dynamic_dispatch_edge_count": 3 if gate_status == "pass" else 1,
+                "unexplained_ambiguous_callback_edge_count": 0 if gate_status == "pass" else 2,
+                "unique_ambiguous_callers": 1,
+                "unique_unexplained_ambiguous_callers": 0 if gate_status == "pass" else 1,
+                "parser_pollution_candidate_count": 0,
+                "real_oracle_total": 0,
+                "real_oracle_passed": 0,
+            },
         }
 
     def _browser_e2e_payload(self, gate_status, *, db_path):

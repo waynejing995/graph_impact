@@ -161,6 +161,39 @@ class CallbackEdgeAuditTests(unittest.TestCase):
             self.assertEqual(result["summary"]["explained_dynamic_dispatch_edge_count"], 3)
             self.assertEqual(result["summary"]["unexplained_ambiguous_callback_edge_count"], 0)
 
+    def test_audit_allows_named_typed_ops_table_dynamic_dispatch_fanout(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            db_path = Path(tmpdir) / "callbacks.db"
+            self._write_db(
+                db_path,
+                [
+                    (
+                        "aca_bank_parser",
+                        f"aca_bank_parser_impl_{index}",
+                        "drivers/gpu/drm/amd/amdgpu/amdgpu_aca.c",
+                        {
+                            "call_kind": "vtable_dispatch",
+                            "function": "aca_bank_parser",
+                            "callee": f"aca_bank_parser_impl_{index}",
+                            "callback_ambiguous": True,
+                            "dispatch_scope": "ambiguous",
+                            "receiver": "bank_ops",
+                            "receiver_type": "aca_bank_ops",
+                            "callback_table": f"aca_bank_ops_{index}",
+                            "callback_table_type": "aca_bank_ops",
+                            "callback_candidate_count": 9,
+                        },
+                    )
+                    for index in range(3)
+                ],
+            )
+
+            result = audit_callback_edges.run_audit(db_path, max_ambiguous_fanout=2)
+
+            self.assertEqual(result["gate_status"], "pass")
+            self.assertEqual(result["summary"]["explained_dynamic_dispatch_edge_count"], 3)
+            self.assertEqual(result["summary"]["unexplained_ambiguous_callback_edge_count"], 0)
+
     def _write_db(self, db_path, edges):
         with sqlite3.connect(db_path) as connection:
             connection.execute(

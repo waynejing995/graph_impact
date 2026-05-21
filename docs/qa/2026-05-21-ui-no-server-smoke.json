@@ -1,6 +1,6 @@
 {
   "source": "asip.web.no_server_smoke",
-  "generated_at": "2026-05-21T03:04:57.688Z",
+  "generated_at": "2026-05-21T05:14:48.472Z",
   "gate_status": "pass",
   "current_artifact_args": [
     "--browser-json",
@@ -11,6 +11,10 @@
     "docs/qa/2026-05-21-provider-gate-current.json",
     "--runtime-semantic-json",
     "docs/qa/2026-05-21-runtime-semantic-freshness-qa.json",
+    "--semantic-quality-json",
+    "docs/qa/2026-05-21-semantic-rerank-labeled-eval.json",
+    "--callback-audit-json",
+    "docs/qa/2026-05-21-callback-edge-audit-current.json",
     "--acceptance-json",
     "docs/qa/2026-05-21-acceptance-data-asip-live-web-current.json",
     "--web-acceptance-json",
@@ -58,6 +62,24 @@
       "sha256": "6199e4278d803264e129a4bff98b9597f1820c7393aba138e746caf737ed684f"
     },
     {
+      "option": "--semantic-quality-json",
+      "path": "docs/qa/2026-05-21-semantic-rerank-labeled-eval.json",
+      "resolved_path": "/Volumes/data/User/wayne/Code/graph_impact/docs/qa/2026-05-21-semantic-rerank-labeled-eval.json",
+      "status": "loaded",
+      "bytes": 11339,
+      "hash_policy": "sha256",
+      "sha256": "e84774c66449cd9ee3867c51b1a918e384341d6415fea97b52087fdbb7e36827"
+    },
+    {
+      "option": "--callback-audit-json",
+      "path": "docs/qa/2026-05-21-callback-edge-audit-current.json",
+      "resolved_path": "/Volumes/data/User/wayne/Code/graph_impact/docs/qa/2026-05-21-callback-edge-audit-current.json",
+      "status": "loaded",
+      "bytes": 4712,
+      "hash_policy": "sha256",
+      "sha256": "bfc87d8808abfa522ceae9dc7ced55bdb18e85de820cbdc9613f85ca7bd7c146"
+    },
+    {
       "option": "--acceptance-json",
       "path": "docs/qa/2026-05-21-acceptance-data-asip-live-web-current.json",
       "resolved_path": "/Volumes/data/User/wayne/Code/graph_impact/docs/qa/2026-05-21-acceptance-data-asip-live-web-current.json",
@@ -80,7 +102,7 @@
       "path": "docs/qa/2026-05-21-current-goal-completion-gate.json",
       "resolved_path": "/Volumes/data/User/wayne/Code/graph_impact/docs/qa/2026-05-21-current-goal-completion-gate.json",
       "status": "loaded",
-      "bytes": 9228,
+      "bytes": 11410,
       "hash_policy": "self-referential-not-final-gate-input",
       "sha256": ""
     },

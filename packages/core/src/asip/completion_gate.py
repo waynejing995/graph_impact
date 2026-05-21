@@ -61,6 +61,8 @@ _NO_SERVER_ARTIFACT_INPUT_OPTIONS = {
     "--in-app-browser-json": "in_app_browser",
     "--provider-json": "provider_gate",
     "--runtime-semantic-json": "runtime_semantic_freshness",
+    "--semantic-quality-json": "semantic_quality",
+    "--callback-audit-json": "callback_audit",
     "--acceptance-json": "acceptance",
     "--web-acceptance-json": "web_acceptance",
 }
@@ -78,6 +80,7 @@ def run_completion_gate(
     provider_json: Optional[Path] = None,
     runtime_semantic_json: Optional[Path] = None,
     semantic_quality_json: Optional[Path] = None,
+    callback_audit_json: Optional[Path] = None,
     browser_json: Optional[Path] = None,
     in_app_browser_json: Optional[Path] = None,
     no_server_json: Optional[Path] = None,
@@ -99,6 +102,7 @@ def run_completion_gate(
         "provider_gate": _load_json_artifact(provider_json),
         "runtime_semantic_freshness": _load_json_artifact(runtime_semantic_json),
         "semantic_quality": _load_json_artifact(semantic_quality_json),
+        "callback_audit": _load_json_artifact(callback_audit_json),
         "browser_gate": _load_json_artifact(browser_json),
         "in_app_browser": _load_json_artifact(in_app_browser_json),
         "no_server_smoke": _load_json_artifact(no_server_json),
@@ -111,6 +115,7 @@ def run_completion_gate(
     provider_payload = artifacts["provider_gate"].get("payload")
     runtime_semantic_payload = artifacts["runtime_semantic_freshness"].get("payload")
     semantic_quality_payload = artifacts["semantic_quality"].get("payload")
+    callback_audit_payload = artifacts["callback_audit"].get("payload")
     browser_payload = artifacts["browser_gate"].get("payload")
     in_app_browser_payload = artifacts["in_app_browser"].get("payload")
     no_server_payload = artifacts["no_server_smoke"].get("payload")
@@ -132,6 +137,7 @@ def run_completion_gate(
         _stage2_requirement(provider_payload),
         _runtime_semantic_freshness_requirement(runtime_semantic_payload),
         _semantic_quality_requirement(semantic_quality_payload, required=minimum_counts is None),
+        _callback_audit_requirement(callback_audit_payload, required=minimum_counts is None),
         _browser_requirement(browser_payload, in_app_browser_payload, db_path, db_health),
         _no_server_requirement(no_server_payload, artifacts),
         _performance_requirement(performance_payload),
@@ -1074,6 +1080,57 @@ def _semantic_quality_requirement(payload: Optional[Mapping[str, Any]], *, requi
     return _requirement(
         "semantic_quality",
         "Labeled semantic retrieval quality gate",
+        status,
+        evidence,
+        failures,
+    )
+
+
+def _callback_audit_requirement(payload: Optional[Mapping[str, Any]], *, required: bool) -> Dict[str, Any]:
+    if not isinstance(payload, Mapping):
+        if not required:
+            return _requirement(
+                "callback_edge_audit",
+                "Callback/vtable parser and overlink audit",
+                "pass",
+                "callback audit artifact is optional for fixture completion gates",
+                [],
+            )
+        return _requirement(
+            "callback_edge_audit",
+            "Callback/vtable parser and overlink audit",
+            "missing",
+            "callback audit artifact is missing",
+            ["callback audit artifact is missing"],
+        )
+    failures: List[str] = []
+    if payload.get("source") != "asip.callback_edge_audit":
+        failures.append(f"source={payload.get('source', 'missing')} does not match asip.callback_edge_audit")
+    if payload.get("gate_status") != "pass":
+        failures.append(f"gate_status={payload.get('gate_status')}")
+        failures.extend(str(reason) for reason in payload.get("failure_reasons", []))
+    summary = payload.get("summary", {})
+    callback_count = _coerce_int(summary.get("callback_edge_count"))
+    parser_pollution = _coerce_int(summary.get("parser_pollution_candidate_count", 0) or 0)
+    unexplained_ambiguous = _coerce_int(summary.get("unexplained_ambiguous_callback_edge_count", 0) or 0)
+    if callback_count is None or callback_count <= 0:
+        failures.append(f"callback_edge_count={summary.get('callback_edge_count')}")
+    if parser_pollution is None or parser_pollution != 0:
+        failures.append(f"parser_pollution_candidate_count={summary.get('parser_pollution_candidate_count')}")
+    if unexplained_ambiguous is None or unexplained_ambiguous != 0:
+        failures.append(
+            f"unexplained_ambiguous_callback_edge_count={summary.get('unexplained_ambiguous_callback_edge_count')}"
+        )
+    status = "pass" if not failures else "blocked"
+    evidence = (
+        f"gate_status={payload.get('gate_status')}; "
+        f"callback_edges={summary.get('callback_edge_count', 0)}; "
+        f"parser_pollution={summary.get('parser_pollution_candidate_count', 0)}; "
+        f"unexplained_ambiguous={summary.get('unexplained_ambiguous_callback_edge_count', 0)}"
+    )
+    return _requirement(
+        "callback_edge_audit",
+        "Callback/vtable parser and overlink audit",
         status,
         evidence,
         failures,

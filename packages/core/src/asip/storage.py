@@ -1491,6 +1491,7 @@ class AsipStore:
             edges.append(edge)
             remember_payload(edge["src"], str(src_node["kind"]), src_node)
             remember_payload(edge["dst"], str(dst_node["kind"]), dst_node)
+        edges = _dedupe_graph_payload_edges(edges)
         if not node_ids:
             for symbol in fallback_symbols:
                 seed_node = _product_graph_node(
@@ -2864,6 +2865,77 @@ def _apply_callback_dispatch_edge_attr(
         edge_attr["callback_candidate_count"] = max(candidate_counts)
     if _bool_graph_value(src_metadata.get("callback_ambiguous")) or _bool_graph_value(dst_metadata.get("callback_ambiguous")):
         edge_attr["callback_ambiguous"] = True
+
+
+def _dedupe_graph_payload_edges(edges: Iterable[Mapping[str, object]]) -> List[Dict[str, object]]:
+    merged: Dict[tuple[str, str, str, str], Dict[str, object]] = {}
+    for raw_edge in edges:
+        edge = dict(raw_edge)
+        key = (
+            str(edge.get("src") or ""),
+            str(edge.get("dst") or ""),
+            str(edge.get("relation") or ""),
+            str(edge.get("stage") or ""),
+        )
+        existing = merged.get(key)
+        if existing is None:
+            edge["attr"] = dict(edge.get("attr") if isinstance(edge.get("attr"), Mapping) else {})
+            edge["count"] = int(edge.get("count") or 1)
+            merged[key] = edge
+            continue
+        existing["confidence"] = round(
+            max(float(existing.get("confidence") or 0), float(edge.get("confidence") or 0)),
+            4,
+        )
+        existing["count"] = int(existing.get("count") or 1) + int(edge.get("count") or 1)
+        existing_attr = dict(existing.get("attr") if isinstance(existing.get("attr"), Mapping) else {})
+        incoming_attr = edge.get("attr") if isinstance(edge.get("attr"), Mapping) else {}
+        existing["attr"] = _merge_graph_edge_payload_attr(existing_attr, incoming_attr)
+    return list(merged.values())
+
+
+def _merge_graph_edge_payload_attr(
+    existing: Mapping[str, object],
+    incoming: Mapping[str, object],
+) -> Dict[str, object]:
+    merged = dict(existing)
+    merged["source"] = _dedupe_source_records(
+        [
+            *(existing.get("source") if isinstance(existing.get("source"), list) else []),
+            *(incoming.get("source") if isinstance(incoming.get("source"), list) else []),
+        ]
+    )
+    for key in ("fields", "resolver_profile_ids", "resolver_wrappers", "providers", "models", "job_ids"):
+        merged[key] = _dedupe_strings([*_string_values(existing.get(key)), *_string_values(incoming.get(key))])
+    implementations = _dedupe_mapping_records(
+        [
+            *(existing.get("implementations") if isinstance(existing.get("implementations"), list) else []),
+            *(incoming.get("implementations") if isinstance(incoming.get("implementations"), list) else []),
+        ]
+    )
+    if implementations:
+        merged["implementations"] = implementations
+    original_relations = _dedupe_strings(
+        [*_string_values(existing.get("original_relation")), *_string_values(incoming.get("original_relation"))]
+    )
+    if original_relations:
+        merged["original_relation"] = original_relations[0] if len(original_relations) == 1 else original_relations
+    dispatch = _dispatch_payload_value([*_string_values(existing.get("dispatch")), *_string_values(incoming.get("dispatch"))])
+    if dispatch:
+        merged["dispatch"] = dispatch
+    call_kinds = _dedupe_strings([*_string_values(existing.get("call_kind")), *_string_values(incoming.get("call_kind"))])
+    if call_kinds:
+        merged["call_kind"] = call_kinds[0] if len(call_kinds) == 1 else call_kinds
+    candidate_counts = [
+        _int_graph_value(value)
+        for value in [*_string_values(existing.get("callback_candidate_count")), *_string_values(incoming.get("callback_candidate_count"))]
+        if _int_graph_value(value)
+    ]
+    if candidate_counts:
+        merged["callback_candidate_count"] = max(candidate_counts)
+    if _bool_graph_value(existing.get("callback_ambiguous")) or _bool_graph_value(incoming.get("callback_ambiguous")):
+        merged["callback_ambiguous"] = True
+    return {key: value for key, value in merged.items() if value not in ("", None, [], {})}
 
 
 def _dispatch_payload_value(values: Iterable[object]) -> str:

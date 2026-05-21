@@ -1,6 +1,6 @@
 {
   "source": "asip.completion_gate",
-  "generated_at": "2026-05-21T03:04:47+00:00",
+  "generated_at": "2026-05-21T05:15:44+00:00",
   "db_path": "data/asip.db",
   "database": {
     "status": "pass",
@@ -8,7 +8,7 @@
     "integrity_check_type": "quick_check",
     "integrity_check": "ok",
     "counts": {
-      "corpora": 5,
+      "corpora": 3,
       "documents": 1224,
       "chunks": 147841,
       "evidence": 5299434,
@@ -24,6 +24,20 @@
       "latest_semantic_edges_job_id": 45,
       "latest_doc_nodes_job_id": 49
     },
+    "corpora_statuses": [
+      {
+        "id": "amd-amdgpu-docs",
+        "status": "indexed"
+      },
+      {
+        "id": "linux-amdgpu",
+        "status": "indexed"
+      },
+      {
+        "id": "mxgpu",
+        "status": "indexed"
+      }
+    ],
     "failure_reasons": []
   },
   "artifacts": {
@@ -75,6 +89,38 @@
         "checks": 7,
         "passed": 7,
         "failed": 0
+      },
+      "failure_reasons": []
+    },
+    "semantic_quality": {
+      "status": "loaded",
+      "path": "docs/qa/2026-05-21-semantic-rerank-labeled-eval.json",
+      "source": "asip.semantic_quality_eval",
+      "gate_status": "pass",
+      "summary": {
+        "total": 5,
+        "passed": 5,
+        "failed": 0,
+        "provider_vector_cases": 2,
+        "mean_reciprocal_rank": 0.67
+      },
+      "failure_reasons": []
+    },
+    "callback_audit": {
+      "status": "loaded",
+      "path": "docs/qa/2026-05-21-callback-edge-audit-current.json",
+      "source": "asip.callback_edge_audit",
+      "gate_status": "pass",
+      "summary": {
+        "ambiguous_callback_edge_count": 4530,
+        "callback_edge_count": 4601,
+        "explained_dynamic_dispatch_edge_count": 4530,
+        "parser_pollution_candidate_count": 0,
+        "real_oracle_passed": 0,
+        "real_oracle_total": 0,
+        "unexplained_ambiguous_callback_edge_count": 0,
+        "unique_ambiguous_callers": 498,
+        "unique_unexplained_ambiguous_callers": 0
       },
       "failure_reasons": []
     },
@@ -131,9 +177,9 @@
     },
     "git_gate": {
       "status": "loaded",
-      "path": "docs/qa/2026-05-21-git-gate-main.json",
+      "path": "/tmp/asip-git-gate-current-dirty.json",
       "source": "asip.git_gate",
-      "gate_status": "pass",
+      "gate_status": "blocked",
       "summary": {},
       "failure_reasons": []
     }
@@ -224,6 +270,20 @@
       "failure_reasons": []
     },
     {
+      "id": "semantic_quality",
+      "title": "Labeled semantic retrieval quality gate",
+      "status": "pass",
+      "evidence": "gate_status=pass; passed=5/5; provider_vector_cases=2; mrr=0.67",
+      "failure_reasons": []
+    },
+    {
+      "id": "callback_edge_audit",
+      "title": "Callback/vtable parser and overlink audit",
+      "status": "pass",
+      "evidence": "gate_status=pass; callback_edges=4601; parser_pollution=0; unexplained_ambiguous=0",
+      "failure_reasons": []
+    },
+    {
       "id": "browser_e2e",
       "title": "No-mock browser QA and e2e proof",
       "status": "pass",
@@ -261,16 +321,19 @@
       "id": "git_gate",
       "title": "Final diff, commit, and push gate",
       "status": "blocked",
-      "evidence": "diff_check=pass; worktree_status=clean; committed=True; pushed=True; artifact_head=12216b4e8dfe; current_head=b80b3c524d0e; artifact_branch=main; current_branch=main; current_worktree=dirty:14; artifact_upstream=origin/main; current_upstream=origin/main; current_ahead=0; current_behind=0",
+      "evidence": "diff_check=pass; worktree_status=dirty; committed=False; pushed=True; artifact_head=9fee2f4c0fba; current_head=9fee2f4c0fba; artifact_branch=main; current_branch=main; current_worktree=dirty:13; artifact_upstream=origin/main; current_upstream=origin/main; current_ahead=0; current_behind=0",
       "failure_reasons": [
-        "head does not match current HEAD: artifact=12216b4e8dfe70c5c6ec556a4d0ec1dbfb68de84 current=b80b3c524d0e32097fae911177101fdd99d7446b",
-        "current worktree has 14 changed/untracked paths"
+        "gate_status=blocked",
+        "worktree has 13 changed/untracked paths",
+        "worktree_status=dirty",
+        "committed is not true",
+        "current worktree has 13 changed/untracked paths"
       ]
     }
   ],
   "summary": {
-    "total": 17,
-    "passed": 15,
+    "total": 19,
+    "passed": 17,
     "blocked": 2,
     "failed": 0,
     "missing": 0
@@ -282,7 +345,10 @@
     "residual_acceptance: explicit user acceptance has not been recorded",
     "residual_acceptance: accepted is not true",
     "residual_acceptance: accepted_residuals is empty",
-    "git_gate: head does not match current HEAD: artifact=12216b4e8dfe70c5c6ec556a4d0ec1dbfb68de84 current=b80b3c524d0e32097fae911177101fdd99d7446b",
-    "git_gate: current worktree has 14 changed/untracked paths"
+    "git_gate: gate_status=blocked",
+    "git_gate: worktree has 13 changed/untracked paths",
+    "git_gate: worktree_status=dirty",
+    "git_gate: committed is not true",
+    "git_gate: current worktree has 13 changed/untracked paths"
   ]
 }

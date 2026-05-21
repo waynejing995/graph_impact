@@ -1001,6 +1001,38 @@ class StorageGraphTests(unittest.TestCase):
             },
         )
 
+    def test_query_expansion_dedupes_edges_after_function_concept_projection(self):
+        store = AsipStore.connect(":memory:")
+        store.migrate()
+        self._add_linux_amdgpu_resolver_profile(store)
+        self._add_function_register_edge(
+            store,
+            "gfxhub_v11_5_0_gart_enable",
+            "GCVM_L2_CNTL",
+            path="drivers/gpu/drm/amd/amdgpu/gfxhub_v11_5_0.c",
+            ip_version="11_5_0",
+        )
+        self._add_function_register_edge(
+            store,
+            "gfxhub_v12_0_gart_enable",
+            "GCVM_L2_CNTL",
+            path="drivers/gpu/drm/amd/amdgpu/gfxhub_v12_0.c",
+            ip_version="12_0",
+        )
+
+        graph = store.expand_graph_networkx("GCVM_L2_CNTL", hops=1, function_view="concept")
+
+        triples = [(edge["src"], edge["relation"], edge["dst"]) for edge in graph["edges"]]
+        concept_triple = (
+            "function:linux-amdgpu:concept:linux-amdgpu:amd-ip-versioned-functions:gfxhub_gart_enable",
+            "writes",
+            "register:GC:GCVM_L2_CNTL",
+        )
+        self.assertEqual(triples.count(concept_triple), 1)
+        edge = next(edge for edge in graph["edges"] if (edge["src"], edge["relation"], edge["dst"]) == concept_triple)
+        self.assertEqual(edge["count"], 2)
+        self.assertEqual(len(edge["attr"]["implementations"]), 2)
+
     def test_find_evidence_candidates_avoids_like_scan_for_sparse_exact_symbol_query(self):
         store = AsipStore.connect(":memory:")
         store.migrate()

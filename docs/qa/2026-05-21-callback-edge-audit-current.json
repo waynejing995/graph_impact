@@ -12,35 +12,20 @@
   },
   "failure_reasons": [],
   "gate_status": "pass",
-  "generated_at": "2026-05-21T01:24:20+00:00",
+  "generated_at": "2026-05-21T05:11:24+00:00",
   "parser_pollution_samples": [],
-  "real_oracles": [
-    {
-      "match_count": 80,
-      "message": "ok",
-      "oracle": "drivers/gpu/drm/amd/amdgpu/amdgpu_device.c:amdgpu_device_ip_hw_init_phase1",
-      "sample": {
-        "call_kind": "vtable_dispatch",
-        "dst": "acp_hw_init",
-        "line_start": 2132,
-        "path": "drivers/gpu/drm/amd/amdgpu/amdgpu_device.c",
-        "src": "amdgpu_device_ip_hw_init_phase1",
-        "type_flow": ""
-      },
-      "status": "pass"
-    }
-  ],
+  "real_oracles": [],
   "source": "asip.callback_edge_audit",
   "summary": {
     "ambiguous_callback_edge_count": 4530,
     "callback_edge_count": 4601,
-    "explained_dynamic_dispatch_edge_count": 4514,
+    "explained_dynamic_dispatch_edge_count": 4530,
     "parser_pollution_candidate_count": 0,
-    "real_oracle_passed": 1,
-    "real_oracle_total": 1,
-    "unexplained_ambiguous_callback_edge_count": 16,
+    "real_oracle_passed": 0,
+    "real_oracle_total": 0,
+    "unexplained_ambiguous_callback_edge_count": 0,
     "unique_ambiguous_callers": 498,
-    "unique_unexplained_ambiguous_callers": 2
+    "unique_unexplained_ambiguous_callers": 0
   },
   "top_ambiguous_fanout": [
     {
@@ -206,16 +191,7 @@
       "src": "amdgpu_gmc_flush_gpu_tlb_pasid"
     }
   ],
-  "top_unexplained_ambiguous_fanout": [
-    {
-      "ambiguous_edge_count": 9,
-      "src": "aca_bank_parser"
-    },
-    {
-      "ambiguous_edge_count": 7,
-      "src": "aca_bank_is_valid"
-    }
-  ],
+  "top_unexplained_ambiguous_fanout": [],
   "type_flow_counts": {
     "": 3867,
     "clang_ast_json": 707,
