@@ -10,6 +10,7 @@ from typing import Dict, List, Optional
 from .acceptance import DEFAULT_ACCEPTANCE_QUERIES, run_acceptance_queries, run_provider_gate
 from .closure_gates import run_git_gate, run_residual_acceptance_gate
 from .completion_gate import run_completion_gate
+from .goal_status import run_goal_status
 from .limits import DEFAULT_WORKBENCH_LIMITS_PATH, load_workbench_limits
 from .openai_compatible_smoke import run_openai_compatible_live_smoke
 from .performance_smoke import run_fixture_performance_smoke
@@ -316,6 +317,21 @@ def main(argv: Optional[List[str]] = None) -> int:
     git_gate.add_argument("--repo-root", default=".")
     git_gate.add_argument("--output-json")
     git_gate.add_argument("--full", action="store_true", help="Print the full git-gate payload")
+
+    goal_status = subcommands.add_parser(
+        "goal-status",
+        help="Summarize whether the active ASIP goal is closed from the latest post-push gate",
+    )
+    goal_status.add_argument("--repo-root", default=".")
+    goal_status.add_argument("--completion-json")
+    goal_status.add_argument("--latest-glob", default="/tmp/asip-postpush-gate-*/completion-gate.json")
+    goal_status.add_argument("--output-json")
+    goal_status.add_argument(
+        "--require-pass",
+        action="store_true",
+        help="Exit non-zero unless the latest completion artifact proves the goal closed",
+    )
+    goal_status.add_argument("--full", action="store_true", help="Print the full goal-status payload")
 
     resolver_list = subcommands.add_parser("resolver-list", help="List resolver profiles from backend state")
     resolver_list.add_argument("--db", required=True)
@@ -656,6 +672,32 @@ def main(argv: Optional[List[str]] = None) -> int:
             output_json=Path(args.output_json) if args.output_json else None,
         )
         print(json.dumps(result if args.full else {"gate_status": result["gate_status"]}, indent=2))
+        return 0
+    if args.command == "goal-status":
+        result = run_goal_status(
+            repo_root=Path(args.repo_root),
+            completion_json=Path(args.completion_json) if args.completion_json else None,
+            latest_glob=args.latest_glob,
+            output_json=Path(args.output_json) if args.output_json else None,
+        )
+        summary = {
+            "goal_status": result["goal_status"],
+            "completion_gate_status": result["completion_gate_status"],
+            "completion_summary": result["completion_summary"],
+            "blockers": [
+                {
+                    "id": blocker["id"],
+                    "status": blocker["status"],
+                    "evidence": blocker["evidence"],
+                }
+                for blocker in result["blockers"]
+            ],
+            "artifact_matches_current_head": result["artifact_matches_current_head"],
+            "completion_artifact": result["completion_artifact"],
+        }
+        print(json.dumps(result if args.full else summary, indent=2))
+        if args.require_pass and result["goal_status"] != "pass":
+            return 2
         return 0
     if args.command == "resolver-list":
         print(json.dumps({"profiles": list_resolver_profiles(Path(args.db))}, indent=2))

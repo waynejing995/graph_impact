@@ -84,6 +84,15 @@ PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=packages/core/src:. \
   --full
 ```
 
+Summarize the active goal closure state from the latest post-push artifact:
+
+```bash
+PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=packages/core/src:. \
+  python3 -m asip.cli goal-status \
+  --repo-root . \
+  --full
+```
+
 Run the standard post-push completion bundle out of tree:
 
 ```bash
