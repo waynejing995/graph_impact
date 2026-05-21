@@ -5,6 +5,7 @@ from pathlib import Path
 
 from asip.resolver_profiles import (
     load_resolver_profiles,
+    resolver_profile_from_config,
     resolve_cpp_register_call,
     resolve_cpp_register_calls,
     resolve_python_symbol,
@@ -38,6 +39,14 @@ class ResolverProfileTests(unittest.TestCase):
         self.assertIn("WREG32_FIELD15_PREREG", profiles["linux-amdgpu"].wrappers)
         self.assertIn("WREG32_P", profiles["amd-mxgpu"].wrappers)
         self.assertIn("RREG32_PCIE", profiles["amd-mxgpu"].wrappers)
+        self.assertIn("mxgpu", profiles["amd-mxgpu"].aliases)
+        linux_function_rules = profiles["linux-amdgpu"].graph.function_normalization.rules
+        mxgpu_function_rules = profiles["amd-mxgpu"].graph.function_normalization.rules
+        self.assertTrue(profiles["linux-amdgpu"].graph.function_normalization.enabled)
+        self.assertTrue(profiles["amd-mxgpu"].graph.function_normalization.enabled)
+        self.assertEqual(linux_function_rules[0].id, "amd-ip-versioned-functions")
+        self.assertEqual(mxgpu_function_rules[0].id, "amd-ip-versioned-functions")
+        self.assertEqual(profiles["linux-amdgpu"].graph.register_normalization.identity, "register:{ip}:{symbol}")
         for profile_id, profile in profiles.items():
             if profile.language in {"c", "cpp", "c++"}:
                 with self.subTest(profile_id=profile_id):
@@ -60,6 +69,44 @@ class ResolverProfileTests(unittest.TestCase):
             with self.subTest(operator=operator):
                 self.assertTrue(is_resolver_wrapper_name(operator))
                 self.assertFalse(is_graph_entity_endpoint(operator))
+
+    def test_resolver_profile_loads_graph_function_normalization_rules(self):
+        profile = resolver_profile_from_config(
+            {
+                "id": "linux-amdgpu",
+                "language": "cpp",
+                "wrappers": {},
+                "graph": {
+                    "function_normalization": {
+                        "enabled": True,
+                        "rules": [
+                            {
+                                "id": "amd-ip-versioned-functions",
+                                "enabled": True,
+                                "match": r"^(?P<ip_block>gfxhub)_v(?P<ip_version>\d+_\d+)_(?P<operation>.+)$",
+                                "canonical": "{ip_block}_{operation}",
+                                "merge_policy": {
+                                    "mode": "concept_with_implementations",
+                                    "warn_register_overlap_below": 0.35,
+                                    "split_register_overlap_below": 0.10,
+                                },
+                            }
+                        ],
+                    },
+                    "register_normalization": {"identity": "register:{ip}:{symbol}"},
+                },
+            }
+        )
+
+        rule = profile.graph.function_normalization.rules[0]
+
+        self.assertEqual(rule.id, "amd-ip-versioned-functions")
+        self.assertEqual(rule.match, r"^(?P<ip_block>gfxhub)_v(?P<ip_version>\d+_\d+)_(?P<operation>.+)$")
+        self.assertEqual(rule.canonical, "{ip_block}_{operation}")
+        self.assertEqual(rule.merge_policy.mode, "concept_with_implementations")
+        self.assertEqual(rule.merge_policy.warn_register_overlap_below, 0.35)
+        self.assertEqual(rule.merge_policy.split_register_overlap_below, 0.10)
+        self.assertEqual(profile.graph.register_normalization.identity, "register:{ip}:{symbol}")
 
     def test_resolves_soc15_register_from_configured_wrapper(self):
         profiles = load_resolver_profiles(REPO_ROOT / "configs/resolvers")

@@ -1,0 +1,38 @@
+{
+  "source": "asip.web.in_app_browser_probe",
+  "generated_at": "2026-05-20T12:27:48Z",
+  "gate_status": "pass",
+  "browser_surface": "codex-in-app-browser",
+  "target_urls": [
+    "http://127.0.0.1:3100/graph?dbPath=data/asip.db",
+    "http://localhost:3100/graph?dbPath=data/asip.db"
+  ],
+  "attempts": [
+    {
+      "url": "http://127.0.0.1:3100/graph?dbPath=data/asip.db",
+      "ok": true,
+      "title": "ASIP Evidence Workbench",
+      "message": "Codex in-app Browser loaded the graph page with current data.",
+      "page_state": {
+        "index_status": "ready",
+        "graph_edges": 3000,
+        "loaded_edge_budget": 3000,
+        "loaded_edge_budget_max": 20000,
+        "visible_nodes": 1000,
+        "total_nodes": 2552,
+        "visible_edges": 1475,
+        "total_edges": 3000,
+        "metadata_mode": "compact",
+        "console_errors": 0,
+        "framework_overlay": false
+      },
+      "screenshot_path": "/tmp/asip-graph-after-compact-wait.png"
+    },
+    {
+      "url": "http://localhost:3100/graph?dbPath=data/asip.db",
+      "ok": true,
+      "message": "localhost route returned HTTP 200 in the local reachability probe."
+    }
+  ],
+  "failure_reasons": []
+}

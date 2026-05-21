@@ -31,10 +31,17 @@ PDF corpus type must be represented.
 - Corpus UI now shows a recent Index Jobs panel with job id, terminal status, message, and event chain such as `queued -> indexing -> succeeded`.
 - QA evidence for the lifecycle slice is recorded in `docs/qa/2026-05-17-g04-corpus-job-lifecycle-qa.md`.
 - 2026-05-18 clean flow QA `docs/qa/2026-05-18-g04-clean-corpus-flow-qa.md` proves a clean named DB Web BFF add/index/query flow where the newly indexed corpus drives query rows and a `doc_section -> register` graph edge, and proves the real Corpus/Evidence UI full-loop shows graph and inspector evidence from the new corpus while leaving default `data/asip.db` byte-identical to the clean-final artifact at the time of that QA. Default `data/asip.db` was later intentionally rebuilt for G03 graph QA.
+- 2026-05-18 multi-subfolder corpus correction: `add_corpus()`, CLI `corpus-add --subfolder`, Web BFF `POST /api/workbench/corpora`, and the Corpus page now persist structured repo-relative subfolder filters. `index_registered_corpora()` and deterministic `graph-rebuild` both read the same `metadata.subfolders`, so a single `linux-amdgpu` corpus can index `amdgpu` source files and sibling `include/asic_reg` headers together. Python core accepts both `relative_root` and UI-style `relativeRoot`, rejects explicit subfolder objects without a root, and rejects unsafe absolute or parent-traversal subfolders. QA is recorded in `docs/qa/2026-05-18-g01-g04-amdgpu-subfolder-corpus-qa.md`.
+- 2026-05-19 DB-path UI correction: `/corpus?dbPath=<temp sqlite>` now lists,
+  adds, reloads, and indexes against the explicit DB path without Playwright
+  route rewriting. The no-mock smoke test creates a corpus with two subfolder
+  filters, runs index, and verifies the temp SQLite DB contains the new corpus,
+  documents, and `regURL_DBPATH_HEADER_ONLY` evidence. Evidence is recorded in
+  `docs/qa/2026-05-19-product-graph-schema-dbpath-e2e.md`.
 
 ## Remaining Gap
 
-The backend/API/MCP state path exists, and the Corpus UI now has explicit selection controls, selected-index status update, invalid-source failed-state proof, a clean named DB BFF add-index-query graph proof, and a browser add-index-query graph/inspector proof for a temporary local corpus.
+The backend/API/MCP state path exists, and the Corpus UI now has explicit selection controls, selected-index status update, invalid-source failed-state proof, a clean named DB BFF add-index-query graph proof, a browser add-index-query graph/inspector proof for a temporary local corpus, and an explicit URL `dbPath` no-route-rewrite proof for list/add/reload/index.
 
 The remaining G04 boundary is no longer the MVP corpus flow itself. The current lifecycle implementation is durable event history for synchronous local jobs; it is not a background worker, streaming progress channel, cancellation system, or remote clone orchestration layer.
 
@@ -52,6 +59,7 @@ Default and fallback corpora remain in the UI. They are acceptable as seed/fallb
 ## Required Tests
 
 - API test: add/list corpus with include globs and type.
+- API/UI test: add/list corpus with structured multi-subfolder filters and reject unsafe subfolder paths. Implemented.
 - API test: index selected corpus and query a unique symbol from it.
 - MCP test: add/list/index corpus with a temp DB and query a unique symbol from it.
 - E2E test: selected corpus rows are the only ids sent to the index endpoint, and the selected row shows returned `indexed` status. Implemented.

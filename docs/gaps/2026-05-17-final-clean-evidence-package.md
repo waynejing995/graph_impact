@@ -57,14 +57,20 @@ The following artifacts are useful but not final closure:
 - `docs/qa/2026-05-17-acceptance-multisource-fixture.*`: proves a healthy synthetic multi-source fixture can return AQ05 with `code`, `doc`, `pdf`, and `register`, and AQ06 with `code` and `register`. It does not prove real AMD source roots, all nine AQ queries, provider closure, browser visual QA, or final performance.
 - Existing visual QA `PASS` documents created before the latest functional changes: historical only until screenshots are recaptured after the final code change.
 
-## Current Final-Candidate Package
+## Historical Final-Candidate Package
 
-The current final-candidate package is `docs/qa/2026-05-17-final-clean-evidence-package.md`.
+The historical final-candidate package is `docs/qa/2026-05-17-final-clean-evidence-package.md`.
 It links the clean AMD DB, source roots, counts, AQ01-AQ09 9/9 artifact,
 six free-form queries plus later 10-query graph QA, `gemma4:e4b` clean provider smoke and live semantic-edge jobs, visual QA screenshots,
 automated verification, architecture review, and a final git gate. Commit and
 push evidence remains pending until the G11 final gate stages, commits, and
 pushes the change that includes this package.
+
+2026-05-20 note: this package is still useful candidate evidence, but it is not
+the current expanded default-DB completion proof. Current status is tracked by
+`docs/qa/2026-05-20-acceptance-data-asip-expanded.md`, which reports DB health
+and schema pass but overall `0 passed / 8 partial / 1 failed` because live
+provider smoke and fresh browser/e2e remain blocked in this environment.
 
 2026-05-18 continuation evidence added to that package:
 
@@ -96,7 +102,7 @@ These remove the full empty-DB raw re-index residual for the current selective r
 - default graph budget now preserves representative cross-repo shared-register
   bridge edges; `docs/qa/2026-05-18-g03-cross-repo-register-merge-qa.md`
   proves `limit=3000` includes `150` shared linux-amdgpu/mxgpu register nodes
-  and both repos connected through `register:IH:unknown:IH_RB_CNTL`;
+  and both repos connected through `register:IH:IH_RB_CNTL`;
 - `docs/qa/2026-05-18-design-review-closure-matrix.md` explicitly maps MVP
   G1-G6 and AQ01-AQ09 to current evidence and residual boundaries;
 - `docs/qa/visual-qa-2026-05-18-final-web-pack/` captures all six routes in

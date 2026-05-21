@@ -1,0 +1,80 @@
+- generic [active] [ref=e1]:
+  - generic [ref=e2]:
+    - banner [ref=e3]:
+      - generic [ref=e5]: ASIP Evidence Workbench
+      - generic [ref=e6]:
+        - img
+        - textbox "Global symbol search" [ref=e7]:
+          - /placeholder: Search indexed symbols
+          - text: who will write/read CP_HQD_* regs
+      - generic "Workbench status" [ref=e8]:
+        - generic [ref=e9]: "Provider: unverified"
+        - generic [ref=e11]: "Edge: Ollama / gemma4:e4b"
+        - generic [ref=e12]: "Index: ready"
+      - button "Switch to light theme" [ref=e13] [cursor=pointer]:
+        - img
+        - text: Light
+    - main [ref=e14]:
+      - navigation "ASIP sections" [ref=e15]:
+        - link "Evidence Search" [ref=e16] [cursor=pointer]:
+          - /url: /
+        - link "Graph Explorer" [ref=e17] [cursor=pointer]:
+          - /url: /graph
+        - link "Corpus" [ref=e18] [cursor=pointer]:
+          - /url: /corpus
+        - link "Resolver Profiles" [ref=e19] [cursor=pointer]:
+          - /url: /resolver-profiles
+        - link "Acceptance Tests" [ref=e20] [cursor=pointer]:
+          - /url: /acceptance
+        - link "Settings" [ref=e21] [cursor=pointer]:
+          - /url: /settings
+      - region "Graph relationship workspace" [ref=e22]:
+        - generic [ref=e23]:
+          - generic [ref=e24]
+          - textbox "IP block filter" [ref=e27]:
+            - /placeholder: IP
+          - textbox "ASIC or generation filter" [ref=e29]:
+            - /placeholder: ASIC
+          - button "Run query" [ref=e30] [cursor=pointer]
+        - generic "Page metrics" [ref=e31]:
+          - generic [ref=e32]: "matches: 24"
+          - generic [ref=e33]: "graph edges: 552"
+          - generic [ref=e34]: "query: live"
+        - generic "Evidence source filters" [ref=e35]:
+          - button "Source filter 1 hop" [ref=e36] [cursor=pointer]
+          - button "Source filter 2 hops" [ref=e37] [cursor=pointer]
+          - button "Source filter writes" [ref=e38] [cursor=pointer]
+          - button "Source filter has_field" [ref=e39] [cursor=pointer]
+        - generic [ref=e40]:
+          - generic [ref=e41]
+          - generic "Graph display controls" [ref=e44]
+          - img "Global weighted network graph" [ref=e165]
+        - table "Evidence results" [ref=e74]:
+          - rowgroup [ref=e75]
+          - rowgroup [ref=e83]
+      - complementary [ref=e94]:
+        - generic [ref=e95]:
+          - heading "Global Graph" [level=2] [ref=e96]
+          - generic [ref=e97]
+        - heading "Relationship Panel" [level=3] [ref=e99]
+        - generic [ref=e100]:
+          - paragraph [ref=e439]
+          - paragraph [ref=e441]
+          - paragraph [ref=e443]
+          - paragraph [ref=e445]
+          - paragraph [ref=e447]
+          - paragraph [ref=e449]
+          - paragraph [ref=e451]
+          - paragraph [ref=e453]
+          - paragraph [ref=e455]
+          - paragraph [ref=e457]
+          - paragraph [ref=e459]
+          - paragraph [ref=e461]
+        - button "Generate semantic edges" [ref=e103] [cursor=pointer]
+        - button "Generate batch semantic edges" [ref=e104] [cursor=pointer]
+        - button "Extract document nodes" [ref=e105] [cursor=pointer]
+        - paragraph [ref=e463]: "Query ran: who will write/read CP_HQD_* regs"
+        - generic "Semantic generation controls" [ref=e106]:
+          - generic [ref=e107]
+          - generic [ref=e109]
+  - alert [ref=e464]

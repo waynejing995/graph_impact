@@ -1,0 +1,50 @@
+import unittest
+
+from asip.graph_schema import (
+    ALLOWED_PRODUCT_NODE_KINDS,
+    ALLOWED_PRODUCT_RELATIONS,
+    is_product_node_kind,
+    normalize_product_relation,
+    product_endpoint_kind,
+)
+
+
+class GraphSchemaTests(unittest.TestCase):
+    def test_product_schema_allows_only_three_node_kinds(self):
+        self.assertEqual(ALLOWED_PRODUCT_NODE_KINDS, {"function", "register", "doc"})
+        for bad_kind in ["macro", "field", "source", "provider", "doc_box", "pdf_section"]:
+            self.assertFalse(is_product_node_kind(bad_kind))
+
+    def test_relation_normalization_is_enum_bound(self):
+        self.assertEqual(normalize_product_relation("field_set"), "sets_field")
+        self.assertEqual(normalize_product_relation("REG_SET_FIELD"), "sets_field")
+        self.assertEqual(normalize_product_relation("contains_box"), "contains")
+        self.assertEqual(normalize_product_relation("checks_mask"), "relates_to")
+        self.assertIsNone(normalize_product_relation("wraps"))
+        self.assertTrue(set(ALLOWED_PRODUCT_RELATIONS).issuperset({"reads", "writes", "sets_field"}))
+
+    def test_endpoint_kind_rejects_macro_field_and_local_tokens(self):
+        self.assertEqual(product_endpoint_kind("gfx_v11_0_hw_init"), "function")
+        self.assertEqual(product_endpoint_kind("function:linux-amdgpu:gfx.c:gfx_v11_0_hw_init"), "function")
+        self.assertEqual(product_endpoint_kind("GCVM_L2_CNTL"), "register")
+        self.assertEqual(product_endpoint_kind("register:GC:GCVM_L2_CNTL"), "register")
+        self.assertEqual(product_endpoint_kind("docs/guide.md#programming-registers"), "doc")
+        self.assertEqual(product_endpoint_kind("doc:docs/guide.md#programming-registers"), "doc")
+        for bad_endpoint in [
+            "WREG32",
+            "REG_SET_FIELD",
+            "ENABLE_L2_CACHE",
+            "tmp",
+            "value",
+            "ops",
+            "callbacks",
+            "init_func",
+            "init_funcs",
+            "tmp_value",
+            "context:tmp",
+        ]:
+            self.assertIsNone(product_endpoint_kind(bad_endpoint))
+
+
+if __name__ == "__main__":
+    unittest.main()

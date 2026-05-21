@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { defaultDbPath, runAsipCli } from "@/lib/asip-cli";
+import { explicitTextOrError } from "@/lib/request-paths";
 
 type RouteContext = {
   params: Promise<{ id: string }>;
@@ -11,7 +12,15 @@ export async function GET(request: NextRequest, context: RouteContext) {
   if (!Number.isInteger(evidenceId) || evidenceId <= 0) {
     return NextResponse.json({ error: `invalid evidence id: ${id}` }, { status: 400 });
   }
-  const dbPath = request.nextUrl.searchParams.get("dbPath")?.trim() || defaultDbPath;
+  let dbPath = defaultDbPath;
+  try {
+    dbPath = explicitTextOrError(request.nextUrl.searchParams.get("dbPath"), "dbPath") ?? defaultDbPath;
+  } catch (error) {
+    return NextResponse.json(
+      { error: error instanceof Error ? error.message : "dbPath cannot be blank" },
+      { status: 400 }
+    );
+  }
   try {
     const payload = runAsipCli<Record<string, unknown>>([
       "evidence-detail",

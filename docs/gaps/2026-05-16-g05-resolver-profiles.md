@@ -1,12 +1,19 @@
 # G05 Resolver Profiles
 
-Status: Current pass verified; richer diagnostics and broader non-C strategies remain blocking
+Status: Current pass verified for YAML-backed resolver config and profile-scoped graph normalization; richer diagnostics and broader non-C strategies remain blocking
 
 ## Requirement
 
 Resolver behavior must be configurable, not hardcoded. MVP-1 must support Linux `amdgpu`, AMD MxGPU/GIM, and at least one non-macro Python-style profile.
 
 Configurable fields include wrapper names, argument positions, prefixes, base-index suffixes, context variables, field rules, and language-specific extraction strategies.
+
+Resolver profiles also own the product graph normalization contract. A profile
+can declare how raw wrapper/access facts become product edge relations, how
+function names are canonicalized into concept nodes, how register identities are
+merged, and which raw implementation records are hidden from the default graph
+but exposed through the inspector. This keeps repo-specific AMD naming rules in
+YAML instead of hardcoding them in graph projection code.
 
 Every resolver shown in the UI must correspond to a real YAML config file under `configs/resolvers/` or a backend-persisted profile that points to an existing YAML file. The UI must not show profile-like static rows that cannot be loaded or validated by the resolver engine.
 
@@ -45,12 +52,25 @@ Resolver wrapper/extractor names are configuration and provenance, not graph ent
 - 2026-05-18 per-job selection correction: core `index_configured_corpora`, `index_registered_corpora`, and `rebuild_deterministic_graph` accept selected resolver profile ids, filter against real YAML/backend profiles, record the active ids in job metadata, and reject unknown ids. CLI `index`/`graph-rebuild`, FastAPI `/index`/`/graph-rebuild`, MCP `corpora_index`/`graph_rebuild`, and the Next Web BFF all pass these ids through.
 - 2026-05-18 Corpus UI correction: the Corpus page now renders a shadcn/Radix checkbox list of enabled YAML-backed resolver profiles and sends `resolverProfileIds` with the next index job. The action feedback echoes the profiles used, and Playwright verifies an unchecked profile is omitted from the request body.
 - 2026-05-18 selection proof: Web API indexing with `resolverProfileIds: ["amd-soc15"]` indexes a `WREG32_SOC15` fixture while excluding `WREG32` direct-MMIO edges, proving selection changes graph output without resolver code edits.
+- 2026-05-18 design correction: resolver profiles now have a documented `graph:` extension contract for function normalization, register normalization, access relation mapping, and default/inspector graph profiles. The design is recorded in `docs/specs/2026-05-18-product-graph-normalization.md`.
+- 2026-05-19 profile-scope correction: product function concept ids include `resolver_profile_id` before `rule_id`, disabled DB alias rows also disable the loaded YAML profile id, and `graph.register_normalization.identity` is consumed by product register projection. Regression tests cover duplicate local rule ids, disabled alias/path fallback, DB/YAML path profile id mismatch, and custom register identity.
+- 2026-05-19 access-relation correction: Stage 1 deterministic graph extraction now consumes `graph.access_relation_map` from the active resolver profile. A RED/GREEN test proves a custom wrapper with raw access `doorbell_write` can map to product relation `writes` without leaking `doorbell_write` as a product edge relation. The edge preserves `access=doorbell_write` and `mapped_relation=writes` in provenance.
+- 2026-05-19 corpus-scoped resolver ordering correction: when one index or
+  graph-rebuild job enables multiple YAML profiles, each corpus now tries
+  profiles matching its `corpus_id`, repo, or profile aliases first, while
+  retaining the remaining profiles as fallback. This prevents overlapping
+  wrappers such as `WREG32` from causing MxGPU code to be attributed to
+  `linux-amdgpu` merely because that profile sorts first. The RED/GREEN
+  regression `test_index_registered_corpora_prefers_matching_resolver_profile_per_corpus`
+  proves `linux-amdgpu` code uses `linux-amdgpu`, `mxgpu` code uses
+  `amd-mxgpu`, and both repos still bridge through the same
+  `register:IH:IH_RB_CNTL` node.
 
 ## Remaining Gap
 
 Resolver profiles are a real product control path for the current C/C++ and Python-call MVP. The backend preserves YAML argument positions, resolves multiple symbols per configured wrapper call, and can restrict an index/rebuild job to user-selected profiles.
 
-The UI now supports add, validate, enabled/disabled creation state, existing-profile editing through the selector, and per-index job selection. Remaining work is richer diagnostics for why a profile did or did not match a source span, and broader language-specific non-macro strategies beyond configured Python-style call extractors; those need either implementation or explicit MVP limits.
+The UI now supports add, validate, enabled/disabled creation state, existing-profile editing through the selector, and per-index job selection. Function normalization, register identity, and access relation mapping from the documented `graph:` contract are now operational for product projection. Remaining work is richer diagnostics for why a profile did or did not match a source span, broader language-specific non-macro strategies beyond configured Python-style call extractors, and operationalizing graph profile presets.
 
 The UI/backend path filters out resolver rows that are not backed by a real YAML config, and the starter `initial` profile is a truthful checked-in YAML file.
 
@@ -65,6 +85,7 @@ The UI/backend path filters out resolver rows that are not backed by a real YAML
 - Field macros can resolve more than one symbol from one configured call, for example register plus field from `REG_SET_FIELD`.
 - Persisted profiles keep YAML-configured `symbol_arg`, `symbol_args`, prefixes, and extractor lists through add/list/validate/index flows.
 - Resolver wrapper/extractor names never appear as graph endpoints; only the resolved register/field/context/document entities enter the graph.
+- Profiles can declare `graph.function_normalization`, `graph.register_normalization`, and `graph.access_relation_map` and have them affect product projection without code edits for repo-specific naming conventions. `graph.graph_profiles` remains parsed/design-specified but still needs product-path enforcement.
 
 ## Required Tests
 
@@ -80,6 +101,13 @@ The UI/backend path filters out resolver rows that are not backed by a real YAML
 - Regression test: indexing/resolver graph output does not create mega-nodes for configured wrapper/extractor names.
 - Regression test: resolver profile UI rows show profile identity and operator count, not wrapper names in the symbol column.
 - Regression test: wrapper/extractor names are rejected as graph seeds and filtered out of stale evidence/query expected-term paths.
+- RED/GREEN test: a YAML function-normalization rule rewrites versioned AMD function implementations into a product concept node while preserving raw implementation provenance.
+- RED/GREEN test: duplicate function-normalization `rule_id` values in different profiles do not merge into the same concept node.
+- RED/GREEN test: disabled DB resolver profile aliases disable both the row id and the loaded YAML profile id in index selection and graph projection.
+- RED/GREEN test: YAML/DB `graph.register_normalization.identity` changes product register ids without code edits.
+- RED/GREEN test: YAML access relation mapping controls product edge enum normalization without hardcoded resolver-specific relation names in graph projection.
+- RED/GREEN test: a multi-corpus index with overlapping wrapper names prefers
+  each corpus's matching YAML resolver profile before generic fallback profiles.
 
 ## Not Closed Until
 

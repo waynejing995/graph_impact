@@ -66,7 +66,7 @@ test("graph route renders API-backed weighted relation graph", async ({ page }) 
               ]
             }
           },
-          { id: "API_GRAPH_SECTION", kind: "doc_section", weight: 1 }
+          { id: "API_GRAPH_SECTION", kind: "doc", weight: 1, attr: { doc_kind: "markdown_section" } }
         ],
         edges: [
           { src: "API_GRAPH_FUNCTION", dst: "API_GRAPH_REGISTER", relation: "sets_field", confidence: 0.91, weight: 0.91, stage: "deterministic" },
@@ -105,7 +105,7 @@ test("graph route requests global graph without a default seed and renders API_G
         nodes: [
           { id: "API_GLOBAL_FUNCTION", kind: "function", weight: 4 },
           { id: "API_GLOBAL_REGISTER", kind: "register", weight: 3 },
-          { id: "API_GLOBAL_SECTION", kind: "doc_section", weight: 1 }
+          { id: "API_GLOBAL_SECTION", kind: "doc", weight: 1, attr: { doc_kind: "markdown_section" } }
         ],
         edges: [
           {
@@ -145,7 +145,7 @@ test("graph route requests global graph without a default seed and renders API_G
 });
 
 test("graph route keeps a global node set instead of collapsing to a tiny seed preview", async ({ page }) => {
-  const kinds = ["register", "function", "doc_section"] as const;
+  const kinds = ["register", "function", "doc"] as const;
   const nodes = Array.from({ length: 18 }, (_, index) => ({
     id: `API_GLOBAL_NODE_${index + 1}`,
     kind: kinds[index % kinds.length],
@@ -179,7 +179,7 @@ test("graph route keeps a global node set instead of collapsing to a tiny seed p
 });
 
 test("graph route does not truncate large API graph payloads in the canvas layer", async ({ page }) => {
-  const kinds = ["register", "function", "doc_section", "pdf_section", "doc_box"] as const;
+  const kinds = ["register", "function", "doc"] as const;
   const nodes = Array.from({ length: 180 }, (_, index) => ({
     id: `API_LARGE_GRAPH_NODE_${index + 1}`,
     kind: kinds[index % kinds.length],
@@ -208,6 +208,7 @@ test("graph route does not truncate large API graph payloads in the canvas layer
   await page.goto("/graph");
 
   const forceGraph = page.getByTestId("force-graph");
+  await expect(forceGraph).toHaveAttribute("data-layout-profile", "dense");
   await expect(forceGraph).toHaveAttribute("data-node-count", String(nodes.length));
   await expect(forceGraph).toHaveAttribute("data-edge-count", String(edges.length));
   await expect(forceGraph).toContainText("API_LARGE_GRAPH_NODE_180");
@@ -319,7 +320,7 @@ async function mockGraphRoute(page: import("@playwright/test").Page) {
         nodes: [
           { id: "MOCK_GRAPH_FUNCTION", kind: "function", weight: 4 },
           { id: "MOCK_GRAPH_REGISTER", kind: "register", weight: 3 },
-          { id: "MOCK_GRAPH_SECTION", kind: "doc_section", weight: 1 }
+          { id: "MOCK_GRAPH_SECTION", kind: "doc", weight: 1, attr: { doc_kind: "markdown_section" } }
         ],
         edges: [
           {

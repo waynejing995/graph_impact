@@ -1,8 +1,17 @@
 import { NextRequest, NextResponse } from "next/server";
 import { defaultDbPath, runAsipCli } from "@/lib/asip-cli";
+import { explicitTextOrError } from "@/lib/request-paths";
 
 export function GET(request: NextRequest) {
-  const dbPath = request.nextUrl.searchParams.get("dbPath")?.trim() || defaultDbPath;
+  let dbPath = defaultDbPath;
+  try {
+    dbPath = explicitTextOrError(request.nextUrl.searchParams.get("dbPath"), "dbPath") ?? defaultDbPath;
+  } catch (error) {
+    return NextResponse.json(
+      { jobs: [], error: error instanceof Error ? error.message : "dbPath cannot be blank" },
+      { status: 400 }
+    );
+  }
   const limit = request.nextUrl.searchParams.get("limit")?.trim();
   try {
     const args = ["jobs", "--db", dbPath];

@@ -1,12 +1,34 @@
 # G10 Testing Acceptance And Visual QA
 
-Status: Current package-backed graph, acceptance detail, and visual QA pass recorded; final completion gate remains in G11
+Status: Historical and scoped package-backed graph, acceptance-detail, and visual QA pass evidence is recorded; the current 2026-05-20 browser/provider/Web acceptance gates remain blocked. The active closure slice is URL `dbPath` no-mock e2e plus live provider proof or explicit residual acceptance, so this file must not be read as a full integrated-graph completion claim.
 
 ## Requirement
 
 Completion requires TDD, automated tests, all nine MVP acceptance queries, acceptance QA, and post-functional-change visual QA against individual anchors.
 
 Every page must support light and dark themes. Visual QA targets a 2K desktop baseline.
+
+2026-05-19 update: graph QA must also follow
+[`docs/specs/2026-05-19-asip-graph-integration-plan.md`](../specs/2026-05-19-asip-graph-integration-plan.md).
+The next browser/e2e gate must be no-mock for the graph path: open `/graph`
+against a real SQLite DB, wait for package graph `data-ready=true`, assert
+nonzero nodes/edges, assert only `function`, `register`, and `doc` product
+kinds are visible, switch function view, run at least one free query, and expand
+acceptance details.
+
+This gate must pass the DB path through explicit URL/API state, not by relying
+on whatever `data/asip.db` currently contains. Historical screenshots and
+acceptance artifacts remain evidence for their named DBs, but the current
+closure target is a reproducible no-mock browser path with a declared DB path.
+
+2026-05-19 acceptance-surface clarification: `surfaces_checked` labels are not
+enough for the final gate. The acceptance runner must record `surface_results`
+per query, including `surface`, `transport`, `status`, `db_path`, row count,
+graph node/edge counts, schema status, and failure reason. CLI/core, FastAPI,
+and MCP probes should execute their real transport paths against the same DB.
+Web may be a real BFF HTTP probe when `ASIP_WEB_BASE_URL` is configured; if it
+is not configured, the report must say Web is covered by the no-mock
+Playwright/browser DB-path test instead of marking Web passed by label alone.
 
 After the 2026-05-17 user review, visual/functional QA must also prove:
 
@@ -38,9 +60,11 @@ After the 2026-05-17 user review, visual/functional QA must also prove:
 - RED/GREEN fixes from this pass: PDF fixture extraction failed at 0 chunks before regenerating the reduced AMD PDF and adding fallback compressed-stream coverage; `dev:api` and MCP tool matrix failed before product route/server registration fixes; AQ06 failed at 8/9 before diverse selection protected injected `register` rows; historical qwen3.5 semantic-edge generation failed with truncated JSON until edge `num_predict` was raised to 1024; continuation tests caught `smn` prefix handling, generic `register` word promotion, `sdma_rlc_reg_offset` helper-node leakage, `REG_FIELD_SHIFT` field endpoints, `relative_root` scan scope, and PDF candidate starvation before the current green pass.
 - Current visual QA `docs/qa/visual-qa-2026-05-17/visual-qa.md` records 2K route screenshots for six routes in dark and light themes: 6 passed, 0 failed. `/graph` shows 12 nodes and 4 weighted edges in both themes. This is now stale for `/graph` after the package-first renderer decision.
 - 2026-05-17 user review found the Acceptance page pass/fail rows unclear because failures could not be expanded to see details. This is a G10/G14 blocker even if the backend artifact has the details.
-- Latest automated verification after the shared-register bridge and doc-overlay provenance pass: core unittest 236 OK with 2 optional sqlite-vec skips; API/MCP unittest 47 OK with 1 optional MCP runtime skip under system Python 3.9; bundled-Python real MCP runtime suite 29 OK with 0 skips from the previous G07 runtime pass; visual route Playwright 15 passed; combined Web API+smoke+visual Playwright 90 passed; `pnpm --filter web run lint` passed; `pnpm --filter web exec tsc --noEmit` passed; `git diff --check` passed.
+- Latest automated verification after the register ip-version merge, query performance pass, shared-register bridge, and doc-overlay provenance pass: core unittest 239 OK with 2 optional sqlite-vec skips; API/MCP unittest 47 OK with 1 optional MCP runtime skip under system Python 3.9; bundled-Python real MCP runtime suite 29 OK with 0 skips from the previous G07 runtime pass; visual route Playwright 15 passed; combined Web API+smoke+visual Playwright 90 passed from the previous Web gate; `pnpm --filter web run lint` passed; `pnpm --filter web exec tsc --noEmit` passed; `git diff --check` must be rerun after final doc edits.
 - 2026-05-18 clean-final acceptance rerun: `/tmp/asip-clean-amd-gemma4-final-current-2026-05-18.db` records DB health `pass`, AQ01-AQ09 `9/9`, surfaces `CLI/API/Web/MCP`, provider embedding `ollama/nomic-embed-text:latest` with `embedding_count=32` and `fallback_count=0`, and provider semantic-edge smoke `ollama/gemma4:e4b`. Artifacts: `docs/qa/2026-05-18-acceptance-clean-amd-gemma4-final-current.json` and `.md`. The same QA pass also records real Stage 2 batch edges, doc boxes, and macro-node endpoint checks in `docs/qa/2026-05-18-clean-final-stage2-and-macro-qa.md`.
-- Final automated rerun after the clean-final Stage 2, macro-node, G06/G07/G15 continuation fixes, shared-register bridge pass, and doc-overlay provenance fix: core unittest 236 OK with 2 optional sqlite-vec skips; API/MCP unittest 47 OK with 1 optional MCP runtime skip under system Python 3.9; bundled-Python real MCP runtime suite 29 OK with 0 skips from the previous G07 runtime pass; `pnpm --filter web run lint` passed; `pnpm --filter web exec tsc --noEmit` passed; visual route Playwright 15 passed; combined Web API+smoke+visual Playwright 90 passed.
+- Final automated rerun after the clean-final Stage 2, macro-node, G06/G07/G15 continuation fixes, register ip-version merge, query graph performance pass, shared-register bridge pass, and doc-overlay provenance fix: core unittest 239 OK with 2 optional sqlite-vec skips; API/MCP unittest 47 OK with 1 optional MCP runtime skip under system Python 3.9; bundled-Python real MCP runtime suite 29 OK with 0 skips from the previous G07 runtime pass; `pnpm --filter web run lint` passed; `pnpm --filter web exec tsc --noEmit` passed; visual route Playwright 15 passed.
+- 2026-05-18 multi-subfolder corpus TDD pass: targeted core tests prove configured and registered corpus multi-subfolder indexing plus unsafe path rejection; Web API/UI Playwright tests prove structured `metadata.subfolders` persistence, multiline Corpus page submission, and 400 responses for unsafe `../` filters. TypeScript `pnpm --filter web exec tsc --noEmit` passed after the route validation change. Evidence is recorded in `docs/qa/2026-05-18-g01-g04-amdgpu-subfolder-corpus-qa.md`.
+- 2026-05-18 docs-only function-normalization planning pass: subagent review and online research were folded into `docs/specs/2026-05-18-product-graph-normalization.md` and `docs/superpowers/plans/2026-05-18-product-graph-normalization.md`. This records the TDD path for resolver-configured function concept nodes, divergent access preservation, and inspector raw-implementation expansion. It does not count as implementation evidence until the planned RED/GREEN tests run.
 - Default in-app browser QA after copying the clean-final DB to `data/asip.db` shows `/graph` with `Edge: Ollama / gemma4:e4b`, `3000` graph edges, layer provenance `deterministic: 2989 semantic: 11`, `1000 / 2883` visible nodes, node-kind summary `doc_box=6`, `doc_section=1`, `function=836`, `register=157`, and no page errors. Screenshot and snapshot are stored under `docs/qa/browser/graph-clean-final-default-3100-*`.
 - 2026-05-18 latest browser QA after the full backfill/static-cleanup/function-query slice is recorded in `docs/qa/2026-05-18-g03-real-query-graph-function-fallback-qa.md`. In-app browser at 2048 x 1280 shows `/graph` with `graph edges: 3000`, `layers deterministic: 2989 semantic: 11`, and `visible nodes: 1000 / 2805`; querying `gfx_v11_0_hw_init` shows `matches: 0` but `graph edges: 36` and a relationship panel containing live function-call edges. Screenshots are `docs/qa/browser/graph-after-full-backfill-and-query-fallback-2k.png` and `docs/qa/browser/graph-function-query-fallback-2k.png`.
 - 2026-05-17 graph semantic QA passed for core function edges, doc section nodes, batch semantic-edge core/API/MCP/Web paths, package-backed graph API behavior, batch UI action, shadcn styled-control regression, browser `/graph` rendering with `react-force-graph-2d`, and light/dark visual route checks. Evidence is recorded in `docs/qa/2026-05-17-graph-function-section-batch-qa.md`.
@@ -49,6 +73,51 @@ After the 2026-05-17 user review, visual/functional QA must also prove:
 - The [MVP Acceptance Query Matrix](2026-05-16-mvp-acceptance-query-matrix.md) now tracks all nine acceptance queries individually.
 - 2026-05-17 provider-check detail correction: `/api/workbench/acceptance` now preserves AQ detail `provider_checks` from `asip.acceptance` artifacts, and the Acceptance page expandable details show embedding and semantic-edge provider status/provider/model/message when present.
 - 2026-05-17 Acceptance page runner correction: `/acceptance` now has its own shadcn/Radix runner panel for configurable `queryIds`, surfaces (`CLI`, `API`, `Web`, `MCP`), DB path, output JSON path, and output Markdown path. In-app Browser QA at `http://127.0.0.1:3102/acceptance` verified the rendered page posts `{"dbPath":"/tmp/asip-ui-acceptance.db","queryIds":["AQ01","AQ09"],"surfaces":["CLI","API","Web","MCP"],"outputJson":"docs/qa/ui-acceptance.json","outputMd":"docs/qa/ui-acceptance.md"}` and renders `Acceptance run passed: 2/2`.
+- 2026-05-19 acceptance surface-probe correction: the core runner now records
+  per-query `surface_results` instead of only `surfaces_checked` labels.
+  Targeted tests prove `CLI/core` and FastAPI `TestClient` `/query` execute
+  against the requested DB path. MCP currently records registered tool-surface
+  execution as `mcp.tool-direct.search_evidence` plus
+  `server_registered=true`; it is intentionally not mislabeled as an MCP
+  protocol-client smoke because the current Python runtime does not have the
+  optional `mcp` package installed. Web requires `ASIP_WEB_BASE_URL` for a real
+  BFF HTTP probe; otherwise the run records `not_configured` and the final Web
+  proof must come from the no-mock browser/e2e gate. The Acceptance page
+  default runner now includes CLI/API/MCP, leaves Web opt-in/configured, and
+  displays surface transport/status details in expanded query rows.
+- 2026-05-19 AQ09 surface alignment: AQ09 now requires `CLI/API/MCP` in the
+  runner matrix because the Settings action intentionally exercises provider
+  plumbing through those transports. Web is proved by the Settings/browser
+  e2e and `/graph?dbPath=...` no-mock semantic-edge gate, not by a hidden
+  runner surface label.
+- 2026-05-20 explicit `dbPath` false-positive correction: all DB-backed
+  Workbench API routes now reject explicitly blank `dbPath` values with `400`
+  instead of silently falling back to default `data/asip.db`. This includes
+  index, query, graph, acceptance-run, corpora, resolver profiles, jobs,
+  evidence detail, entity detail, provider settings, and semantic-edge jobs.
+  The Workbench UI preserves an explicit blank URL parameter through request
+  helpers so `/graph?dbPath=%20` and `/acceptance?dbPath=%20` can fail
+  truthfully rather than trimming the evidence path away. Static no-fallback
+  smoke, Playwright config smoke, TypeScript, and eslint passed. Web API test
+  definitions now cover blank `dbPath` HTTP `400` across DB-backed routes, and
+  the no-mock graph e2e definition now asserts function-view and free-query
+  graph data changes.
+  Fresh browser execution is still blocked in this environment by local
+  `listen EPERM`.
+- 2026-05-20 browser-gate preflight: `apps/web/scripts/browser-gate-preflight.mjs`
+  now checks local listen capability and the target Playwright port before
+  browser claims. It exits nonzero by default when the environment is blocked,
+  and the explicit `--allow-blocked` artifact
+  `docs/qa/2026-05-20-browser-gate-preflight.json` records
+  `gate_status: blocked` with `EPERM` for both `127.0.0.1` listen capability
+  and target port `3100`. This is blocker evidence, not a browser pass.
+- 2026-05-20 Playwright server-mode correction:
+  `apps/web/playwright.config.ts` now starts a fresh server by default and
+  requires explicit `PLAYWRIGHT_REUSE_EXISTING_SERVER=1` opt-in for reuse.
+  `PLAYWRIGHT_BASE_URL`, `PLAYWRIGHT_SKIP_WEB_SERVER=1`, and
+  `PLAYWRIGHT_WEB_SERVER_COMMAND` remain available for targeting or supplying
+  a known-good external dev server. The final no-mock browser gate should use a
+  fresh server unless the run log names the reused server and why it is safe.
 - 2026-05-17 QA infrastructure correction: `apps/web/playwright.config.ts` now supports `PLAYWRIGHT_BASE_URL` and `PLAYWRIGHT_SKIP_WEB_SERVER=1`, so e2e tests can target a known-good dev server instead of hanging on a stale port. Ports `3100` and `3101` were observed accepting connections but returning zero bytes during this pass; browser QA used a fresh `3102` server.
 - 2026-05-17 backend/API/MCP re-verification: core unittest discovery is now 129 OK with 1 sqlite-vec skip; FastAPI/MCP regression is 41 OK with 1 optional MCP runtime skip; `pnpm --filter web exec tsc --noEmit` passes after the Acceptance runner and Playwright config changes.
 - 2026-05-17 final verification rerun, superseding the older permission-policy blocker:
@@ -62,21 +131,95 @@ After the 2026-05-17 user review, visual/functional QA must also prove:
 - 2026-05-17 Playwright config correction: workers are fixed at 1 because the e2e suite uses real shared SQLite state and provider settings. A 2-worker run exposed a real race where concurrent settings tests overwrote the provider model during reload.
 - 2026-05-17 current graph QA: after deterministic rebuild and gemma4 semantic/doc-node jobs, `global_graph(limit=1500)` has 1,123 nodes, 1,500 edges, node kinds `function=523`, `register=593`, `doc_box=6`, `doc_section=1`, and 15 visible semantic edges.
 
+Historical/current evidence rows above may report raw document subtypes such as
+`doc_box` and `doc_section`. The 2026-05-19 product-schema gate is stricter:
+default Web/API/MCP graph output must expose those as `kind=doc` with
+`attr.doc_kind`, while raw/debug summaries may keep subtype labels for audit.
+
 ## Remaining Gap
 
-The test suite now proves the user-review blockers for this pass: package-backed graph rendering, expandable acceptance details, shadcn/Radix styled-control regression, batch semantic-edge generation, function-operation graph edges, document section nodes, no static default graph/query rows, and real add-index-query UI flow. The remaining gate is G11/G17 reconciliation and final user/commit/push workflow, not another missing package-graph implementation.
+The test suite proves the earlier user-review blockers for package-backed graph rendering, expandable acceptance details, shadcn/Radix styled-control regression, batch semantic-edge generation, function-operation graph edges, document section nodes, no static default graph/query rows, and real add-index-query UI flow. The remaining gates now include fresh no-mock browser/e2e, live provider smoke or explicit residual acceptance, and G11/G17 reconciliation; this is not merely a final user/commit/push workflow.
+
+The 2026-05-19 contract adds a new QA boundary before future completion claims:
+schema and data assertions must be as important as canvas visibility. A
+nonblank canvas does not prove the graph is correct. The e2e test must verify
+real node kinds, real edge counts, real query-driven graph changes, and real
+acceptance detail expansion.
+
+2026-05-20 expanded-DB status: the current default `data/asip.db` acceptance
+artifact is `docs/qa/2026-05-20-acceptance-data-asip-expanded.md`, not the older
+`9/9` default-DB artifact. It records DB health pass, schema pass for AQ01-AQ09,
+AQ05 source diversity restored, and AQ09 persisted semantic-edge provenance
+reported as `partial/stale`: `14` `ollama/gemma4:e4b` `semantic_edges` rows
+exist from succeeded job `4`, but latest index job `10` is newer. The overall
+result remains `0 passed / 8 partial / 1 failed` with `gate_status: blocked`.
+AQ09 embedding coverage is now explicitly partial
+because the DB has `27` provider embeddings and `125962` deterministic fallback
+embeddings plus `21852` chunks with no embedding rows. Live semantic-edge
+provider smoke fails with `Operation not permitted`, and fresh browser/e2e is
+blocked here by local `listen`/connect `EPERM`.
+
+2026-05-20 Web-included acceptance blocker: the supplemental artifact
+`docs/qa/2026-05-20-acceptance-data-asip-expanded-web-blocked.md` explicitly
+requests CLI/API/Web/MCP for all AQ01-AQ09 queries. CLI/API/MCP probes return
+rows and product schema `pass`, but every Web probe is `not_configured` because
+`ASIP_WEB_BASE_URL` is absent and the local browser/server gate is blocked. The
+summary is therefore `0 passed / 0 partial / 9 failed`, which is stronger
+blocking evidence than merely omitting Web from the current expanded acceptance
+run.
+
+This new boundary is still active work: package rendering, previous acceptance
+detail display, and visual screenshots are recorded, but the integrated
+three-kind schema plus URL `dbPath` no-mock browser gate is not yet a final
+completion claim.
+
+2026-05-20 subagent follow-up: Web e2e review found that the no-mock
+`/graph?dbPath=...` test proved API payload changes more strongly than rendered
+graph changes. The test definition now also checks `force-graph`
+`data-node-total` / `data-edge-total` and accessibility summary text after
+global graph load, function implementation view, and free-query transitions.
+This still remains a listed/compiled definition until browser execution is
+unblocked.
+
+2026-05-19 continuation update: the three-kind schema gate has core coverage
+now. `asip.graph_schema` is shared by acceptance, storage projection, semantic
+edge prompts, and workbench semantic-edge persistence. Targeted RED/GREEN tests
+proved the prompt no longer asks for `checks_mask`/`assigns_doorbell`/`waits_for`,
+storage calls the shared relation normalizer, and `entity_type=macro` evidence
+does not become a visible register node. The broader core graph/workbench sweep
+ran 155 tests OK with 2 optional sqlite-vec skips, acceptance/API/MCP ran 14
+tests OK, TypeScript passed, and `git diff --check` passed.
+
+Browser evidence also improved but remains scoped: a stale 3100 server returned
+zero bytes and had a hot `next-server` process, so QA relaunched a clean server
+on 3111 and opened `/graph` in the in-app browser at 2048 x 1280. The page
+loaded a real default-DB graph with `graph edges: 3000`, layers
+`deterministic: 2989 semantic: 11`, and visible summary `doc 7`,
+`function 696`, `register 297`. Screenshots are
+`docs/qa/browser/asip-graph-schema-v2-2026-05-19-2k.png` and
+`docs/qa/browser/asip-graph-schema-v2-loaded-2026-05-19-2k.png`; snapshot notes
+are in
+`docs/qa/browser/asip-graph-schema-v2-loaded-2026-05-19-snapshot.md`.
+This does not replace the final no-mock `/graph?dbPath=...` Playwright gate.
+
+The Product Graph V2 implementation plan also adds a stricter UI/e2e boundary:
+visual anchor tests may use mocked layout data, but they must be named and
+reported as visual/layout tests. Final graph acceptance must cite a real
+SQLite-backed `/graph?dbPath=...` or equivalent no-mock scenario, and must fail
+if the page silently falls back to default `data/asip.db`, static rows, or a
+mocked graph payload.
 
 `add corpus -> index raw inputs in a clean DB -> query live index -> inspect evidence -> render weighted graph -> verify visual anchors`.
 
-Visual QA has been rerun after the graph package replacement, shadcn-native UI pass, final graph/query performance fixes, resolver edit flow, live global search, source-type filters, semantic generation controls, and graph layer provenance. The old note about not being able to relaunch headless Playwright is superseded by the 75-test Web API/smoke run and 15-test visual route run above.
+Visual QA was rerun for the earlier graph package replacement, shadcn-native UI pass, graph/query performance fixes, resolver edit flow, live global search, source-type filters, semantic generation controls, and graph layer provenance. That scoped pass does not cover the latest 2026-05-20 explicit `dbPath`, browser-gate, provider-gate, or Web-included acceptance blockers; those still require fresh browser/e2e when local listening is available.
 
 Graph QA must not pass only because a canvas or SVG is nonblank. The data assertions must prove that the graph is built from the indexed corpus and includes the required graph layers: evidence-derived relations, function-to-register/field operations, document section nodes, and semantic edges generated by the configured LLM provider.
 
 The final acceptance run must use a clean named SQLite database. The default `data/asip.db` was reset to the clean-final DB for the G01/G10 gate and later intentionally rebuilt for G03 typed-callback graph QA; the previous dirty local dev DB was backed up to `/tmp/asip-dirty-dev-before-final-default-2026-05-18.db`. Future local browser/API runs may dirty or rebuild the default DB again, so the named clean-final artifact `/tmp/asip-clean-amd-gemma4-final-current-2026-05-18.db` remains the stable final QA reference.
 
-The old clean provider AQ01-AQ09 pass is superseded by the source-gated failure artifact. The current clean AMD artifact now provides the healthy source-diverse DB evidence, current screenshots/visual-anchor review, and current automated suite evidence. Final QA still needs design/spec reconciliation and git hygiene review.
+The old clean provider AQ01-AQ09 pass is superseded for current closure by source-gated and expanded-DB artifacts. The clean AMD artifacts still provide scoped source-diverse DB, screenshot/visual-anchor, and automated-suite evidence, but G10 remains open for the current 2026-05-20 browser/provider/Web acceptance blockers unless those blockers are resolved or explicitly accepted as residuals.
 
-Final QA must follow [Final Clean Evidence Package Gate](2026-05-17-final-clean-evidence-package.md); this pass closes the package/shadcn/graph/acceptance-detail G10 slice, while G11 owns the final completion claim and git gate.
+Final QA must follow [Final Clean Evidence Package Gate](2026-05-17-final-clean-evidence-package.md). The earlier pass closes the package/shadcn/graph/acceptance-detail slice, but it does not close current G10; G11 owns the final completion claim, residual acceptance, and git gate.
 
 ## Acceptance Criteria
 
@@ -96,6 +239,10 @@ Final QA must follow [Final Clean Evidence Package Gate](2026-05-17-final-clean-
 - Core unit/integration suite.
 - FastAPI and MCP tests, including live runtime smoke when required.
 - Core/CLI acceptance runner tests for AQ01-AQ09 artifact shape and pass/fail truthfulness. Implemented for fixture DB and the 2026-05-18 clean-final AMD artifact.
+- Core/CLI acceptance runner test: per-query `surface_results` records real
+  CLI/API/MCP probes with transport name, DB path, graph counts, schema status,
+  and failure reason; Web is real HTTP when `ASIP_WEB_BASE_URL` is configured
+  or explicitly delegated to the no-mock Playwright/browser gate.
 - Core/CLI acceptance runner tests now fail when required source types are missing and when corpus/job health is not clean.
 - API/MCP/Web test: acceptance listing includes the new `acceptance-clean-qwen35` artifact and displays partial counts. Implemented for listing/UI visibility.
 - API/MCP/Web test: selected acceptance execution returns a full `asip.acceptance` payload for `AQ01`. Implemented for plumbing; clean-final AQ01-AQ09 pass/fail evidence is recorded in `docs/qa/2026-05-18-acceptance-clean-amd-gemma4-final-current.md/json`.
@@ -114,6 +261,24 @@ Final QA must follow [Final Clean Evidence Package Gate](2026-05-17-final-clean-
 - Web E2E test: acceptance failures expand and show query-level failure reasons, missing surfaces, source paths/types, row/graph counts, provider checks, and artifact path.
 - Web E2E/browser test: package-backed graph renderer is visible, nonblank, weight-aware, and no longer tested by private hand-written SVG class names.
 - Web E2E/browser test: graph detail/summary exposes node-kind counts or labels proving functions, registers/fields, document sections, and semantic edges are present in the default global graph.
+- Core/Web TDD slice: resolver-configured function normalization must prove concept function nodes with raw implementations, divergent access preservation, and implementation-view/inspector expansion before it can be marked implemented.
+- Core/Web TDD slice: product graph schema validator must prove default output
+  contains only `function`, `register`, and `doc`; legacy doc subtypes must be
+  projected into `doc.attr.doc_kind`.
+- Web no-mock e2e: `/graph` opens against a real SQLite DB, graph package marks
+  `data-ready=true`, node/edge totals are nonzero, product node-kind assertions
+  pass, function-view switch changes data, and a free query changes the graph.
+- Web no-mock e2e: `/graph?dbPath=...` or the equivalent routed API state uses
+  the requested real SQLite DB for graph, query, and acceptance checks; the test
+  must fail if the page silently falls back to a mock DB or stale default DB.
+- Web no-mock e2e: graph controls for loaded edge budget, visible node/edge
+  budgets, minimum edge weight, relation/stage/source filters, and function
+  view change request parameters; tests must fail if these controls only alter
+  component-local hardcoded constants.
+- Web no-mock e2e: graph details expose deterministic and semantic layer
+  counts plus provider/model/job provenance for semantic edges when present.
+- Performance-aware e2e: route-level timing records graph API total time,
+  payload size, and canvas readiness for the selected DB.
 - Visual screenshot capture at 2048 x 1280 after final functional changes.
 - E2E test for the full loop: add corpus, index, query unique symbol, graph changes, inspector shows source/snippet/resolved chain.
 - Design-review checklist mapping ASIP MVP-1 G1-G6 and all nine acceptance queries to evidence.

@@ -688,6 +688,62 @@ Open implementation questions:
 - confirm whether the batch semantic-edge default should run over all indexed candidates or over a capped, high-signal queue for MVP-1;
 - confirm the minimum document-section granularity for converted PDFs: page nodes only, heading nodes only, or page-plus-heading nodes.
 
+## Product Graph V2 Contract Decision
+
+Decision date: 2026-05-19
+
+This supersedes the earlier wording that allowed field, macro, wrapper, source
+file, `doc_section`, `pdf_section`, or `doc_box` as visible product graph
+nodes.
+
+The default ASIP product graph is now exactly three node kinds:
+
+- `function`
+- `register`
+- `doc`
+
+Everything else is evidence or metadata:
+
+- resolver wrappers and macros such as `WREG32`, `RREG32`, `REG_SET_FIELD`,
+  `SOC15_REG_OFFSET`, `amdgv_wreg32`, and `gpu_register` live in provenance;
+- register fields such as `ENABLE_L2_CACHE` live in node/edge attributes, and
+  every field operation must still link the function to the owning register;
+- callback slot/table names, source paths, corpus ids, provider names, model
+  names, and local variables are not product nodes;
+- Markdown sections, PDF sections, and BoxMatrix doc boxes are `kind=doc` with
+  `attr.doc_kind=markdown_section|pdf_section|boxmatrix_box`.
+
+The accepted graph architecture is three-layered:
+
+1. Raw fact graph in SQLite, lossless and auditable.
+2. Resolver-configured product projection over `function/register/doc`.
+3. Web/API view graph with explicit budgets, filters, loaded counts, visible
+   counts, and global/full controls.
+
+Register identity defaults to `register:{ip}:{symbol}`. `ip_version` is an
+attribute/provenance item, so linux-amdgpu and MxGPU can connect through the
+same register when IP and symbol match. Different IP blocks do not merge.
+
+Function normalization is allowed only through resolver YAML. Versioned
+functions such as `gfxhub_v11_5_0_gart_enable` can merge into a concept
+function only when the rule preserves raw implementations and edge provenance.
+Different register neighborhoods are not discarded; they become union edges
+and may mark the concept `divergent` or `split_recommended`.
+
+Stage 1 and Stage 2 remain separate:
+
+- Stage 1 deterministic graph owns code-aware function/register/callback facts
+  and must describe its actual provenance, such as source spans, preprocessor
+  expansion, selective `clang_ast_json`, or typed extractor. It must not claim
+  full clangd/libclang cross-TU flow until implemented and tested.
+- Stage 2 LLM graph owns doc boxes and semantic edges over existing product
+  endpoints. It uses configured Ollama/OpenAI-compatible calls, not BoxMatrix
+  skills. BoxMatrix only provides the schema inspiration: `inputs`, `outputs`,
+  `constraints`, and explicit relationships.
+
+The immediate implementation plan is
+`docs/superpowers/plans/2026-05-19-product-graph-v2-implementation.md`.
+
 ## Brainstorming Method
 
 We installed the `grill-me` skill and will use it to stress-test decisions one question at a time. Each question should include a recommended answer, then wait for confirmation before moving deeper.

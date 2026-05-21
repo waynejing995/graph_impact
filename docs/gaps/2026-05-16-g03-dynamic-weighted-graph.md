@@ -1,12 +1,41 @@
 # G03 Dynamic Weighted Graph
 
-Status: Blocking; current graph paths are live-data backed and now have a two-stage storage contract, but final full-corpus/browser QA is still open
+Status: Partial; current graph paths are live-data backed and now have a two-stage storage contract, resolver-profile-scoped function/register projection, YAML-driven function concept aliases, API/Web view switching, and the first register-header inventory filter. The 2026-05-19 integration contract now supersedes older five-kind product-node wording. The active closure slice is no-mock semantic-edge Web e2e plus final clean-corpus review; full typed AST/clangd type-flow, fresh expanded-header re-index proof, and LLM semantic-edge hardening remain open.
 
 ## Requirement
 
 ASIP must provide weighted relationship graph output. The user explicitly wants a global graph comparable to an Obsidian wiki relation graph, with connection weight reflected in the rendering.
 
+The current source-of-truth integration plan is
+[`docs/specs/2026-05-19-asip-graph-integration-plan.md`](../specs/2026-05-19-asip-graph-integration-plan.md).
+It was written after three subagent audits and external reference checks. When
+this gap document and older specs disagree, the 2026-05-19 integration plan
+wins for the next implementation slice.
+
+2026-05-19 subagent-audit consolidation: the graph completion path is now
+defined as `raw fact graph -> product graph projection -> Web/API view graph`.
+The raw fact graph may contain resolver wrappers, fields, callback slots,
+source paths, provider/job ids, and original relation strings for audit. The
+default product graph may not expose those as nodes. The view graph may choose
+loaded budget, visible budget, weight threshold, relation/stage/source filters,
+label density, and global/full mode, but it may not redefine product semantics.
+The executable TDD plan is
+[`docs/superpowers/plans/2026-05-19-product-graph-v2-implementation.md`](../superpowers/plans/2026-05-19-product-graph-v2-implementation.md).
+
 SQLite is the persistent graph store. NetworkX is the in-memory graph runtime for traversal, subgraph extraction, and metrics.
+
+2026-05-19 concept-view review: the default function concept view is real
+resolver/YAML projection, not a static front-end label swap. A bug in the first
+slice left call/callback edges without explicit resolver profile metadata as
+raw function nodes; the same raw function could therefore appear both inside a
+concept node and as a separate implementation node. The fix added
+resolver-profile `aliases`, canonical concept labels, corpus/repo alias
+inference, and AMD C/C++ function-normalization rules across the committed
+resolver YAMLs. Live `data/asip.db` after the fix reports `11731` concept-view
+nodes versus `14640` implementation-view nodes, `1516` concept functions,
+`1294` merged concept functions, zero concept labels that differ from their
+canonical name, and zero raw function names present in both concept and raw
+nodes.
 
 Scope note: the original MVP-1 design deferred a full interactive graph canvas until the evidence workbench stabilized. The later active user request supersedes that deferral for this branch: a global weighted graph is now required for completion, while query/inspector views can still use bounded subgraphs.
 
@@ -30,15 +59,48 @@ The first useful ASIP graph should therefore connect functions, registers, docum
 
 Clarified hard boundary from 2026-05-17 user review: graph construction has at least two distinct stages, and completion must prove both separately.
 
-Stage 1 is the deterministic code graph. For C/C++/kernel/MxGPU sources, this must be built from a code-aware pipeline such as clang/libclang/AST plus preprocessing or compile-command style macro expansion, not from regex-only resolver scans. This stage owns function and register nodes plus deterministic operation edges such as `reads`, `writes`, `sets_field`, `read_modify_writes`, and `maps_base`. YAML resolver profiles seed wrapper/macro interpretation, but wrapper names such as `WREG32`, `REG_SET_FIELD`, `SOC15_REG_OFFSET`, and `gpu_register` are resolver operations/provenance, not graph entity nodes.
+Stage 1 is the deterministic code graph. For C/C++/kernel/MxGPU sources, this must be built from a code-aware pipeline such as clang/libclang/AST plus preprocessing or compile-command style macro expansion, not from regex-only resolver scans. This stage owns function and register nodes plus deterministic operation edges such as `reads`, `writes`, `sets_field`, and `maps_base`. Raw read-modify-write facts must normalize into those product enums rather than adding a drifting `read_modify_writes` relation. YAML resolver profiles seed wrapper/macro interpretation, but wrapper names such as `WREG32`, `REG_SET_FIELD`, `SOC15_REG_OFFSET`, and `gpu_register` are resolver operations/provenance, not graph entity nodes.
 
 Stage 1 also needs enough C call-graph structure to avoid a global graph made of disconnected register-operation islands. At minimum, source indexing must connect direct helper calls and AMD-style ops/vtable callback slots such as `.hw_init = gfx_v11_0_hw_init` with common dispatchers such as `funcs->hw_init(...)`. The callback slot/table names remain provenance only; visible graph nodes remain functions, registers, and document entities.
 
 Stage 2 is LLM semantic-edge generation. It runs after Stage 1 and after document/PDF Markdown section extraction. It proposes additional semantic edges between already indexed code/doc/register concepts, records provider/model/provenance/job status, and must be distinguishable from deterministic edges in storage and QA. The LLM is not allowed to substitute for deterministic function/register extraction.
 
+2026-05-19 natural language graph-query follow-up: the query
+`who will write/read CP_HQD_* regs` now exercises the Stage 1 graph rather than
+only returning register-header mentions. `query_evidence()` derives answer rows
+from matching `reads`/`writes` graph edges and includes `target_symbol`, so the
+Web table can render rows such as
+`gfx_deactivate_hqd -> CP_HQD_ACTIVE code reads`. `/graph?q=...` now executes
+the URL query on load and prevents stale global-graph responses from
+overwriting the query graph. Current `data/asip.db` evidence for that query:
+`24` matches, `164` graph nodes, `552` graph edges, with relation counts
+`writes=275`, `reads=81`, `sets_field=42`, `maps_base=29`, and `calls=125`.
+Fresh tests are recorded in
+`../qa/2026-05-19-product-graph-schema-dbpath-e2e.md`.
+
 ## Graph Entity Contract
 
-The default graph is intentionally a compact BoxMatrix-style entity graph. Allowed node kinds are:
+2026-05-19 update: the default product graph now has exactly three conceptual
+node kinds:
+
+- `function`
+- `register`
+- `doc`
+
+Legacy document subtypes remain supported as document attributes:
+
+- `doc.attr.doc_kind = "markdown_section"`
+- `doc.attr.doc_kind = "pdf_section"`
+- `doc.attr.doc_kind = "boxmatrix_box"`
+
+Older references in this file to `doc_section`, `pdf_section`, or `doc_box` as
+top-level product node kinds are historical implementation details. They must
+be projected to `kind: "doc"` in default product graph output before this gap
+can close.
+
+Historical wording before the 2026-05-19 contract: the default graph was
+described as a compact BoxMatrix-style entity graph with these allowed node
+kinds:
 
 - `function`
 - `register`
@@ -46,23 +108,28 @@ The default graph is intentionally a compact BoxMatrix-style entity graph. Allow
 - `pdf_section`
 - `doc_box`
 
+Any evidence rows or historical QA summaries that still report these document
+subtypes are raw/debug shape. Default product output must project them to
+`kind=doc` and preserve the subtype in `attr.doc_kind`.
+
 Disallowed graph node kinds include resolver wrapper macros, intermediate macro-expansion helpers, field-only symbols, raw source file path nodes, temporary variables, and provider/model/config names. Those details remain available through edge provenance and node attributes.
 
-Every graph node payload should have this shape:
+Every product graph node payload should have this shape:
 
 ```json
 {
   "id": "stable canonical entity id",
-  "kind": "function|register|doc_section|pdf_section|doc_box",
+  "kind": "function|register|doc",
   "label": "human readable label",
   "in": ["incoming semantic or operation summaries"],
   "out": ["outgoing semantic or operation summaries"],
   "attr": {
     "source": [{"corpus_id": "mxgpu", "repo": "https://github.com/amd/MxGPU-Virtualization", "path": "relative/source/path", "line_start": 1, "line_end": 1}],
+    "doc_kind": "markdown_section|pdf_section|boxmatrix_box",
     "fields": ["field names touched by this register or operation"],
     "resolver_wrappers": ["provenance-only wrapper names"],
     "ip": "GC",
-    "ip_version": "11.0",
+    "ip_versions": ["11.0"],
     "asic": "navi3x",
     "summary": "doc box or section summary"
   }
@@ -89,23 +156,135 @@ Required `attr` fields for all nodes:
 Additional required `attr` fields by kind:
 
 - `function`: `function_name`, `language`, and `source`.
-- `register`: `symbol`, `ip`, `ip_version`, and `source`. `ip_version` may be `unknown` only when extraction cannot prove it.
-- `doc_section`/`pdf_section`: `source`, `section_id` or `anchor`, and `title`/`label`.
-- `doc_box`: `source`, `box_id`, `summary`, `inputs`, `outputs`, and `constraints`.
+- `register`: `symbol`, `ip`, `ip_versions`, and `source`. Per-source
+  `ip_version` may be `unknown` only when extraction cannot prove it.
+- `doc`: `doc_kind`, `source`, and either `title`, `summary`, or `label`.
+  Markdown/PDF sections preserve `section_id`, `anchor`, `page`, and heading
+  metadata when known; BoxMatrix boxes preserve `box_id`, `inputs`, `outputs`,
+  and `constraints`.
 
 Node merge rules:
 
 - Nodes merge only when their canonical merge key is identical.
-- `function` merge key: `function:<repo_or_corpus>:<normalized_path>:<function_name>`. Same function name in two files or two repos is not merged.
-- `register` merge key: `register:<ip>:<ip_version>:<symbol>`. The same register symbol from two repos can merge if IP and IP version match. Different IP versions must not merge, even when the symbol is identical.
-- `doc_section`/`pdf_section` merge key: `doc_section:<repo_or_corpus>:<path>:<anchor_or_page>`.
-- `doc_box` merge key: `doc_box:<repo_or_corpus>:<path>:<box_id>`.
+- `function` merge key by default: `function:<repo_or_corpus>:<normalized_path>:<function_name>`. Same function name in two files or two repos is not merged unless a resolver profile enables an explicit function normalization rule.
+- `function` optional concept merge key: `function:<repo_or_corpus>:concept:<resolver_profile_id>:<rule_id>:<canonical_function_name>`. `rule_id` is profile-local, so duplicate rule names in different resolver profiles do not merge accidentally. This is only allowed when the resolver profile preserves `attr.raw_implementations` and edge-level source/access provenance.
+- `register` merge key: `register:<ip>:<symbol>`. The same register symbol from two repos can merge if IP matches. Different IP versions of the same IP block and symbol merge as a conceptual register bridge with `attr.ip_versions` and `source[].ip_version`; different IP blocks must not merge.
+- `doc` merge key: `doc:<repo_or_corpus>:<path>:<doc_kind>:<anchor_or_page_or_box_id>`.
 - When nodes merge, attributes are unioned rather than overwritten: `source`, `fields`, `resolver_wrappers`, `inputs`, `outputs`, and `constraints` are de-duplicated lists; scalar conflicts are kept in `attr.conflicts` unless one side is empty or `unknown`.
-- Field operations are folded upward during merge: if two source edges mention `ENABLE_L2_CACHE` on `GCVM_L2_CNTL`, the merged register node keeps one `fields` entry and the merged function node keeps an `out` entry linking the operation to `register:GC:<ip_version>:GCVM_L2_CNTL`.
+- Field operations are folded upward during merge: if two source edges mention `ENABLE_L2_CACHE` on `GCVM_L2_CNTL`, the merged register node keeps one `fields` entry and the merged function node keeps an `out` entry linking the operation to `register:GC:GCVM_L2_CNTL`.
+
+## Resolver-Configured Normalization And Graph Profiles
+
+The graph has two views. The raw fact graph remains lossless in SQLite: raw
+function names, paths, resolver wrapper names, access kinds, callback/type-flow
+facts, provider/model/job ids, and line-level source provenance stay in
+`edges.provenance_json`. The default product graph is a resolver-configured
+projection over allowed entity nodes.
+
+This follows the same shape as Code Property Graph practice: keep source facts
+as an attributed graph and add derived overlays rather than rewriting away the
+raw evidence. External references used for this design:
+
+- Joern/CPG documentation: <https://docs.joern.io/code-property-graph/> and
+  <https://cpg.joern.io/>
+- Yamaguchi et al. Code Property Graph paper:
+  <https://fabianyamaguchi.com/files/2014-ieeesp.pdf>
+- CodeQL data-flow documentation on local/global precision tradeoffs:
+  <https://codeql.github.com/docs/writing-codeql-queries/about-data-flow-analysis/>
+- Semantic clone-detection survey warning against pure name-based semantic
+  merging: <https://arxiv.org/abs/2109.12079>
+
+Function normalization must be explicit and conservative. A resolver profile may
+turn versioned AMD implementation names such as `gfxhub_v11_5_0_gart_enable`
+and `gfxhub_v12_0_gart_enable` into a concept node such as
+`gfxhub_gart_enable`, but only with a tested rule and preserved raw
+implementation metadata:
+
+```yaml
+graph:
+  function_normalization:
+    enabled: true
+    rules:
+      - id: amd-ip-versioned-functions
+        enabled: true
+        match: "^(?P<ip_block>gfxhub|mmhub|gfx|sdma|gmc|nbio|df|ih)_v(?P<ip_version>\\d+_\\d+(?:_\\d+)?)_(?P<operation>.+)$"
+        canonical: "{ip_block}_{operation}"
+        merge_policy:
+          mode: concept_with_implementations
+          warn_register_overlap_below: 0.35
+          split_register_overlap_below: 0.10
+          split_when:
+            different_ip_block: true
+            different_language: true
+            conflicting_relation_family: true
+          preserve:
+            raw_implementations: true
+            source: true
+            signature: true
+            extractor: true
+
+  register_normalization:
+    identity: "register:{ip}:{symbol}"
+    merge_across_repos_when_ip_and_symbol_match: true
+    merge_across_ip_versions: true
+    merge_across_ip_blocks: false
+    preserve:
+      ip_version_attr: true
+      ip_versions_attr: true
+      source_ip_version: true
+```
+
+If normalized functions touch different registers, the graph must not drop or
+average away the difference. The default concept node keeps the union of product
+edges, sets `attr.merge_status = "divergent"` when the configured overlap guard
+falls below the warning threshold, and attaches the exact raw implementations
+to each edge in `edge.attr.implementations`. If the overlap falls below the
+split threshold or a rule marks the relation as non-mergeable, the projection
+must split the concept into deterministic variants rather than pretending they
+are one behavior.
+
+Access normalization is separate from node normalization. `read`, `write`,
+`field_set`, `field_read`, `field_mask`, `field_shift`, `field_value`, and
+`address` can normalize to product relation enums such as `reads`, `writes`,
+`sets_field`, and `maps_base`, but the original access kind must remain on each
+edge provenance. If one function touches the same register through both read and
+write paths, the raw graph/inspector must keep distinct access records; the
+default graph may visually aggregate only when it exposes `attr.accesses` and
+raw edge expansion.
+
+The default global profile may hide raw implementations, wrappers, field-only
+nodes, and low-value provenance edges, but it must protect representative
+shared-register and callback-backbone edges so linux-amdgpu and MxGPU remain
+visibly connected. The inspector profile must expose raw implementations, raw
+edges, access records, source provenance, callback/type-flow provenance, and
+IP/version evidence.
+
+Implementation and TDD handoff are recorded in
+`docs/specs/2026-05-18-product-graph-normalization.md` and
+`docs/superpowers/plans/2026-05-18-product-graph-normalization.md`.
+
+Implementation update on 2026-05-18:
+
+- `linux-amdgpu` resolver YAML now owns the first AMD versioned-function
+  normalization rule.
+- The default product graph projects matching raw functions into concept nodes,
+  preserves `attr.raw_function_names` and `attr.raw_implementations`, and keeps
+  raw inspection available through `function_view=implementation`.
+- Query subgraphs and global graphs both use the same projection path.
+- CLI, Next BFF, FastAPI, MCP, and Web graph controls expose the function view
+  switch so the feature is reachable outside core unit tests.
+- Verified in `docs/qa/2026-05-18-g03-function-normalization-design-qa.md`.
 
 ## Edge Enum Contract
 
 Edges must also be normalized before product graph output. Free-form provider text or resolver access names are not allowed to leak into product relation names.
+
+2026-05-19 update: edge enum validation must become a first-class schema
+validator, not only a helper function inside graph projection. Default product
+payloads must reject or normalize every edge relation before Web/API/MCP output.
+Wrapper edges such as `wraps`, field-only facts such as `has_field`, and
+source/file relations such as `defined_in` are provenance-only and cannot enter
+the product relation enum.
 
 Allowed `edge.relation` enum:
 
@@ -179,7 +358,7 @@ The default product graph must not treat evidence/query-term edges as Stage 1. E
 - 2026-05-17 mega-node correction: resolver wrapper/extractor names are filtered from deterministic, evidence-derived, semantic, and traversal graph endpoints. `WREG32`, `REG_SET_FIELD`, `SOC15_REG_OFFSET`, `amdgv_wreg32`, and Python extractor names remain in resolver config/provenance/resolved chains, but do not become graph nodes.
 - 2026-05-17 wrapper hardening correction: resolver operator names are also rejected as selected graph seeds, filtered out of query `expected_terms`, and hidden from stale wrapper-symbol evidence rows, so legacy or fixture data cannot reintroduce `REG_SET_FIELD`/`WREG32` style mega-nodes through query or `/graph?seed=...` paths.
 - 2026-05-17 storage-boundary correction: resolver operator detection now reads committed `configs/resolvers/*.yaml` wrappers and Python extractors, including `AMDGV_WRITE_REG`/`AMDGV_READ_REG`/`AMDGV_WAIT_REG`. `AsipStore.add_edge()` rejects wrapper endpoints, legacy `expand_graph()` omits dirty wrapper endpoints, and artifact import only counts persisted graph-entity edges.
-- 2026-05-17 semantic doc-section correction: Stage 2 semantic edges can promote document section endpoints such as `docs/guide.md#programming-local-registers` into the default global graph with `kind=doc_section`, rather than falling back to generic `code` nodes.
+- 2026-05-17 semantic doc-section correction: Stage 2 semantic edges can promote document section endpoints such as `docs/guide.md#programming-local-registers` into the graph rather than falling back to generic `code` nodes. That historical evidence used raw `kind=doc_section`; the 2026-05-19 product projection must expose it as `kind=doc` with `attr.doc_kind=markdown_section`.
 - 2026-05-17 BoxMatrix-style doc-node correction: the graph can now call the configured LLM provider to extract document boxes from indexed doc/PDF chunks. The prompt references the BoxMatrix box/matrix abstraction, explicitly says not to use a skill, and persists `doc_box` nodes plus `contains_box`/semantic relationship edges with provider/model/job provenance. CLI `doc-nodes-batch`, Web API `mode: "doc-nodes"`, and `/graph` `Extract document nodes` expose this as a product feature.
 - 2026-05-17 macro-expansion correction: Stage 1 now reads nearby/root `compile_commands.json` entries, sanitizes include/define arguments, and uses clang preprocessing to resolve project-local wrapper macros while preserving original source line evidence. The current proof covers project macro wrappers expanding to configured AMD wrappers; broader kernel compile database coverage still needs real-tree QA.
 - 2026-05-17 callback/callgraph correction: Stage 1 now extracts conservative direct `function -> function` call edges, captures C struct ops/vtable initializer slots such as `.hw_init = gfx_v11_0_hw_init`, records slot-call sites such as `funcs->hw_init(...)`, and joins slot matches across all code files in a corpus before persisting deterministic `calls` edges. Tests cover `gfx_v11_0_hw_init -> program_gcvm_l2 -> GCVM_L2_CNTL` and cross-file `amdgpu_device_init -> gfx_v11_0_hw_init -> GCVM_L2_CNTL`, with callback callee path and function definition line preserved. Specific table calls such as `gfx_v11_0_ip_funcs.hw_init(...)` remain constrained to the matching table, while generic `funcs/ops/callbacks` receivers now emit lower-confidence `vtable_dispatch` provenance edges to all known callbacks for that slot so common dispatch logic can connect to callback functions and then to register operations without exposing slot/table names as graph nodes.
@@ -198,8 +377,8 @@ The default product graph must not treat evidence/query-term edges as Stage 1. E
 - 2026-05-18 macro-wrapped callback initializer correction: RED/GREEN tests now prove `.hw_init = ASIP_CB(gfx_v11_0_hw_init)` resolves through clang AST JSON to the real callback function, including the cross-file case where the callback is found through the corpus-level unique function-location index. The persisted edge records `callback_initializer_flow=clang_ast_json`, and macro names and slot names still stay out of graph nodes. Rebuilding live `data/asip.db` for `linux-amdgpu` + `mxgpu` produced `41,929` deterministic graph-rebuild edges from `1,225` files, `41,942` total edge rows, `6,133` `clang_callback` rows, `2,248` `type_flow=clang_ast_json` callback rows, and `6` `callback_initializer_flow=clang_ast_json` rows. This closes one common macro-expansion callback hole, but remains a bounded AST JSON seam rather than full clangd/libclang indexing.
 - 2026-05-18 return-table alias correction: RED/GREEN tests now prove a bounded source return-flow such as `select_gfx_funcs() { return &gfx_v11_0_ip_funcs; }` followed by `funcs = select_gfx_funcs(); funcs->hw_init(...)` resolves to the exact returned callback table instead of every same-type `.hw_init` table. Persisted SQLite graph QA proves the same across files and records `call_kind=vtable_table_alias`, `receiver_tables=["gfx_v11_0_ip_funcs"]`, and `type_flow=source_return_table_alias`. A later ambiguity regression proves duplicate selector names such as two `select_funcs()` definitions returning different tables are skipped rather than overlinked. Evidence is recorded in `docs/qa/2026-05-18-g03-return-table-alias-qa.md` and `docs/qa/2026-05-18-g15-empty-db-raw-corpus-reindex.md`. This narrows another same-slot overlink case, but remains a bounded source fact rather than full clangd/libclang cross-TU type-flow.
 - 2026-05-18 local receiver alias correction: RED/GREEN tests now prove two real AMD source shapes are narrowed before callback dispatch falls back to receiver type: `const struct amdgpu_userq_funcs *uq_funcs = adev->userq_funcs[queue->queue_type]; uq_funcs->map(...)` resolves through `type_flow=source_receiver_table_alias` when the indexed receiver maps to one known table, and `struct amd_ip_block *ip_block = &adev->ip_blocks[i]; ip_block->version->funcs->hw_init(...)` resolves through `type_flow=local_receiver_path_alias` when the local path maps to one known registered table. A leakage regression proves function-local `funcs = &table` aliases do not escape into other functions. Follow-up ambiguity regressions prove dynamic indexed receivers with multiple known slots keep all table candidates, emit lower-confidence `vtable_dispatch`, and record `source_receiver_table_alias_ambiguous` or `local_receiver_path_alias_ambiguous` instead of pretending to be exact `vtable_table_alias`; this remains true even if only one candidate table implements the called slot. Persisted SQLite indexing proves both the exact and ambiguous paths across files. Evidence is recorded in `docs/qa/2026-05-18-g03-local-receiver-alias-type-flow-qa.md`. This narrows two same-type overlink cases while avoiding false precision, but remains bounded source-level aliasing rather than full clangd/libclang points-to analysis.
-- 2026-05-18 cross-repo register identity correction: raw deterministic edges already proved `linux-amdgpu` and `mxgpu` touch shared canonical register names such as `IH_RB_CNTL`, but product graph register IDs still included source scope when `ip_version=unknown`, splitting `register:IH:unknown:linux-amdgpu:IH_RB_CNTL` from `register:IH:unknown:mxgpu:IH_RB_CNTL`. Register node identity is now `register:{ip}:{ip_version}:{symbol}` and source records merge into `attr.source`, so unknown-version shared registers connect the two repos while known different IP versions such as `GC:11.0` and `GC:12.0` stay separate. The Web force graph now also exposes `shared registers 149` and double-rings shared register nodes so these bridges are visible in the dense global layout. Core, live DB, and Web BFF QA are recorded in `docs/qa/2026-05-18-g03-cross-repo-register-merge-qa.md`.
-- 2026-05-18 default-budget bridge correction: the default global edge selector now protects representative cross-repo register bridge edges before filling the remaining budget with call and operation backbone edges. This prevents high-confidence isolated operation islands from hiding the shared-register bridge class at normal UI budgets. Live `data/asip.db` and Web BFF QA prove `limit=3000` returns `2813` nodes, `3000` edges, `150` shared linux-amdgpu/mxgpu register nodes, and both linux-amdgpu and mxgpu edges into the merged `register:IH:unknown:IH_RB_CNTL` node.
+- 2026-05-18 cross-repo register identity correction: raw deterministic edges already proved `linux-amdgpu` and `mxgpu` touch shared canonical register names such as `IH_RB_CNTL`, but product graph register IDs still included source scope when `ip_version=unknown`, splitting old IDs such as `register:IH:unknown:linux-amdgpu:IH_RB_CNTL` from `register:IH:unknown:mxgpu:IH_RB_CNTL`. Register node identity was first unified across sources and then refined to `register:{ip}:{symbol}` so `ip_version` is an aggregated attr/provenance field, not a split dimension. A reused register such as `GCVM_L2_CNTL` now bridges `GC` across versions through `attr.ip_versions`, while a different IP block still remains a different node. The Web force graph exposes `shared registers 149`, double-rings shared register nodes, and uses a dense layout profile for large graphs. Core, live DB, Web BFF, browser, and performance QA are recorded in `docs/qa/2026-05-18-g03-cross-repo-register-merge-qa.md` and `docs/qa/2026-05-18-g03-register-ip-version-merge-and-profile-qa.md`.
+- 2026-05-18 default-budget bridge correction: the default global edge selector now protects representative cross-repo register bridge edges before filling the remaining budget with call and operation backbone edges. This prevents high-confidence isolated operation islands from hiding the shared-register bridge class at normal UI budgets. Live `data/asip.db` and Web BFF QA after the ip-version merge prove `limit=3000` returns `2687` nodes, `3000` edges, `149` shared linux-amdgpu/mxgpu register nodes, and both linux-amdgpu and mxgpu edges into merged register nodes such as `register:IH:IH_RB_CNTL`.
 - 2026-05-18 query-scoped graph performance correction: `graph_for_rows()` now expands all query seeds with one `expand_graph_networkx_many()` call, and empty multi-seed results no longer rebuild through `expand_query_graph()`. The storage no-edge path now returns real seed nodes through `_multi_seed_graph()`, which fixed user-supplied DB and semantic-edge e2e failures. `_snippet_has_callable_symbol()` now uses a direct C-identifier-aware scan instead of regex compilation in the function metadata hot path. Six real dirty-DB ASIP queries returned rows and query graphs in `4.161s`, `3.845s`, `0.878s`, `2.135s`, `2.093s`, and `2.084s`; AQ01 Web acceptance completed in `26.3s`. Evidence is recorded in `docs/qa/2026-05-18-query-graph-performance-qa.md`.
 - 2026-05-18 clean-final graph closure: `/tmp/asip-clean-amd-gemma4-final-current-2026-05-18.db` was rebuilt from the clean AMD base with current Stage 1 code. It contains `41,880` deterministic graph-rebuild edges from `1,225` files, `25` real `stage=semantic/source=ollama` edges from `gemma4:e4b`, including `14` batch semantic edges and `11` doc-node edges, plus `6` `doc_box` nodes. The all-caps macro false-positive fix removes `IP_VERSION` from raw and product graph endpoints; `IP_VERSION/WREG32/RREG32/REG_SET_FIELD/SOC15_REG_OFFSET/funcs/ops/hw_init` all have raw endpoint count `0`. A 20k product graph sample has `15,154` nodes and `20,000` edges with node kinds `function=13,662`, `register=1,485`, `doc_box=6`, `doc_section=1`, and `semantic=11` visible sampled edges. AQ01-AQ09 acceptance over this DB is `9/9` with DB health pass. Evidence is recorded in `docs/qa/2026-05-18-clean-final-stage2-and-macro-qa.md`.
 - 2026-05-18 real query/function fallback QA is recorded in `docs/qa/2026-05-18-g03-real-query-graph-function-fallback-qa.md` and `.json`. Ten real queries over `/tmp/asip-provider-embed-batch-smoke-20260518-133434.db` exited through the CLI and core path; eight register/doc queries returned 12 rows each plus query graphs ranging from 16 to 164 nodes and 32 to 477 edges, and two exact function-node queries (`gfx_v11_0_hw_init`, `gfxhub_v11_5_0_gart_enable`) returned zero evidence rows but live graph neighborhoods with 36 and 16 edges from persisted Stage 1 graph data. The same QA records a 3,000-edge global graph with 2,805 nodes (`function=2,532`, `register=266`, `doc_box=6`, `doc_section=1`) and in-app browser 2K screenshots for both default global graph and function-node query fallback.
@@ -208,13 +387,13 @@ The default product graph must not treat evidence/query-term edges as Stage 1. E
 - SQLite edges now separate `stage`, `source`, path/line, and provenance. Query-term fixture edges are stored as `stage=evidence`, while LLM jobs store `stage=semantic`, `source=ollama`, and model/job provenance.
 - `packages/core/src/asip/storage.py` uses a NetworkX `MultiDiGraph` for seed expansion so multiple operations between the same function and register, such as read/write/read-modify, are not collapsed.
 - Evidence-derived section/source/co-occurrence overlay is explicit and capped by row count, avoiding accidental full scans of the real AMD DB while preserving small-fixture QA.
-- Current deterministic-code limitation: the Stage 1 extractor is a pragmatic clang command plus source-span/resolver/callback pipeline with compile_commands-driven preprocessing support, receiver type hints, simple local callback table aliases, bounded return-table aliases, same-function field-path aliases, device-field receiver aliases, local receiver-path aliases, receiver-path table-type hints, IP-block `.funcs` table-field aliases, corpus-level IP-block registration aliases, selective Clang AST JSON receiver-type hints, selective Clang AST JSON callback-initializer hints, and conservative C ops/vtable slot matching. It is not full clangd/libclang cursor traversal. Generic receivers such as `funcs->hw_init(...)`, typed `ops->start(...)`, `(*ops->start)(...)`, MxGPU `init_func->hw_init(...)`, userq field loads, and local `ip_block` aliases can emit deterministic callback edges filtered by exact table, local table alias, bounded returned-table alias, full receiver-path alias, receiver-path expected table type, declared table type, Clang AST JSON receiver type, Clang AST JSON macro-wrapped callback initializer, provable IP-block version/function-table alias, or bounded local receiver alias where possible. Register graph nodes merge by canonical symbol, IP, and IP version across source corpora with source kept as node attr; known different IP versions do not merge. When a dynamic receiver path maps to multiple known tables, Stage 1 keeps the candidate set as `vtable_dispatch` with `*_ambiguous` type-flow provenance rather than claiming exact table resolution. Full Linux kernel compile-database/type-flow callback resolution remains open.
+- Current deterministic-code limitation: the Stage 1 extractor is a pragmatic clang command plus source-span/resolver/callback pipeline with compile_commands-driven preprocessing support, receiver type hints, simple local callback table aliases, bounded return-table aliases, same-function field-path aliases, device-field receiver aliases, local receiver-path aliases, receiver-path table-type hints, IP-block `.funcs` table-field aliases, corpus-level IP-block registration aliases, selective Clang AST JSON receiver-type hints, selective Clang AST JSON callback-initializer hints, and conservative C ops/vtable slot matching. It is not full clangd/libclang cursor traversal. Generic receivers such as `funcs->hw_init(...)`, typed `ops->start(...)`, `(*ops->start)(...)`, MxGPU `init_func->hw_init(...)`, userq field loads, and local `ip_block` aliases can emit deterministic callback edges filtered by exact table, local table alias, bounded returned-table alias, full receiver-path alias, receiver-path expected table type, declared table type, Clang AST JSON receiver type, Clang AST JSON macro-wrapped callback initializer, provable IP-block version/function-table alias, or bounded local receiver alias where possible. Register graph nodes merge by canonical symbol and IP across source corpora, while `ip_version` stays in `attr.ip_versions` and per-source provenance; different IP blocks do not merge. When a dynamic receiver path maps to multiple known tables, Stage 1 keeps the candidate set as `vtable_dispatch` with `*_ambiguous` type-flow provenance rather than claiming exact table resolution. Full Linux kernel compile-database/type-flow callback resolution remains open.
 - 2026-05-17 real rebuild QA is recorded in `docs/qa/2026-05-17-two-stage-graph-real-rebuild-qa.md`: mxgpu + linux-amdgpu rebuilt real Stage 1 deterministic edges and a small Stage 2 `gemma4:e4b` semantic overlay. Earlier QA still showed `field`/source-style nodes in the visible graph; the current user correction supersedes that shape. The accepted graph now requires only function/register/doc-section/doc-box nodes with field/macro/source details folded into BoxMatrix-style `in`/`out`/`attr` payloads.
 - 2026-05-17 graph entity schema QA is recorded in `docs/qa/2026-05-17-graph-entity-schema-rebuild-qa.md`: rebuilding `mxgpu` + `linux-amdgpu` produced 10,108 deterministic edges from 1,225 files; the full product graph normalized to 3,078 nodes (`register`: 1,597, `function`: 1,481) and 4,999 enum edges (`writes`, `reads`, `sets_field`, `maps_base`) with zero invalid node kinds, zero invalid edge relations, zero field/wrapper nodes, and 749 `sets_field` edges carrying field attrs. Browser QA at `http://127.0.0.1:3100/graph` rendered the package-backed graph with `Edge: Ollama / gemma4:e4b`, 1,000 visible nodes, 1,792 visible edges, and no field/wrapper kind leakage in the accessibility summary.
 - 2026-05-17 follow-up semantic QA used a real local Ollama `gemma4:e4b` call for `IH_RB_CNTL RB_ENABLE interrupt ring buffer`, persisted six `stage=semantic/source=ollama` rows, and exposed three valid function-to-function semantic product graph edges after filtering temporary/local-variable endpoints such as `ih_ring_entry` and `kfd.dev`.
 - 2026-05-17 RED/GREEN hardening prevents LLM semantic edges from promoting local variables into function nodes and verifies register seed aliases `reg*`, `mm*`, and `smn*` all canonicalize to the same register graph seed before expansion.
 - Verification on 2026-05-17, superseding earlier counts:
-  - `PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=packages/core/src:packages/core/tests:. python3 -m unittest discover -s packages/core/tests -p 'test_*.py' -v`: latest 2026-05-18 run is 236 tests OK, 2 sqlite-vec skips.
+  - `PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=packages/core/src:packages/core/tests:. python3 -m unittest discover -s packages/core/tests -p 'test_*.py' -v`: latest 2026-05-18 run is 239 tests OK, 2 sqlite-vec skips.
   - `PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=packages/core/src:. python3 -m unittest apps.api.tests.test_app apps.mcp.tests.test_tools apps.mcp.tests.test_server -v`: latest 2026-05-18 run is 47 tests OK, 1 optional MCP runtime skip.
   - `pnpm --filter web exec tsc --noEmit`: passed.
   - `pnpm --filter web run lint`: passed.
@@ -233,7 +412,82 @@ The default product graph must not treat evidence/query-term edges as Stage 1. E
 
 The graph API is live-data backed and now supports a no-seed global graph plus explicit query-scoped and batch semantic-edge actions. The storage contract separates Stage 1 deterministic, evidence overlay, and Stage 2 semantic edges, and the current Stage 1 tests prove function/register operation edges, cross-file direct common-helper calls when the callee definition is unique, plus direct helper and ops/vtable callback `calls` edges with fields, wrappers, callback slots, and source paths folded into BoxMatrix-style `in`/`out`/`attr` payloads.
 
-The entity-contract gap is no longer blocking for the current product graph: field, macro/wrapper, callback slot, source-file, and control-keyword pseudo nodes are filtered or folded, edge relations are enum-normalized, and the UI refuses legacy `field/doc/pdf/code` graph-node kinds. Remaining follow-up risk is narrower but still real: the Stage 1 extractor is still pragmatic clang/text-span extraction plus conservative direct-call/callback dispatch expansion rather than full clangd/libclang cursor traversal across every Linux kernel compile-database and callback edge case. Ambiguous duplicate cross-file callees are intentionally skipped instead of over-connected until a typed call graph is available, and Stage 2 larger semantic batches still need local-model JSON robustness testing.
+The next closure pass must still harden the product graph through the V2 plan:
+
+- continue expanding the shared product schema beyond the current node-kind and
+  relation enum gate; the 2026-05-19 continuation centralized acceptance,
+  storage projection, semantic prompts, and workbench semantic-edge persistence
+  on `asip.graph_schema`, and added regression tests for macro evidence not
+  becoming register nodes;
+- keep Stage 1 truthful as source-span/preprocess/selective `clang_ast_json`
+  evidence until a typed extractor with compile-database coverage lands;
+- make AMD register inventory configurable for `reg*`, `mm*`, `smn*`, and
+  offset/mask/default families, including mixed-case examples such as
+  `smnMP1_FIRMWARE_FLAGS`, while rejecting low-signal local tokens;
+- keep semantic prompts and persisted semantic edges pinned to product relation
+  enums. The current continuation removed `checks_mask`, `assigns_doorbell`,
+  and `waits_for` from the edge prompt, normalizes raw LLM relation aliases
+  such as `checks_mask` to `relates_to`, and preserves the raw wording in
+  `original_relation`;
+- preserve cross-repo register bridges through `register:{ip}:{symbol}` while
+  keeping `ip_version` as attr/provenance;
+- prove the default Web graph is a global budgeted graph with explicit full/all
+  mode and visible relation/stage/source/weight filters, not a hidden hardcoded
+  slice.
+
+2026-05-19 subagent review narrows the next required implementation slice:
+
+- add a product graph schema validator proving only `function`, `register`,
+  and `doc` nodes reach default product output;
+- project current `doc_section`/`pdf_section`/`doc_box` payloads into
+  `kind=doc` with `attr.doc_kind`;
+- implement a register-header inventory/filter so `asic_reg` imports do not
+  promote low-signal tokens such as `A`, `tmp`, or `adapt`;
+- add a separate typed AST extractor path or a clearly named typed-extractor
+  adapter layer, while keeping the current `code_graph.py` span/callback
+  pipeline as fallback;
+- record compile database coverage metrics per corpus, including files matched,
+  files parsed by typed AST, and files forced to fallback;
+- make resolver YAML `access_relation_map` and remaining graph-profile controls
+  operational rather than only parsed/documented; function merge thresholds and
+  `register_normalization.identity` are now consumed by product projection;
+- preserve raw implementation and callback/type-flow provenance through
+  inspector expansion;
+- prove Stage 2 semantic-edge jobs reject endpoints that cannot project to
+  `function`, `register`, or `doc`.
+
+The macro/filter and three-kind projection parts of the entity contract are no
+longer blocking for the current product graph: field, macro/wrapper, callback
+slot, source-file, and control-keyword pseudo nodes are filtered or folded;
+`doc_section`/`pdf_section`/`doc_box` project to `kind=doc` with
+`attr.doc_kind`; edge relations are enum-normalized; and the UI refuses legacy
+`field/doc/pdf/code` graph-node kinds. Remaining follow-up risk is narrower but
+still real: the Stage 1 extractor is still pragmatic clang/text-span extraction
+plus conservative direct-call/callback dispatch expansion rather than full
+clangd/libclang cursor traversal across every Linux kernel compile-database and
+callback edge case. Ambiguous duplicate cross-file callees are intentionally
+skipped instead of over-connected until a typed call graph is available, and
+Stage 2 larger semantic batches still need local-model JSON robustness testing.
+
+2026-05-19 schema/browser evidence update: core graph/workbench schema sweep
+ran 155 tests OK with 2 optional sqlite-vec skips; acceptance/API/MCP regression
+ran 14 tests OK; TypeScript and `git diff --check` passed. In-app browser QA at
+`http://localhost:3111/graph` against default `data/asip.db` showed a real
+loaded graph with `graph edges: 3000`, layer counts `deterministic: 2989` and
+`semantic: 11`, visible summary `doc 7`, `function 696`, `register 297`, and no
+runtime exception in the captured console. This is a browser smoke, not the
+final isolated `dbPath` Playwright gate.
+
+2026-05-19 graph filter/provenance correction: the default graph surface now
+derives visible relation, stage, and source filters from returned edges and
+renders them with shadcn/Radix checkboxes. Semantic edge provider/model/job
+metadata is preserved through storage projection into `edge.attr`, and both
+the graph header and relationship preview can expose provenance such as
+`ollama/gemma4:e4b job 42`. A no-mock Playwright fixture proves a temporary
+SQLite graph with `deterministic: 2 semantic: 1` can be filtered from `3` to
+`2` edges by toggling the `documents` relation, and that the visible `Loaded
+edge budget` slider sends a real `limit=1` Graph API request. A core storage
+test separately proves semantic provider provenance survives graph projection.
 
 The final product still needs continued visual QA as graph density grows, but `/graph` and query-scoped graph panels now render indexed ASIP graph output rather than fixed page rows, fixed edge counts, or hardcoded layout assumptions. Default graph selection is still budgeted for browser performance, but it now preserves representative shared-register bridges so separate repo subgraphs do not appear disconnected simply because they lost their bridge edges during selection.
 
@@ -248,6 +502,21 @@ The final product still needs continued visual QA as graph density grows, but `/
 - The default global graph includes Stage 1 function nodes and operation edges that connect code functions to the registers they read, write, or set; resolver macro/wrapper names, expanded macro helpers, and field-only symbols are not entity nodes.
 - Stage 1 deterministic graph build links direct helper calls and ops/vtable callback dispatch into function-to-function `calls` edges, so common dispatch logic can connect to callback functions and then to the registers those callbacks operate on.
 - Graph node payloads expose BoxMatrix-style `in`, `out`, and `attr` fields, with register fields, wrapper names, source path/line, and doc summaries carried as attributes/provenance.
+- Default product graph output exposes only `function`, `register`, and `doc`
+  node kinds; document section/PDF/box distinctions live in `doc.attr.doc_kind`.
+- Product graph schema validation rejects wrapper, field, source, provider, and
+  callback-slot endpoints before API/Web/MCP output.
+- Register-header imports use a dedicated inventory/filter path and do not
+  index arbitrary uppercase or local-variable tokens as graphable symbols.
+- Typed AST extraction, when enabled, records `libclang_cursor`,
+  `clangd_index`, `scip_index`, `clang_ast_json`, `clang_preprocess`, or
+  `text_fallback` provenance truthfully.
+- Resolver-configured function normalization can collapse AMD IP-versioned implementation functions into a concept node only when raw implementations, source records, access kinds, and edge provenance remain expandable.
+- Register product identity is `register:{ip}:{symbol}`; `ip_version` is preserved as `attr.ip_versions` and per-source provenance, not as a product-node identity split.
+- A single logical corpus can include multiple allowed subfolders, including
+  code and register-header roots; graph closure must preserve subfolder source
+  metadata, reject unsafe path filters, and index register headers through the
+  dedicated inventory path rather than generic token extraction.
 - Converted Markdown/PDF document sections become graph nodes with source/page/heading provenance, and section-to-symbol/semantic edges are visible in graph output.
 - Stage 2 batch LLM semantic-edge generation can process indexed corpus candidates, persist separately identifiable semantic edges, and refresh graph output without requiring a single selected query seed.
 - The UI exposes graph size and minimum edge-weight controls instead of silently truncating nodes/edges in the component.
@@ -272,17 +541,80 @@ The final product still needs continued visual QA as graph density grows, but `/
 - Core RED/GREEN test: CLI global graph output uses a configured budget by default and only returns the full graph when the user passes an explicit full-graph flag.
 - Core RED/GREEN test: Stage 1 extractor expands or resolves configured wrapper/macro calls through an AST/preprocessor-aware path, and records whether the edge came from `clang_text_spans`, `clang_preprocess`, or `text_fallback` instead of silently pretending evidence/query-term output is an AST graph.
 - Core RED/GREEN test: Stage 1 extractor uses `compile_commands.json` include/define arguments to expand project-local macros into configured AMD wrapper calls, while reporting the original source line for the resolved register/field edge.
+- Core/API/Web RED/GREEN test: one corpus registered with multiple subfolders
+  preserves per-subfolder source type, resolver profile, and file counts;
+  unsafe `../` path filters are rejected; `register_header` subfolders use the
+  register inventory/filter instead of generic evidence-token promotion.
 - Core RED/GREEN test: graph traversal preserves multiple operation edges between the same function and register.
+- Core RED/GREEN test: resolver-configured function normalization merges `gfxhub_v11_5_0_gart_enable` and `gfxhub_v12_0_gart_enable` into a concept function node with `attr.raw_implementations`, while raw SQLite edge provenance still records the original function names and paths.
+- Core RED/GREEN test: normalized function variants that touch different registers preserve all product edges, attach `edge.attr.implementations`, and mark the concept `merge_status` as `divergent` or split according to the configured overlap thresholds.
+- Core RED/GREEN test: implementation/debug view can still return raw function implementation nodes for inspector expansion.
 - Core RED/GREEN test: evidence/query-term edges are stored as `stage=evidence` and are excluded from the default Stage 1/Stage 2 graph unless evidence overlay is explicitly requested.
 - Core test: converted Markdown/PDF sections produce section nodes with page/heading/source provenance and section-to-symbol edges.
 - Core/API/Web RED/GREEN test: LLM doc-node extraction uses the configured provider call, not a skill, and persists BoxMatrix-style `doc_box` nodes plus semantic relationships.
 - Core/API RED/GREEN test: Stage 2 batch semantic-edge generation reads indexed Stage 1/document candidates, calls the configured provider, persists generated edges with provider/model/job provenance, and does not overwrite deterministic Stage 1 edges.
 - Web API test: selected seed returns weighted nodes/edges from SQLite.
-- Web API test: no-seed global graph includes more than persisted-edge seed rows and exposes only allowed node kinds (`function`, `register`, `doc_section`, `pdf_section`, `doc_box`) while preserving field/macro/source details in `attr`.
+- Web API test: no-seed global graph includes more than persisted-edge seed rows and exposes only allowed product node kinds (`function`, `register`, `doc`) while preserving document subtype, field, macro, and source details in `attr`.
 - Web E2E test: `/graph` requests global graph without a default seed.
 - Web E2E/browser test: package-backed graph canvas/SVG is nonblank, interactive enough to pan/zoom or drag, and renders more than a tiny seed cluster when API returns a global graph.
 - Web E2E test: `/graph` does not silently slice API graph nodes/edges; graph size and weight filtering are controlled by visible shadcn/Radix UI controls.
+- Web E2E test: relation, stage, and source graph filters are derived from
+  real API graph edges, and semantic edge provenance is visible from a no-mock
+  SQLite DB fixture.
 - E2E test: query changes graph labels and edge weights. Implemented for query-scoped API graph labels plus live inspector linkage; final clean-corpus graph QA remains open.
+- Core/Web RED/GREEN test: natural-language register wildcard queries such as
+  `who will write/read CP_HQD_* regs` preserve the `CP_HQD_` symbol prefix,
+  ignore generic `regs` noise, and expand to persisted `reads`/`writes`
+  function-to-register graph edges rather than unrelated `...REGS...` rows.
+- 2026-05-20 Stage 1 parser hardening: red/green tests now prevent direct
+  calls, slot calls, callback initializers, whole disabled functions, and
+  global receiver aliases inside comments/strings or disabled preprocessor
+  branches from creating product graph edges. The parser suite now covers
+  `#if 0`, `#if (0)`, `#ifdef` / `#ifndef` for undefined config symbols,
+  `defined(CONFIG_*)`, `IS_ENABLED(CONFIG_*)`, simple `!` / `&&` / `||`
+  preprocessor expressions, compile-argument-defined `CONFIG_*` branches,
+  active `#else`, disabled `#else`, inactive `#elif` after a taken branch,
+  compile-command preprocessed string literals, and generic local non-callback
+  receivers such as `struct holder *ops; ops->start()` and nested
+  non-callback receivers such as `holder->ops->start()`. Fresh verification
+  after the nested receiver, provider coverage, live embedding smoke, stale
+  semantic provenance, config branch, fast provider-gate, address-of callback
+  initializer, direct indexed MxGPU receiver, and `_ip_block_version`
+  registration follow-ups: parser coverage is in `test_code_graph.py`, and new
+  workbench live tests prove the same three callback/registration paths through
+  `index_registered_corpora -> SQLite edges -> global_graph`. Combined
+  `test_code_graph` +
+  `test_acceptance_runner` + `test_graph_schema` `76 OK`;
+  `test_code_graph.py` under pytest `49 passed`; full `test_workbench_live`
+  `76 OK` with `1` real-Ollama skip after adding persisted-edge coverage for
+  those three paths. The live provider gate artifact remains
+  `blocked` by the current Ollama `Operation not permitted` environment
+  restriction.
+- 2026-05-20 two-phase graph follow-up: the workbench cross-file callback join
+  now uses the same callback-ish generic receiver guard as `code_graph.py`.
+  A live-index RED test reproduced `struct holder *ops; ops->start()` linking
+  to unrelated `amdgpu_ring_funcs.start`; GREEN verification keeps that false
+  edge absent while preserving declared `struct amdgpu_ring_funcs *ops`
+  dispatch and existing cross-file vtable callback links.
+- 2026-05-20 nested receiver callback follow-up: a subagent audit found that
+  `holder->ops->start()` could still fan out to unrelated callbacks because the
+  generic guard treated any receiver containing `->` or `.` as callback-like.
+  Stage 1 and the workbench two-phase join now require concrete table, expected
+  table type, declared receiver type, or known init receiver evidence before
+  generic dispatch. RED/GREEN tests cover both in-memory parser output and
+  persisted SQLite indexing.
+- 2026-05-20 Stage 2 semantic-edge endpoint follow-up: typed function evidence
+  now survives query and batch semantic-edge allowlists, so lowercase C
+  functions such as `program_cache` can be persisted as semantic edge
+  endpoints when evidence says `entity_type=function`. Persisted semantic
+  edges now record prompt `case_id` plus source refs for the indexed evidence
+  used to ground the edge. A follow-up correction routes Stage 2 endpoint
+  acceptance through the shared product graph schema, so local callback or
+  provenance tokens such as `init_func`, `init_funcs`, `ops`, `callbacks`,
+  `tmp_value`, and `GC` are rejected even if evidence/provider output labels
+  them as `function` or `register`. Targeted tests preserve real MxGPU
+  `init_func->hw_init` Stage 1 callback dispatch while keeping those variable
+  names out of Stage 2 product semantic endpoints.
 - Visual QA: `/graph` compared with its individual 2K anchor after functional changes.
 
 ## Not Closed Until

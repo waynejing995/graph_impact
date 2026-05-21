@@ -1,0 +1,88 @@
+{
+  "source": "asip.web.browser_e2e",
+  "generated_at": "2026-05-21T01:21:06.510Z",
+  "base_url": "http://127.0.0.1:3112",
+  "db_path": "/Volumes/data/User/wayne/Code/graph_impact/data/asip.db",
+  "latest_index_job_id": "10",
+  "latest_graph_rebuild_job_id": "44",
+  "target_urls": [
+    "http://127.0.0.1:3112/graph?dbPath=/Volumes/data/User/wayne/Code/graph_impact/data/asip.db",
+    "http://127.0.0.1:3112/api/workbench/graph?dbPath=/Volumes/data/User/wayne/Code/graph_impact/data/asip.db"
+  ],
+  "skip_web_server": true,
+  "command": [
+    "pnpm",
+    "exec",
+    "playwright",
+    "test",
+    "--reporter=json"
+  ],
+  "report_json": "/Volumes/data/User/wayne/Code/graph_impact/docs/qa/2026-05-21-browser-e2e-current.playwright-report.json",
+  "report_sha256": "69c2010359b82885617e050751245f46cff84f5fb4462317945789f3f5ff3bd5",
+  "report_bytes": 122584,
+  "exit_code": 0,
+  "gate_status": "pass",
+  "e2e_status": "pass",
+  "summary": {
+    "total": 109,
+    "passed": 109,
+    "failed": 0,
+    "flaky": 0,
+    "skipped": 0,
+    "duration_ms": 206255.596
+  },
+  "required_tests": [
+    {
+      "title": "acceptance page runs no-mock AQ01 through the real workbench API",
+      "status": "pass",
+      "file": "workbench-smoke.spec.ts"
+    },
+    {
+      "title": "graph page uses URL dbPath for no-mock graph and query requests",
+      "status": "pass",
+      "file": "workbench-smoke.spec.ts"
+    },
+    {
+      "title": "graph page loads current data/asip.db through browser and API",
+      "status": "pass",
+      "file": "workbench-smoke.spec.ts"
+    },
+    {
+      "title": "graph page filters no-mock graph layers and shows edge provenance",
+      "status": "pass",
+      "file": "workbench-smoke.spec.ts"
+    },
+    {
+      "title": "evidence page initial query uses URL dbPath without default DB fallback",
+      "status": "pass",
+      "file": "workbench-smoke.spec.ts"
+    }
+  ],
+  "current_db_probes": [
+    {
+      "surface": "graph_page_api_request",
+      "url": "http://127.0.0.1:3112/api/workbench/graph?limit=3000&dbPath=%2FVolumes%2Fdata%2FUser%2Fwayne%2FCode%2Fgraph_impact%2Fdata%2Fasip.db&functionView=concept",
+      "db_path": "/Volumes/data/User/wayne/Code/graph_impact/data/asip.db",
+      "status": 200,
+      "node_count": 2557,
+      "edge_count": 3000,
+      "response_sha256": "9d54177ec8eae10999468c4c2f0c724081c796db27d5b629394608869d716c1a",
+      "latest_index_job_id": "10",
+      "latest_graph_rebuild_job_id": "44"
+    },
+    {
+      "surface": "direct_api_document_request",
+      "url": "http://127.0.0.1:3112/api/workbench/graph?dbPath=%2FVolumes%2Fdata%2FUser%2Fwayne%2FCode%2Fgraph_impact%2Fdata%2Fasip.db",
+      "db_path": "/Volumes/data/User/wayne/Code/graph_impact/data/asip.db",
+      "status": 200,
+      "node_count": 2557,
+      "edge_count": 3000,
+      "response_sha256": "9d54177ec8eae10999468c4c2f0c724081c796db27d5b629394608869d716c1a",
+      "latest_index_job_id": "10",
+      "latest_graph_rebuild_job_id": "44"
+    }
+  ],
+  "failure_reasons": [],
+  "stdout_tail": "",
+  "stderr_tail": ""
+}

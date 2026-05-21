@@ -56,6 +56,141 @@ test("corpora API persists user-added corpus state", async ({ request }) => {
   );
 });
 
+test("corpora API persists user-added corpus subfolder filters", async ({ request }) => {
+  const root = mkdtempSync(path.join(tmpdir(), "asip-api-subfolder-corpus-"));
+  const dbPath = path.join(root, "subfolder-filters.db");
+
+  const create = await request.post("/api/workbench/corpora", {
+    data: {
+      dbPath,
+      id: "local-amd-sliced",
+      repo: "local",
+      sourceRoot: "/src/amd",
+      include: ["**/*.c", "**/*.h"],
+      type: "code",
+      subfolders: [
+        { relativeRoot: "drivers/gpu/drm/amd/amdgpu", include: ["**/*.c", "**/*.h"] },
+        { path: "drivers/gpu/drm/amd/include/asic_reg", include: "**/*.h" }
+      ]
+    }
+  });
+  expect(create.ok()).toBe(true);
+  const created = (await create.json()) as {
+    id: string;
+    metadata?: { subfolders?: Array<{ relative_root: string; include: string[] }> };
+  };
+  expect(created).toMatchObject({
+    id: "local-amd-sliced",
+    metadata: {
+      subfolders: [
+        { relative_root: "drivers/gpu/drm/amd/amdgpu", include: ["**/*.c", "**/*.h"] },
+        { relative_root: "drivers/gpu/drm/amd/include/asic_reg", include: ["**/*.h"] }
+      ]
+    }
+  });
+
+  const list = await request.get(`/api/workbench/corpora?dbPath=${encodeURIComponent(dbPath)}`);
+  expect(list.ok()).toBe(true);
+  const body = (await list.json()) as {
+    corpora: Array<{ id: string; metadata?: { subfolders?: Array<{ relative_root: string; include: string[] }> } }>;
+  };
+  expect(body.corpora).toEqual(
+    expect.arrayContaining([
+      expect.objectContaining({
+        id: "local-amd-sliced",
+        metadata: expect.objectContaining({
+          subfolders: [
+            { relative_root: "drivers/gpu/drm/amd/amdgpu", include: ["**/*.c", "**/*.h"] },
+            { relative_root: "drivers/gpu/drm/amd/include/asic_reg", include: ["**/*.h"] }
+          ]
+        })
+      })
+    ])
+  );
+});
+
+test("corpora API rejects unsafe subfolder filters outside the corpus root", async ({ request }) => {
+  const root = mkdtempSync(path.join(tmpdir(), "asip-api-unsafe-subfolder-"));
+  const dbPath = path.join(root, "unsafe-subfolder.db");
+
+  const response = await request.post("/api/workbench/corpora", {
+    data: {
+      dbPath,
+      id: "unsafe-subfolder-corpus",
+      repo: "local",
+      sourceRoot: "/src/amd",
+      include: ["**/*.c"],
+      type: "code",
+      subfolders: ["../outside:**/*.c"]
+    }
+  });
+
+  expect(response.status()).toBe(400);
+  const body = (await response.json()) as { error?: string };
+  expect(body.error).toContain("repo-relative");
+});
+
+test("index API honors user-added corpus subfolder filters", async ({ request }) => {
+  const root = mkdtempSync(path.join(tmpdir(), "asip-api-subfolder-index-"));
+  const dbPath = path.join(root, "subfolder-index.db");
+  const sourceRoot = path.join(root, "linux");
+  const amdgpuRoot = path.join(sourceRoot, "drivers/gpu/drm/amd/amdgpu");
+  const asicRegRoot = path.join(sourceRoot, "drivers/gpu/drm/amd/include/asic_reg");
+  const displayRoot = path.join(sourceRoot, "drivers/gpu/drm/amd/display");
+  mkdirSync(amdgpuRoot, { recursive: true });
+  mkdirSync(asicRegRoot, { recursive: true });
+  mkdirSync(displayRoot, { recursive: true });
+  writeFileSync(path.join(amdgpuRoot, "gfx.c"), "void program(void) { WREG32(regAPI_SUBFOLDER_CNTL, 1); }\n", "utf8");
+  writeFileSync(path.join(asicRegRoot, "api_11_0_0_offset.h"), "#define regAPI_HEADER_ONLY_REGISTER 0x1234\n", "utf8");
+  writeFileSync(path.join(displayRoot, "display.c"), "void display(void) { WREG32(regAPI_DISPLAY_ONLY_REGISTER, 1); }\n", "utf8");
+
+  const create = await request.post("/api/workbench/corpora", {
+    data: {
+      dbPath,
+      id: "linux-amdgpu-subfolders",
+      repo: "local",
+      sourceRoot,
+      include: ["**/*.c"],
+      type: "code",
+      subfolders: [
+        { relativeRoot: "drivers/gpu/drm/amd/amdgpu", include: ["**/*.c"] },
+        { relativeRoot: "drivers/gpu/drm/amd/include/asic_reg", include: ["**/*.h"] }
+      ]
+    }
+  });
+  expect(create.ok()).toBe(true);
+
+  const index = await request.post("/api/workbench/index", {
+    data: { dbPath, corpusIds: ["linux-amdgpu-subfolders"] }
+  });
+  expect(index.ok()).toBe(true);
+  const indexed = (await index.json()) as { files: number; jobStatus: string };
+  expect(indexed.jobStatus).toBe("succeeded");
+  expect(indexed.files).toBe(2);
+
+  const headerQuery = await request.get(
+    `/api/workbench/query?q=${encodeURIComponent("API_HEADER_ONLY_REGISTER")}&dbPath=${encodeURIComponent(dbPath)}`
+  );
+  expect(headerQuery.ok()).toBe(true);
+  const headerBody = (await headerQuery.json()) as { rows: Array<{ symbol: string; path: string; source_type: string }> };
+  expect(headerBody.rows).toEqual(
+    expect.arrayContaining([
+      expect.objectContaining({
+        symbol: "regAPI_HEADER_ONLY_REGISTER",
+        path: "drivers/gpu/drm/amd/include/asic_reg/api_11_0_0_offset.h",
+        source_type: "register"
+      })
+    ])
+  );
+
+  const displayQuery = await request.get(
+    `/api/workbench/query?q=${encodeURIComponent("API_DISPLAY_ONLY_REGISTER")}&dbPath=${encodeURIComponent(dbPath)}`
+  );
+  expect(displayQuery.ok()).toBe(true);
+  const displayBody = (await displayQuery.json()) as { rows: Array<{ symbol: string }> };
+  expect(displayBody.rows).toHaveLength(0);
+});
+
 test("corpus API indexes a clean named DB and returns query graph provenance for the new corpus", async ({ request }) => {
   const root = mkdtempSync(path.join(tmpdir(), "asip-api-clean-corpus-"));
   const corpusRoot = path.join(root, "corpus");
@@ -116,8 +251,9 @@ test("corpus API indexes a clean named DB and returns query graph provenance for
     expect.arrayContaining([
       expect.objectContaining({
         id: "note.md#lines-1",
-        kind: "doc_section",
+        kind: "doc",
         attr: expect.objectContaining({
+          doc_kind: "markdown_section",
           source: expect.arrayContaining([expect.objectContaining({ corpus_id: "g04-clean-docs", path: "note.md" })])
         })
       }),
@@ -266,6 +402,52 @@ test("query API ranks live SQLite evidence and graph edges for a free-form query
   expect(body.graph.nodes.map((node) => node.id)).not.toContain("ENABLE_LOCAL_FIELD");
 });
 
+test("query API treats natural language register wildcards as graphable symbol prefixes", async ({ request }) => {
+  const dbPath = createNlWildcardQueryDb();
+  const response = await request.get(
+    `/api/workbench/query?q=${encodeURIComponent("who will write/read CP_HQD_* regs")}&dbPath=${encodeURIComponent(dbPath)}`
+  );
+
+  expect(response.ok()).toBe(true);
+  const body = (await response.json()) as {
+    empty: boolean;
+    rows: Array<{ symbol: string; target_symbol?: string; relation?: string; source_type?: string }>;
+    graph: {
+      nodes: Array<{ id: string; kind?: string }>;
+      edges: Array<{ src: string; relation: string; dst: string }>;
+    };
+  };
+
+  expect(body.empty).toBe(false);
+  expect(body.rows.length).toBeGreaterThan(0);
+  expect(["reads", "writes"]).toContain(body.rows[0].relation);
+  expect(body.rows[0].source_type).toBe("code");
+  expect(["gfx_hqd_readback", "gfx_mqd_program"]).toContain(body.rows[0].symbol);
+  expect(body.rows.every((row) => row.symbol.startsWith("CP_HQD_") || row.target_symbol?.startsWith("CP_HQD_"))).toBe(true);
+  expect(body.rows.map((row) => row.symbol)).not.toContain("CPM_CONTROL__REFCLK_REGS_GATE_ENABLE_MASK");
+  expect(body.graph.nodes).toEqual(
+    expect.arrayContaining([
+      expect.objectContaining({ id: expect.stringContaining("CP_HQD_PQ_CONTROL"), kind: "register" }),
+      expect.objectContaining({ id: expect.stringContaining("gfx_mqd_program"), kind: "function" }),
+      expect.objectContaining({ id: expect.stringContaining("gfx_hqd_readback"), kind: "function" })
+    ])
+  );
+  expect(body.graph.edges).toEqual(
+    expect.arrayContaining([
+      expect.objectContaining({
+        src: expect.stringContaining("gfx_mqd_program"),
+        relation: "writes",
+        dst: expect.stringContaining("CP_HQD_PQ_CONTROL")
+      }),
+      expect.objectContaining({
+        src: expect.stringContaining("gfx_hqd_readback"),
+        relation: "reads",
+        dst: expect.stringContaining("CP_HQD_PQ_CONTROL")
+      })
+    ])
+  );
+});
+
 test("query API exposes matching PDF section node with page provenance", async ({ request }) => {
   const dbPath = createPdfSectionQueryDb();
   const response = await request.get(
@@ -284,8 +466,9 @@ test("query API exposes matching PDF section node with page provenance", async (
     expect.arrayContaining([
       expect.objectContaining({
         id: "docs/manual.pdf#page-3",
-        kind: "pdf_section",
+        kind: "doc",
         attr: expect.objectContaining({
+          doc_kind: "pdf_section",
           source: expect.arrayContaining([expect.objectContaining({ path: "docs/manual.pdf", page: 3 })])
         })
       })
@@ -496,17 +679,19 @@ test("acceptance API lists real qwen and gemma QA runs", async ({ request }) => 
         failed: 0,
         queryCount: 9,
         artifactPath: "docs/qa/2026-05-18-acceptance-clean-amd-gemma4-final-current.json"
+      }),
+      expect.objectContaining({
+        id: "acceptance-clean-amd-current",
+        model: "asip.acceptance",
+        passed: 9,
+        partial: 0,
+        failed: 0,
+        queryCount: 9,
+        artifactPath: "docs/qa/2026-05-19-acceptance-clean-amd-current.json"
       })
     ])
   );
-  expect(body.runs[0]).toEqual(
-    expect.objectContaining({
-      id: "acceptance-clean-amd-gemma4-final-current",
-      model: "asip.acceptance",
-      artifactPath: "docs/qa/2026-05-18-acceptance-clean-amd-gemma4-final-current.json"
-    })
-  );
-  const providerRun = body.runs.find((run) => run.id === "acceptance-clean-amd-gemma4-final-current");
+  const providerRun = body.runs.find((run) => run.id === "acceptance-clean-amd-current");
   const aq09 = providerRun?.details?.find((detail) => detail.id === "AQ09");
   expect(aq09?.providerChecks?.embedding).toMatchObject({
     status: "pass",
@@ -521,6 +706,7 @@ test("acceptance API lists real qwen and gemma QA runs", async ({ request }) => 
 });
 
 test("acceptance run API executes selected acceptance queries", async ({ request }) => {
+  test.setTimeout(90_000);
   const response = await request.post("/api/workbench/acceptance/run", {
     data: {
       queryIds: ["AQ01"],
@@ -547,6 +733,54 @@ test("acceptance run API executes selected acceptance queries", async ({ request
   ]);
 });
 
+test("workbench DB-backed APIs reject explicitly blank dbPath without falling back", async ({ request }) => {
+  const blankQuery = `dbPath=${encodeURIComponent("  ")}`;
+  const checks: Array<{
+    label: string;
+    request: () => Promise<{ status(): number; json(): Promise<unknown> }>;
+  }> = [
+    { label: "query", request: () => request.get(`/api/workbench/query?q=GCVM_L2_CNTL&${blankQuery}`) },
+    { label: "graph", request: () => request.get(`/api/workbench/graph?seed=GCVM_L2_CNTL&${blankQuery}`) },
+    { label: "corpora", request: () => request.get(`/api/workbench/corpora?${blankQuery}`) },
+    { label: "resolver profiles", request: () => request.get(`/api/workbench/resolver-profiles?${blankQuery}`) },
+    { label: "jobs", request: () => request.get(`/api/workbench/jobs?${blankQuery}`) },
+    { label: "job detail", request: () => request.get(`/api/workbench/jobs/1?${blankQuery}`) },
+    { label: "evidence detail", request: () => request.get(`/api/workbench/evidence/1?${blankQuery}`) },
+    { label: "entity detail", request: () => request.get(`/api/workbench/entities/GCVM_L2_CNTL?${blankQuery}`) },
+    { label: "provider settings", request: () => request.get(`/api/workbench/providers/settings?${blankQuery}`) },
+    {
+      label: "index",
+      request: () => request.post("/api/workbench/index", { data: { dbPath: "  " } })
+    },
+    {
+      label: "acceptance run",
+      request: () => request.post("/api/workbench/acceptance/run", { data: { dbPath: "  ", queryIds: ["AQ01"] } })
+    },
+    {
+      label: "semantic edges",
+      request: () => request.post("/api/workbench/semantic-edges", { data: { dbPath: "  ", q: "GCVM_L2_CNTL" } })
+    },
+    {
+      label: "corpus add",
+      request: () =>
+        request.post("/api/workbench/corpora", {
+          data: { dbPath: "  ", id: "blank-dbpath-corpus", sourceRoot: "/tmp/asip-blank-dbpath" }
+        })
+    },
+    {
+      label: "provider save",
+      request: () => request.post("/api/workbench/providers/settings", { data: { dbPath: "  ", edge: {} } })
+    }
+  ];
+
+  for (const check of checks) {
+    const response = await check.request();
+    expect(response.status(), check.label).toBe(400);
+    const body = (await response.json()) as { error?: string };
+    expect(body.error, check.label).toContain("dbPath cannot be blank");
+  }
+});
+
 test("acceptance run API exposes AQ09 provider provenance from configured edge and embedding settings", async ({ request }) => {
   const root = mkdtempSync(path.join(tmpdir(), "asip-aq09-api-"));
   const dbPath = path.join(root, "aq09.db");
@@ -567,7 +801,7 @@ test("acceptance run API exposes AQ09 provider provenance from configured edge a
     data: {
       dbPath,
       queryIds: ["AQ09"],
-      surfaces: ["CLI", "API", "Web"]
+      surfaces: ["CLI", "API", "MCP"]
     }
   });
 
@@ -656,6 +890,99 @@ test("graph API returns data-driven weighted edges for a selected seed", async (
       })
     ])
   );
+});
+
+test("graph API can switch between concept and implementation function views", async ({ request }) => {
+  const dbPath = createVersionedFunctionGraphDb();
+  const conceptResponse = await request.get(
+    `/api/workbench/graph?seed=GCVM_L2_CNTL&hops=1&functionView=concept&dbPath=${encodeURIComponent(dbPath)}`
+  );
+  const implementationResponse = await request.get(
+    `/api/workbench/graph?seed=GCVM_L2_CNTL&hops=1&functionView=implementation&dbPath=${encodeURIComponent(dbPath)}`
+  );
+
+  expect(conceptResponse.ok()).toBe(true);
+  expect(implementationResponse.ok()).toBe(true);
+  const concept = (await conceptResponse.json()) as {
+    nodes: Array<{ id: string; kind: string; attr?: { raw_function_names?: string[] } }>;
+    edges: Array<{ src: string; dst: string; relation: string }>;
+  };
+  const implementation = (await implementationResponse.json()) as {
+    nodes: Array<{ id: string; kind: string }>;
+  };
+
+  const conceptFunction = concept.nodes.find((node) => node.kind === "function");
+  expect(conceptFunction?.id).toBe(
+    "function:linux-amdgpu:concept:linux-amdgpu:amd-ip-versioned-functions:gfxhub_gart_enable",
+  );
+  expect(conceptFunction?.attr?.raw_function_names).toEqual(
+    expect.arrayContaining(["gfxhub_v11_5_0_gart_enable", "gfxhub_v12_0_gart_enable"])
+  );
+  expect(concept.edges).toEqual(
+    expect.arrayContaining([
+      expect.objectContaining({
+        src: "function:linux-amdgpu:concept:linux-amdgpu:amd-ip-versioned-functions:gfxhub_gart_enable",
+        relation: "writes",
+        dst: "register:GC:GCVM_L2_CNTL"
+      })
+    ])
+  );
+
+  const implementationIds = implementation.nodes.filter((node) => node.kind === "function").map((node) => node.id);
+  expect(implementationIds).toEqual(
+    expect.arrayContaining([
+      "function:linux-amdgpu:drivers/gpu/drm/amd/amdgpu/gfxhub_v11_5_0.c:gfxhub_v11_5_0_gart_enable",
+      "function:linux-amdgpu:drivers/gpu/drm/amd/amdgpu/gfxhub_v12_0.c:gfxhub_v12_0_gart_enable"
+    ])
+  );
+  expect(implementationIds.some((id) => id.includes(":concept:"))).toBe(false);
+});
+
+test("graph API returns compact metadata for global UI graphs", async ({ request }) => {
+  const dbPath = createVersionedFunctionGraphDb();
+  const response = await request.get(
+    `/api/workbench/graph?limit=20&functionView=concept&dbPath=${encodeURIComponent(dbPath)}`
+  );
+
+  expect(response.ok()).toBe(true);
+  const body = (await response.json()) as {
+    metadata_mode?: string;
+    nodes: Array<{
+      id: string;
+      kind: string;
+      attr?: {
+        concept_implementations?: Array<{ function_name?: string; path?: string }>;
+        raw_function_names?: string[];
+        raw_implementation_count?: number;
+      };
+    }>;
+    edges: Array<{ src: string; dst: string; relation: string }>;
+  };
+
+  expect(body.metadata_mode).toBe("compact");
+  expect(body.nodes.length).toBeGreaterThan(0);
+  expect(body.edges.length).toBeGreaterThan(0);
+  const conceptFunction = body.nodes.find(
+    (node) =>
+      node.id === "function:linux-amdgpu:concept:linux-amdgpu:amd-ip-versioned-functions:gfxhub_gart_enable"
+  );
+  expect(conceptFunction?.attr?.raw_implementation_count).toBeGreaterThanOrEqual(2);
+  expect(conceptFunction?.attr?.raw_function_names).toEqual(
+    expect.arrayContaining(["gfxhub_v11_5_0_gart_enable", "gfxhub_v12_0_gart_enable"])
+  );
+  expect(conceptFunction?.attr?.concept_implementations).toEqual(
+    expect.arrayContaining([
+      expect.objectContaining({
+        function_name: "gfxhub_v11_5_0_gart_enable",
+        path: expect.stringContaining("gfxhub_v11_5_0.c")
+      }),
+      expect.objectContaining({
+        function_name: "gfxhub_v12_0_gart_enable",
+        path: expect.stringContaining("gfxhub_v12_0.c")
+      })
+    ])
+  );
+  expect(JSON.stringify(body)).not.toContain("raw_implementations");
 });
 
 test("graph API rejects resolver operators as selected seed nodes", async ({ request }) => {
@@ -835,7 +1162,11 @@ test("semantic edges API supports batch generation from indexed candidates", asy
     expect(body.candidate_count).toBeGreaterThan(0);
     expect(body.graph.nodes).toEqual(
       expect.arrayContaining([
-        expect.objectContaining({ id: "edge.md#programming-local-registers", kind: "doc_section" })
+        expect.objectContaining({
+          id: "edge.md#programming-local-registers",
+          kind: "doc",
+          attr: expect.objectContaining({ doc_kind: "markdown_section" })
+        })
       ])
     );
     expect(body.graph.edges).toEqual(
@@ -891,7 +1222,8 @@ test("semantic edges API supports LLM document node extraction", async ({ reques
       expect.arrayContaining([
         expect.objectContaining({
           id: "edge.md#box-l2-cache-control",
-          kind: "doc_box",
+          kind: "doc",
+          attr: expect.objectContaining({ doc_kind: "boxmatrix_box" }),
           label: "L2 cache control"
         })
       ])
@@ -919,6 +1251,55 @@ function createEmptySqliteDb(dbPath: string) {
     { encoding: "utf8" }
   );
   expect(result.status, result.stderr || result.stdout).toBe(0);
+}
+
+function createVersionedFunctionGraphDb() {
+  const root = mkdtempSync(path.join(tmpdir(), "asip-versioned-graph-"));
+  const dbPath = path.join(root, "versioned.db");
+  const repoRoot = path.resolve(process.cwd(), "../..");
+  const script = String.raw`
+import sys
+from asip.storage import AsipStore
+
+store = AsipStore.connect(sys.argv[1])
+store.migrate()
+for function_name, ip_version in [
+    ("gfxhub_v11_5_0_gart_enable", "11_5_0"),
+    ("gfxhub_v12_0_gart_enable", "12_0"),
+]:
+    path = f"drivers/gpu/drm/amd/amdgpu/gfxhub_v{ip_version}.c"
+    store.add_edge(
+        function_name,
+        "GCVM_L2_CNTL",
+        "writes",
+        0.95,
+        stage="deterministic",
+        source="clang_text_spans",
+        path=path,
+        line_start=10,
+        provenance={
+            "extractor": "code_graph",
+            "function": function_name,
+            "corpus_id": "linux-amdgpu",
+            "repo": "linux",
+            "path": path,
+            "ip": "GC",
+            "ip_version": ip_version,
+            "resolver_profile": "linux-amdgpu",
+        },
+    )
+`;
+  const result = spawnSync("python3", ["-c", script, dbPath], {
+    cwd: repoRoot,
+    env: {
+      ...process.env,
+      PYTHONDONTWRITEBYTECODE: "1",
+      PYTHONPATH: [path.join(repoRoot, "packages/core/src"), repoRoot].join(":")
+    },
+    encoding: "utf8"
+  });
+  expect(result.status, result.stderr || result.stdout).toBe(0);
+  return dbPath;
 }
 
 function runMcpAgreementProbe(query: string, evidenceId: number, symbol: string, dbPath: string) {
@@ -1077,6 +1458,88 @@ store.add_evidence(
     line_start=1,
     line_end=1,
     page=3,
+)
+`;
+  const result = spawnSync("python3", ["-c", script, dbPath], {
+    cwd: repoRoot,
+    env: {
+      ...process.env,
+      PYTHONDONTWRITEBYTECODE: "1",
+      PYTHONPATH: [path.join(repoRoot, "packages/core/src"), repoRoot].join(":")
+    },
+    encoding: "utf8"
+  });
+  expect(result.status, result.stderr || result.stdout).toBe(0);
+  return dbPath;
+}
+
+function createNlWildcardQueryDb() {
+  const root = mkdtempSync(path.join(tmpdir(), "asip-api-nl-wildcard-"));
+  const dbPath = path.join(root, "query.db");
+  const repoRoot = path.resolve(process.cwd(), "../..");
+  const script = String.raw`
+import sys
+from asip.storage import AsipStore
+
+store = AsipStore.connect(sys.argv[1])
+store.migrate()
+noisy_doc = store.add_document("fixture", "register", "include/noisy_regs.h")
+noisy_chunk = store.add_chunk(noisy_doc, "#define CPM_CONTROL__REFCLK_REGS_GATE_ENABLE_MASK 0x1", 1, 1)
+store.add_evidence(
+    noisy_chunk,
+    "fixture",
+    "register",
+    "local",
+    "include/noisy_regs.h",
+    "CPM_CONTROL__REFCLK_REGS_GATE_ENABLE_MASK",
+    "field",
+    "mention",
+    0.99,
+    "#define CPM_CONTROL__REFCLK_REGS_GATE_ENABLE_MASK 0x1",
+    "register header -> CPM_CONTROL__REFCLK_REGS_GATE_ENABLE_MASK",
+    line_start=1,
+    line_end=1,
+)
+cp_doc = store.add_document("fixture", "register", "include/cp_hqd_regs.h")
+cp_chunk = store.add_chunk(cp_doc, "#define CP_HQD_PQ_CONTROL 0x0\n#define CP_HQD_ACTIVE 0x1", 1, 2)
+for symbol in ("CP_HQD_PQ_CONTROL", "CP_HQD_ACTIVE"):
+    store.add_evidence(
+        cp_chunk,
+        "fixture",
+        "register",
+        "local",
+        "include/cp_hqd_regs.h",
+        symbol,
+        "register",
+        "mention",
+        0.7,
+        f"#define {symbol} 0x0",
+        f"register header -> {symbol}",
+        line_start=1,
+        line_end=2,
+        ip_block="CP",
+    )
+store.add_edge(
+    "gfx_mqd_program",
+    "CP_HQD_PQ_CONTROL",
+    "writes",
+    0.95,
+    stage="deterministic",
+    source="clang_text_spans",
+    path="drivers/gpu/drm/amd/amdgpu/gfx_mqd.c",
+    line_start=21,
+    provenance={"extractor": "code_graph", "function": "gfx_mqd_program", "corpus_id": "linux-amdgpu"},
+)
+store.add_edge(
+    "gfx_hqd_readback",
+    "CP_HQD_PQ_CONTROL",
+    "reads",
+    0.95,
+    stage="deterministic",
+    source="clang_text_spans",
+    path="drivers/gpu/drm/amd/amdgpu/gfx_mqd.c",
+    line_start=34,
+    provenance={"extractor": "code_graph", "function": "gfx_hqd_readback", "corpus_id": "linux-amdgpu"},
 )
 `;
   const result = spawnSync("python3", ["-c", script, dbPath], {

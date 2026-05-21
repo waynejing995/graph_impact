@@ -12,7 +12,7 @@ import {
   type ComponentProps,
   type FormEvent
 } from "react";
-import { WeightedForceGraph, type WeightedGraphPayload } from "@/components/weighted-force-graph";
+import { WeightedForceGraph, type WeightedGraphNode, type WeightedGraphPayload } from "@/components/weighted-force-graph";
 import {
   Accordion,
   AccordionContent,
@@ -204,8 +204,8 @@ const defaultAcceptanceRunnerDraft: AcceptanceRunnerDraft = {
   surfaces: {
     CLI: true,
     API: true,
-    Web: true,
-    MCP: false
+    Web: false,
+    MCP: true
   },
   outputJson: "",
   outputMd: ""
@@ -216,6 +216,7 @@ type CorpusEntry = {
   repo: string;
   sourceRoot: string;
   include: string;
+  subfolders: string;
   fileCount: string;
   status?: string;
 };
@@ -226,6 +227,7 @@ type ApiCorpusEntry = {
   sourceRoot?: string;
   source_root?: string;
   include?: string[] | string;
+  metadata?: Record<string, unknown>;
   fileCount?: number | string;
   file_count?: number | string;
   status?: string;
@@ -274,10 +276,22 @@ type AcceptanceDetail = {
   edgeCount?: number;
   sourceHitCount?: number;
   retrievalSources?: string[];
+  surfaceResults?: AcceptanceSurfaceResult[];
   providerChecks?: {
     embedding?: ProviderAcceptanceCheck;
     semanticEdge?: ProviderAcceptanceCheck;
   };
+};
+
+type AcceptanceSurfaceResult = {
+  surface: string;
+  transport: string;
+  status: string;
+  dbPath?: string;
+  rowCount?: number;
+  graphNodeCount?: number;
+  graphEdgeCount?: number;
+  message?: string;
 };
 
 type JobRun = {
@@ -294,6 +308,17 @@ type JobRun = {
 };
 
 type GraphPayload = WeightedGraphPayload;
+type GraphFunctionView = "concept" | "implementation";
+type GraphFilterGroup = "relation" | "stage" | "source";
+type GraphFilterOption = {
+  value: string;
+  count: number;
+};
+type InspectorDetailSection = {
+  title: string;
+  body?: string;
+  lines?: string[];
+};
 
 type WorkbenchLimits = {
   graph?: {
@@ -334,8 +359,10 @@ export function WorkbenchPage({ pageId }: WorkbenchPageProps) {
   const [workbenchLimits, setWorkbenchLimits] = useState<WorkbenchLimits>({});
   const [limitsReady, setLimitsReady] = useState(false);
   const [graphEdgeBudget, setGraphEdgeBudget] = useState<number | null>(null);
+  const [graphFunctionView, setGraphFunctionView] = useState<GraphFunctionView>("concept");
   const providerSettingsDirtyRef = useRef(false);
   const initialSearchHandledRef = useRef(false);
+  const graphQueryActiveRef = useRef(false);
   const queryInputRef = useRef<HTMLInputElement | null>(null);
   const queryRequestSeqRef = useRef(0);
   const [settingsDraft, setSettingsDraft] = useState<ProviderSettingsDraft>(
@@ -345,10 +372,15 @@ export function WorkbenchPage({ pageId }: WorkbenchPageProps) {
   const [settingsError, setSettingsError] = useState("");
   const [semanticLimitDraft, setSemanticLimitDraft] = useState("");
   const [semanticBatchSizeDraft, setSemanticBatchSizeDraft] = useState("");
+  const [workbenchDbPath, setWorkbenchDbPath] = useState("");
+  const [workbenchDbPathExplicit, setWorkbenchDbPathExplicit] = useState(false);
+  const [workbenchDbPathReady, setWorkbenchDbPathReady] = useState(false);
   const [acceptanceDbPath, setAcceptanceDbPath] = useState("");
+  const [acceptanceDbPathExplicit, setAcceptanceDbPathExplicit] = useState(false);
   const [acceptanceRunnerDraft, setAcceptanceRunnerDraft] = useState<AcceptanceRunnerDraft>(
     defaultAcceptanceRunnerDraft
   );
+  const [acceptanceRunnerDbPathExplicit, setAcceptanceRunnerDbPathExplicit] = useState(false);
   const [corpora, setCorpora] = useState<CorpusEntry[]>([]);
   const [selectedCorpusIds, setSelectedCorpusIds] = useState<string[]>([]);
   const [corpusDraft, setCorpusDraft] = useState<CorpusEntry>({
@@ -356,6 +388,7 @@ export function WorkbenchPage({ pageId }: WorkbenchPageProps) {
     repo: "",
     sourceRoot: "",
     include: "**/*.c, **/*.h",
+    subfolders: "",
     fileCount: "user"
   });
   const [corpusMessage, setCorpusMessage] = useState("");
@@ -382,6 +415,7 @@ export function WorkbenchPage({ pageId }: WorkbenchPageProps) {
   const [apiGraph, setApiGraph] = useState<GraphPayload | null>(
     config.id === "evidence-workbench" || config.id === "graph-explorer" ? { nodes: [], edges: [] } : null
   );
+  const [selectedGraphNodeId, setSelectedGraphNodeId] = useState("");
   const [graphEmptyMessage, setGraphEmptyMessage] = useState("");
   const [queryEmptyMessage, setQueryEmptyMessage] = useState(
     config.id === "evidence-workbench" ? "Enter a query to search live evidence." : ""
@@ -409,7 +443,23 @@ export function WorkbenchPage({ pageId }: WorkbenchPageProps) {
   }, [config.actionLabel]);
 
   useEffect(() => {
-    if (config.id !== "evidence-workbench" || initialSearchHandledRef.current) {
+    const searchParams = new URLSearchParams(window.location.search);
+    const dbPath = searchParams.get("dbPath") ?? "";
+    const hasDbPath = searchParams.has("dbPath");
+    setWorkbenchDbPathExplicit(hasDbPath);
+    setWorkbenchDbPath(dbPath);
+    const trimmedDbPath = dbPath.trim();
+    if (hasDbPath) {
+      setAcceptanceDbPathExplicit(true);
+      setAcceptanceRunnerDbPathExplicit(true);
+      setAcceptanceDbPath((current) => current || trimmedDbPath || dbPath);
+      setAcceptanceRunnerDraft((draft) => (draft.dbPath ? draft : { ...draft, dbPath: trimmedDbPath || dbPath }));
+    }
+    setWorkbenchDbPathReady(true);
+  }, []);
+
+  useEffect(() => {
+    if (!workbenchDbPathReady || config.id !== "evidence-workbench" || initialSearchHandledRef.current) {
       return;
     }
     const storedGlobalQuery = window.sessionStorage.getItem("asip-global-query")?.trim() ?? "";
@@ -421,7 +471,7 @@ export function WorkbenchPage({ pageId }: WorkbenchPageProps) {
     window.sessionStorage.removeItem("asip-global-query");
     setGlobalQuery(initialQuery);
     void runQuery(initialQuery);
-  }, [config.id]);
+  }, [config.id, workbenchDbPath, workbenchDbPathReady]);
 
   useEffect(() => {
     let cancelled = false;
@@ -451,7 +501,7 @@ export function WorkbenchPage({ pageId }: WorkbenchPageProps) {
   }, []);
 
   useEffect(() => {
-    if (config.id !== "corpus") {
+    if (config.id !== "corpus" || !workbenchDbPathReady) {
       return;
     }
     let cancelled = false;
@@ -463,10 +513,14 @@ export function WorkbenchPage({ pageId }: WorkbenchPageProps) {
     return () => {
       cancelled = true;
     };
-  }, [config.id]);
+  }, [config.id, workbenchDbPath, workbenchDbPathReady]);
 
   useLayoutEffect(() => {
-    if (config.id === "evidence-workbench" && !initialSearchHandledRef.current) {
+    if (!workbenchDbPathReady) {
+      return;
+    }
+    const supportsInitialQuery = config.id === "evidence-workbench" || config.id === "graph-explorer";
+    if (supportsInitialQuery && !initialSearchHandledRef.current) {
       const storedGlobalQuery = window.sessionStorage.getItem("asip-global-query")?.trim() ?? "";
       const initialQuery = new URLSearchParams(window.location.search).get("q")?.trim() || storedGlobalQuery;
       if (initialQuery) {
@@ -485,26 +539,29 @@ export function WorkbenchPage({ pageId }: WorkbenchPageProps) {
     }
     updateQuery(config.query);
     setQueryEmptyMessage(config.id === "evidence-workbench" ? "Enter a query to search live evidence." : "");
-  }, [config.id, config.query]);
+  }, [config.id, config.query, workbenchDbPath, workbenchDbPathReady]);
 
   useEffect(() => {
-    if (config.id !== "evidence-workbench") {
+    if (!workbenchDbPathReady || config.id !== "evidence-workbench") {
       return;
     }
     if (config.query.trim()) {
       void executeQuery(config.query, { announce: false, incrementRun: false });
     }
-  }, [config.id, config.query]);
+  }, [config.id, config.query, workbenchDbPath, workbenchDbPathReady]);
 
   useEffect(() => {
     if (config.id !== "graph-explorer") {
       setApiGraph(null);
       return;
     }
+    if (graphQueryActiveRef.current || queryValueRef.current.trim()) {
+      return;
+    }
 
     let cancelled = false;
     setGraphEmptyMessage("");
-    if (!limitsReady) {
+    if (!limitsReady || !workbenchDbPathReady) {
       return;
     }
 
@@ -512,6 +569,8 @@ export function WorkbenchPage({ pageId }: WorkbenchPageProps) {
     if (graphEdgeBudget !== null) {
       params.set("limit", String(graphEdgeBudget));
     }
+    appendWorkbenchDbPath(params);
+    params.set("functionView", graphFunctionView);
     const queryString = params.toString();
     fetch(`/api/workbench/graph${queryString ? `?${queryString}` : ""}`)
       .then((response) => {
@@ -521,14 +580,14 @@ export function WorkbenchPage({ pageId }: WorkbenchPageProps) {
         return response.json() as Promise<GraphPayload>;
       })
       .then((payload) => {
-        if (!cancelled) {
+        if (!cancelled && !graphQueryActiveRef.current && !queryValueRef.current.trim()) {
           const graphPayload = sanitizeGraphPayload(payload) ?? { nodes: [], edges: [] };
           setApiGraph(graphPayload);
           setGraphEmptyMessage(graphPayload.nodes.length || graphPayload.edges.length ? "" : "No graph data returned.");
         }
       })
       .catch((error) => {
-        if (!cancelled) {
+        if (!cancelled && !graphQueryActiveRef.current && !queryValueRef.current.trim()) {
           setApiGraph({ nodes: [], edges: [] });
           setGraphEmptyMessage(error instanceof Error ? error.message : "Graph failed");
         }
@@ -537,9 +596,12 @@ export function WorkbenchPage({ pageId }: WorkbenchPageProps) {
     return () => {
       cancelled = true;
     };
-  }, [config.id, graphEdgeBudget, limitsReady]);
+  }, [config.id, graphEdgeBudget, graphFunctionView, limitsReady, workbenchDbPath, workbenchDbPathExplicit, workbenchDbPathReady]);
 
   useEffect(() => {
+    if (!workbenchDbPathReady) {
+      return;
+    }
     let cancelled = false;
     const applySettings = (next: ProviderSettings) => {
       if (cancelled) {
@@ -550,7 +612,9 @@ export function WorkbenchPage({ pageId }: WorkbenchPageProps) {
       setProviderVerification("unverified");
     };
 
-    fetch("/api/workbench/providers/settings")
+    const params = new URLSearchParams();
+    appendWorkbenchDbPath(params);
+    fetch(`/api/workbench/providers/settings${params.toString() ? `?${params.toString()}` : ""}`)
       .then((response) => {
         if (!response.ok) {
           throw new Error(`Provider settings API returned ${response.status}`);
@@ -581,12 +645,17 @@ export function WorkbenchPage({ pageId }: WorkbenchPageProps) {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [workbenchDbPath, workbenchDbPathExplicit, workbenchDbPathReady]);
 
   useEffect(() => {
+    if (!workbenchDbPathReady) {
+      return;
+    }
     let cancelled = false;
 
-    fetch("/api/workbench/resolver-profiles")
+    const params = new URLSearchParams();
+    appendWorkbenchDbPath(params);
+    fetch(`/api/workbench/resolver-profiles${params.toString() ? `?${params.toString()}` : ""}`)
       .then((response) => {
         if (!response.ok) {
           throw new Error(`Resolver API returned ${response.status}`);
@@ -608,12 +677,17 @@ export function WorkbenchPage({ pageId }: WorkbenchPageProps) {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [workbenchDbPath, workbenchDbPathExplicit, workbenchDbPathReady]);
 
   useEffect(() => {
+    if (!workbenchDbPathReady) {
+      return;
+    }
     let cancelled = false;
 
-    fetch("/api/workbench/corpora")
+    const params = new URLSearchParams();
+    appendWorkbenchDbPath(params);
+    fetch(`/api/workbench/corpora${params.toString() ? `?${params.toString()}` : ""}`)
       .then((response) => {
         if (!response.ok) {
           throw new Error(`Corpus API returned ${response.status}`);
@@ -638,7 +712,7 @@ export function WorkbenchPage({ pageId }: WorkbenchPageProps) {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [workbenchDbPath, workbenchDbPathExplicit, workbenchDbPathReady]);
 
   useEffect(() => {
     const enabledIds = resolverProfiles.filter((profile) => profile.enabled).map((profile) => profile.id);
@@ -692,22 +766,52 @@ export function WorkbenchPage({ pageId }: WorkbenchPageProps) {
     }
     return queryEvidenceRows.find((row) => evidenceRowKey(row) === selectedEvidenceKey) ?? queryEvidenceRows[0];
   }, [config.id, queryEvidenceRows, selectedEvidenceKey]);
+  const selectedGraphNode = useMemo(() => {
+    if (!apiGraph || !selectedGraphNodeId) {
+      return null;
+    }
+    return apiGraph.nodes.find((node) => node.id === selectedGraphNodeId) ?? null;
+  }, [apiGraph, selectedGraphNodeId]);
+  useEffect(() => {
+    if (!selectedGraphNodeId || !apiGraph) {
+      return;
+    }
+    if (!apiGraph.nodes.some((node) => node.id === selectedGraphNodeId)) {
+      setSelectedGraphNodeId("");
+    }
+  }, [apiGraph, selectedGraphNodeId]);
   const inspectorTitle = useMemo(() => {
+    if (selectedGraphNode) {
+      return `Graph Node: ${selectedGraphNode.label ?? selectedGraphNode.id}`;
+    }
     if (selectedEvidence) {
       return `Resolved Evidence: ${selectedEvidence.symbol}`;
     }
     return config.inspectorTitle;
-  }, [config.inspectorTitle, selectedEvidence]);
+  }, [config.inspectorTitle, selectedEvidence, selectedGraphNode]);
   const inspectorChain = useMemo(
-    () => (selectedEvidence ? buildLiveInspectorChain(selectedEvidence) : []),
-    [selectedEvidence]
+    () => {
+      if (selectedGraphNode) {
+        return buildGraphNodeInspectorChain(selectedGraphNode);
+      }
+      return selectedEvidence ? buildLiveInspectorChain(selectedEvidence) : [];
+    },
+    [selectedEvidence, selectedGraphNode]
   );
   const inspectorDetailSections = useMemo(
-    () => (selectedEvidence ? buildLiveInspectorSections(selectedEvidence) : []),
-    [selectedEvidence]
+    () => {
+      if (selectedGraphNode) {
+        return buildGraphNodeInspectorSections(selectedGraphNode);
+      }
+      return selectedEvidence ? buildLiveInspectorSections(selectedEvidence) : [];
+    },
+    [selectedEvidence, selectedGraphNode]
   );
   const inspectorRelationshipLines = useMemo(
     () => {
+      if (selectedGraphNode && apiGraph) {
+        return buildSelectedNodeRelationshipLines(selectedGraphNode, apiGraph, workbenchLimits.graph?.inspectorEdgePreviewLimit);
+      }
       if (selectedEvidence) {
         return buildLiveRelationshipLines(selectedEvidence, apiGraph);
       }
@@ -716,7 +820,7 @@ export function WorkbenchPage({ pageId }: WorkbenchPageProps) {
       }
       return ["No relationship data returned from API."];
     },
-    [apiGraph, config.id, graphEmptyMessage, selectedEvidence, workbenchLimits.graph?.inspectorEdgePreviewLimit]
+    [apiGraph, config.id, graphEmptyMessage, selectedEvidence, selectedGraphNode, workbenchLimits.graph?.inspectorEdgePreviewLimit]
   );
 
   const providerLabel = providerSettings.provider === "ollama" ? "Ollama" : "OpenAI-compatible";
@@ -754,6 +858,9 @@ export function WorkbenchPage({ pageId }: WorkbenchPageProps) {
   async function runQuery(queryOverride?: string) {
     const nextQuery = (queryOverride ?? queryInputRef.current?.value ?? query).trim() || config.query;
     if (!nextQuery.trim()) {
+      if (config.id === "graph-explorer") {
+        graphQueryActiveRef.current = false;
+      }
       setApiQueryRows([]);
       setSelectedEvidenceKey("");
       setApiGraph(config.id === "graph-explorer" ? apiGraph : { nodes: [], edges: [] });
@@ -763,8 +870,39 @@ export function WorkbenchPage({ pageId }: WorkbenchPageProps) {
       }
       return;
     }
+    if (config.id === "graph-explorer") {
+      graphQueryActiveRef.current = true;
+    }
     updateQuery(nextQuery);
     await executeQuery(nextQuery, { announce: true, incrementRun: true });
+  }
+
+  function workbenchDbPathForRequest() {
+    const trimmed = workbenchDbPath.trim();
+    if (trimmed) {
+      return trimmed;
+    }
+    return workbenchDbPathExplicit ? workbenchDbPath : undefined;
+  }
+
+  function workbenchDbPathPayload() {
+    const dbPath = workbenchDbPathForRequest();
+    return dbPath === undefined ? {} : { dbPath };
+  }
+
+  function dbPathInputPayload(value: string, explicit = false) {
+    if (!value && !explicit) {
+      return {};
+    }
+    const trimmed = value.trim();
+    return { dbPath: trimmed || value };
+  }
+
+  function appendWorkbenchDbPath(params: URLSearchParams) {
+    const dbPath = workbenchDbPathForRequest();
+    if (dbPath !== undefined) {
+      params.set("dbPath", dbPath);
+    }
   }
 
   function updateQuery(nextQuery: string) {
@@ -789,7 +927,9 @@ export function WorkbenchPage({ pageId }: WorkbenchPageProps) {
       return;
     }
     window.sessionStorage.setItem("asip-global-query", nextQuery);
-    window.location.assign(`/?q=${encodeURIComponent(nextQuery)}`);
+    const params = new URLSearchParams({ q: nextQuery });
+    appendWorkbenchDbPath(params);
+    window.location.assign(`/?${params.toString()}`);
   }
 
   async function executeQuery(
@@ -817,6 +957,8 @@ export function WorkbenchPage({ pageId }: WorkbenchPageProps) {
       if (selectedSourceTypes.length !== sourceFilterTypes.length) {
         params.set("sourceTypes", selectedSourceTypes.length ? selectedSourceTypes.join(",") : "__none__");
       }
+      appendWorkbenchDbPath(params);
+      params.set("functionView", graphFunctionView);
       const response = await fetch(`/api/workbench/query?${params.toString()}`);
       if (!response.ok) {
         throw new Error(`Query API returned ${response.status}`);
@@ -876,7 +1018,11 @@ export function WorkbenchPage({ pageId }: WorkbenchPageProps) {
         const response = await fetch("/api/workbench/index", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ corpusIds: selectedIds, resolverProfileIds: selectedResolverIds })
+          body: JSON.stringify({
+            corpusIds: selectedIds,
+            resolverProfileIds: selectedResolverIds,
+            ...workbenchDbPathPayload()
+          })
         });
         const payload = (await response.json()) as {
           status?: string;
@@ -943,6 +1089,7 @@ export function WorkbenchPage({ pageId }: WorkbenchPageProps) {
           try {
             const docNodePayload = {
               mode: "doc-nodes",
+              ...workbenchDbPathPayload(),
               ...semanticGenerationLimits("doc-nodes")
             };
             const response = await fetch("/api/workbench/semantic-edges", {
@@ -984,6 +1131,7 @@ export function WorkbenchPage({ pageId }: WorkbenchPageProps) {
           try {
             const semanticPayload = {
               mode: "batch",
+              ...workbenchDbPathPayload(),
               ...semanticGenerationLimits("batch")
             };
             const response = await fetch("/api/workbench/semantic-edges", {
@@ -1030,7 +1178,11 @@ export function WorkbenchPage({ pageId }: WorkbenchPageProps) {
           const response = await fetch("/api/workbench/semantic-edges", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ q: semanticEdgeQuery, ...(limits.limit !== undefined ? { limit: limits.limit } : {}) })
+            body: JSON.stringify({
+              q: semanticEdgeQuery,
+              ...workbenchDbPathPayload(),
+              ...(limits.limit !== undefined ? { limit: limits.limit } : {})
+            })
           });
           const payload = (await response.json()) as { edge_count?: number; graph?: GraphPayload; error?: string };
           if (!response.ok) {
@@ -1072,7 +1224,7 @@ export function WorkbenchPage({ pageId }: WorkbenchPageProps) {
     try {
       providerSettingsDirtyRef.current = true;
       const next = buildProviderSettingsFromDraft(settingsDraft);
-      await persistProviderSettings(next);
+      await persistProviderSettings(next, workbenchDbPathForRequest());
       setProviderSettings(next);
       setProviderVerification("unverified");
       setSettingsDraft(settingsToDraft(next));
@@ -1088,7 +1240,7 @@ export function WorkbenchPage({ pageId }: WorkbenchPageProps) {
     try {
       providerSettingsDirtyRef.current = true;
       const next = buildProviderSettingsFromDraft(settingsDraft);
-      await persistProviderSettings(next);
+      await persistProviderSettings(next, workbenchDbPathForRequest());
       setProviderSettings(next);
       setProviderVerification("unverified");
       setSettingsDraft(settingsToDraft(next));
@@ -1099,8 +1251,8 @@ export function WorkbenchPage({ pageId }: WorkbenchPageProps) {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           queryIds: ["AQ09"],
-          surfaces: ["CLI", "API", "Web"],
-          ...(acceptanceDbPath.trim() ? { dbPath: acceptanceDbPath.trim() } : {})
+          surfaces: ["CLI", "API", "MCP"],
+          ...dbPathInputPayload(acceptanceDbPath, acceptanceDbPathExplicit)
         })
       });
       if (!response.ok) {
@@ -1125,7 +1277,7 @@ export function WorkbenchPage({ pageId }: WorkbenchPageProps) {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          ...(acceptanceRunnerDraft.dbPath.trim() ? { dbPath: acceptanceRunnerDraft.dbPath.trim() } : {}),
+          ...dbPathInputPayload(acceptanceRunnerDraft.dbPath, acceptanceRunnerDbPathExplicit),
           ...(queryIds.length ? { queryIds } : {}),
           surfaces,
           ...(acceptanceRunnerDraft.outputJson.trim() ? { outputJson: acceptanceRunnerDraft.outputJson.trim() } : {}),
@@ -1194,6 +1346,7 @@ export function WorkbenchPage({ pageId }: WorkbenchPageProps) {
       repo: corpusDraft.repo.trim() || "local",
       sourceRoot: corpusDraft.sourceRoot.trim() || id,
       include: corpusDraft.include.trim() || "**/*",
+      subfolders: corpusDraft.subfolders.trim(),
       fileCount: corpusDraft.fileCount.trim() || "user"
     };
     try {
@@ -1205,7 +1358,9 @@ export function WorkbenchPage({ pageId }: WorkbenchPageProps) {
           repo: next.repo,
           sourceRoot: next.sourceRoot,
           include: next.include.split(",").map((item) => item.trim()).filter(Boolean),
-          type: next.include.includes("pdf") ? "doc" : "code"
+          subfolders: parseSubfolderFilters(next.subfolders),
+          type: next.include.includes("pdf") ? "doc" : "code",
+          ...workbenchDbPathPayload()
         })
       });
       const payload = (await response.json()) as ApiCorpusEntry & { error?: string };
@@ -1216,7 +1371,7 @@ export function WorkbenchPage({ pageId }: WorkbenchPageProps) {
       const nextCorpora = [...corpora.filter((corpus) => corpus.id !== persisted.id), persisted];
       setCorpora(nextCorpora);
       setSelectedCorpusIds((current) => Array.from(new Set([...current, persisted.id])));
-      setCorpusDraft({ id: "", repo: "", sourceRoot: "", include: "**/*.c, **/*.h", fileCount: "user" });
+      setCorpusDraft({ id: "", repo: "", sourceRoot: "", include: "**/*.c, **/*.h", subfolders: "", fileCount: "user" });
       setCorpusMessage(`Corpus ${persisted.id} added`);
     } catch (error) {
       setCorpusMessage(error instanceof Error ? error.message : "Corpus add failed");
@@ -1248,7 +1403,8 @@ export function WorkbenchPage({ pageId }: WorkbenchPageProps) {
           wrappers: [next.wrapper],
           strategy: next.strategy,
           path: next.path,
-          enabled: next.enabled
+          enabled: next.enabled,
+          ...workbenchDbPathPayload()
         })
       });
       const payload = (await response.json()) as ApiResolverProfile & { error?: string };
@@ -1284,7 +1440,8 @@ export function WorkbenchPage({ pageId }: WorkbenchPageProps) {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           id,
-          validateSource: resolverValidateSource
+          validateSource: resolverValidateSource,
+          ...workbenchDbPathPayload()
         })
       });
       const payload = (await response.json()) as {
@@ -1356,7 +1513,9 @@ export function WorkbenchPage({ pageId }: WorkbenchPageProps) {
 
   async function fetchJobRuns() {
     try {
-      const response = await fetch("/api/workbench/jobs?limit=8");
+      const params = new URLSearchParams({ limit: "8" });
+      appendWorkbenchDbPath(params);
+      const response = await fetch(`/api/workbench/jobs?${params.toString()}`);
       if (!response.ok) {
         return [];
       }
@@ -1486,7 +1645,10 @@ export function WorkbenchPage({ pageId }: WorkbenchPageProps) {
                 setProviderVerification("unverified");
                 setSettingsDraft(draft);
               }}
-              onAcceptanceDbPathChange={setAcceptanceDbPath}
+              onAcceptanceDbPathChange={(value) => {
+                setAcceptanceDbPathExplicit(Boolean(value));
+                setAcceptanceDbPath(value);
+              }}
               onSave={saveProviderSettings}
               onRunAcceptance={runProviderAcceptance}
               runtimeConfig={runtimeConfig}
@@ -1526,9 +1688,13 @@ export function WorkbenchPage({ pageId }: WorkbenchPageProps) {
             <GlobalNetworkGraph
               emptyMessage={graphEmptyMessage || queryEmptyMessage}
               graph={apiGraph}
+              functionView={graphFunctionView}
               limits={workbenchLimits}
               loadedEdgeBudget={graphEdgeBudget}
+              onFunctionViewChange={setGraphFunctionView}
               onLoadedEdgeBudgetChange={setGraphEdgeBudget}
+              onNodeSelect={(node) => setSelectedGraphNodeId(node.id)}
+              selectedNodeId={selectedGraphNodeId}
               testId={config.id === "graph-explorer" ? "global-network-graph" : "query-network-graph"}
             />
           ) : null}
@@ -1537,7 +1703,10 @@ export function WorkbenchPage({ pageId }: WorkbenchPageProps) {
             <>
               <AcceptanceRunnerPanel
                 draft={acceptanceRunnerDraft}
-                onChange={setAcceptanceRunnerDraft}
+                onChange={(draft) => {
+                  setAcceptanceRunnerDbPathExplicit(Boolean(draft.dbPath));
+                  setAcceptanceRunnerDraft(draft);
+                }}
                 onRun={runAcceptanceFromPage}
               />
               <AcceptanceRunsPanel runs={acceptanceRuns} />
@@ -1573,9 +1742,19 @@ export function WorkbenchPage({ pageId }: WorkbenchPageProps) {
           {inspectorDetailSections.map((section) => (
             <section className="inspector-section" key={section.title}>
               <h3>{section.title}</h3>
-              <p>
-                <code>{section.body}</code>
-              </p>
+              {section.lines?.length ? (
+                <ul className="node-detail-list">
+                  {section.lines.map((line) => (
+                    <li key={line}>
+                      <code>{line}</code>
+                    </li>
+                  ))}
+                </ul>
+              ) : (
+                <p>
+                  <code>{section.body}</code>
+                </p>
+              )}
             </section>
           ))}
           <h3>Relationship Panel</h3>
@@ -1745,7 +1924,7 @@ function EvidenceResultsTable({
                       </TableCell>
                     ) : null}
                     <TableCell>
-                      <code>{item.symbol}</code>
+                      <code>{formatEvidenceSymbol(item)}</code>
                     </TableCell>
                     <TableCell>
                       <ToneBadge className="source-type-badge" tone={sourceToneForRow(item)}>
@@ -1947,6 +2126,7 @@ function AcceptanceDetailText({ detail }: { detail: AcceptanceDetail }) {
     ...detail.failureReasons,
     detail.missingSurfaces.length ? `missing surfaces: ${detail.missingSurfaces.join(", ")}` : "",
     detail.missing.length ? `missing terms: ${detail.missing.join(", ")}` : "",
+    ...formatAcceptanceSurfaceResults(detail.surfaceResults),
     ...formatAcceptanceProviderChecks(detail.providerChecks)
   ].filter(Boolean);
   return lines.length ? (
@@ -1982,6 +2162,21 @@ function formatAcceptanceProviderChecks(checks: AcceptanceDetail["providerChecks
   ].filter(Boolean) as string[];
 }
 
+function formatAcceptanceSurfaceResults(results: AcceptanceSurfaceResult[] | undefined): string[] {
+  if (!results?.length) {
+    return [];
+  }
+  return results.map((result) => {
+    const graphText =
+      result.graphNodeCount !== undefined || result.graphEdgeCount !== undefined
+        ? `, graph ${result.graphNodeCount ?? 0} nodes / ${result.graphEdgeCount ?? 0} edges`
+        : "";
+    const rowText = result.rowCount !== undefined ? `: rows ${result.rowCount}${graphText}` : "";
+    const message = result.message && result.message !== "ok" ? `: ${result.message}` : rowText;
+    return `${result.surface} ${result.transport} ${result.status}${message}`;
+  });
+}
+
 function formatAcceptanceProviderCheck(label: string, check: ProviderAcceptanceCheck | undefined): string {
   if (!check) {
     return "";
@@ -2002,7 +2197,7 @@ function parseCsvList(value: string): string[] {
 
 function acceptanceSurfacesFromDraft(draft: AcceptanceRunnerDraft): AcceptanceSurface[] {
   const selected = (Object.keys(draft.surfaces) as AcceptanceSurface[]).filter((surface) => draft.surfaces[surface]);
-  return selected.length ? selected : ["CLI", "Web"];
+  return selected.length ? selected : ["CLI", "API", "MCP"];
 }
 
 function acceptanceRunFromPayload(payload: AcceptanceRunPayload): AcceptanceRun {
@@ -2114,11 +2309,14 @@ function buildProviderSettingsFromDraft(settingsDraft: ProviderSettingsDraft): P
   };
 }
 
-async function persistProviderSettings(next: ProviderSettings) {
+async function persistProviderSettings(next: ProviderSettings, dbPath?: string) {
   const response = await fetch("/api/workbench/providers/settings", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(providerSettingsToBackend(next))
+    body: JSON.stringify({
+      ...providerSettingsToBackend(next),
+      ...(dbPath === undefined ? {} : { dbPath })
+    })
   });
   if (!response.ok) {
     const payload = (await response.json().catch(() => ({}))) as { error?: string };
@@ -2365,9 +2563,43 @@ function normalizeApiCorpus(corpus: ApiCorpusEntry): CorpusEntry {
     repo: corpus.repo ?? "local",
     sourceRoot: corpus.sourceRoot ?? corpus.source_root ?? corpus.id,
     include: include ?? "**/*",
+    subfolders: formatSubfolderFilters(corpus.metadata?.subfolders),
     fileCount: String(corpus.fileCount ?? corpus.file_count ?? "api"),
     status: corpus.status ?? "not_indexed"
   };
+}
+
+function parseSubfolderFilters(value: string) {
+  return value
+    .split(/\n+/)
+    .map((line) => line.trim())
+    .filter(Boolean)
+    .flatMap((line) => {
+      const [relativeRoot, includeText = ""] = line.split(/[:=]/, 2);
+      const include = includeText.split(",").map((item) => item.trim()).filter(Boolean);
+      return relativeRoot.trim()
+        ? [{ relativeRoot: relativeRoot.trim(), include: include.length ? include : ["**/*"] }]
+        : [];
+    });
+}
+
+function formatSubfolderFilters(value: unknown) {
+  if (!Array.isArray(value)) {
+    return "";
+  }
+  return value
+    .flatMap((item) => {
+      if (!isObjectRecord(item)) {
+        return [];
+      }
+      const relativeRoot = String(item.relative_root ?? item.relativeRoot ?? item.path ?? "").trim();
+      if (!relativeRoot) {
+        return [];
+      }
+      const include = Array.isArray(item.include) ? item.include.map(String).join(", ") : String(item.include ?? "**/*");
+      return `${relativeRoot}: ${include}`;
+    })
+    .join("\n");
 }
 
 function normalizeApiResolverProfile(profile: ApiResolverProfile): ResolverProfile {
@@ -2398,6 +2630,7 @@ function normalizeApiEvidenceRow(row: EvidenceRow): EvidenceRow {
     source: row.source ?? "api",
     tone: row.tone ?? "neutral",
     symbol: row.symbol,
+    target_symbol: row.target_symbol,
     relation: row.relation,
     score: String(row.score),
     path: row.path,
@@ -2458,8 +2691,27 @@ function normalizeAcceptanceDetail(detail: Partial<AcceptanceDetail> & Record<st
     graphEdgeCount: normalizeOptionalNumber(detail.graphEdgeCount ?? detail.graph_edge_count),
     edgeCount: normalizeOptionalNumber(detail.edgeCount ?? detail.edge_count),
     sourceHitCount: normalizeOptionalNumber(detail.sourceHitCount ?? detail.source_hit_count),
+    surfaceResults: normalizeAcceptanceSurfaceResults(detail.surfaceResults ?? detail.surface_results),
     providerChecks: normalizeAcceptanceProviderChecks(detail.providerChecks ?? detail.provider_checks)
   };
+}
+
+function normalizeAcceptanceSurfaceResults(value: unknown): AcceptanceSurfaceResult[] {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+  return value
+    .filter((item): item is Record<string, unknown> => isObjectRecord(item))
+    .map((item) => ({
+      surface: String(item.surface ?? "surface"),
+      transport: String(item.transport ?? "unknown"),
+      status: String(item.status ?? "unknown"),
+      dbPath: typeof item.dbPath === "string" ? item.dbPath : typeof item.db_path === "string" ? item.db_path : undefined,
+      rowCount: normalizeOptionalNumber(item.rowCount ?? item.row_count),
+      graphNodeCount: normalizeOptionalNumber(item.graphNodeCount ?? item.graph_node_count),
+      graphEdgeCount: normalizeOptionalNumber(item.graphEdgeCount ?? item.graph_edge_count),
+      message: typeof item.message === "string" ? item.message : undefined
+    }));
 }
 
 function normalizeAcceptanceProviderChecks(value: unknown): AcceptanceDetail["providerChecks"] | undefined {
@@ -2500,7 +2752,11 @@ function normalizeOptionalNumber(value: unknown): number | undefined {
 }
 
 function evidenceRowKey(row: EvidenceRow): string {
-  return `${row.source}:${row.symbol}:${row.path}`;
+  return `${row.source}:${row.symbol}:${row.relation}:${row.target_symbol ?? ""}:${row.path}:${row.line_start ?? ""}`;
+}
+
+function formatEvidenceSymbol(row: EvidenceRow): string {
+  return row.target_symbol ? `${row.symbol} -> ${row.target_symbol}` : row.symbol;
 }
 
 function sourceToneForRow(row: EvidenceRow): SourceTone {
@@ -2529,10 +2785,13 @@ function buildLiveInspectorChain(row: EvidenceRow): string[] {
   if (row.resolved_chain) {
     return row.resolved_chain.split(/\s*->\s*/).filter(Boolean);
   }
+  if (row.target_symbol) {
+    return [row.symbol, row.relation, row.target_symbol].filter(Boolean);
+  }
   return [row.symbol, row.relation, row.path].filter(Boolean);
 }
 
-function buildLiveInspectorSections(row: EvidenceRow): Array<{ title: string; body: string }> {
+function buildLiveInspectorSections(row: EvidenceRow): InspectorDetailSection[] {
   const location = [row.path, row.line_start ? `line ${row.line_start}` : "", row.page ? `page ${row.page}` : ""]
     .filter(Boolean)
     .join(" ");
@@ -2548,10 +2807,67 @@ function buildLiveInspectorSections(row: EvidenceRow): Array<{ title: string; bo
   ];
 }
 
+function buildGraphNodeInspectorChain(node: WeightedGraphNode): string[] {
+  return [
+    String(node.kind ?? "node"),
+    String(node.label ?? node.id),
+    node.id
+  ].filter(Boolean);
+}
+
+function buildGraphNodeInspectorSections(node: WeightedGraphNode): InspectorDetailSection[] {
+  const attr = isObjectRecord(node.attr) ? node.attr : {};
+  const sections: InspectorDetailSection[] = [
+    {
+      title: "Node Detail",
+      body: [
+        `kind=${node.kind ?? "unknown"}`,
+        `weight=${formatNodeWeight(node.weight)}`,
+        `in=${node.in?.length ?? 0}`,
+        `out=${node.out?.length ?? 0}`
+      ].join(" ")
+    }
+  ];
+  const conceptImplementations = conceptImplementationLines(attr);
+  if (isConceptFunctionNode(node) && conceptImplementations.length) {
+    sections.push({
+      title: "Concept Generated From",
+      lines: conceptImplementations
+    });
+  }
+  const sources = sourceRecordLines(attr.source);
+  if (sources.length) {
+    sections.push({
+      title: "Source Records",
+      lines: sources
+    });
+  }
+  const metadata = compactMetadataLines(attr, [
+    "function_name",
+    "normalization_rule",
+    "normalization_profile_id",
+    "merge_status",
+    "register_neighbor_overlap",
+    "ip_block",
+    "ip_version",
+    "doc_kind"
+  ]);
+  if (metadata.length) {
+    sections.push({
+      title: "Metadata",
+      lines: metadata
+    });
+  }
+  return sections;
+}
+
 function buildLiveRelationshipLines(row: EvidenceRow, graph: GraphPayload | null): string[] {
   const lines = new Set<string>();
   if (row.resolved_chain) {
     lines.add(row.resolved_chain);
+  }
+  if (row.target_symbol) {
+    lines.add(`${row.symbol} ${row.relation} ${row.target_symbol}`);
   }
   lines.add(`${row.symbol} ${row.relation} ${row.path}`);
   for (const edge of graph?.edges ?? []) {
@@ -2560,6 +2876,105 @@ function buildLiveRelationshipLines(row: EvidenceRow, graph: GraphPayload | null
     }
   }
   return Array.from(lines);
+}
+
+function buildSelectedNodeRelationshipLines(node: WeightedGraphNode, graph: GraphPayload, limit?: number): string[] {
+  const previewLimit = Math.max(1, limit ?? graph.edges.length);
+  const lines = graph.edges.flatMap((edge) => {
+    if (edge.src !== node.id && edge.dst !== node.id) {
+      return [];
+    }
+    const direction = edge.src === node.id ? "out" : "in";
+    const provenance = graphEdgeProvenanceLabel(edge);
+    return provenance
+      ? [`${direction}: ${edge.src} ${edge.relation} ${edge.dst} [${provenance}]`]
+      : [`${direction}: ${edge.src} ${edge.relation} ${edge.dst}`];
+  });
+  if (lines.length === 0) {
+    return [`${node.id} has no visible relationships after current filters.`];
+  }
+  return lines.slice(0, previewLimit);
+}
+
+function isConceptFunctionNode(node: WeightedGraphNode): boolean {
+  return node.kind === "function" && node.id.includes(":concept:");
+}
+
+function conceptImplementationLines(attr: Record<string, unknown>): string[] {
+  const implementationRecords = Array.isArray(attr.concept_implementations)
+    ? attr.concept_implementations.filter(isObjectRecord)
+    : Array.isArray(attr.raw_implementations)
+      ? attr.raw_implementations.filter(isObjectRecord)
+      : [];
+  const lines = implementationRecords.flatMap((item) => {
+    const functionName = String(item.function_name ?? item.name ?? "").trim();
+    if (!functionName) {
+      return [];
+    }
+    const location = sourceLocationLabel(item);
+    const version = [item.ip_block, item.ip_version].filter(Boolean).join(" ");
+    return [`${functionName}${version ? ` (${version})` : ""}${location ? ` @ ${location}` : ""}`];
+  });
+  const rawFunctionNames = arrayOfStrings(attr.raw_function_names);
+  for (const functionName of rawFunctionNames) {
+    if (!lines.some((line) => line.startsWith(functionName))) {
+      lines.push(functionName);
+    }
+  }
+  const count = Number(attr.raw_implementation_count ?? attr.raw_function_names_count ?? lines.length);
+  if (Number.isFinite(count) && count > lines.length) {
+    lines.push(`+${count - lines.length} more implementations in the current graph payload`);
+  }
+  return lines;
+}
+
+function sourceRecordLines(value: unknown): string[] {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+  return value.filter(isObjectRecord).map(sourceLocationLabel).filter(Boolean).slice(0, 8);
+}
+
+function compactMetadataLines(attr: Record<string, unknown>, keys: string[]): string[] {
+  return keys.flatMap((key) => {
+    const value = attr[key];
+    if (value === undefined || value === null || value === "" || value === 0) {
+      return [];
+    }
+    if (Array.isArray(value) && value.length === 0) {
+      return [];
+    }
+    return [`${key}=${Array.isArray(value) ? value.map(String).join(", ") : String(value)}`];
+  });
+}
+
+function sourceLocationLabel(record: Record<string, unknown>): string {
+  const functionName = String(record.function_name ?? "").trim();
+  const path = String(record.path ?? "").trim();
+  const lineStart = record.line_start ?? record.lineStart;
+  const lineEnd = record.line_end ?? record.lineEnd;
+  const page = record.page;
+  const location = [
+    path,
+    lineStart ? `line ${lineEnd && lineEnd !== lineStart ? `${lineStart}-${lineEnd}` : lineStart}` : "",
+    page ? `page ${page}` : ""
+  ].filter(Boolean).join(" ");
+  if (location) {
+    return location;
+  }
+  return functionName;
+}
+
+function arrayOfStrings(value: unknown): string[] {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+  return value.map(String).map((item) => item.trim()).filter(Boolean);
+}
+
+function formatNodeWeight(value: unknown): string {
+  const numeric = Number(value ?? 1);
+  return Number.isFinite(numeric) ? numeric.toFixed(2) : "1.00";
 }
 
 function buildGraphRelationshipLines(graph: GraphPayload, emptyMessage: string, limit?: number): string[] {
@@ -2573,7 +2988,10 @@ function buildGraphRelationshipLines(graph: GraphPayload, emptyMessage: string, 
   ];
   const seen = new Set<string>();
   return relationshipOrder.flatMap((edge) => {
-    const line = `${edge.src} ${edge.relation} ${edge.dst}`;
+    const provenance = graphEdgeProvenanceLabel(edge);
+    const line = provenance
+      ? `${edge.src} ${edge.relation} ${edge.dst} [${provenance}]`
+      : `${edge.src} ${edge.relation} ${edge.dst}`;
     if (seen.has(line)) {
       return [];
     }
@@ -2925,6 +3343,16 @@ function CorpusEditor({
             value={draft.include}
           />
         </Field>
+        <Field className="provider-settings-field--wide">
+          <FieldLabel>Subfolder filters</FieldLabel>
+          <Textarea
+            aria-label="Subfolder filters"
+            onChange={(event) => update("subfolders", event.target.value)}
+            placeholder={"drivers/gpu/drm/amd/amdgpu: **/*.c, **/*.h\ndrivers/gpu/drm/amd/include/asic_reg: **/*.h"}
+            value={draft.subfolders}
+          />
+          <FieldDescription>One relative subfolder per line, followed by optional include globs.</FieldDescription>
+        </Field>
       </FieldGroup>
       <div className="provider-settings-actions">
         <Button onClick={onAdd} type="button">
@@ -3168,29 +3596,63 @@ function JobRunsPanel({ jobs }: { jobs: JobRun[] }) {
 
 function GlobalNetworkGraph({
   emptyMessage,
+  functionView,
   graph,
   limits,
   loadedEdgeBudget,
+  onFunctionViewChange,
   onLoadedEdgeBudgetChange,
+  onNodeSelect,
+  selectedNodeId,
   testId
 }: {
   emptyMessage?: string;
+  functionView: GraphFunctionView;
   graph: GraphPayload | null;
   limits: WorkbenchLimits;
   loadedEdgeBudget: number | null;
+  onFunctionViewChange: (value: GraphFunctionView) => void;
   onLoadedEdgeBudgetChange: (value: number | null) => void;
+  onNodeSelect: (node: WeightedGraphNode) => void;
+  selectedNodeId: string;
   testId: string;
 }) {
   const graphData = buildGraphData(graph);
-  const isEmpty = graphData.nodes.length === 0;
+  const filterOptions = useMemo(() => graphFilterOptions(graphData.edges), [graphData.edges]);
+  const [selectedRelations, setSelectedRelations] = useState<string[]>([]);
+  const [selectedStages, setSelectedStages] = useState<string[]>([]);
+  const [selectedSources, setSelectedSources] = useState<string[]>([]);
   const [minEdgeWeight, setMinEdgeWeight] = useState<number | null>(null);
   const [maxNodes, setMaxNodes] = useState<number | null>(null);
   const [maxEdges, setMaxEdges] = useState<number | null>(null);
+  const relationOptionKey = filterOptions.relations.map((option) => option.value).join("\u0000");
+  const stageOptionKey = filterOptions.stages.map((option) => option.value).join("\u0000");
+  const sourceOptionKey = filterOptions.sources.map((option) => option.value).join("\u0000");
+  useEffect(() => {
+    setSelectedRelations((current) => reconcileGraphFilterSelection(current, filterOptions.relations));
+  }, [relationOptionKey]);
+  useEffect(() => {
+    setSelectedStages((current) => reconcileGraphFilterSelection(current, filterOptions.stages));
+  }, [stageOptionKey]);
+  useEffect(() => {
+    setSelectedSources((current) => reconcileGraphFilterSelection(current, filterOptions.sources));
+  }, [sourceOptionKey]);
+  const filteredGraphData = useMemo(
+    () =>
+      filterGraphDataByControls(graphData, {
+        relations: selectedRelations,
+        stages: selectedStages,
+        sources: selectedSources
+      }),
+    [graphData, selectedRelations, selectedStages, selectedSources]
+  );
+  const isEmpty = filteredGraphData.nodes.length === 0;
   const effectiveMinEdgeWeight = minEdgeWeight ?? limits.graph?.minimumEdgeWeight ?? 0;
-  const effectiveMaxNodes = maxNodes ?? limits.graph?.visibleNodeBudget ?? graphData.nodes.length;
-  const effectiveMaxEdges = maxEdges ?? limits.graph?.visibleEdgeBudget ?? graphData.edges.length;
-  const summaryLimit = Math.max(1, limits.graph?.accessibilitySummaryLimit ?? (graphData.nodes.length || 1));
-  const layerSummary = graphLayerSummary(graphData.edges);
+  const effectiveMaxNodes = maxNodes ?? limits.graph?.visibleNodeBudget ?? filteredGraphData.nodes.length;
+  const effectiveMaxEdges = maxEdges ?? limits.graph?.visibleEdgeBudget ?? filteredGraphData.edges.length;
+  const summaryLimit = Math.max(1, limits.graph?.accessibilitySummaryLimit ?? (filteredGraphData.nodes.length || 1));
+  const layerSummary = graphLayerSummary(filteredGraphData.edges);
+  const provenanceSummary = graphProvenanceSummary(filteredGraphData.edges);
 
   return (
     <div className="network-preview network-preview--global" data-testid={testId}>
@@ -3198,19 +3660,35 @@ function GlobalNetworkGraph({
         <span>Global Relation Graph</span>
         <ToneBadge tone="code">weighted connections</ToneBadge>
         {layerSummary ? <ToneBadge tone="success">layers {layerSummary}</ToneBadge> : null}
+        {provenanceSummary ? <ToneBadge tone="code">provenance {provenanceSummary}</ToneBadge> : null}
       </div>
       <GraphDisplayControls
-        edgeTotal={graphData.edges.length}
+        edgeTotal={filteredGraphData.edges.length}
+        filterOptions={filterOptions}
         loadedEdgeBudget={loadedEdgeBudget}
         maxEdgeBudget={limits.graph?.maxEdgeBudget}
         maxEdges={effectiveMaxEdges}
         maxNodes={effectiveMaxNodes}
         minEdgeWeight={effectiveMinEdgeWeight}
-        nodeTotal={graphData.nodes.length}
+        nodeTotal={filteredGraphData.nodes.length}
+        functionView={functionView}
+        onFunctionViewChange={onFunctionViewChange}
         onLoadedEdgeBudgetChange={onLoadedEdgeBudgetChange}
         onMaxEdgesChange={setMaxEdges}
         onMaxNodesChange={setMaxNodes}
         onMinEdgeWeightChange={setMinEdgeWeight}
+        onToggleFilter={(group, value) => {
+          if (group === "relation") {
+            setSelectedRelations((current) => toggleGraphFilterValue(current, value));
+          } else if (group === "stage") {
+            setSelectedStages((current) => toggleGraphFilterValue(current, value));
+          } else {
+            setSelectedSources((current) => toggleGraphFilterValue(current, value));
+          }
+        }}
+        selectedRelations={selectedRelations}
+        selectedSources={selectedSources}
+        selectedStages={selectedStages}
       />
       {isEmpty ? (
         <div className="network-empty" role="status">
@@ -3218,10 +3696,12 @@ function GlobalNetworkGraph({
         </div>
       ) : (
         <WeightedForceGraph
-          graph={graphData}
+          graph={filteredGraphData}
           maxEdges={effectiveMaxEdges}
           maxNodes={effectiveMaxNodes}
           minEdgeWeight={effectiveMinEdgeWeight}
+          onNodeSelect={onNodeSelect}
+          selectedNodeId={selectedNodeId}
           summaryLimit={summaryLimit}
         />
       )}
@@ -3232,7 +3712,7 @@ function GlobalNetworkGraph({
 function graphLayerSummary(edges: Array<{ stage?: string }>): string {
   const counts = new Map<string, number>();
   for (const edge of edges) {
-    const stage = (edge.stage || "unspecified").trim() || "unspecified";
+    const stage = graphEdgeStage(edge);
     counts.set(stage, (counts.get(stage) ?? 0) + 1);
   }
   return Array.from(counts.entries())
@@ -3241,30 +3721,238 @@ function graphLayerSummary(edges: Array<{ stage?: string }>): string {
     .join(" ");
 }
 
+function graphProvenanceSummary(edges: GraphPayload["edges"]): string {
+  const labels = new Set<string>();
+  for (const edge of edges) {
+    const label = graphEdgeProvenanceLabel(edge);
+    if (label) {
+      labels.add(label);
+    }
+  }
+  return Array.from(labels).slice(0, 4).join(" ");
+}
+
+function graphFilterOptions(edges: GraphPayload["edges"]): {
+  relations: GraphFilterOption[];
+  stages: GraphFilterOption[];
+  sources: GraphFilterOption[];
+} {
+  const relations = new Map<string, number>();
+  const stages = new Map<string, number>();
+  const sources = new Map<string, number>();
+  for (const edge of edges) {
+    incrementGraphOption(relations, edge.relation || "relates_to");
+    incrementGraphOption(stages, graphEdgeStage(edge));
+    for (const source of graphEdgeSourceValues(edge)) {
+      incrementGraphOption(sources, source);
+    }
+  }
+  return {
+    relations: graphOptionsFromCounts(relations),
+    stages: graphOptionsFromCounts(stages),
+    sources: graphOptionsFromCounts(sources)
+  };
+}
+
+function filterGraphDataByControls(
+  graph: GraphPayload,
+  filters: { relations: string[]; stages: string[]; sources: string[] }
+): GraphPayload {
+  const edges = graph.edges.filter((edge) => {
+    if (!graphFilterMatches([edge.relation], filters.relations)) {
+      return false;
+    }
+    if (!graphFilterMatches([graphEdgeStage(edge)], filters.stages)) {
+      return false;
+    }
+    return graphFilterMatches(graphEdgeSourceValues(edge), filters.sources);
+  });
+  const nodeIds = new Set(edges.flatMap((edge) => [edge.src, edge.dst]));
+  return {
+    nodes: edges.length ? graph.nodes.filter((node) => nodeIds.has(node.id)) : graph.nodes,
+    edges
+  };
+}
+
+function reconcileGraphFilterSelection(current: string[], options: GraphFilterOption[]): string[] {
+  const values = options.map((option) => option.value);
+  if (values.length === 0) {
+    return [];
+  }
+  if (current.length === 0) {
+    return values;
+  }
+  const valueSet = new Set(values);
+  const next = current.filter((value) => valueSet.has(value));
+  if (next.length === 0) {
+    return values;
+  }
+  return sameStringList(current, next) ? current : next;
+}
+
+function toggleGraphFilterValue(current: string[], value: string): string[] {
+  if (!current.includes(value)) {
+    return [...current, value].sort((left, right) => left.localeCompare(right));
+  }
+  if (current.length <= 1) {
+    return current;
+  }
+  return current.filter((candidate) => candidate !== value);
+}
+
+function graphFilterMatches(values: string[], selected: string[]): boolean {
+  return selected.length === 0 || values.some((value) => selected.includes(value));
+}
+
+function graphOptionsFromCounts(counts: Map<string, number>): GraphFilterOption[] {
+  return Array.from(counts.entries())
+    .map(([value, count]) => ({ value, count }))
+    .sort((left, right) => left.value.localeCompare(right.value));
+}
+
+function incrementGraphOption(counts: Map<string, number>, value: string) {
+  const key = value.trim() || "unspecified";
+  counts.set(key, (counts.get(key) ?? 0) + 1);
+}
+
+function graphEdgeStage(edge: { stage?: string }): string {
+  return (edge.stage || "unspecified").trim() || "unspecified";
+}
+
+function graphEdgeSourceValues(edge: GraphPayload["edges"][number]): string[] {
+  const values: string[] = [];
+  if (typeof edge.source === "string") {
+    values.push(edge.source);
+  }
+  if (Array.isArray(edge.sources)) {
+    for (const source of edge.sources) {
+      if (typeof source === "string") {
+        values.push(source);
+      } else if (source && typeof source === "object") {
+        values.push(...stringValuesFromUnknown(source.source, source.provider, source.extractor));
+      }
+    }
+  }
+  return dedupeStrings(values).length > 0 ? dedupeStrings(values) : ["unspecified"];
+}
+
+function graphEdgeProvenanceLabel(edge: GraphPayload["edges"][number]): string {
+  const attr = isObjectRecord(edge.attr) ? edge.attr : {};
+  const sourceRecords = recordValuesFromUnknown(attr.source, attr.sources);
+  const providers = dedupeStrings(
+    stringValuesFromUnknown(
+      attr.provider,
+      attr.providers,
+      ...sourceRecords.flatMap((source) => [source.provider, source.providers])
+    )
+  );
+  const models = dedupeStrings(
+    stringValuesFromUnknown(
+      attr.model,
+      attr.models,
+      ...sourceRecords.flatMap((source) => [source.model, source.models])
+    )
+  );
+  const jobIds = dedupeStrings(
+    stringValuesFromUnknown(
+      attr.job_id,
+      attr.job_ids,
+      ...sourceRecords.flatMap((source) => [source.job_id, source.job_ids])
+    )
+  );
+  const sources = graphEdgeSourceValues(edge).filter((source) => source !== "unspecified");
+  const providerModel =
+    providers[0] && models[0] ? `${providers[0]}/${models[0]}` : providers[0] || models[0] || "";
+  const source = sources.find((candidate) => candidate !== providers[0]);
+  const dispatch = typeof attr.dispatch === "string" ? attr.dispatch : "";
+  const candidateCount = Number(attr.callback_candidate_count ?? 0);
+  const dispatchLabel = dispatch
+    ? `${dispatch === "ambiguous" ? "dynamic dispatch" : dispatch}${candidateCount > 0 ? ` ${candidateCount} candidates` : ""}`
+    : "";
+  return [providerModel, jobIds[0] ? `job ${jobIds[0]}` : "", source ? `source ${source}` : "", dispatchLabel]
+    .filter(Boolean)
+    .join(" ");
+}
+
+function stringValuesFromUnknown(...values: unknown[]): string[] {
+  return values.flatMap((value) => {
+    if (value === "" || value === null || value === undefined) {
+      return [];
+    }
+    if (Array.isArray(value)) {
+      return value.map((item) => String(item)).filter(Boolean);
+    }
+  return [String(value)];
+  });
+}
+
+function recordValuesFromUnknown(...values: unknown[]): Record<string, unknown>[] {
+  return values.flatMap((value) => {
+    if (Array.isArray(value)) {
+      return value.filter(isObjectRecord);
+    }
+    return isObjectRecord(value) ? [value] : [];
+  });
+}
+
+function dedupeStrings(values: string[]): string[] {
+  const seen = new Set<string>();
+  return values.flatMap((value) => {
+    const trimmed = value.trim();
+    if (!trimmed || seen.has(trimmed)) {
+      return [];
+    }
+    seen.add(trimmed);
+    return [trimmed];
+  });
+}
+
+function sameStringList(left: string[], right: string[]): boolean {
+  return left.length === right.length && left.every((value, index) => value === right[index]);
+}
+
 function GraphDisplayControls({
   edgeTotal,
+  filterOptions,
+  functionView,
   loadedEdgeBudget,
   maxEdgeBudget,
   maxEdges,
   maxNodes,
   minEdgeWeight,
   nodeTotal,
+  onFunctionViewChange,
   onLoadedEdgeBudgetChange,
   onMaxEdgesChange,
   onMaxNodesChange,
-  onMinEdgeWeightChange
+  onMinEdgeWeightChange,
+  onToggleFilter,
+  selectedRelations,
+  selectedSources,
+  selectedStages
 }: {
   edgeTotal: number;
+  filterOptions: {
+    relations: GraphFilterOption[];
+    stages: GraphFilterOption[];
+    sources: GraphFilterOption[];
+  };
+  functionView: GraphFunctionView;
   loadedEdgeBudget: number | null;
   maxEdgeBudget?: number;
   maxEdges: number;
   maxNodes: number;
   minEdgeWeight: number;
   nodeTotal: number;
+  onFunctionViewChange: (value: GraphFunctionView) => void;
   onLoadedEdgeBudgetChange: (value: number | null) => void;
   onMaxEdgesChange: (value: number) => void;
   onMaxNodesChange: (value: number) => void;
   onMinEdgeWeightChange: (value: number) => void;
+  onToggleFilter: (group: GraphFilterGroup, value: string) => void;
+  selectedRelations: string[];
+  selectedSources: string[];
+  selectedStages: string[];
 }) {
   const nodeMax = Math.max(nodeTotal || 1, maxNodes || 1);
   const edgeMax = Math.max(edgeTotal || 1, maxEdges || 1);
@@ -3275,6 +3963,18 @@ function GraphDisplayControls({
 
   return (
     <div className="graph-controls" aria-label="Graph display controls">
+      <label className="graph-control">
+        <span>Function view</span>
+        <Select value={functionView} onValueChange={(value) => onFunctionViewChange(value as GraphFunctionView)}>
+          <SelectTrigger aria-label="Function view">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="concept">Concept</SelectItem>
+            <SelectItem value="implementation">Implementation</SelectItem>
+          </SelectContent>
+        </Select>
+      </label>
       <label className="graph-control">
         <span>Loaded edge budget</span>
         <strong>{loadedEdgeBudget ?? "config"} / {sourceMax}</strong>
@@ -3323,6 +4023,63 @@ function GraphDisplayControls({
           value={[Math.min(maxEdges, edgeMax)]}
         />
       </label>
+      <GraphFilterChecklist
+        group="relation"
+        label="Relations"
+        options={filterOptions.relations}
+        selected={selectedRelations}
+        onToggle={onToggleFilter}
+      />
+      <GraphFilterChecklist
+        group="stage"
+        label="Stages"
+        options={filterOptions.stages}
+        selected={selectedStages}
+        onToggle={onToggleFilter}
+      />
+      <GraphFilterChecklist
+        group="source"
+        label="Sources"
+        options={filterOptions.sources}
+        selected={selectedSources}
+        onToggle={onToggleFilter}
+      />
+    </div>
+  );
+}
+
+function GraphFilterChecklist({
+  group,
+  label,
+  onToggle,
+  options,
+  selected
+}: {
+  group: GraphFilterGroup;
+  label: string;
+  onToggle: (group: GraphFilterGroup, value: string) => void;
+  options: GraphFilterOption[];
+  selected: string[];
+}) {
+  if (options.length === 0) {
+    return null;
+  }
+  return (
+    <div className="graph-filter-group" aria-label={`Graph ${group} filters`}>
+      <span>{label}</span>
+      <div className="graph-filter-options">
+        {options.map((option) => (
+          <label className="graph-filter-option" key={option.value}>
+            <Checkbox
+              aria-label={`Graph ${group} ${option.value}`}
+              checked={selected.length === 0 || selected.includes(option.value)}
+              onCheckedChange={() => onToggle(group, option.value)}
+            />
+            <span>{option.value}</span>
+            <strong>{option.count}</strong>
+          </label>
+        ))}
+      </div>
     </div>
   );
 }
@@ -3334,7 +4091,7 @@ function buildGraphData(graph: GraphPayload | null): GraphPayload {
   return { nodes: [], edges: [] };
 }
 
-const allowedGraphKinds = new Set(["function", "register", "doc_section", "pdf_section", "doc_box"]);
+const allowedGraphKinds = new Set(["function", "register", "doc"]);
 const allowedGraphRelations = new Set([
   "reads",
   "writes",
@@ -3354,21 +4111,27 @@ function sanitizeGraphPayload(graph: GraphPayload | null | undefined): GraphPayl
     return null;
   }
   const nodes = (Array.isArray(graph.nodes) ? graph.nodes : [])
-    .filter((node) => node.id && allowedGraphKinds.has(String(node.kind ?? "")))
-    .map((node) => {
+    .flatMap((node) => {
+      const graphKind = normalizeGraphKind(node.kind);
+      if (!node.id || !graphKind || !allowedGraphKinds.has(graphKind.kind)) {
+        return [];
+      }
       const attr = isObjectRecord(node.attr) ? { ...node.attr } : {};
+      if (graphKind.docKind && !attr.doc_kind) {
+        attr.doc_kind = graphKind.docKind;
+      }
       if (!Array.isArray(attr.source)) {
         attr.source = [unknownSourceRecord()];
       }
-      return {
+      return [{
         ...node,
         id: String(node.id),
-        kind: String(node.kind),
+        kind: graphKind.kind,
         label: String(node.label ?? node.id),
         in: Array.isArray(node.in) ? node.in.map(String) : [],
         out: Array.isArray(node.out) ? node.out.map(String) : [],
         attr
-      };
+      }];
     });
   const nodeIds = new Set(nodes.map((node) => node.id));
   const edges = (Array.isArray(graph.edges) ? graph.edges : []).flatMap((edge) => {
@@ -3388,6 +4151,23 @@ function sanitizeGraphPayload(graph: GraphPayload | null | undefined): GraphPayl
     }];
   });
   return { nodes, edges };
+}
+
+function normalizeGraphKind(rawKind: string | undefined) {
+  const normalized = String(rawKind ?? "").trim().toLowerCase();
+  if (normalized === "function" || normalized === "register" || normalized === "doc") {
+    return { kind: normalized };
+  }
+  if (normalized === "doc_section") {
+    return { kind: "doc", docKind: "markdown_section" };
+  }
+  if (normalized === "pdf_section") {
+    return { kind: "doc", docKind: "pdf_section" };
+  }
+  if (normalized === "doc_box") {
+    return { kind: "doc", docKind: "boxmatrix_box" };
+  }
+  return null;
 }
 
 function normalizeGraphRelation(rawRelation: string | undefined) {

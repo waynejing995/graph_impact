@@ -27,6 +27,115 @@ class WorkbenchCorpusStateTests(unittest.TestCase):
             self.assertEqual(corpora[0]["include"], ["**/*.md", "**/*.pdf"])
             self.assertEqual(corpora[0]["metadata"]["type"], "doc")
 
+    def test_registered_corpus_indexes_multiple_subfolder_filters(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            db_path = root / "asip.db"
+            source_root = root / "linux"
+            amdgpu_root = source_root / "drivers/gpu/drm/amd/amdgpu"
+            asic_reg_root = source_root / "drivers/gpu/drm/amd/include/asic_reg"
+            display_root = source_root / "drivers/gpu/drm/amd/display"
+            amdgpu_root.mkdir(parents=True)
+            asic_reg_root.mkdir(parents=True)
+            display_root.mkdir(parents=True)
+            (amdgpu_root / "gfx.c").write_text("void program(void) { WREG32(regGCVM_L2_CNTL, 1); }\n", encoding="utf-8")
+            (asic_reg_root / "gc_11_0_0_offset.h").write_text("#define regHEADER_ONLY_REGISTER 0x1234\n", encoding="utf-8")
+            (display_root / "display.c").write_text("void display(void) { WREG32(regDISPLAY_ONLY_REGISTER, 1); }\n", encoding="utf-8")
+
+            add_corpus(
+                db_path,
+                corpus_id="linux-amdgpu",
+                repo="local",
+                source_root=str(source_root),
+                include=["**/*.c"],
+                corpus_type="code",
+                subfolders=[
+                    {"relative_root": "drivers/gpu/drm/amd/amdgpu", "include": ["**/*.c"]},
+                    {"relative_root": "drivers/gpu/drm/amd/include/asic_reg", "include": ["**/*.h"]},
+                ],
+            )
+            summary = index_registered_corpora(db_path, corpus_ids=["linux-amdgpu"])
+            corpora = list_indexed_corpora(db_path)
+            con = sqlite3.connect(db_path)
+            paths = {row[0] for row in con.execute("select path from documents order by path")}
+
+            self.assertEqual(summary["files"], 2)
+            self.assertEqual(corpora[0]["metadata"]["subfolders"][0]["relative_root"], "drivers/gpu/drm/amd/amdgpu")
+            self.assertIn("drivers/gpu/drm/amd/amdgpu/gfx.c", paths)
+            self.assertIn("drivers/gpu/drm/amd/include/asic_reg/gc_11_0_0_offset.h", paths)
+            self.assertNotIn("drivers/gpu/drm/amd/display/display.c", paths)
+
+    def test_registered_corpus_accepts_camel_case_subfolder_filters_without_repo_wide_scan(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            db_path = root / "asip.db"
+            source_root = root / "linux"
+            amdgpu_root = source_root / "drivers/gpu/drm/amd/amdgpu"
+            display_root = source_root / "drivers/gpu/drm/amd/display"
+            amdgpu_root.mkdir(parents=True)
+            display_root.mkdir(parents=True)
+            (amdgpu_root / "gfx.c").write_text("void program(void) { WREG32(regGCVM_L2_CNTL, 1); }\n", encoding="utf-8")
+            (display_root / "display.c").write_text("void display(void) { WREG32(regDISPLAY_ONLY_REGISTER, 1); }\n", encoding="utf-8")
+
+            add_corpus(
+                db_path,
+                corpus_id="linux-amdgpu",
+                repo="local",
+                source_root=str(source_root),
+                include=["**/*.c"],
+                corpus_type="code",
+                subfolders=[
+                    {"relativeRoot": "drivers/gpu/drm/amd/amdgpu", "include": ["**/*.c"]},
+                ],
+            )
+            summary = index_registered_corpora(db_path, corpus_ids=["linux-amdgpu"])
+            con = sqlite3.connect(db_path)
+            paths = {row[0] for row in con.execute("select path from documents order by path")}
+
+            self.assertEqual(summary["files"], 1)
+            self.assertIn("drivers/gpu/drm/amd/amdgpu/gfx.c", paths)
+            self.assertNotIn("drivers/gpu/drm/amd/display/display.c", paths)
+
+    def test_registered_corpus_rejects_subfolder_filters_outside_source_root(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            db_path = root / "asip.db"
+            source_root = root / "linux"
+            source_root.mkdir()
+
+            with self.assertRaises(ValueError) as parent_path:
+                add_corpus(
+                    db_path,
+                    corpus_id="linux-parent-escape",
+                    repo="local",
+                    source_root=str(source_root),
+                    include=["**/*.c"],
+                    subfolders=["../outside:**/*.c"],
+                )
+            self.assertIn("repo-relative", str(parent_path.exception))
+
+            with self.assertRaises(ValueError) as absolute_path:
+                add_corpus(
+                    db_path,
+                    corpus_id="linux-absolute-escape",
+                    repo="local",
+                    source_root=str(source_root),
+                    include=["**/*.c"],
+                    subfolders=[{"relative_root": str(root / "outside"), "include": ["**/*.c"]}],
+                )
+            self.assertIn("repo-relative", str(absolute_path.exception))
+
+            with self.assertRaises(ValueError) as missing_root:
+                add_corpus(
+                    db_path,
+                    corpus_id="linux-missing-subfolder-root",
+                    repo="local",
+                    source_root=str(source_root),
+                    include=["**/*.c"],
+                    subfolders=[{"include": ["**/*.c"]}],
+                )
+            self.assertIn("repo-relative", str(missing_root.exception))
+
     def test_registered_doc_and_pdf_corpus_indexes_plain_text_as_queryable_evidence(self):
         with tempfile.TemporaryDirectory() as tmpdir:
             root = Path(tmpdir)

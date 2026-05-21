@@ -1,0 +1,347 @@
+- generic [active] [ref=e1]:
+  - generic [ref=e2]:
+    - banner [ref=e3]:
+      - generic [ref=e5]: ASIP Evidence Workbench
+      - generic [ref=e6]:
+        - img
+        - textbox "Global symbol search" [ref=e7]:
+          - /placeholder: Search indexed symbols
+          - text: who will write/read CP_HQD_* regs
+      - generic "Workbench status" [ref=e8]:
+        - generic [ref=e9]: "Provider: unverified"
+        - generic [ref=e11]: "Edge: Ollama / gemma4:e4b"
+        - generic [ref=e12]: "Index: ready"
+      - button "Switch to light theme" [ref=e13] [cursor=pointer]:
+        - img
+        - text: Light
+    - main [ref=e14]:
+      - navigation "ASIP sections" [ref=e15]:
+        - link "Evidence Search" [ref=e16] [cursor=pointer]:
+          - /url: /
+        - link "Graph Explorer" [ref=e17] [cursor=pointer]:
+          - /url: /graph
+        - link "Corpus" [ref=e18] [cursor=pointer]:
+          - /url: /corpus
+        - link "Resolver Profiles" [ref=e19] [cursor=pointer]:
+          - /url: /resolver-profiles
+        - link "Acceptance Tests" [ref=e20] [cursor=pointer]:
+          - /url: /acceptance
+        - link "Settings" [ref=e21] [cursor=pointer]:
+          - /url: /settings
+      - region "Graph relationship workspace" [ref=e22]:
+        - generic [ref=e23]:
+          - generic [ref=e24]:
+            - img
+            - textbox "Evidence query" [ref=e25]:
+              - /placeholder: Query live evidence
+              - text: who will write/read CP_HQD_* regs
+          - textbox "IP block filter" [ref=e27]:
+            - /placeholder: IP
+          - textbox "ASIC or generation filter" [ref=e29]:
+            - /placeholder: ASIC
+          - button "Run query" [ref=e30] [cursor=pointer]
+        - generic "Page metrics" [ref=e31]:
+          - generic [ref=e32]: "matches: 24"
+          - generic [ref=e33]: "graph edges: 552"
+          - generic [ref=e34]: "query: live"
+        - generic "Evidence source filters" [ref=e35]:
+          - button "Source filter 1 hop" [ref=e36] [cursor=pointer]:
+            - img
+            - text: 1 hop
+          - button "Source filter 2 hops" [ref=e37] [cursor=pointer]:
+            - img
+            - text: 2 hops
+          - button "Source filter writes" [ref=e38] [cursor=pointer]:
+            - img
+            - text: writes
+          - button "Source filter has_field" [ref=e39] [cursor=pointer]:
+            - img
+            - text: has_field
+        - generic [ref=e40]:
+          - generic [ref=e41]:
+            - generic [ref=e42]: Global Relation Graph
+            - generic [ref=e43]: weighted connections
+            - generic [ref=e111]: "layers deterministic: 552"
+            - generic [ref=e112]: provenance source clang_text_spans source clang_callback
+          - generic "Graph display controls" [ref=e44]:
+            - generic [ref=e45]:
+              - generic [ref=e46]: Function view
+              - combobox "Function view" [ref=e47]
+            - generic [ref=e49]:
+              - generic [ref=e50]: Loaded edge budget
+              - strong [ref=e51]: 3000 / 20000
+              - generic "Loaded edge budget" [ref=e52]
+            - generic [ref=e54]:
+              - generic [ref=e55]: Minimum edge weight
+              - strong [ref=e56]: "0.00"
+              - generic "Minimum edge weight" [ref=e57]
+            - generic [ref=e59]:
+              - generic [ref=e60]: Visible nodes
+              - strong [ref=e61]: 164 / 164
+              - generic "Visible nodes" [ref=e62]
+            - generic [ref=e64]:
+              - generic [ref=e65]: Visible edges
+              - strong [ref=e66]: 552 / 552
+              - generic "Visible edges" [ref=e67]
+            - generic "Graph relation filters" [ref=e124]:
+              - generic [ref=e125]: Relations
+              - generic [ref=e126]
+            - generic "Graph stage filters" [ref=e147]:
+              - generic [ref=e148]: Stages
+              - generic [ref=e150]
+            - generic "Graph source filters" [ref=e154]:
+              - generic [ref=e155]: Sources
+              - generic [ref=e156]
+          - img "Global weighted network graph" [ref=e165]:
+            - generic [ref=e169]:
+              - generic [ref=e170]: nodes 164
+              - generic [ref=e171]: edges 552
+              - generic [ref=e172]: shared registers 27
+              - generic [ref=e173]: function 110
+              - generic [ref=e174]: register 54
+              - generic [ref=e175]: gfx_kiq_init_register
+              - generic [ref=e176]: CP_HQD_ACTIVE
+              - generic [ref=e177]: gfx_kiq_init_register
+              - generic [ref=e178]: gfx_xcc_kiq_init_register
+              - generic [ref=e179]: CP_HQD_PQ_DOORBELL_CONTROL
+              - generic [ref=e180]: gfx_reset_kcq
+              - generic [ref=e181]: CP_HQD_DEQUEUE_REQUEST
+              - generic [ref=e182]: gfx_xcc_kiq_init_register
+              - generic [ref=e183]: CP_HQD_PQ_WPTR_POLL_ADDR
+              - generic [ref=e184]: CP_HQD_PQ_WPTR_POLL_ADDR_HI
+              - generic [ref=e185]: CP_MQD_BASE_ADDR
+              - generic [ref=e186]: CP_PQ_WPTR_POLL_CNTL1
+              - generic [ref=e187]: SDMA0_QUEUE_RESET_REQ
+              - generic [ref=e188]: SDMA1_QUEUE_RESET_REQ
+              - generic [ref=e189]: GRBM_SOFT_RESET
+              - generic [ref=e190]: SPI_COMPUTE_QUEUE_RESET
+              - generic [ref=e191]: reads / 0.97
+              - generic [ref=e192]: writes / 0.97
+              - generic [ref=e193]: writes / 0.97
+              - generic [ref=e194]: writes / 0.97
+              - generic [ref=e195]: reads / 0.97
+              - generic [ref=e196]: writes / 0.97
+              - generic [ref=e197]: writes / 0.97
+              - generic [ref=e198]: writes / 0.97
+        - table "Evidence results" [ref=e74]:
+          - rowgroup [ref=e75]:
+            - row "Type Symbol Source Relation Score Location" [ref=e76]:
+              - columnheader "Type" [ref=e77]
+              - columnheader "Symbol" [ref=e78]
+              - columnheader "Source" [ref=e79]
+              - columnheader "Relation" [ref=e80]
+              - columnheader "Score" [ref=e81]
+              - columnheader "Location" [ref=e82]
+          - rowgroup [ref=e83]:
+            - row "gfx_deactivate_hqd -> CP_HQD_ACTIVE code reads 0.97 drivers/gpu/drm/amd/amdgpu/gfx_v8_0.c line 4369" [ref=e199]:
+              - cell [ref=e200]
+              - cell "gfx_deactivate_hqd -> CP_HQD_ACTIVE" [ref=e201]
+              - cell "code" [ref=e203]
+              - cell "reads" [ref=e205]
+              - cell "0.97" [ref=e207]
+              - cell "drivers/gpu/drm/amd/amdgpu/gfx_v8_0.c line 4369" [ref=e208]
+            - row "gfx_deactivate_hqd -> CP_HQD_DEQUEUE_REQUEST code writes 0.97 drivers/gpu/drm/amd/amdgpu/gfx_v8_0.c line 4370" [ref=e209]:
+              - cell [ref=e210]
+              - cell "gfx_deactivate_hqd -> CP_HQD_DEQUEUE_REQUEST" [ref=e211]
+              - cell "code" [ref=e213]
+              - cell "writes" [ref=e215]
+              - cell "0.97" [ref=e217]
+              - cell "drivers/gpu/drm/amd/amdgpu/gfx_v8_0.c line 4370" [ref=e218]
+            - row "gfx_deactivate_hqd -> CP_HQD_PQ_RPTR code writes 0.97 drivers/gpu/drm/amd/amdgpu/gfx_v8_0.c line 4380" [ref=e219]:
+              - cell [ref=e220]
+              - cell "gfx_deactivate_hqd -> CP_HQD_PQ_RPTR" [ref=e221]
+              - cell "code" [ref=e223]
+              - cell "writes" [ref=e225]
+              - cell "0.97" [ref=e227]
+              - cell "drivers/gpu/drm/amd/amdgpu/gfx_v8_0.c line 4380" [ref=e228]
+            - row "gfx_deactivate_hqd -> CP_HQD_PQ_WPTR code writes 0.97 drivers/gpu/drm/amd/amdgpu/gfx_v8_0.c line 4381" [ref=e229]:
+              - cell [ref=e230]
+              - cell "gfx_deactivate_hqd -> CP_HQD_PQ_WPTR" [ref=e231]
+              - cell "code" [ref=e233]
+              - cell "writes" [ref=e235]
+              - cell "0.97" [ref=e237]
+              - cell "drivers/gpu/drm/amd/amdgpu/gfx_v8_0.c line 4381" [ref=e238]
+            - row "gfx_kiq_fini_register -> CP_HQD_ACTIVE code reads 0.97 drivers/gpu/drm/amd/amdgpu/gfx_v9_0.c line 3801" [ref=e239]:
+              - cell [ref=e240]
+              - cell "gfx_kiq_fini_register -> CP_HQD_ACTIVE" [ref=e241]
+              - cell "code" [ref=e243]
+              - cell "reads" [ref=e245]
+              - cell "0.97" [ref=e247]
+              - cell "drivers/gpu/drm/amd/amdgpu/gfx_v9_0.c line 3801" [ref=e248]
+            - row "gfx_kiq_fini_register -> CP_HQD_ACTIVE code writes 0.97 drivers/gpu/drm/amd/amdgpu/gfx_v9_0.c line 3801" [ref=e249]:
+              - cell [ref=e250]
+              - cell "gfx_kiq_fini_register -> CP_HQD_ACTIVE" [ref=e251]
+              - cell "code" [ref=e253]
+              - cell "writes" [ref=e255]
+              - cell "0.97" [ref=e257]
+              - cell "drivers/gpu/drm/amd/amdgpu/gfx_v9_0.c line 3801" [ref=e258]
+            - row "gfx_kiq_fini_register -> CP_HQD_DEQUEUE_REQUEST code writes 0.97 drivers/gpu/drm/amd/amdgpu/gfx_v9_0.c line 3803" [ref=e259]:
+              - cell [ref=e260]
+              - cell "gfx_kiq_fini_register -> CP_HQD_DEQUEUE_REQUEST" [ref=e261]
+              - cell "code" [ref=e263]
+              - cell "writes" [ref=e265]
+              - cell "0.97" [ref=e267]
+              - cell "drivers/gpu/drm/amd/amdgpu/gfx_v9_0.c line 3803" [ref=e268]
+            - row "gfx_kiq_fini_register -> CP_HQD_IB_CONTROL code writes 0.97 drivers/gpu/drm/amd/amdgpu/gfx_v9_0.c line 3823" [ref=e269]:
+              - cell [ref=e270]
+              - cell "gfx_kiq_fini_register -> CP_HQD_IB_CONTROL" [ref=e271]
+              - cell "code" [ref=e273]
+              - cell "writes" [ref=e275]
+              - cell "0.97" [ref=e277]
+              - cell "drivers/gpu/drm/amd/amdgpu/gfx_v9_0.c line 3823" [ref=e278]
+            - row "gfx_kiq_fini_register -> CP_HQD_IQ_TIMER code writes 0.97 drivers/gpu/drm/amd/amdgpu/gfx_v9_0.c line 3822" [ref=e279]:
+              - cell [ref=e280]
+              - cell "gfx_kiq_fini_register -> CP_HQD_IQ_TIMER" [ref=e281]
+              - cell "code" [ref=e283]
+              - cell "writes" [ref=e285]
+              - cell "0.97" [ref=e287]
+              - cell "drivers/gpu/drm/amd/amdgpu/gfx_v9_0.c line 3822" [ref=e288]
+            - row "gfx_kiq_fini_register -> CP_HQD_PERSISTENT_STATE code writes 0.97 drivers/gpu/drm/amd/amdgpu/gfx_v9_0.c line 3824" [ref=e289]:
+              - cell [ref=e290]
+              - cell "gfx_kiq_fini_register -> CP_HQD_PERSISTENT_STATE" [ref=e291]
+              - cell "code" [ref=e293]
+              - cell "writes" [ref=e295]
+              - cell "0.97" [ref=e297]
+              - cell "drivers/gpu/drm/amd/amdgpu/gfx_v9_0.c line 3824" [ref=e298]
+            - row "gfx_kiq_fini_register -> CP_HQD_PQ_DOORBELL_CONTROL code writes 0.97 drivers/gpu/drm/amd/amdgpu/gfx_v9_0.c line 3825" [ref=e299]:
+              - cell [ref=e300]
+              - cell "gfx_kiq_fini_register -> CP_HQD_PQ_DOORBELL_CONTROL" [ref=e301]
+              - cell "code" [ref=e303]
+              - cell "writes" [ref=e305]
+              - cell "0.97" [ref=e307]
+              - cell "drivers/gpu/drm/amd/amdgpu/gfx_v9_0.c line 3825" [ref=e308]
+            - row "gfx_kiq_fini_register -> CP_HQD_PQ_RPTR code writes 0.97 drivers/gpu/drm/amd/amdgpu/gfx_v9_0.c line 3827" [ref=e309]:
+              - cell [ref=e310]
+              - cell "gfx_kiq_fini_register -> CP_HQD_PQ_RPTR" [ref=e311]
+              - cell "code" [ref=e313]
+              - cell "writes" [ref=e315]
+              - cell "0.97" [ref=e317]
+              - cell "drivers/gpu/drm/amd/amdgpu/gfx_v9_0.c line 3827" [ref=e318]
+            - row "gfx_kiq_fini_register -> CP_HQD_PQ_WPTR_HI code writes 0.97 drivers/gpu/drm/amd/amdgpu/gfx_v9_0.c line 3828" [ref=e319]:
+              - cell [ref=e320]
+              - cell "gfx_kiq_fini_register -> CP_HQD_PQ_WPTR_HI" [ref=e321]
+              - cell "code" [ref=e323]
+              - cell "writes" [ref=e325]
+              - cell "0.97" [ref=e327]
+              - cell "drivers/gpu/drm/amd/amdgpu/gfx_v9_0.c line 3828" [ref=e328]
+            - row "gfx_kiq_fini_register -> CP_HQD_PQ_WPTR_LO code writes 0.97 drivers/gpu/drm/amd/amdgpu/gfx_v9_0.c line 3829" [ref=e329]:
+              - cell [ref=e330]
+              - cell "gfx_kiq_fini_register -> CP_HQD_PQ_WPTR_LO" [ref=e331]
+              - cell "code" [ref=e333]
+              - cell "writes" [ref=e335]
+              - cell "0.97" [ref=e337]
+              - cell "drivers/gpu/drm/amd/amdgpu/gfx_v9_0.c line 3829" [ref=e338]
+            - row "gfx_kiq_init_register -> CP_HQD_ACTIVE code reads 0.97 drivers/gpu/drm/amd/amdgpu/gfx_v10_0.c line 7031" [ref=e339]:
+              - cell [ref=e340]
+              - cell "gfx_kiq_init_register -> CP_HQD_ACTIVE" [ref=e341]
+              - cell "code" [ref=e343]
+              - cell "reads" [ref=e345]
+              - cell "0.97" [ref=e347]
+              - cell "drivers/gpu/drm/amd/amdgpu/gfx_v10_0.c line 7031" [ref=e348]
+            - row "gfx_kiq_init_register -> CP_HQD_ACTIVE code writes 0.97 drivers/gpu/drm/amd/amdgpu/gfx_v10_0.c line 7031" [ref=e349]:
+              - cell [ref=e350]
+              - cell "gfx_kiq_init_register -> CP_HQD_ACTIVE" [ref=e351]
+              - cell "code" [ref=e353]
+              - cell "writes" [ref=e355]
+              - cell "0.97" [ref=e357]
+              - cell "drivers/gpu/drm/amd/amdgpu/gfx_v10_0.c line 7031" [ref=e358]
+            - row "gfx_kiq_init_register -> CP_HQD_DEQUEUE_REQUEST code writes 0.97 drivers/gpu/drm/amd/amdgpu/gfx_v10_0.c line 7038" [ref=e359]:
+              - cell [ref=e360]
+              - cell "gfx_kiq_init_register -> CP_HQD_DEQUEUE_REQUEST" [ref=e361]
+              - cell "code" [ref=e363]
+              - cell "writes" [ref=e365]
+              - cell "0.97" [ref=e367]
+              - cell "drivers/gpu/drm/amd/amdgpu/gfx_v10_0.c line 7038" [ref=e368]
+            - row "gfx_kiq_init_register -> CP_HQD_EOP_BASE_ADDR code writes 0.97 drivers/gpu/drm/amd/amdgpu/gfx_v10_0.c line 7058" [ref=e369]:
+              - cell [ref=e370]
+              - cell "gfx_kiq_init_register -> CP_HQD_EOP_BASE_ADDR" [ref=e371]
+              - cell "code" [ref=e373]
+              - cell "writes" [ref=e375]
+              - cell "0.97" [ref=e377]
+              - cell "drivers/gpu/drm/amd/amdgpu/gfx_v10_0.c line 7058" [ref=e378]
+            - row "gfx_kiq_init_register -> CP_HQD_EOP_BASE_ADDR_HI code writes 0.97 drivers/gpu/drm/amd/amdgpu/gfx_v10_0.c line 7060" [ref=e379]:
+              - cell [ref=e380]
+              - cell "gfx_kiq_init_register -> CP_HQD_EOP_BASE_ADDR_HI" [ref=e381]
+              - cell "code" [ref=e383]
+              - cell "writes" [ref=e385]
+              - cell "0.97" [ref=e387]
+              - cell "drivers/gpu/drm/amd/amdgpu/gfx_v10_0.c line 7060" [ref=e388]
+            - row "gfx_kiq_init_register -> CP_HQD_EOP_CONTROL code writes 0.97 drivers/gpu/drm/amd/amdgpu/gfx_v10_0.c line 7064" [ref=e389]:
+              - cell [ref=e390]
+              - cell "gfx_kiq_init_register -> CP_HQD_EOP_CONTROL" [ref=e391]
+              - cell "code" [ref=e393]
+              - cell "writes" [ref=e395]
+              - cell "0.97" [ref=e397]
+              - cell "drivers/gpu/drm/amd/amdgpu/gfx_v10_0.c line 7064" [ref=e398]
+            - row "gfx_kiq_init_register -> CP_HQD_PERSISTENT_STATE code writes 0.97 drivers/gpu/drm/amd/amdgpu/gfx_v10_0.c line 7119" [ref=e399]:
+              - cell [ref=e400]
+              - cell "gfx_kiq_init_register -> CP_HQD_PERSISTENT_STATE" [ref=e401]
+              - cell "code" [ref=e403]
+              - cell "writes" [ref=e405]
+              - cell "0.97" [ref=e407]
+              - cell "drivers/gpu/drm/amd/amdgpu/gfx_v10_0.c line 7119" [ref=e408]
+            - row "gfx_kiq_init_register -> CP_HQD_PQ_BASE code writes 0.97 drivers/gpu/drm/amd/amdgpu/gfx_v10_0.c line 7078" [ref=e409]:
+              - cell [ref=e410]
+              - cell "gfx_kiq_init_register -> CP_HQD_PQ_BASE" [ref=e411]
+              - cell "code" [ref=e413]
+              - cell "writes" [ref=e415]
+              - cell "0.97" [ref=e417]
+              - cell "drivers/gpu/drm/amd/amdgpu/gfx_v10_0.c line 7078" [ref=e418]
+            - row "gfx_kiq_init_register -> CP_HQD_PQ_BASE_HI code writes 0.97 drivers/gpu/drm/amd/amdgpu/gfx_v10_0.c line 7080" [ref=e419]:
+              - cell [ref=e420]
+              - cell "gfx_kiq_init_register -> CP_HQD_PQ_BASE_HI" [ref=e421]
+              - cell "code" [ref=e423]
+              - cell "writes" [ref=e425]
+              - cell "0.97" [ref=e427]
+              - cell "drivers/gpu/drm/amd/amdgpu/gfx_v10_0.c line 7080" [ref=e428]
+            - row "gfx_kiq_init_register -> CP_HQD_PQ_CONTROL code writes 0.97 drivers/gpu/drm/amd/amdgpu/gfx_v10_0.c line 7084" [ref=e429]:
+              - cell [ref=e430]
+              - cell "gfx_kiq_init_register -> CP_HQD_PQ_CONTROL" [ref=e431]
+              - cell "code" [ref=e433]
+              - cell "writes" [ref=e435]
+              - cell "0.97" [ref=e437]
+              - cell "drivers/gpu/drm/amd/amdgpu/gfx_v10_0.c line 7084" [ref=e438]
+      - complementary [ref=e94]:
+        - generic [ref=e95]:
+          - heading "Global Graph" [level=2] [ref=e96]
+          - generic [ref=e97]:
+            - img
+            - text: live / run 2
+        - heading "Relationship Panel" [level=3] [ref=e99]
+        - generic [ref=e100]:
+          - paragraph [ref=e439]:
+            - code [ref=e440]: function:linux-amdgpu:concept:linux-amdgpu:amd-ip-versioned-functions:gfx_compute_queue_init calls function:linux-amdgpu:concept:linux-amdgpu:amd-ip-versioned-functions:gfx_mqd_deactivate [source clang_text_spans]
+          - paragraph [ref=e441]:
+            - code [ref=e442]: function:linux-amdgpu:concept:linux-amdgpu:amd-ip-versioned-functions:gfx_hw_fini calls function:linux-amdgpu:concept:linux-amdgpu:amd-ip-versioned-functions:gfx_kiq_fini_register [source clang_text_spans]
+          - paragraph [ref=e443]:
+            - code [ref=e444]: function:linux-amdgpu:concept:linux-amdgpu:amd-ip-versioned-functions:gfx_kiq_init_queue calls function:linux-amdgpu:concept:linux-amdgpu:amd-ip-versioned-functions:gfx_kiq_init_register [source clang_text_spans]
+          - paragraph [ref=e445]:
+            - code [ref=e446]: function:linux-amdgpu:concept:linux-amdgpu:amd-ip-versioned-functions:gfx_kiq_init_register calls function:linux-amdgpu:drivers/gpu/drm/amd/amdgpu/gfx_v9_0.c:check_if_enlarge_doorbell_range [source clang_text_spans]
+          - paragraph [ref=e447]:
+            - code [ref=e448]: function:linux-amdgpu:concept:linux-amdgpu:amd-ip-versioned-functions:gfx_kiq_reset_hw_queue calls function:linux-amdgpu:drivers/gpu/drm/amd/amdgpu/amdgpu_rlc.c:amdgpu_gfx_rlc_enter_safe_mode [source clang_text_spans]
+          - paragraph [ref=e449]:
+            - code [ref=e450]: function:linux-amdgpu:concept:linux-amdgpu:amd-ip-versioned-functions:gfx_kiq_reset_hw_queue calls function:linux-amdgpu:drivers/gpu/drm/amd/amdgpu/amdgpu_rlc.c:amdgpu_gfx_rlc_exit_safe_mode [source clang_text_spans]
+          - paragraph [ref=e451]:
+            - code [ref=e452]: function:linux-amdgpu:concept:linux-amdgpu:amd-ip-versioned-functions:gfx_kiq_reset_hw_queue calls function:linux-amdgpu:drivers/gpu/drm/amd/amdgpu/nv.c:nv_grbm_select [source clang_text_spans]
+          - paragraph [ref=e453]:
+            - code [ref=e454]: function:linux-amdgpu:concept:linux-amdgpu:amd-ip-versioned-functions:gfx_kiq_reset_hw_queue calls function:linux-amdgpu:drivers/gpu/drm/amd/amdgpu/soc15.c:soc15_grbm_select [source clang_text_spans]
+          - paragraph [ref=e455]:
+            - code [ref=e456]: function:linux-amdgpu:concept:linux-amdgpu:amd-ip-versioned-functions:gfx_post_soft_reset calls function:linux-amdgpu:concept:linux-amdgpu:amd-ip-versioned-functions:gfx_deactivate_hqd [source clang_text_spans]
+          - paragraph [ref=e457]:
+            - code [ref=e458]: function:linux-amdgpu:concept:linux-amdgpu:amd-ip-versioned-functions:gfx_pre_soft_reset calls function:linux-amdgpu:concept:linux-amdgpu:amd-ip-versioned-functions:gfx_deactivate_hqd [source clang_text_spans]
+          - paragraph [ref=e459]:
+            - code [ref=e460]: function:linux-amdgpu:concept:linux-amdgpu:amd-ip-versioned-functions:gfx_reset_hw_pipe calls function:linux-amdgpu:concept:linux-amdgpu:amd-ip-versioned-functions:gfx_unmap_done [source clang_text_spans]
+          - paragraph [ref=e461]:
+            - code [ref=e462]: function:linux-amdgpu:concept:linux-amdgpu:amd-ip-versioned-functions:gfx_reset_kcq calls function:linux-amdgpu:concept:linux-amdgpu:amd-ip-versioned-functions:gfx_kcq_init_queue [source clang_text_spans]
+        - button "Generate semantic edges" [ref=e103] [cursor=pointer]
+        - button "Generate batch semantic edges" [ref=e104] [cursor=pointer]
+        - button "Extract document nodes" [ref=e105] [cursor=pointer]
+        - paragraph [ref=e463]: "Query ran: who will write/read CP_HQD_* regs"
+        - generic "Semantic generation controls" [ref=e106]:
+          - generic [ref=e107]:
+            - text: Semantic candidate limit
+            - spinbutton "Semantic candidate limit" [ref=e108]
+          - generic [ref=e109]:
+            - text: Semantic batch size
+            - spinbutton "Semantic batch size" [ref=e110]
+  - alert [ref=e464]

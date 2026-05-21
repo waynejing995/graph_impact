@@ -43,6 +43,85 @@ class WorkbenchCliTests(unittest.TestCase):
             self.assertEqual(len(json.loads(configured.stdout)["edges"]), 1)
             self.assertEqual(len(json.loads(all_edges.stdout)["edges"]), 2)
 
+    def test_jobs_command_supersedes_stale_active_jobs(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            db_path = Path(tmpdir) / "asip.db"
+            setup = (
+                "from asip.storage import AsipStore;"
+                f"store=AsipStore.connect({str(db_path)!r});"
+                "store.migrate();"
+                "old_id=store.start_job('index','old index');"
+                "store.update_job_status(old_id,'indexing','old index');"
+                "new_id=store.start_job('index','new index');"
+                "store.finish_job(new_id,'indexed','Indexed 1 documents')"
+            )
+            subprocess.run([sys.executable, "-c", setup], check=True, capture_output=True, text=True)
+
+            result = subprocess.run(
+                [
+                    sys.executable,
+                    "-m",
+                    "asip.cli",
+                    "jobs",
+                    "--db",
+                    str(db_path),
+                    "--kind",
+                    "index",
+                    "--supersede-stale-before-id",
+                    "2",
+                ],
+                check=True,
+                capture_output=True,
+                text=True,
+            )
+
+            payload = json.loads(result.stdout)
+            self.assertEqual(payload["superseded_job_ids"], [1])
+            with sqlite3.connect(db_path) as con:
+                rows = con.execute("select id, status, finished_at from jobs order by id").fetchall()
+            self.assertEqual(rows[0][1], "superseded")
+            self.assertIsNotNone(rows[0][2])
+            self.assertEqual(rows[1][1], "succeeded")
+
+    def test_jobs_command_supersedes_failed_jobs_after_replacement_job(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            db_path = Path(tmpdir) / "asip.db"
+            setup = (
+                "from asip.storage import AsipStore;"
+                f"store=AsipStore.connect({str(db_path)!r});"
+                "store.migrate();"
+                "failed_id=store.start_job('embedding_backfill','too large');"
+                "store.finish_job(failed_id,'failed','context length');"
+                "new_id=store.start_job('embedding_backfill','retry');"
+                "store.finish_job(new_id,'embedded','Embedded 1 chunks')"
+            )
+            subprocess.run([sys.executable, "-c", setup], check=True, capture_output=True, text=True)
+
+            result = subprocess.run(
+                [
+                    sys.executable,
+                    "-m",
+                    "asip.cli",
+                    "jobs",
+                    "--db",
+                    str(db_path),
+                    "--kind",
+                    "embedding_backfill",
+                    "--supersede-stale-before-id",
+                    "2",
+                ],
+                check=True,
+                capture_output=True,
+                text=True,
+            )
+
+            payload = json.loads(result.stdout)
+            self.assertEqual(payload["superseded_job_ids"], [1])
+            with sqlite3.connect(db_path) as con:
+                rows = con.execute("select id, status, message from jobs order by id").fetchall()
+            self.assertEqual(rows[0][1], "superseded")
+            self.assertEqual(rows[1][1], "succeeded")
+
     def test_index_query_and_graph_commands_use_live_sqlite_store(self):
         with tempfile.TemporaryDirectory() as tmpdir:
             root = Path(tmpdir)
@@ -196,8 +275,6 @@ class WorkbenchCliTests(unittest.TestCase):
                 [
                     *common,
                     "index",
-                    "--config",
-                    str(root / "unused.json"),
                     "--db",
                     str(db_path),
                     "--corpus-id",
@@ -227,6 +304,20 @@ class WorkbenchCliTests(unittest.TestCase):
 
             self.assertEqual(json.loads(index.stdout)["resolver_profile_ids"], ["cli-profile"])
             self.assertEqual(json.loads(rebuild.stdout)["resolver_profile_ids"], ["cli-profile"])
+
+    def test_index_command_requires_config_only_for_configured_corpus_indexing(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            db_path = root / "asip.db"
+
+            missing = subprocess.run(
+                [sys.executable, "-m", "asip.cli", "index", "--db", str(db_path)],
+                capture_output=True,
+                text=True,
+            )
+
+            self.assertNotEqual(missing.returncode, 0)
+            self.assertIn("--config is required unless --corpus-id is provided", missing.stderr)
 
     def test_performance_smoke_command_rebuilds_fixture_and_times_queries(self):
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -395,6 +486,42 @@ class WorkbenchCliTests(unittest.TestCase):
             self.assertEqual(payload["queries"][0]["id"], "AQ01")
             self.assertEqual(payload["queries"][0]["missing_surfaces"], [])
             self.assertEqual(payload["surfaces_checked"], ["CLI", "API", "Web", "MCP"])
+
+    def test_provider_gate_command_writes_json_artifact(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            config_path, _corpus_root = write_live_fixture(root)
+            db_path = root / "asip.db"
+            output_json = root / "provider-gate.json"
+            common = [sys.executable, "-m", "asip.cli"]
+
+            subprocess.run(
+                [*common, "index", "--config", str(config_path), "--db", str(db_path)],
+                check=True,
+                capture_output=True,
+                text=True,
+            )
+            provider_gate = subprocess.run(
+                [
+                    *common,
+                    "provider-gate",
+                    "--db",
+                    str(db_path),
+                    "--output-json",
+                    str(output_json),
+                    "--full",
+                ],
+                check=True,
+                capture_output=True,
+                text=True,
+            )
+
+            printed = json.loads(provider_gate.stdout)
+            payload = json.loads(output_json.read_text(encoding="utf-8"))
+            self.assertEqual(printed["source"], "asip.provider_gate")
+            self.assertEqual(payload["source"], "asip.provider_gate")
+            self.assertEqual(payload["gate_status"], "blocked")
+            self.assertIn("provider settings are missing", payload["failure_reasons"])
 
 
 if __name__ == "__main__":

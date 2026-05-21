@@ -14,6 +14,7 @@ from asip.workbench import (
     query_evidence,
     save_provider_settings,
     validate_resolver_profile,
+    _resolver_profiles_from_store,
 )
 from asip.storage import AsipStore
 
@@ -36,6 +37,17 @@ class FakeBatchEmbeddingTransport:
         return {"embeddings": [[float(index), float(index) + 0.5] for index, _ in enumerate(payload["input"])]}
 
 
+class FailingSecondBatchEmbeddingTransport:
+    def __init__(self):
+        self.requests = []
+
+    def post_json(self, url, payload, headers, timeout):
+        self.requests.append({"url": url, "payload": payload, "headers": dict(headers), "timeout": timeout})
+        if len(self.requests) > 1:
+            raise RuntimeError("provider stopped mid-backfill")
+        return {"embeddings": [[float(index), float(index) + 0.5] for index, _ in enumerate(payload["input"])]}
+
+
 class FakeContextLimitedBatchEmbeddingTransport:
     def __init__(self, max_inputs: int):
         self.max_inputs = max_inputs
@@ -46,6 +58,19 @@ class FakeContextLimitedBatchEmbeddingTransport:
         if len(payload["input"]) > self.max_inputs:
             raise RuntimeError("embedding request failed with HTTP 400: the input length exceeds the context length")
         return {"embeddings": [[float(index), float(index) + 0.5] for index, _ in enumerate(payload["input"])]}
+
+
+class FakeTextLengthLimitedEmbeddingTransport:
+    def __init__(self, max_chars: int):
+        self.max_chars = max_chars
+        self.requests = []
+
+    def post_json(self, url, payload, headers, timeout):
+        self.requests.append({"url": url, "payload": payload, "headers": dict(headers), "timeout": timeout})
+        too_long = [text for text in payload["input"] if len(text) > self.max_chars]
+        if too_long:
+            raise RuntimeError("embedding request failed with HTTP 400: the input length exceeds the context length")
+        return {"embeddings": [[float(len(text)), float(len(text)) + 0.5] for text in payload["input"]]}
 
 
 class WorkbenchBackendStateTests(unittest.TestCase):
@@ -386,6 +411,44 @@ class WorkbenchBackendStateTests(unittest.TestCase):
             )
             self.assertEqual(job_metadata["resolver_profile_ids"], ["custom-a"])
 
+    def test_disabled_db_resolver_profile_overrides_default_index_profiles(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            db_path = Path(tmpdir) / "asip.db"
+            store = AsipStore.connect(str(db_path))
+            store.migrate()
+            store.upsert_resolver_profile(
+                "linux-amdgpu",
+                "cpp",
+                ["WREG32"],
+                "write",
+                "configs/resolvers/linux-amdgpu.yaml",
+                enabled=False,
+            )
+
+            profiles = _resolver_profiles_from_store(store)
+
+            self.assertNotIn("linux-amdgpu", {profile.id for profile in profiles})
+
+    def test_disabled_db_resolver_profile_alias_overrides_loaded_default_index_profile(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            db_path = Path(tmpdir) / "asip.db"
+            store = AsipStore.connect(str(db_path))
+            store.migrate()
+            store.upsert_resolver_profile(
+                "alias-linux",
+                "cpp",
+                ["WREG32"],
+                "write",
+                "configs/resolvers/linux-amdgpu.yaml",
+                enabled=False,
+            )
+
+            profiles = _resolver_profiles_from_store(store)
+
+            profile_ids = {profile.id for profile in profiles}
+            self.assertNotIn("alias-linux", profile_ids)
+            self.assertNotIn("linux-amdgpu", profile_ids)
+
     def test_persisted_resolver_profile_keeps_configured_argument_positions(self):
         with tempfile.TemporaryDirectory() as tmpdir:
             root = Path(tmpdir)
@@ -568,9 +631,189 @@ class WorkbenchBackendStateTests(unittest.TestCase):
             summary = backfill_provider_embeddings(db_path, batch_size=4, embedding_transport=transport)
 
             self.assertEqual(summary["embedded_chunks"], 4)
+            self.assertEqual(summary["provider_input_count"], 4)
+            self.assertEqual(summary["provider_request_count"], 3)
+            self.assertEqual(summary["provider_input_attempt_count"], 8)
             self.assertEqual([len(request["payload"]["input"]) for request in transport.requests], [4, 2, 2])
             con = sqlite3.connect(db_path)
             self.assertEqual(con.execute("select count(*) from embeddings").fetchone()[0], 4)
+            status, message, metadata_json = con.execute(
+                "select status, message, metadata_json from jobs order by id desc limit 1"
+            ).fetchone()
+            metadata = json.loads(metadata_json)
+            self.assertEqual(status, "succeeded")
+            self.assertIn("provider attempts 8 inputs/3 requests", message)
+            self.assertEqual(metadata["provider_request_count"], 3)
+            self.assertEqual(metadata["provider_input_attempt_count"], 8)
+
+    def test_backfill_provider_embeddings_shortens_single_context_too_large_input(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            db_path = Path(tmpdir) / "asip.db"
+            store = AsipStore.connect(str(db_path))
+            store.migrate()
+            document_id = store.add_document("docs", "doc", "docs/long.md")
+            store.add_chunk(document_id, "GCVM_L2_CNTL " + ("very_long_code_token " * 20), 1, 1)
+            save_provider_settings(
+                db_path,
+                {
+                    "embedding": {
+                        "provider": "ollama",
+                        "base_url": "http://embed.local",
+                        "api_path": "/api/embed",
+                        "model": "nomic-embed-text",
+                    },
+                },
+            )
+            transport = FakeTextLengthLimitedEmbeddingTransport(max_chars=64)
+
+            summary = backfill_provider_embeddings(db_path, batch_size=1, embedding_transport=transport)
+
+            self.assertEqual(summary["embedded_chunks"], 1)
+            self.assertEqual(summary["context_retry_chunks"], 1)
+            self.assertEqual(summary["provider_request_count"], len(transport.requests))
+            self.assertEqual(summary["provider_input_attempt_count"], len(transport.requests))
+            self.assertGreater(len(transport.requests), 1)
+            self.assertLessEqual(len(transport.requests[-1]["payload"]["input"][0]), 64)
+            con = sqlite3.connect(db_path)
+            metadata_json, vector_json = con.execute("select metadata_json, vector_json from embeddings").fetchone()
+            metadata = json.loads(metadata_json)
+            self.assertEqual(metadata["source"], "provider")
+            self.assertTrue(metadata["embedding_context_retry"])
+            self.assertTrue(metadata["embedding_text_truncated"])
+            self.assertLessEqual(metadata["embedding_text_chars"], 64)
+            self.assertGreater(metadata["original_embedding_text_chars"], metadata["embedding_text_chars"])
+            self.assertEqual(json.loads(vector_json)[0], float(metadata["embedding_text_chars"]))
+
+    def test_backfill_provider_embeddings_replaces_deterministic_fallback_rows(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            db_path = Path(tmpdir) / "asip.db"
+            store = AsipStore.connect(str(db_path))
+            store.migrate()
+            document_id = store.add_document("docs", "doc", "docs/note.md")
+            fallback_chunk_id = store.add_chunk(document_id, "fallback GCVM_L2_CNTL evidence", 1, 1)
+            provider_chunk_id = store.add_chunk(document_id, "already provider-backed evidence", 2, 2)
+            store.add_embedding(
+                fallback_chunk_id,
+                provider="ollama",
+                model="nomic-embed-text",
+                vector=[0.1, 0.2],
+                metadata={"source": "deterministic-fallback"},
+            )
+            store.add_embedding(
+                provider_chunk_id,
+                provider="ollama",
+                model="nomic-embed-text",
+                vector=[0.3, 0.4],
+                metadata={"source": "provider"},
+            )
+            save_provider_settings(
+                db_path,
+                {
+                    "embedding": {
+                        "provider": "ollama",
+                        "base_url": "http://embed.local",
+                        "api_path": "/api/embed",
+                        "model": "nomic-embed-text",
+                    },
+                },
+            )
+            transport = FakeBatchEmbeddingTransport()
+
+            summary = backfill_provider_embeddings(db_path, batch_size=2, embedding_transport=transport)
+
+            self.assertEqual(summary["embedded_chunks"], 1)
+            self.assertEqual(summary["requested_limit"], 0)
+            self.assertIsNone(summary["applied_limit"])
+            self.assertTrue(summary["limit_is_unlimited"])
+            self.assertEqual(len(transport.requests), 1)
+            self.assertEqual(transport.requests[0]["payload"]["input"], ["fallback GCVM_L2_CNTL evidence"])
+            con = sqlite3.connect(db_path)
+            rows = {
+                chunk_id: json.loads(metadata_json)["source"]
+                for chunk_id, metadata_json in con.execute("select chunk_id, metadata_json from embeddings")
+            }
+            self.assertEqual(rows[fallback_chunk_id], "provider")
+            self.assertEqual(rows[provider_chunk_id], "provider")
+
+    def test_backfill_provider_embeddings_dedupes_identical_inputs_within_run(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            db_path = Path(tmpdir) / "asip.db"
+            store = AsipStore.connect(str(db_path))
+            store.migrate()
+            document_id = store.add_document("docs", "doc", "docs/note.md")
+            first_chunk_id = store.add_chunk(document_id, "duplicate GCVM_L2_CNTL evidence", 1, 1)
+            second_chunk_id = store.add_chunk(document_id, "duplicate GCVM_L2_CNTL evidence", 2, 2)
+            third_chunk_id = store.add_chunk(document_id, "unique CP_INT_CNTL_RING0 evidence", 3, 3)
+            save_provider_settings(
+                db_path,
+                {
+                    "embedding": {
+                        "provider": "ollama",
+                        "base_url": "http://embed.local",
+                        "api_path": "/api/embed",
+                        "model": "nomic-embed-text",
+                    },
+                },
+            )
+            transport = FakeBatchEmbeddingTransport()
+
+            summary = backfill_provider_embeddings(db_path, batch_size=8, embedding_transport=transport)
+
+            self.assertEqual(summary["embedded_chunks"], 3)
+            self.assertEqual(summary["provider_input_count"], 2)
+            self.assertEqual(summary["deduped_chunks"], 1)
+            self.assertEqual(len(transport.requests), 1)
+            self.assertEqual(
+                transport.requests[0]["payload"]["input"],
+                ["duplicate GCVM_L2_CNTL evidence", "unique CP_INT_CNTL_RING0 evidence"],
+            )
+            con = sqlite3.connect(db_path)
+            rows = {
+                chunk_id: json.loads(vector_json)
+                for chunk_id, vector_json in con.execute("select chunk_id, vector_json from embeddings")
+            }
+            self.assertEqual(rows[first_chunk_id], rows[second_chunk_id])
+            self.assertNotEqual(rows[first_chunk_id], rows[third_chunk_id])
+
+    def test_backfill_provider_embeddings_persists_completed_batches_before_failure(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            db_path = Path(tmpdir) / "asip.db"
+            store = AsipStore.connect(str(db_path))
+            store.migrate()
+            document_id = store.add_document("docs", "doc", "docs/note.md")
+            first_chunk_id = store.add_chunk(document_id, "first GCVM_L2_CNTL evidence", 1, 1)
+            second_chunk_id = store.add_chunk(document_id, "second GCVM_L2_CNTL evidence", 2, 2)
+            third_chunk_id = store.add_chunk(document_id, "third GCVM_L2_CNTL evidence", 3, 3)
+            save_provider_settings(
+                db_path,
+                {
+                    "embedding": {
+                        "provider": "ollama",
+                        "base_url": "http://embed.local",
+                        "api_path": "/api/embed",
+                        "model": "nomic-embed-text",
+                    },
+                },
+            )
+            transport = FailingSecondBatchEmbeddingTransport()
+
+            with self.assertRaises(RuntimeError):
+                backfill_provider_embeddings(db_path, batch_size=2, embedding_transport=transport)
+
+            con = sqlite3.connect(db_path)
+            embedded_chunk_ids = {
+                row[0] for row in con.execute("select chunk_id from embeddings order by chunk_id").fetchall()
+            }
+            self.assertEqual(embedded_chunk_ids, {first_chunk_id, second_chunk_id})
+            self.assertNotIn(third_chunk_id, embedded_chunk_ids)
+            job = con.execute("select status, message, metadata_json from jobs order by id desc limit 1").fetchone()
+            self.assertEqual(job[0], "failed")
+            self.assertIn("provider stopped mid-backfill", job[1])
+            metadata = json.loads(job[2])
+            self.assertEqual(metadata["embedded_chunks"], 2)
+            self.assertEqual(metadata["total_candidates"], 3)
+            self.assertEqual(metadata["provider_request_count"], 2)
+            self.assertEqual(metadata["provider_input_attempt_count"], 3)
 
     def test_backfill_provider_embeddings_truncates_long_inputs_with_metadata(self):
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -634,7 +877,7 @@ class WorkbenchBackendStateTests(unittest.TestCase):
 
             try:
                 AsipStore.search_vector = recording_search_vector
-                query_evidence(db_path, "GCVM_L2_CNTL")
+                query_evidence(db_path, "cache enable flow")
             finally:
                 AsipStore.search_vector = original_search_vector
 

@@ -1,6 +1,6 @@
 # G08 PDF And Document Ingestion
 
-Status: Current pass verified for indexed PDF evidence, page provenance, and browser/API `pdf_section` proof
+Status: Current pass verified for indexed PDF evidence, page provenance, and historical browser/API raw `pdf_section` proof; 2026-05-19 product output projects document subtypes to `kind=doc` with `attr.doc_kind`
 
 ## Requirement
 
@@ -29,15 +29,15 @@ After conversion to Markdown/text chunks, documents must also provide graph stru
 - `packages/core/tests/test_documents.py` now verifies that the reduced AMD PDF fixture is extractable and that ReportLab `/ASCII85Decode` + `/FlateDecode` PDF streams can be decoded by the fallback extractor when `pypdf`/MarkItDown are unavailable.
 - Clean AMD DB `/tmp/asip-clean-amd-gemma4-provider-2026-05-17-final.db` contains `documents` source count `pdf=1` and `evidence` source count `pdf=5`; AQ05 passes with `code`, `doc`, `pdf`, and `register` in `docs/qa/2026-05-17-acceptance-clean-amd-gemma4-provider-current.json`.
 - 2026-05-17 continuation fix: documentation/PDF queries now preserve at least one matching source row per source type before the candidate cap, so the AMD PDF row is not starved by higher-scoring code/register rows.
-- 2026-05-17 targeted graph tests now prove Markdown/document chunks create `doc_section` graph nodes and `section_mentions` edges. The graph renderer preserves `doc_section`/`pdf_section` node kinds, and batch semantic-edge QA proves document candidates can feed the LLM edge job.
-- 2026-05-17 semantic endpoint hardening now proves a Stage 2 provider can return a document-section endpoint such as `docs/guide.md#programming-local-registers`, and the default global graph preserves it as `kind=doc_section`.
+- 2026-05-17 targeted graph tests proved Markdown/document chunks can create historical raw `doc_section` graph facts and `section_mentions` edges. The 2026-05-19 product graph contract now projects those document subtypes to `kind=doc` with `attr.doc_kind`, and batch semantic-edge QA proves document candidates can feed the LLM edge job.
+- 2026-05-17 semantic endpoint hardening proved a Stage 2 provider can return a document-section endpoint such as `docs/guide.md#programming-local-registers`. That older raw/debug evidence used `kind=doc_section`; the current 2026-05-19 product graph contract projects it to `kind=doc` with `attr.doc_kind=markdown_section`.
 - 2026-05-17 PDF section provenance hardening now proves a PDF-derived graph node such as `docs/manual.pdf#page-3` carries `source_type=pdf`, `path`, `page`, `anchor`, and a user-facing label through the core graph payload.
 - 2026-05-17 BoxMatrix-style doc-node extraction now uses the configured LLM provider call to turn document chunks into self-contained `doc_box` nodes and relationships. This intentionally does not use a BoxMatrix skill; the provider prompt carries the box/matrix abstraction and stores provider/model/job provenance.
-- 2026-05-18 clean-final PDF section QA proves the real default Web/API path can expose `amdgpu-driver-source-tree.pdf#page-1` as `kind=pdf_section` with `attr.source[0].path=amdgpu-driver-source-tree.pdf` and `attr.source[0].page=1`. Evidence is recorded in `docs/qa/2026-05-18-pdf-section-clean-final-qa.md`, with browser screenshot `docs/qa/browser/pdf-section-query-clean-final-3100-2k.png`.
+- 2026-05-18 clean-final PDF section QA proves the real default Web/API path can expose `amdgpu-driver-source-tree.pdf#page-1` with `attr.source[0].path=amdgpu-driver-source-tree.pdf` and `attr.source[0].page=1`. That artifact predates the 2026-05-19 projection and recorded the historical raw shape `kind=pdf_section`; current product output must expose the same endpoint as `kind=doc` with `attr.doc_kind=pdf_section`. Evidence is recorded in `docs/qa/2026-05-18-pdf-section-clean-final-qa.md`, with browser screenshot `docs/qa/browser/pdf-section-query-clean-final-3100-2k.png`.
 
 ## Remaining Gap
 
-PDF support is functional for deterministic fixtures, a source-diverse synthetic fixture, a real converter-level AMD PDF smoke, and an indexed reduced AMD amdgpu PDF in the clean AMD DB. The current clean-final API and browser QA now show the PDF section node and page/source metadata to the user.
+PDF support is functional for deterministic fixtures, a source-diverse synthetic fixture, a real converter-level AMD PDF smoke, and an indexed reduced AMD amdgpu PDF in the clean AMD DB. The current clean-final API and browser QA show the PDF page/source metadata to the user. Older artifacts show the raw `pdf_section` shape; current product graph output must show the same evidence as `kind=doc` with `attr.doc_kind=pdf_section`.
 
 MarkItDown remains optional; `pypdf` is the declared page-preserving converter for MVP smoke coverage, with a stdlib fallback for simple and ReportLab-compressed text streams. The final acceptance path now has API and browser proof for PDF page/source citations through the product UI.
 
@@ -50,7 +50,7 @@ Document graph extraction is implemented for converted document chunks, heading/
 - PDF chunks enter SQLite documents/chunks/evidence.
 - Query results can return PDF evidence with page citation.
 - Web inspector displays PDF page/source metadata.
-- Converted Markdown/PDF sections create graph section nodes with stable ids, heading/page/source metadata, and section-to-symbol edges.
+- Converted Markdown/PDF sections create product `doc` graph nodes with stable ids, `attr.doc_kind`, heading/page/source metadata, and section-to-symbol edges.
 - LLM doc-node extraction can create self-contained document concept boxes and relationships from indexed chunks without using a skill.
 - Batch semantic-edge generation can include document/PDF sections as candidates and persist section semantic edges with provider/model provenance.
 - The final QA doc records whether PDF evidence came from a real AMD PDF, a reduced fixture generated from one, or an explicitly accepted local fallback.
@@ -62,7 +62,7 @@ Document graph extraction is implemented for converted document chunks, heading/
 - Integration test: PDF evidence appears in a query result.
 - Core graph test: Markdown/PDF headings or page sections become graph nodes with provenance and connect to mentioned symbols.
 - Semantic-edge test: a fake provider can generate an edge from a document section candidate and that edge appears in the global graph.
-- Semantic-edge test: a provider-returned Markdown/PDF section endpoint remains a section node in the default global graph.
+- Semantic-edge test: a provider-returned Markdown/PDF section endpoint remains a product `doc` node in the default global graph, with subtype stored in `attr.doc_kind`.
 - Real AMD PDF smoke: text extraction succeeds on a small known AMD PDF or documented reduced fixture.
 - UI/E2E test: PDF evidence row and page metadata are visible.
 

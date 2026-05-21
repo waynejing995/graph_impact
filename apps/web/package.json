@@ -8,7 +8,10 @@
     "build": "next build",
     "lint": "eslint .",
     "start": "next start",
-    "test:ui": "playwright test"
+    "test:ui": "playwright test",
+    "test:ui:artifact": "node scripts/browser-e2e-artifact.mjs",
+    "test:ui:no-server": "node scripts/no-server-smoke.mjs",
+    "test:ui:preflight": "node scripts/browser-gate-preflight.mjs"
   },
   "dependencies": {
     "@radix-ui/react-accordion": "^1.2.12",

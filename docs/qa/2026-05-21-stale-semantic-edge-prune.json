@@ -1,0 +1,179 @@
+{
+  "source": "asip.stale_semantic_edge_prune",
+  "generated_at": "2026-05-20T21:56:23+00:00",
+  "db_path": "data/asip.db",
+  "freshness_floor_job_id": 44,
+  "latest_index_job_id": 10,
+  "latest_graph_rebuild_job_id": 44,
+  "deleted_edge_count": 21,
+  "deleted_edges": [
+    {
+      "id": 81256,
+      "src": "mi200_ih_iv_ring_hw_init",
+      "dst": "IH_RB_CNTL",
+      "relation": "reads",
+      "extractor": "semantic_edges",
+      "job_id": 18
+    },
+    {
+      "id": 81257,
+      "src": "mi200_ih_iv_ring_hw_init",
+      "dst": "IH_RB_CNTL",
+      "relation": "sets_field",
+      "extractor": "semantic_edges",
+      "job_id": 18
+    },
+    {
+      "id": 81258,
+      "src": "navi32_enable_sdma",
+      "dst": "SDMA0_QUEUE0_IB_CNTL",
+      "relation": "sets_field",
+      "extractor": "semantic_edges",
+      "job_id": 18
+    },
+    {
+      "id": 81259,
+      "src": "navi32_enable_sdma",
+      "dst": "regSDMA0_QUEUE0_IB_CNTL",
+      "relation": "writes",
+      "extractor": "semantic_edges",
+      "job_id": 18
+    },
+    {
+      "id": 81260,
+      "src": "navi32_enable_sdma",
+      "dst": "SDMA0_QUEUE0_RB_CNTL",
+      "relation": "reads",
+      "extractor": "semantic_edges",
+      "job_id": 18
+    },
+    {
+      "id": 81261,
+      "src": "navi32_enable_sdma",
+      "dst": "SDMA0_QUEUE0_RB_CNTL",
+      "relation": "sets_field",
+      "extractor": "semantic_edges",
+      "job_id": 18
+    },
+    {
+      "id": 81262,
+      "src": "navi32_enable_sdma1",
+      "dst": "SDMA1_QUEUE0_IB_CNTL",
+      "relation": "sets_field",
+      "extractor": "semantic_edges",
+      "job_id": 18
+    },
+    {
+      "id": 81263,
+      "src": "navi32_enable_sdma1",
+      "dst": "regSDMA1_QUEUE0_IB_CNTL",
+      "relation": "writes",
+      "extractor": "semantic_edges",
+      "job_id": 18
+    },
+    {
+      "id": 81264,
+      "src": "navi32_enable_sdma1",
+      "dst": "SDMA1_QUEUE0_RB_CNTL",
+      "relation": "reads",
+      "extractor": "semantic_edges",
+      "job_id": 18
+    },
+    {
+      "id": 81265,
+      "src": "navi32_enable_sdma1",
+      "dst": "SDMA1_QUEUE0_RB_CNTL",
+      "relation": "sets_field",
+      "extractor": "semantic_edges",
+      "job_id": 18
+    },
+    {
+      "id": 81266,
+      "src": "mi200_ih_iv_ring_enable",
+      "dst": "IH_RB_CNTL",
+      "relation": "sets_field",
+      "extractor": "semantic_edges",
+      "job_id": 18
+    },
+    {
+      "id": 81267,
+      "src": "mi200_ih_iv_ring_enable",
+      "dst": "IH_RB_CNTL",
+      "relation": "writes",
+      "extractor": "semantic_edges",
+      "job_id": 18
+    },
+    {
+      "id": 81268,
+      "src": "this_block",
+      "dst": "mmBIF_DOORBELL_INT_CNTL_ALDE",
+      "relation": "writes",
+      "extractor": "semantic_edges",
+      "job_id": 18
+    },
+    {
+      "id": 81269,
+      "src": "this_block",
+      "dst": "BIF_DOORBELL_INT_CNTL_ALDE__DOORBELL_INTERRUPT_DISABLE_MASK",
+      "relation": "writes",
+      "extractor": "semantic_edges",
+      "job_id": 18
+    },
+    {
+      "id": 81270,
+      "src": "gfx_v11_init_cache_regs",
+      "dst": "GCVM_L2_CNTL",
+      "relation": "sets_field",
+      "extractor": "semantic_edges",
+      "job_id": 18
+    },
+    {
+      "id": 81271,
+      "src": "gfx_v11_init_cache_regs",
+      "dst": "GCVM_L2_CNTL",
+      "relation": "writes",
+      "extractor": "semantic_edges",
+      "job_id": 18
+    },
+    {
+      "id": 81272,
+      "src": "navi32_reset_grbm_soft_reset_stage_1",
+      "dst": "RLC_FED_DRVR_STATUS",
+      "relation": "sets_field",
+      "extractor": "semantic_edges",
+      "job_id": 18
+    },
+    {
+      "id": 81273,
+      "src": "navi32_reset_grbm_soft_reset_stage_1",
+      "dst": "RLC_FED_DRVR_STATUS",
+      "relation": "reads",
+      "extractor": "semantic_edges",
+      "job_id": 18
+    },
+    {
+      "id": 81274,
+      "src": "README.md#gim",
+      "dst": "README.md#box-gim-module",
+      "relation": "contains_box",
+      "extractor": "doc_nodes",
+      "job_id": 20
+    },
+    {
+      "id": 81275,
+      "src": "README.md#box-gim-module",
+      "dst": "README.md#gim",
+      "relation": "documents",
+      "extractor": "doc_nodes",
+      "job_id": 20
+    },
+    {
+      "id": 81276,
+      "src": "smi-lib/README.md#amd-smi-lib",
+      "dst": "smi-lib/README.md#box-amd-smi-lib",
+      "relation": "contains_box",
+      "extractor": "doc_nodes",
+      "job_id": 20
+    }
+  ]
+}

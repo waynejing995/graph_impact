@@ -8,11 +8,21 @@ import math
 import re
 import sqlite3
 from dataclasses import dataclass
+from functools import lru_cache
 from itertools import combinations
 from pathlib import Path
 from typing import Any, Dict, Iterable, List, Mapping, Optional
 
+from .graph_schema import normalize_product_relation
 from .graph_filters import is_resolver_wrapper_name
+from .resolver_profiles import (
+    GraphFunctionNormalizationRule,
+    GraphMergePolicy,
+    GraphRegisterNormalization,
+    load_resolver_profile,
+    load_resolver_profiles,
+    resolver_profile_from_config,
+)
 
 
 @dataclass
@@ -143,6 +153,8 @@ class AsipStore:
 
             create index if not exists idx_evidence_chunk_confidence
               on evidence(chunk_id, confidence desc, id asc);
+            create index if not exists idx_evidence_symbol_confidence
+              on evidence(symbol, confidence desc, id asc);
             create index if not exists idx_edges_src_stage
               on edges(src, stage);
             create index if not exists idx_edges_dst_stage
@@ -181,6 +193,7 @@ class AsipStore:
             """
         )
         self.con.commit()
+        self._invalidate_runtime_graph_policy()
 
     def start_job(self, kind: str, message: str = "", metadata: Optional[Dict[str, object]] = None) -> int:
         cursor = self.con.execute(
@@ -190,6 +203,7 @@ class AsipStore:
         job_id = int(cursor.lastrowid)
         self._append_job_event(job_id, "queued", message)
         self.con.commit()
+        self._invalidate_runtime_graph_policy()
         return job_id
 
     def update_job_status(
@@ -222,6 +236,7 @@ class AsipStore:
         if should_append_event:
             self._append_job_event(job_id, normalized_status, message)
         self.con.commit()
+        self._invalidate_runtime_graph_policy()
 
     def finish_job(self, job_id: int, status: str, message: str = "") -> None:
         normalized_status = _normalize_job_status(status)
@@ -238,6 +253,7 @@ class AsipStore:
         )
         self._append_job_event(job_id, normalized_status, message)
         self.con.commit()
+        self._invalidate_runtime_graph_policy()
 
     def get_job(self, job_id: int) -> Dict[str, object]:
         row = self.con.execute(
@@ -527,15 +543,28 @@ class AsipStore:
             chunk_rows = self._find_evidence_candidates_by_chunks(chunk_ids, candidate_limit)
             if len(chunk_rows) >= candidate_limit:
                 return chunk_rows
-            fallback_limit = candidate_limit - len(chunk_rows)
+            selected_rows = list(chunk_rows)
+            excluded_ids = [int(row["id"]) for row in selected_rows]
+            symbol_rows = self._find_evidence_candidates_by_symbols(
+                ranked_tokens,
+                candidate_limit - len(selected_rows),
+                exclude_ids=excluded_ids,
+            )
+            selected_rows.extend(symbol_rows)
+            excluded_ids.extend(int(row["id"]) for row in symbol_rows)
+            if len(selected_rows) >= candidate_limit or _tokens_look_like_exact_symbols(ranked_tokens):
+                return selected_rows
             like_rows = self._find_evidence_candidates_by_like(
                 ranked_tokens,
-                fallback_limit,
-                exclude_ids=[int(row["id"]) for row in chunk_rows],
+                candidate_limit - len(selected_rows),
+                exclude_ids=excluded_ids,
             )
-            return [*chunk_rows, *like_rows]
+            return [*selected_rows, *like_rows]
         if not ranked_tokens:
             return self.all_evidence()
+        symbol_rows = self._find_evidence_candidates_by_symbols(ranked_tokens, candidate_limit)
+        if symbol_rows and _tokens_look_like_exact_symbols(ranked_tokens):
+            return symbol_rows
         return self._find_evidence_candidates_by_like(ranked_tokens, candidate_limit)
 
     def _find_evidence_candidates_by_chunks(
@@ -635,6 +664,39 @@ class AsipStore:
         )
         return [dict(row) for row in rows]
 
+    def _find_evidence_candidates_by_symbols(
+        self,
+        ranked_tokens: Iterable[str],
+        limit: int,
+        exclude_ids: Optional[Iterable[int]] = None,
+    ) -> List[Dict[str, object]]:
+        symbols = _symbol_aliases_for_query_tokens(ranked_tokens)
+        if not symbols or limit <= 0:
+            return []
+        placeholders = ",".join("?" for _ in symbols)
+        conditions = [f"symbol in ({placeholders})"]
+        params: List[object] = list(symbols)
+        excluded = list(dict.fromkeys(int(row_id) for row_id in (exclude_ids or [])))
+        if excluded:
+            excluded_placeholders = ",".join("?" for _ in excluded)
+            conditions.append(f"id not in ({excluded_placeholders})")
+            params.extend(excluded)
+        params.append(max(1, int(limit)))
+        rows = self.con.execute(
+            f"""
+            select
+              id, chunk_id, corpus_id, source_type, repo, path, line_start, line_end, page,
+              symbol, entity_type, ip_block, asic_or_generation, access_type,
+              confidence, snippet, resolved_chain, query_id
+            from evidence
+            where {" and ".join(conditions)}
+            order by confidence desc, id asc
+            limit ?
+            """,
+            tuple(params),
+        )
+        return [dict(row) for row in rows]
+
     def evidence_for_chunks(self, chunk_ids: Iterable[int]) -> List[Dict[str, object]]:
         ids = list(dict.fromkeys(int(chunk_id) for chunk_id in chunk_ids))
         if not ids:
@@ -702,7 +764,32 @@ class AsipStore:
         vector: List[float],
         metadata: Optional[Dict[str, object]] = None,
     ) -> None:
-        self.con.execute(
+        self.add_embeddings(
+            [
+                {
+                    "chunk_id": chunk_id,
+                    "provider": provider,
+                    "model": model,
+                    "vector": vector,
+                    "metadata": metadata or {},
+                }
+            ]
+        )
+
+    def add_embeddings(self, rows: Iterable[Mapping[str, Any]]) -> None:
+        prepared_rows = [
+            (
+                int(row["chunk_id"]),
+                str(row["provider"]),
+                str(row["model"]),
+                json.dumps(list(row["vector"])),
+                json.dumps(row.get("metadata") or {}),
+            )
+            for row in rows
+        ]
+        if not prepared_rows:
+            return
+        self.con.executemany(
             """
             insert into embeddings(chunk_id, provider, model, vector_json, metadata_json)
             values (?, ?, ?, ?, ?)
@@ -712,7 +799,7 @@ class AsipStore:
               vector_json=excluded.vector_json,
               metadata_json=excluded.metadata_json
             """,
-            (chunk_id, provider, model, json.dumps(vector), json.dumps(metadata or {})),
+            prepared_rows,
         )
         self.con.commit()
 
@@ -792,6 +879,48 @@ class AsipStore:
             "config": json.loads(str(row["config_json"])),
         }
 
+    def _graph_function_normalization_rules_by_profile(self) -> Dict[str, tuple[GraphFunctionNormalizationRule, ...]]:
+        rows = self.list_resolver_profiles() if self._table_exists("resolver_profiles") else []
+        rules_by_profile: Dict[str, tuple[GraphFunctionNormalizationRule, ...]] = dict(
+            _default_function_normalization_rules_by_profile()
+        )
+        for row in rows:
+            profile_id = str(row.get("id") or "")
+            if not profile_id:
+                continue
+            profile = _resolver_profile_from_graph_row(row)
+            aliases = _resolver_profile_aliases_for_graph_row(row, profile)
+            if not row.get("enabled", True):
+                for alias in aliases:
+                    rules_by_profile[alias] = ()
+                continue
+            rules: tuple[GraphFunctionNormalizationRule, ...] = ()
+            if profile is not None and profile.graph.function_normalization.enabled:
+                rules = tuple(rule for rule in profile.graph.function_normalization.rules if rule.enabled)
+            for alias in aliases:
+                rules_by_profile[alias] = rules
+        return rules_by_profile
+
+    def _graph_register_normalization_by_profile(self) -> Dict[str, GraphRegisterNormalization]:
+        rows = self.list_resolver_profiles() if self._table_exists("resolver_profiles") else []
+        normalization_by_profile: Dict[str, GraphRegisterNormalization] = dict(
+            _default_register_normalization_by_profile()
+        )
+        for row in rows:
+            profile_id = str(row.get("id") or "")
+            if not profile_id:
+                continue
+            profile = _resolver_profile_from_graph_row(row)
+            aliases = _resolver_profile_aliases_for_graph_row(row, profile)
+            if not row.get("enabled", True):
+                for alias in aliases:
+                    normalization_by_profile[alias] = GraphRegisterNormalization()
+                continue
+            normalization = profile.graph.register_normalization if profile is not None else GraphRegisterNormalization()
+            for alias in aliases:
+                normalization_by_profile[alias] = normalization
+        return normalization_by_profile
+
     def save_provider_settings(self, settings: Dict[str, object], settings_id: str = "default") -> None:
         self.con.execute(
             """
@@ -802,6 +931,7 @@ class AsipStore:
             (settings_id, json.dumps(settings)),
         )
         self.con.commit()
+        self._invalidate_runtime_graph_policy()
 
     def load_provider_settings(self, settings_id: str = "default") -> Dict[str, object]:
         row = self.con.execute("select settings_json from provider_settings where id = ?", (settings_id,)).fetchone()
@@ -972,10 +1102,8 @@ class AsipStore:
             if not frontier:
                 break
             placeholders = ",".join("?" for _ in frontier)
-            rows = self.con.execute(
+            rows = self._runtime_graph_edge_rows(
                 f"""
-                select src, dst, relation, confidence, stage, source, path, line_start, line_end, provenance_json
-                from edges
                 where src in ({placeholders}) or dst in ({placeholders})
                 order by confidence desc
                 """,
@@ -999,16 +1127,150 @@ class AsipStore:
             "edges": deduped_edges,
         }
 
+    def _runtime_graph_edge_rows(
+        self,
+        tail_sql: str = "",
+        params: Iterable[object] = (),
+        include_evidence_derived: bool = False,
+    ) -> List[sqlite3.Row]:
+        rows = self.con.execute(
+            f"""
+                select id, src, dst, relation, confidence, stage, source, path, line_start, line_end, provenance_json
+                from edges
+                {tail_sql}
+                """,
+            tuple(params),
+        )
+        return [
+            row
+            for row in rows
+            if self._runtime_graph_edge_row_is_usable(row, include_evidence_derived=include_evidence_derived)
+        ]
+
+    def _runtime_graph_edge_row_is_usable(self, row: sqlite3.Row, include_evidence_derived: bool = False) -> bool:
+        stage = str(row["stage"] or "deterministic")
+        if stage == "evidence" and not include_evidence_derived:
+            return False
+        if stage != "semantic":
+            return True
+        policy = self._runtime_semantic_graph_policy()
+        try:
+            provenance = json.loads(str(row["provenance_json"] or "{}"))
+        except json.JSONDecodeError:
+            provenance = {}
+        extractor = str(provenance.get("extractor") or "")
+        if not policy["enforce_job_provenance"] and extractor not in {"semantic_edges", "doc_nodes"}:
+            return True
+        job_id = _int_graph_value(provenance.get("job_id"))
+        if not job_id:
+            return False
+        valid_job_ids_by_extractor = policy.get("valid_job_ids_by_extractor")
+        if isinstance(valid_job_ids_by_extractor, Mapping):
+            valid_extractor_job_ids = valid_job_ids_by_extractor.get(extractor)
+            if not isinstance(valid_extractor_job_ids, set) or job_id not in valid_extractor_job_ids:
+                return False
+        elif job_id not in policy["valid_job_ids"]:
+            return False
+        expected_provider = str(policy.get("expected_provider") or "")
+        expected_model = str(policy.get("expected_model") or "")
+        provider = str(provenance.get("provider") or row["source"] or "").strip()
+        model = str(provenance.get("model") or "").strip()
+        if expected_provider and provider != expected_provider:
+            return False
+        if expected_model and model != expected_model:
+            return False
+        freshness_floor = policy["freshness_floor_job_id"]
+        if freshness_floor is not None and job_id < int(freshness_floor):
+            return False
+        return True
+
+    def _runtime_semantic_graph_policy(self) -> Dict[str, object]:
+        cached = getattr(self, "_runtime_semantic_graph_policy_cache", None)
+        if isinstance(cached, dict):
+            return cached
+        policy: Dict[str, object] = {
+            "enforce_job_provenance": False,
+            "freshness_floor_job_id": None,
+            "valid_job_ids": set(),
+            "valid_job_ids_by_extractor": {"semantic_edges": set(), "doc_nodes": set()},
+            "expected_provider": "",
+            "expected_model": "",
+        }
+        if not self._table_exists("jobs"):
+            self._runtime_semantic_graph_policy_cache = policy
+            return policy
+        expected_provider = ""
+        expected_model = ""
+        if self._table_exists("provider_settings"):
+            try:
+                settings = self.load_provider_settings()
+            except Exception:
+                settings = {}
+            edge_settings = settings.get("edge") if isinstance(settings, Mapping) else None
+            if isinstance(edge_settings, Mapping):
+                expected_provider = str(edge_settings.get("provider") or "ollama").strip()
+                expected_model = str(edge_settings.get("model") or edge_settings.get("preferred") or "").strip()
+        latest_index_job_id: Optional[int] = None
+        latest_graph_rebuild_job_id: Optional[int] = None
+        has_semantic_jobs = False
+        valid_job_ids: set[int] = set()
+        valid_job_ids_by_extractor: Dict[str, set[int]] = {"semantic_edges": set(), "doc_nodes": set()}
+        rows = self.con.execute("select id, kind, status, metadata_json from jobs order by id asc")
+        for row in rows:
+            job_id = _int_graph_value(row["id"])
+            if not job_id:
+                continue
+            kind = str(row["kind"] or "")
+            status = _normalize_job_status(str(row["status"] or ""))
+            if status != "succeeded":
+                continue
+            if kind == "index":
+                latest_index_job_id = max(latest_index_job_id or job_id, job_id)
+                continue
+            if kind == "graph_rebuild":
+                latest_graph_rebuild_job_id = max(latest_graph_rebuild_job_id or job_id, job_id)
+                continue
+            if kind not in {"semantic_edges", "semantic_edges_batch", "doc_nodes_batch"}:
+                continue
+            has_semantic_jobs = True
+            if not _semantic_graph_job_matches_provider(row, expected_provider, expected_model):
+                continue
+            valid_job_ids.add(job_id)
+            if kind in {"semantic_edges", "semantic_edges_batch"}:
+                valid_job_ids_by_extractor["semantic_edges"].add(job_id)
+            elif kind == "doc_nodes_batch":
+                valid_job_ids_by_extractor["doc_nodes"].add(job_id)
+        freshness_floor_job_id = max(
+            [job_id for job_id in (latest_index_job_id, latest_graph_rebuild_job_id) if job_id is not None],
+            default=None,
+        )
+        policy = {
+            "enforce_job_provenance": bool(has_semantic_jobs or freshness_floor_job_id is not None),
+            "freshness_floor_job_id": freshness_floor_job_id,
+            "valid_job_ids": valid_job_ids,
+            "valid_job_ids_by_extractor": valid_job_ids_by_extractor,
+            "expected_provider": expected_provider,
+            "expected_model": expected_model,
+        }
+        self._runtime_semantic_graph_policy_cache = policy
+        return policy
+
+    def _invalidate_runtime_graph_policy(self) -> None:
+        if hasattr(self, "_runtime_semantic_graph_policy_cache"):
+            delattr(self, "_runtime_semantic_graph_policy_cache")
+
     def expand_graph_networkx(
         self,
         symbol: str,
         hops: int = 1,
         include_evidence_derived: bool = False,
+        function_view: str = "concept",
     ) -> Dict[str, object]:
         return self.expand_graph_networkx_many(
             [symbol],
             hops=hops,
             include_evidence_derived=include_evidence_derived,
+            function_view=function_view,
         )
 
     def expand_graph_networkx_many(
@@ -1016,6 +1278,7 @@ class AsipStore:
         symbols: Iterable[str],
         hops: int = 1,
         include_evidence_derived: bool = False,
+        function_view: str = "concept",
     ) -> Dict[str, object]:
         seed_symbols = [str(symbol) for symbol in symbols if str(symbol)]
         seed_symbols = [symbol for symbol in seed_symbols if not _is_graph_wrapper_hub(symbol)]
@@ -1023,6 +1286,12 @@ class AsipStore:
             return {"nodes": [], "edges": [], "graph_runtime": "networkx"}
         if not self._has_expandable_edges(include_evidence_derived=include_evidence_derived):
             return _multi_seed_graph(seed_symbols)
+        if not include_evidence_derived:
+            return self._expand_graph_networkx_many_by_frontier(
+                seed_symbols,
+                hops=hops,
+                function_view=function_view,
+            )
         graph = self.to_networkx(include_evidence_derived=include_evidence_derived)
         seen = set(seed_symbols)
         frontier = set(seed_symbols)
@@ -1041,13 +1310,68 @@ class AsipStore:
             seen.update(next_frontier)
             frontier = next_frontier
 
-        return self._networkx_subgraph_payload(graph, seen, seed_symbols)
+        return self._networkx_subgraph_payload(graph, seen, seed_symbols, function_view=function_view)
+
+    def _expand_graph_networkx_many_by_frontier(
+        self,
+        seed_symbols: Iterable[str],
+        hops: int = 1,
+        function_view: str = "concept",
+    ) -> Dict[str, object]:
+        import networkx as nx
+
+        seeds = [str(symbol) for symbol in seed_symbols if str(symbol)]
+        seen = set(seeds)
+        frontier = set(seeds)
+        selected_rows: Dict[int, sqlite3.Row] = {}
+        graph = nx.MultiDiGraph()
+
+        for _ in range(max(1, hops)):
+            if not frontier:
+                break
+            placeholders = ",".join("?" for _ in frontier)
+            rows = self._runtime_graph_edge_rows(
+                f"""
+                where stage <> 'evidence'
+                  and (src in ({placeholders}) or dst in ({placeholders}))
+                order by confidence desc, id asc
+                """,
+                tuple(frontier) + tuple(frontier),
+            )
+            next_frontier = set()
+            for row in rows:
+                src = str(row["src"])
+                dst = str(row["dst"])
+                if _is_graph_wrapper_hub(src) or _is_graph_wrapper_hub(dst):
+                    continue
+                selected_rows[int(row["id"])] = row
+                for endpoint in (src, dst):
+                    if endpoint not in seen:
+                        seen.add(endpoint)
+                        next_frontier.add(endpoint)
+            frontier = next_frontier
+
+        for row in selected_rows.values():
+            graph.add_edge(
+                str(row["src"]),
+                str(row["dst"]),
+                relation=row["relation"],
+                confidence=float(row["confidence"]),
+                stage=row["stage"],
+                source=row["source"],
+                path=row["path"],
+                line_start=row["line_start"],
+                line_end=row["line_end"],
+                provenance_json=row["provenance_json"],
+            )
+        return self._networkx_subgraph_payload(graph, seen, seeds, function_view=function_view)
 
     def _networkx_subgraph_payload(
         self,
         graph: object,
         seen: set[str],
         fallback_symbols: Iterable[str],
+        function_view: str = "concept",
     ) -> Dict[str, object]:
         subgraph = graph.subgraph(seen)
         subgraph_edges = list(subgraph.edges(data=True))
@@ -1057,6 +1381,19 @@ class AsipStore:
         node_payloads: Dict[str, Dict[str, object]] = {}
         known_function_metadata = self._known_graph_function_metadata() if has_semantic_edges else {}
         known_function_symbols = set(known_function_metadata)
+        function_rules_by_profile = self._graph_function_normalization_rules_by_profile()
+        register_normalization_by_profile = self._graph_register_normalization_by_profile()
+
+        def remember_payload(node_id: str, kind: str, node: Mapping[str, object]) -> None:
+            node_ids.add(node_id)
+            payload = _boxmatrix_node_payload(node_id, kind, 1, node)
+            existing = node_payloads.get(node_id)
+            if existing is not None:
+                _merge_boxmatrix_metadata(existing, payload)
+                existing["weight"] = round(float(existing.get("weight") or 1.0) + 1.0, 4)
+                return
+            node_payloads[node_id] = payload
+
         for src, dst, data in subgraph_edges:
             src_metadata = _metadata_from_networkx_edge_data(data, str(src))
             dst_metadata = _metadata_from_networkx_edge_data(data, str(dst))
@@ -1070,12 +1407,18 @@ class AsipStore:
                 _kind_for_graph_symbol(str(src)),
                 src_metadata,
                 known_function_symbols=semantic_functions,
+                function_view=function_view,
+                function_rules_by_profile=function_rules_by_profile,
+                register_normalization_by_profile=register_normalization_by_profile,
             )
             dst_node = _product_graph_node(
                 str(dst),
                 _kind_for_graph_symbol(str(dst)),
                 dst_metadata,
                 known_function_symbols=semantic_functions,
+                function_view=function_view,
+                function_rules_by_profile=function_rules_by_profile,
+                register_normalization_by_profile=register_normalization_by_profile,
             )
             relation = _normalize_graph_relation(str(data["relation"]))
             if src_node is None or dst_node is None or not relation:
@@ -1096,6 +1439,12 @@ class AsipStore:
                     *_string_values(dst_metadata.get("resolver_wrappers")),
                 ]
             )
+            resolver_profile_ids = _dedupe_strings(
+                [
+                    *_resolver_profile_ids_for_graph(src_metadata),
+                    *_resolver_profile_ids_for_graph(dst_metadata),
+                ]
+            )
             edge = {
                 "src": str(src_node["id"]),
                 "dst": str(dst_node["id"]),
@@ -1108,27 +1457,50 @@ class AsipStore:
                         [*_source_records_for_graph(src_metadata), *_source_records_for_graph(dst_metadata)]
                     ),
                     "fields": fields,
+                    "resolver_profile_ids": resolver_profile_ids,
                     "resolver_wrappers": resolver_wrappers,
+                    "implementations": _dedupe_mapping_records(
+                        [
+                            *(
+                                src_node.get("attr", {}).get("raw_implementations", [])
+                                if isinstance(src_node.get("attr"), Mapping)
+                                and isinstance(src_node.get("attr", {}).get("raw_implementations"), list)
+                                else []
+                            ),
+                            *(
+                                dst_node.get("attr", {}).get("raw_implementations", [])
+                                if isinstance(dst_node.get("attr"), Mapping)
+                                and isinstance(dst_node.get("attr", {}).get("raw_implementations"), list)
+                                else []
+                            ),
+                        ]
+                    ),
                 },
             }
+            _apply_callback_dispatch_edge_attr(edge["attr"], src_metadata, dst_metadata)
+            original_relations = _original_relations_for_graph_edge(
+                relation,
+                str(data["relation"]),
+                src_metadata,
+                dst_metadata,
+            )
+            if original_relations:
+                edge["attr"]["original_relation"] = (
+                    original_relations[0] if len(original_relations) == 1 else original_relations
+                )
             edges.append(edge)
-            node_ids.add(edge["src"])
-            node_ids.add(edge["dst"])
-            node_payloads[edge["src"]] = _boxmatrix_node_payload(
-                edge["src"],
-                str(src_node["kind"]),
-                1,
-                src_node,
-            )
-            node_payloads[edge["dst"]] = _boxmatrix_node_payload(
-                edge["dst"],
-                str(dst_node["kind"]),
-                1,
-                dst_node,
-            )
+            remember_payload(edge["src"], str(src_node["kind"]), src_node)
+            remember_payload(edge["dst"], str(dst_node["kind"]), dst_node)
         if not node_ids:
             for symbol in fallback_symbols:
-                seed_node = _product_graph_node(symbol, _kind_for_graph_symbol(symbol), {})
+                seed_node = _product_graph_node(
+                    symbol,
+                    _kind_for_graph_symbol(symbol),
+                    {},
+                    function_view=function_view,
+                    function_rules_by_profile=function_rules_by_profile,
+                    register_normalization_by_profile=register_normalization_by_profile,
+                )
                 if seed_node is not None:
                     node_ids.add(str(seed_node["id"]))
                     node_payloads[str(seed_node["id"])] = _boxmatrix_node_payload(
@@ -1152,6 +1524,8 @@ class AsipStore:
         include_evidence_derived: bool = False,
         evidence_row_cap: Optional[int] = None,
         cooccurrence_symbol_limit: Optional[int] = None,
+        function_view: str = "concept",
+        compact: bool = False,
     ) -> Dict[str, object]:
         edge_limit = None if limit is None else max(0, int(limit))
         evidence_cap = 0 if evidence_row_cap is None else max(0, int(evidence_row_cap))
@@ -1161,6 +1535,8 @@ class AsipStore:
         node_metadata: Dict[str, Dict[str, object]] = {}
         known_function_metadata: Optional[Dict[str, Dict[str, object]]] = None
         known_function_symbols: Optional[set[str]] = None
+        function_rules_by_profile = self._graph_function_normalization_rules_by_profile()
+        register_normalization_by_profile = self._graph_register_normalization_by_profile()
 
         def semantic_function_metadata() -> tuple[Dict[str, Dict[str, object]], set[str]]:
             nonlocal known_function_metadata, known_function_symbols
@@ -1200,15 +1576,31 @@ class AsipStore:
                 return
             if _is_graph_wrapper_hub(src) or _is_graph_wrapper_hub(dst):
                 return
-            if stage == "semantic":
+            if stage == "semantic" and not compact:
                 semantic_metadata, semantic_symbols = semantic_function_metadata()
                 src_metadata = _merge_graph_metadata(semantic_metadata.get(src, {}), src_metadata)
                 dst_metadata = _merge_graph_metadata(semantic_metadata.get(dst, {}), dst_metadata)
                 semantic_functions = semantic_symbols
             else:
                 semantic_functions = None
-            src_node = _product_graph_node(src, src_kind, src_metadata, known_function_symbols=semantic_functions)
-            dst_node = _product_graph_node(dst, dst_kind, dst_metadata, known_function_symbols=semantic_functions)
+            src_node = _product_graph_node(
+                src,
+                src_kind,
+                src_metadata,
+                known_function_symbols=semantic_functions,
+                function_view=function_view,
+                function_rules_by_profile=function_rules_by_profile,
+                register_normalization_by_profile=register_normalization_by_profile,
+            )
+            dst_node = _product_graph_node(
+                dst,
+                dst_kind,
+                dst_metadata,
+                known_function_symbols=semantic_functions,
+                function_view=function_view,
+                function_rules_by_profile=function_rules_by_profile,
+                register_normalization_by_profile=register_normalization_by_profile,
+            )
             if src_node is None or dst_node is None:
                 folded_node = _fold_field_endpoint_into_register(
                     src,
@@ -1238,9 +1630,20 @@ class AsipStore:
                     "stages": set(),
                     "sources": set(),
                     "fields": set(),
+                    "providers": set(),
+                    "models": set(),
+                    "job_ids": set(),
+                    "resolver_profile_ids": set(),
                     "resolver_wrappers": set(),
                     "original_relations": set(),
+                    "dispatch_scopes": set(),
+                    "call_kinds": set(),
+                    "callback_candidate_counts": set(),
+                    "callback_ambiguous": False,
                     "source_records": [],
+                    "raw_implementations": [],
+                    "src_nodes": [],
+                    "dst_nodes": [],
                 },
             )
             stats["confidence_sum"] = float(stats["confidence_sum"]) + bounded_confidence
@@ -1248,19 +1651,27 @@ class AsipStore:
             stats["stages"].add(stage or "deterministic")
             if source:
                 stats["sources"].add(source)
-            if original_relation != relation:
-                stats["original_relations"].add(original_relation)
+            for raw_relation in _original_relations_for_graph_edge(
+                relation,
+                original_relation,
+                src_metadata or {},
+                dst_metadata or {},
+            ):
+                stats["original_relations"].add(raw_relation)
             _merge_edge_attr_stats(stats, src_node)
             _merge_edge_attr_stats(stats, dst_node)
-            remember_node(src_node)
-            remember_node(dst_node)
+            _merge_callback_dispatch_stats(stats, src_metadata or {}, dst_metadata or {})
+            if compact:
+                node_kinds.setdefault(src, str(src_node.get("kind") or src_kind))
+                node_kinds.setdefault(dst, str(dst_node.get("kind") or dst_kind))
+                _remember_compact_graph_node(node_metadata, src_node)
+                _remember_compact_graph_node(node_metadata, dst_node)
+            else:
+                stats["src_nodes"].append(src_node)
+                stats["dst_nodes"].append(dst_node)
 
         had_persisted_graph_rows = False
-        for row in self.con.execute(
-            "select src, dst, relation, confidence, stage, source, path, line_start, line_end, provenance_json from edges"
-        ):
-            if str(row["stage"] or "") == "evidence" and not include_evidence_derived:
-                continue
+        for row in self._runtime_graph_edge_rows(include_evidence_derived=include_evidence_derived):
             had_persisted_graph_rows = True
             src = str(row["src"])
             dst = str(row["dst"])
@@ -1404,10 +1815,19 @@ class AsipStore:
         selected_edges = edges if edge_limit is None else _select_global_graph_edges(edges, edge_limit)
         node_weights: Dict[str, float] = {}
         for edge in selected_edges:
+            stats = edge_stats.get((str(edge["src"]), str(edge["dst"]), str(edge["relation"])), {})
             weight = float(edge["weight"])
             node_weights[str(edge["src"])] = node_weights.get(str(edge["src"]), 0.0) + weight
             node_weights[str(edge["dst"])] = node_weights.get(str(edge["dst"]), 0.0) + weight
-            _append_boxmatrix_io(node_metadata, edge)
+            if not compact:
+                for node in [
+                    *(stats.get("src_nodes") if isinstance(stats.get("src_nodes"), list) else []),
+                    *(stats.get("dst_nodes") if isinstance(stats.get("dst_nodes"), list) else []),
+                ]:
+                    if isinstance(node, Mapping):
+                        remember_node(node)
+                _append_boxmatrix_io(node_metadata, edge)
+        _mark_function_concept_divergence(node_metadata, selected_edges, function_rules_by_profile)
         if not selected_edges:
             for node in node_metadata:
                 node_weights[node] = max(node_weights.get(node, 0.0), 1.0)
@@ -1437,11 +1857,8 @@ class AsipStore:
     def _has_expandable_edges(self, include_evidence_derived: bool = False) -> bool:
         if not self._table_exists("edges"):
             return False
-        if include_evidence_derived:
-            row = self.con.execute("select 1 from edges limit 1").fetchone()
-        else:
-            row = self.con.execute("select 1 from edges where stage <> 'evidence' limit 1").fetchone()
-        return row is not None
+        tail_sql = "" if include_evidence_derived else "where stage <> 'evidence'"
+        return any(self._runtime_graph_edge_rows(tail_sql, include_evidence_derived=include_evidence_derived))
 
     def _known_graph_function_metadata(self) -> Dict[str, Dict[str, object]]:
         functions: Dict[str, Dict[str, object]] = {}
@@ -1530,12 +1947,7 @@ class AsipStore:
         import networkx as nx
 
         graph = nx.MultiDiGraph()
-        rows = self.con.execute(
-            "select src, dst, relation, confidence, stage, source, path, line_start, line_end, provenance_json from edges"
-        )
-        for row in rows:
-            if str(row["stage"] or "") == "evidence" and not include_evidence_derived:
-                continue
+        for row in self._runtime_graph_edge_rows(include_evidence_derived=include_evidence_derived):
             if _is_graph_wrapper_hub(str(row["src"])) or _is_graph_wrapper_hub(str(row["dst"])):
                 continue
             graph.add_edge(
@@ -1639,6 +2051,9 @@ def _product_graph_node(
     kind: str,
     metadata: Optional[Mapping[str, object]] = None,
     known_function_symbols: Optional[set[str]] = None,
+    function_view: str = "concept",
+    function_rules_by_profile: Optional[Mapping[str, tuple[GraphFunctionNormalizationRule, ...]]] = None,
+    register_normalization_by_profile: Optional[Mapping[str, GraphRegisterNormalization]] = None,
 ) -> Optional[Dict[str, object]]:
     raw_metadata: Dict[str, object] = dict(metadata or {})
     if not raw_metadata:
@@ -1648,11 +2063,21 @@ def _product_graph_node(
     if not function_name and symbol == str(raw_metadata.get("function") or ""):
         function_name = symbol
     if function_name:
-        return _function_graph_node(symbol, function_name, raw_metadata)
+        return _function_graph_node(
+            symbol,
+            function_name,
+            raw_metadata,
+            function_view=function_view,
+            function_rules_by_profile=function_rules_by_profile,
+        )
     if normalized_kind in {"field", "doc", "pdf"}:
         return None
     if normalized_kind == "register":
-        return _register_graph_node(symbol, raw_metadata)
+        return _register_graph_node(
+            symbol,
+            raw_metadata,
+            register_normalization_by_profile=register_normalization_by_profile,
+        )
     if normalized_kind in {"doc_section", "pdf_section", "doc_box"}:
         return _document_graph_node(symbol, normalized_kind, raw_metadata)
     if not function_name and _looks_like_function_symbol(symbol) and (
@@ -1660,7 +2085,13 @@ def _product_graph_node(
     ):
         function_name = symbol
     if function_name:
-        return _function_graph_node(symbol, function_name, raw_metadata)
+        return _function_graph_node(
+            symbol,
+            function_name,
+            raw_metadata,
+            function_view=function_view,
+            function_rules_by_profile=function_rules_by_profile,
+        )
     return None
 
 
@@ -1698,48 +2129,105 @@ def _multi_seed_graph(symbols: Iterable[str]) -> Dict[str, object]:
     }
 
 
-def _register_graph_node(symbol: str, metadata: Mapping[str, object]) -> Dict[str, object]:
+def _register_graph_node(
+    symbol: str,
+    metadata: Mapping[str, object],
+    register_normalization_by_profile: Optional[Mapping[str, GraphRegisterNormalization]] = None,
+) -> Dict[str, object]:
     register_symbol = _register_symbol_for_graph(str(metadata.get("symbol") or symbol))
     source = _source_records_for_graph(metadata)
     ip = str(metadata.get("ip") or _ip_for_graph_symbol(register_symbol, source) or "unknown")
     ip_version = str(metadata.get("ip_version") or _ip_version_for_graph_source(source) or "unknown")
-    node_id = f"register:{ip}:{ip_version}:{register_symbol}"
+    register_normalization = _register_normalization_for_metadata(metadata, register_normalization_by_profile)
+    node_id = _register_node_id_for_graph(register_symbol, ip, ip_version, register_normalization)
+    ip_versions = _dedupe_strings(
+        [
+            *_string_values(metadata.get("ip_versions")),
+            *[str(item.get("ip_version") or "") for item in source if isinstance(item, Mapping)],
+            ip_version,
+        ]
+    )
     attr = {
         "source": source,
         "symbol": register_symbol,
         "ip": ip,
         "ip_version": ip_version,
+        "ip_versions": ip_versions,
         "fields": _string_values(metadata.get("fields"), metadata.get("field")),
         "resolver_wrappers": _string_values(metadata.get("resolver_wrappers"), metadata.get("wrapper")),
     }
+    attr.update(_provider_metadata_for_graph(metadata))
     return {"id": node_id, "kind": "register", "label": register_symbol, "attr": attr, "in": [], "out": []}
 
 
-def _function_graph_node(symbol: str, function_name: str, metadata: Mapping[str, object]) -> Dict[str, object]:
+def _function_graph_node(
+    symbol: str,
+    function_name: str,
+    metadata: Mapping[str, object],
+    function_view: str = "concept",
+    function_rules_by_profile: Optional[Mapping[str, tuple[GraphFunctionNormalizationRule, ...]]] = None,
+) -> Dict[str, object]:
     source = _source_records_for_graph(metadata)
     primary_source = source[0]
     path = str(primary_source.get("path") or str(metadata.get("path") or "unknown"))
     scope = _source_scope_for_graph(source)
-    node_id = f"function:{scope}:{path}:{function_name}"
+    concept = _function_concept_for_graph(
+        function_name,
+        metadata,
+        function_view,
+        function_rules_by_profile=function_rules_by_profile,
+    )
+    canonical_function_name = concept.get("function_name", function_name)
+    if concept.get("rule_id"):
+        node_id = (
+            f"function:{scope}:concept:{concept.get('profile_id') or 'unknown'}:"
+            f"{concept['rule_id']}:{canonical_function_name}"
+        )
+    else:
+        node_id = f"function:{scope}:{path}:{function_name}"
+    raw_implementation = _function_raw_implementation(function_name, path, metadata, source)
     attr = {
         "source": source,
-        "function_name": function_name,
+        "function_name": canonical_function_name,
+        "raw_function_names": [function_name],
+        "raw_implementations": [raw_implementation],
         "language": str(metadata.get("language") or _language_for_graph_path(path)),
         "fields": _string_values(metadata.get("fields"), metadata.get("field")),
         "resolver_wrappers": _string_values(metadata.get("resolver_wrappers"), metadata.get("wrapper")),
     }
-    return {"id": node_id, "kind": "function", "label": function_name, "attr": attr, "in": [], "out": []}
+    attr.update(_provider_metadata_for_graph(metadata))
+    for key in ("ip_block", "ip_version"):
+        if concept.get(key) not in ("", None, 0):
+            attr[key] = concept[key]
+    if concept.get("rule_id"):
+        attr["normalization_rule"] = concept["rule_id"]
+        attr["normalization_profile_id"] = concept.get("profile_id") or "unknown"
+        attr["merge_status"] = "merged"
+    resolver_profile_ids = _resolver_profile_ids_for_graph(metadata)
+    if resolver_profile_ids:
+        attr["resolver_profile_ids"] = resolver_profile_ids
+    return {"id": node_id, "kind": "function", "label": canonical_function_name, "attr": attr, "in": [], "out": []}
 
 
 def _document_graph_node(symbol: str, kind: str, metadata: Mapping[str, object]) -> Dict[str, object]:
     source = _source_records_for_graph(metadata)
+    doc_kind = {
+        "doc_section": "markdown_section",
+        "pdf_section": "pdf_section",
+        "doc_box": "boxmatrix_box",
+    }.get(kind, kind or "doc")
     attr = {
         "source": source,
+        "doc_kind": doc_kind,
         "anchor": str(metadata.get("anchor") or _anchor_for_graph_symbol(symbol)),
         "summary": str(metadata.get("summary") or ""),
         "fields": _string_values(metadata.get("fields"), metadata.get("field")),
         "resolver_wrappers": _string_values(metadata.get("resolver_wrappers"), metadata.get("wrapper")),
     }
+    attr.update(_provider_metadata_for_graph(metadata))
+    page = _doc_page_for_graph(metadata, str(attr["anchor"]))
+    if page:
+        attr["page"] = page
     if kind == "doc_box":
         attr["box_id"] = str(metadata.get("box_id") or attr["anchor"] or Path(str(metadata.get("path") or symbol)).name)
         attr["inputs"] = _string_values(metadata.get("inputs"))
@@ -1749,7 +2237,276 @@ def _document_graph_node(symbol: str, kind: str, metadata: Mapping[str, object])
         attr["section_id"] = str(metadata.get("section_id") or attr["anchor"] or symbol)
         attr["title"] = str(metadata.get("title") or metadata.get("heading") or metadata.get("label") or Path(symbol).name)
     label = str(metadata.get("label") or attr.get("title") or attr.get("box_id") or symbol)
-    return {"id": symbol, "kind": kind, "label": label, "attr": attr, "in": [], "out": []}
+    return {"id": symbol, "kind": "doc", "label": label, "attr": attr, "in": [], "out": []}
+
+
+def _provider_metadata_for_graph(metadata: Mapping[str, object]) -> Dict[str, object]:
+    values = {
+        "providers": _string_values(metadata.get("provider"), metadata.get("providers")),
+        "models": _string_values(metadata.get("model"), metadata.get("models")),
+        "job_ids": _string_values(metadata.get("job_id"), metadata.get("job_ids")),
+    }
+    return {key: _dedupe_strings(value) for key, value in values.items() if value}
+
+
+def _function_concept_for_graph(
+    function_name: str,
+    metadata: Mapping[str, object],
+    function_view: str,
+    function_rules_by_profile: Optional[Mapping[str, tuple[GraphFunctionNormalizationRule, ...]]] = None,
+) -> Dict[str, object]:
+    if function_view != "concept":
+        return {}
+    for profile_id, rule in _function_normalization_rule_entries_for_metadata(metadata, function_rules_by_profile):
+        if not rule.enabled:
+            continue
+        match = re.match(rule.match, function_name)
+        if not match:
+            continue
+        values = match.groupdict()
+        try:
+            canonical = rule.canonical.format(**values)
+        except KeyError:
+            continue
+        result: Dict[str, object] = {
+            "rule_id": rule.id,
+            "profile_id": profile_id,
+            "function_name": canonical,
+        }
+        if values.get("ip_block"):
+            result["ip_block"] = values["ip_block"]
+        if values.get("ip_version"):
+            result["ip_version"] = values["ip_version"]
+        return result
+    return {}
+
+
+def _doc_page_for_graph(metadata: Mapping[str, object], anchor: str) -> int:
+    try:
+        page = int(metadata.get("page") or 0)
+    except (TypeError, ValueError):
+        page = 0
+    if page:
+        return page
+    match = re.match(r"page-(\d+)$", anchor)
+    return int(match.group(1)) if match else 0
+
+
+def _function_normalization_rules_for_metadata(
+    metadata: Mapping[str, object],
+    function_rules_by_profile: Optional[Mapping[str, tuple[GraphFunctionNormalizationRule, ...]]] = None,
+) -> tuple[GraphFunctionNormalizationRule, ...]:
+    return tuple(
+        rule for _profile_id, rule in _function_normalization_rule_entries_for_metadata(metadata, function_rules_by_profile)
+    )
+
+
+def _function_normalization_rule_entries_for_metadata(
+    metadata: Mapping[str, object],
+    function_rules_by_profile: Optional[Mapping[str, tuple[GraphFunctionNormalizationRule, ...]]] = None,
+) -> tuple[tuple[str, GraphFunctionNormalizationRule], ...]:
+    rules_by_profile = (
+        _default_function_normalization_rules_by_profile()
+        if function_rules_by_profile is None
+        else function_rules_by_profile
+    )
+    resolver_profile_ids = _resolver_profile_ids_for_graph(metadata)
+    if not resolver_profile_ids:
+        resolver_profile_ids = _inferred_function_normalization_profile_ids_for_graph(metadata, rules_by_profile)
+    if resolver_profile_ids:
+        rules: List[tuple[str, GraphFunctionNormalizationRule]] = []
+        for profile_id in resolver_profile_ids:
+            rules.extend((profile_id, rule) for rule in rules_by_profile.get(profile_id, ()))
+        return tuple(rules)
+    return ()
+
+
+def _inferred_function_normalization_profile_ids_for_graph(
+    metadata: Mapping[str, object],
+    rules_by_profile: Mapping[str, tuple[GraphFunctionNormalizationRule, ...]],
+) -> List[str]:
+    candidates: List[str] = []
+    for key in ("corpus_id", "repo"):
+        candidates.extend(_string_values(metadata.get(key)))
+    source = metadata.get("source")
+    if isinstance(source, list):
+        for record in source:
+            if isinstance(record, Mapping):
+                for key in ("corpus_id", "repo"):
+                    candidates.extend(_string_values(record.get(key)))
+    profile_ids: List[str] = []
+    for candidate in candidates:
+        for profile_id in (candidate, _slug_for_graph_heading(candidate)):
+            if profile_id in rules_by_profile:
+                profile_ids.append(_canonical_default_resolver_profile_id_for_graph_alias(profile_id))
+    return _dedupe_strings(profile_ids)
+
+
+@lru_cache(maxsize=1)
+def _default_resolver_profile_ids_by_graph_alias() -> Dict[str, str]:
+    resolver_dir = _repo_root_for_storage_graph() / "configs" / "resolvers"
+    if not resolver_dir.exists():
+        return {}
+    try:
+        profiles = load_resolver_profiles(resolver_dir)
+    except Exception:
+        return {}
+    aliases: Dict[str, str] = {}
+    for profile in profiles.values():
+        for alias in _dedupe_strings([profile.id, *profile.aliases]):
+            aliases[alias] = profile.id
+    return aliases
+
+
+def _canonical_default_resolver_profile_id_for_graph_alias(profile_id: str) -> str:
+    return _default_resolver_profile_ids_by_graph_alias().get(profile_id, profile_id)
+
+
+def _register_normalization_for_metadata(
+    metadata: Mapping[str, object],
+    register_normalization_by_profile: Optional[Mapping[str, GraphRegisterNormalization]] = None,
+) -> GraphRegisterNormalization:
+    normalizations_by_profile = (
+        _default_register_normalization_by_profile()
+        if register_normalization_by_profile is None
+        else register_normalization_by_profile
+    )
+    for profile_id in _resolver_profile_ids_for_graph(metadata):
+        normalization = normalizations_by_profile.get(profile_id)
+        if normalization is not None:
+            return normalization
+    return GraphRegisterNormalization()
+
+
+def _register_node_id_for_graph(
+    register_symbol: str,
+    ip: str,
+    ip_version: str,
+    register_normalization: GraphRegisterNormalization,
+) -> str:
+    identity = register_normalization.identity or GraphRegisterNormalization().identity
+    if not register_normalization.merge_across_ip_blocks and "{ip}" not in identity:
+        identity = f"{identity}:{{ip}}"
+    if not register_normalization.merge_across_ip_versions and "{ip_version}" not in identity:
+        identity = f"{identity}:{{ip_version}}"
+    values = {
+        "symbol": register_symbol,
+        "ip": ip,
+        "ip_version": ip_version,
+    }
+    try:
+        node_id = identity.format(**values)
+    except (KeyError, ValueError):
+        node_id = GraphRegisterNormalization().identity.format(**values)
+    node_id = re.sub(r":+", ":", str(node_id).strip())
+    if not node_id.startswith("register:"):
+        node_id = f"register:{node_id}"
+    return node_id
+
+
+def _resolver_profile_ids_for_graph(metadata: Mapping[str, object]) -> List[str]:
+    return _dedupe_strings(
+        [
+            *_string_values(metadata.get("resolver_profile_ids")),
+            *_string_values(metadata.get("resolver_profiles")),
+            *_string_values(metadata.get("resolver_profile")),
+        ]
+    )
+
+
+@lru_cache(maxsize=1)
+def _default_function_normalization_rules_by_profile() -> Dict[str, tuple[GraphFunctionNormalizationRule, ...]]:
+    resolver_dir = _repo_root_for_storage_graph() / "configs" / "resolvers"
+    if not resolver_dir.exists():
+        return {}
+    try:
+        profiles = load_resolver_profiles(resolver_dir)
+    except Exception:
+        return {}
+    rules_by_profile: Dict[str, tuple[GraphFunctionNormalizationRule, ...]] = {}
+    for profile in profiles.values():
+        function_normalization = profile.graph.function_normalization
+        if function_normalization.enabled:
+            rules = tuple(rule for rule in function_normalization.rules if rule.enabled)
+        else:
+            rules = ()
+        for alias in _dedupe_strings([profile.id, *profile.aliases]):
+            rules_by_profile[alias] = rules
+    return rules_by_profile
+
+
+@lru_cache(maxsize=1)
+def _default_register_normalization_by_profile() -> Dict[str, GraphRegisterNormalization]:
+    resolver_dir = _repo_root_for_storage_graph() / "configs" / "resolvers"
+    if not resolver_dir.exists():
+        return {}
+    try:
+        profiles = load_resolver_profiles(resolver_dir)
+    except Exception:
+        return {}
+    normalization_by_profile: Dict[str, GraphRegisterNormalization] = {}
+    for profile in profiles.values():
+        for alias in _dedupe_strings([profile.id, *profile.aliases]):
+            normalization_by_profile[alias] = profile.graph.register_normalization
+    return normalization_by_profile
+
+
+def _resolver_profile_from_graph_row(row: Mapping[str, object]) -> Optional[object]:
+    profile_id = str(row.get("id") or "")
+    config = row.get("config", {})
+    if isinstance(config, Mapping) and config:
+        try:
+            return resolver_profile_from_config(config, fallback_id=profile_id)
+        except Exception:
+            return None
+    config_path = _resolver_config_path_for_graph(str(row.get("path") or ""))
+    if config_path.exists():
+        try:
+            return load_resolver_profile(config_path)
+        except Exception:
+            return None
+    return None
+
+
+def _resolver_profile_aliases_for_graph_row(row: Mapping[str, object], profile: Optional[object]) -> List[str]:
+    aliases = [str(row.get("id") or "")]
+    profile_id = str(getattr(profile, "id", "") or "")
+    if profile_id:
+        aliases.append(profile_id)
+    aliases.extend(str(alias) for alias in getattr(profile, "aliases", []) or [])
+    return _dedupe_strings(aliases)
+
+
+def _resolver_config_path_for_graph(path: str) -> Path:
+    config_path = Path(path)
+    if config_path.is_absolute():
+        return config_path
+    return _repo_root_for_storage_graph() / config_path
+
+
+def _repo_root_for_storage_graph() -> Path:
+    return Path(__file__).resolve().parents[4]
+
+
+def _function_raw_implementation(
+    function_name: str,
+    path: str,
+    metadata: Mapping[str, object],
+    source: List[Mapping[str, object]],
+) -> Dict[str, object]:
+    primary_source = source[0] if source else {}
+    implementation = {
+        "raw_function_name": function_name,
+        "path": path,
+        "corpus_id": str(primary_source.get("corpus_id") or metadata.get("corpus_id") or "unknown"),
+        "repo": str(primary_source.get("repo") or metadata.get("repo") or "unknown"),
+        "language": str(metadata.get("language") or _language_for_graph_path(path)),
+    }
+    for key in ("line_start", "line_end", "ip", "ip_version", "extractor", "resolver_profile"):
+        value = metadata.get(key) or primary_source.get(key)
+        if value not in ("", None, 0):
+            implementation[key] = value
+    return implementation
 
 
 def _fold_field_endpoint_into_register(
@@ -1809,11 +2566,81 @@ def _boxmatrix_node_payload(
     if not attr["source"]:
         attr["source"] = [_unknown_source_record()]
     attr["fields"] = _dedupe_strings(_string_values(attr.get("fields")))
+    attr["ip_versions"] = _dedupe_strings(
+        [
+            *_string_values(attr.get("ip_versions")),
+            *_string_values(attr.get("ip_version")),
+            *[
+                str(item.get("ip_version") or "")
+                for item in attr["source"]
+                if isinstance(item, Mapping)
+            ],
+        ]
+    )
     attr["resolver_wrappers"] = _dedupe_strings(_string_values(attr.get("resolver_wrappers")))
+    attr["providers"] = _dedupe_strings(_string_values(attr.get("providers"), attr.get("provider")))
+    attr["models"] = _dedupe_strings(_string_values(attr.get("models"), attr.get("model")))
+    attr["job_ids"] = _dedupe_strings(_string_values(attr.get("job_ids"), attr.get("job_id")))
+    attr["raw_function_names"] = _dedupe_strings(_string_values(attr.get("raw_function_names")))
+    attr["raw_implementations"] = _dedupe_mapping_records(
+        attr.get("raw_implementations") if isinstance(attr.get("raw_implementations"), list) else []
+    )
     payload["attr"] = attr
     payload["in"] = _dedupe_strings(_string_values(payload.get("in")))
     payload["out"] = _dedupe_strings(_string_values(payload.get("out")))
     return payload
+
+
+def _remember_compact_graph_node(node_metadata: Dict[str, Dict[str, object]], node: Mapping[str, object]) -> None:
+    node_id = str(node.get("id") or "")
+    if not node_id:
+        return
+    existing = node_metadata.setdefault(node_id, {})
+    attr = node.get("attr") if isinstance(node.get("attr"), Mapping) else {}
+    compact_attr = existing.setdefault("attr", {})
+    if not isinstance(compact_attr, dict):
+        compact_attr = {}
+        existing["attr"] = compact_attr
+    for key in (
+        "doc_kind",
+        "fields",
+        "ip_versions",
+        "providers",
+        "models",
+        "job_ids",
+        "raw_function_names",
+        "function_name",
+        "ip_block",
+        "normalization_rule",
+        "merge_status",
+    ):
+        value = attr.get(key)
+        if value not in (None, "", [], {}):
+            if isinstance(value, list):
+                compact_attr[key] = _dedupe_strings(
+                    [*_string_values(compact_attr.get(key)), *_string_values(value)]
+                )
+            else:
+                compact_attr.setdefault(key, value)
+    raw_implementations = attr.get("raw_implementations")
+    if isinstance(raw_implementations, list) and raw_implementations:
+        existing_raw_implementations = (
+            compact_attr.get("raw_implementations")
+            if isinstance(compact_attr.get("raw_implementations"), list)
+            else []
+        )
+        compact_attr["raw_implementations"] = _dedupe_mapping_records(
+            [*existing_raw_implementations, *raw_implementations]
+        )
+    source_records = _source_records_for_graph(attr)[:1]
+    if source_records:
+        compact_attr.setdefault("source", source_records)
+    label = str(node.get("label") or "")
+    if label:
+        existing.setdefault("label", label)
+    kind = str(node.get("kind") or "")
+    if kind:
+        existing.setdefault("kind", kind)
 
 
 def _merge_boxmatrix_metadata(target: Dict[str, object], incoming: Mapping[str, object]) -> None:
@@ -1849,14 +2676,62 @@ def _merge_boxmatrix_metadata(target: Dict[str, object], incoming: Mapping[str, 
             ),
         ]
     )
-    for list_key in ("fields", "resolver_wrappers", "inputs", "outputs", "constraints"):
+    for list_key in (
+        "fields",
+        "resolver_wrappers",
+        "ip_versions",
+        "inputs",
+        "outputs",
+        "constraints",
+        "raw_function_names",
+        "resolver_profile_ids",
+        "providers",
+        "models",
+        "job_ids",
+    ):
         target_attr[list_key] = _dedupe_strings(
             [*_string_values(target_attr.get(list_key)), *_string_values(incoming_attr.get(list_key))]
         )
+    target_attr["raw_implementations"] = _dedupe_mapping_records(
+        [
+            *(
+                target_attr.get("raw_implementations")
+                if isinstance(target_attr.get("raw_implementations"), list)
+                else []
+            ),
+            *(
+                incoming_attr.get("raw_implementations")
+                if isinstance(incoming_attr.get("raw_implementations"), list)
+                else []
+            ),
+        ]
+    )
+    incoming_ip_version = incoming_attr.get("ip_version")
+    if incoming_ip_version not in ("", None, 0):
+        target_attr["ip_versions"] = _dedupe_strings(
+            [*_string_values(target_attr.get("ip_versions")), str(incoming_ip_version)]
+        )
     for key, value in incoming_attr.items():
-        if key in {"source", "fields", "resolver_wrappers", "inputs", "outputs", "constraints"}:
+        if key in {
+            "source",
+            "fields",
+            "resolver_wrappers",
+            "ip_versions",
+            "inputs",
+            "outputs",
+            "constraints",
+            "raw_function_names",
+            "raw_implementations",
+            "resolver_profile_ids",
+            "providers",
+            "models",
+            "job_ids",
+        }:
             continue
-        if value in ("", None, 0):
+        if value in ("", None, 0) and key != "register_neighbor_overlap":
+            continue
+        if key == "ip_version":
+            target_attr.setdefault("ip_version", value)
             continue
         existing = target_attr.get(key)
         if existing in ("", None, 0):
@@ -1877,24 +2752,148 @@ def _merge_boxmatrix_metadata(target: Dict[str, object], incoming: Mapping[str, 
 def _merge_edge_attr_stats(stats: Dict[str, object], node: Mapping[str, object]) -> None:
     attr = node.get("attr") if isinstance(node.get("attr"), Mapping) else {}
     for field_name in _string_values(attr.get("fields")):
-        stats["fields"].add(field_name)
+        stats.setdefault("fields", set()).add(field_name)
+    for provider in _string_values(attr.get("provider"), attr.get("providers")):
+        stats.setdefault("providers", set()).add(provider)
+    for model in _string_values(attr.get("model"), attr.get("models")):
+        stats.setdefault("models", set()).add(model)
+    for job_id in _string_values(attr.get("job_id"), attr.get("job_ids")):
+        stats.setdefault("job_ids", set()).add(job_id)
+    for profile_id in _resolver_profile_ids_for_graph(attr):
+        stats.setdefault("resolver_profile_ids", set()).add(profile_id)
     for wrapper in _string_values(attr.get("resolver_wrappers")):
-        stats["resolver_wrappers"].add(wrapper)
+        stats.setdefault("resolver_wrappers", set()).add(wrapper)
     source_records = stats.get("source_records")
     if isinstance(source_records, list):
         source_records.extend(_source_records_for_graph(attr))
+    raw_implementations = stats.get("raw_implementations")
+    if isinstance(raw_implementations, list) and isinstance(attr.get("raw_implementations"), list):
+        raw_implementations.extend(attr.get("raw_implementations") or [])
+    for call_kind in _string_values(attr.get("call_kind")):
+        stats.setdefault("call_kinds", set()).add(call_kind)
+    for dispatch_scope in _string_values(attr.get("dispatch_scope")):
+        stats.setdefault("dispatch_scopes", set()).add(dispatch_scope)
+    for candidate_count in _string_values(attr.get("callback_candidate_count")):
+        stats.setdefault("callback_candidate_counts", set()).add(candidate_count)
+    if _bool_graph_value(attr.get("callback_ambiguous")):
+        stats["callback_ambiguous"] = True
+
+
+def _merge_callback_dispatch_stats(
+    stats: Dict[str, object],
+    src_metadata: Mapping[str, object],
+    dst_metadata: Mapping[str, object],
+) -> None:
+    for metadata in (src_metadata, dst_metadata):
+        for call_kind in _string_values(metadata.get("call_kind")):
+            stats.setdefault("call_kinds", set()).add(call_kind)
+        for dispatch_scope in _string_values(metadata.get("dispatch_scope")):
+            stats.setdefault("dispatch_scopes", set()).add(dispatch_scope)
+        for candidate_count in _string_values(metadata.get("callback_candidate_count")):
+            stats.setdefault("callback_candidate_counts", set()).add(candidate_count)
+        if _bool_graph_value(metadata.get("callback_ambiguous")):
+            stats["callback_ambiguous"] = True
 
 
 def _edge_attr_payload(stats: Mapping[str, object]) -> Dict[str, object]:
     payload = {
         "source": _dedupe_source_records(stats.get("source_records", []) if isinstance(stats.get("source_records"), list) else []),
         "fields": sorted(str(value) for value in stats.get("fields", set()) if value),
+        "providers": sorted(str(value) for value in stats.get("providers", set()) if value),
+        "models": sorted(str(value) for value in stats.get("models", set()) if value),
+        "job_ids": sorted(str(value) for value in stats.get("job_ids", set()) if value),
+        "resolver_profile_ids": sorted(str(value) for value in stats.get("resolver_profile_ids", set()) if value),
         "resolver_wrappers": sorted(str(value) for value in stats.get("resolver_wrappers", set()) if value),
     }
+    raw_implementations = _dedupe_mapping_records(
+        stats.get("raw_implementations", []) if isinstance(stats.get("raw_implementations"), list) else []
+    )
+    if raw_implementations:
+        payload["implementations"] = raw_implementations
     original_relations = sorted(str(value) for value in stats.get("original_relations", set()) if value)
     if original_relations:
         payload["original_relation"] = original_relations[0] if len(original_relations) == 1 else original_relations
+    dispatch = _dispatch_payload_value(stats.get("dispatch_scopes", set()))
+    if dispatch:
+        payload["dispatch"] = dispatch
+    call_kinds = sorted(str(value) for value in stats.get("call_kinds", set()) if value)
+    if call_kinds:
+        payload["call_kind"] = call_kinds[0] if len(call_kinds) == 1 else call_kinds
+    candidate_counts = sorted(
+        int(value)
+        for value in stats.get("callback_candidate_counts", set())
+        if _int_graph_value(value)
+    )
+    if candidate_counts:
+        payload["callback_candidate_count"] = max(candidate_counts)
+    if stats.get("callback_ambiguous"):
+        payload["callback_ambiguous"] = True
     return payload
+
+
+def _apply_callback_dispatch_edge_attr(
+    edge_attr: Dict[str, object],
+    src_metadata: Mapping[str, object],
+    dst_metadata: Mapping[str, object],
+) -> None:
+    dispatch = _dispatch_payload_value(
+        [
+            *_string_values(src_metadata.get("dispatch_scope")),
+            *_string_values(dst_metadata.get("dispatch_scope")),
+        ]
+    )
+    if dispatch:
+        edge_attr["dispatch"] = dispatch
+    call_kinds = _dedupe_strings(
+        [
+            *_string_values(src_metadata.get("call_kind")),
+            *_string_values(dst_metadata.get("call_kind")),
+        ]
+    )
+    if call_kinds:
+        edge_attr["call_kind"] = call_kinds[0] if len(call_kinds) == 1 else call_kinds
+    candidate_counts = [
+        _int_graph_value(value)
+        for value in [
+            *_string_values(src_metadata.get("callback_candidate_count")),
+            *_string_values(dst_metadata.get("callback_candidate_count")),
+        ]
+        if _int_graph_value(value)
+    ]
+    if candidate_counts:
+        edge_attr["callback_candidate_count"] = max(candidate_counts)
+    if _bool_graph_value(src_metadata.get("callback_ambiguous")) or _bool_graph_value(dst_metadata.get("callback_ambiguous")):
+        edge_attr["callback_ambiguous"] = True
+
+
+def _dispatch_payload_value(values: Iterable[object]) -> str:
+    scopes = {str(value) for value in values if value}
+    if "ambiguous" in scopes:
+        return "ambiguous"
+    if "generic_slot" in scopes:
+        return "generic_slot"
+    if "matched_slot" in scopes:
+        return "matched_slot"
+    return ""
+
+
+def _bool_graph_value(value: object) -> bool:
+    if isinstance(value, bool):
+        return value
+    return str(value).strip().lower() in {"1", "true", "yes"}
+
+
+def _original_relations_for_graph_edge(
+    relation: str,
+    original_relation: str,
+    *metadata_items: Mapping[str, object],
+) -> List[str]:
+    originals: List[str] = []
+    if original_relation and original_relation != relation:
+        originals.append(original_relation)
+    for metadata in metadata_items:
+        originals.extend(_string_values(metadata.get("original_relation"), metadata.get("original_relations")))
+    return [value for value in _dedupe_strings(originals) if value and value != relation]
 
 
 def _append_boxmatrix_io(node_metadata: Dict[str, Dict[str, object]], edge: Mapping[str, object]) -> None:
@@ -1914,6 +2913,110 @@ def _append_boxmatrix_io(node_metadata: Dict[str, Dict[str, object]], edge: Mapp
     dst_meta["in"] = _dedupe_strings([*_string_values(dst_meta.get("in")), f"{src_label} {relation}{field_suffix}"])
 
 
+def _mark_function_concept_divergence(
+    node_metadata: Dict[str, Dict[str, object]],
+    edges: Iterable[Mapping[str, object]],
+    function_rules_by_profile: Optional[Mapping[str, tuple[GraphFunctionNormalizationRule, ...]]] = None,
+) -> None:
+    register_neighbors: Dict[str, set[str]] = {}
+    implementation_neighbors: Dict[str, Dict[str, set[str]]] = {}
+    for edge in edges:
+        src = str(edge.get("src") or "")
+        dst = str(edge.get("dst") or "")
+        relation = str(edge.get("relation") or "")
+        if relation not in {"reads", "writes", "sets_field", "maps_base"}:
+            continue
+        concept_id = ""
+        register_id = ""
+        if ":concept:" in src and dst.startswith("register:"):
+            concept_id = src
+            register_id = dst
+        elif ":concept:" in dst and src.startswith("register:"):
+            concept_id = dst
+            register_id = src
+        if not concept_id or not register_id:
+            continue
+        register_neighbors.setdefault(concept_id, set()).add(register_id)
+        edge_attr = edge.get("attr") if isinstance(edge.get("attr"), Mapping) else {}
+        implementations = edge_attr.get("implementations")
+        if isinstance(implementations, list):
+            for implementation in implementations:
+                if not isinstance(implementation, Mapping):
+                    continue
+                implementation_key = _implementation_overlap_key(implementation)
+                if implementation_key:
+                    implementation_neighbors.setdefault(concept_id, {}).setdefault(implementation_key, set()).add(
+                        register_id
+                    )
+    for node_id, neighbors in register_neighbors.items():
+        metadata = node_metadata.get(node_id)
+        if not metadata or len(neighbors) < 2:
+            continue
+        attr = metadata.setdefault("attr", {})
+        if isinstance(attr, dict):
+            raw_implementations = attr.get("raw_implementations")
+            if isinstance(raw_implementations, list) and len(raw_implementations) > 1:
+                overlap = _minimum_register_neighbor_overlap(implementation_neighbors.get(node_id, {}))
+                if overlap is not None:
+                    attr["register_neighbor_overlap"] = round(overlap, 4)
+                normalization_profile_id = str(attr.get("normalization_profile_id") or "")
+                policy_profile_ids = [normalization_profile_id] if normalization_profile_id else _resolver_profile_ids_for_graph(attr)
+                policy = _function_merge_policy_for_rule(
+                    str(attr.get("normalization_rule") or ""),
+                    resolver_profile_ids=policy_profile_ids,
+                    function_rules_by_profile=function_rules_by_profile,
+                )
+                if overlap is not None and overlap < policy.split_register_overlap_below:
+                    attr["merge_status"] = "split_recommended"
+                elif overlap is not None and overlap < policy.warn_register_overlap_below:
+                    attr["merge_status"] = "divergent"
+                elif overlap is not None:
+                    attr["merge_status"] = "merged"
+                else:
+                    attr["merge_status"] = "divergent"
+
+
+def _implementation_overlap_key(implementation: Mapping[str, object]) -> str:
+    raw_name = str(implementation.get("raw_function_name") or "")
+    path = str(implementation.get("path") or "")
+    return f"{path}:{raw_name}" if raw_name else path
+
+
+def _minimum_register_neighbor_overlap(implementation_neighbors: Mapping[str, set[str]]) -> Optional[float]:
+    neighbor_sets = [set(neighbors) for neighbors in implementation_neighbors.values() if neighbors]
+    if len(neighbor_sets) < 2:
+        return None
+    minimum = 1.0
+    for left, right in combinations(neighbor_sets, 2):
+        union = left | right
+        if not union:
+            continue
+        minimum = min(minimum, len(left & right) / len(union))
+    return minimum
+
+
+def _function_merge_policy_for_rule(
+    rule_id: str,
+    resolver_profile_ids: Optional[Iterable[str]] = None,
+    function_rules_by_profile: Optional[Mapping[str, tuple[GraphFunctionNormalizationRule, ...]]] = None,
+) -> GraphMergePolicy:
+    rules_by_profile = (
+        _default_function_normalization_rules_by_profile()
+        if function_rules_by_profile is None
+        else function_rules_by_profile
+    )
+    selected_profile_ids = _dedupe_strings(str(profile_id) for profile_id in (resolver_profile_ids or []))
+    if selected_profile_ids:
+        profile_rule_sets = [rules_by_profile.get(profile_id, ()) for profile_id in selected_profile_ids]
+    else:
+        profile_rule_sets = list(rules_by_profile.values())
+    for profile_rules in profile_rule_sets:
+        for rule in profile_rules:
+            if rule.id == rule_id:
+                return rule.merge_policy
+    return GraphMergePolicy()
+
+
 def _source_records_for_graph(metadata: Mapping[str, object]) -> List[Dict[str, object]]:
     raw_source = metadata.get("source")
     if isinstance(raw_source, list):
@@ -1923,7 +3026,11 @@ def _source_records_for_graph(metadata: Mapping[str, object]) -> List[Dict[str, 
         "repo": str(metadata.get("repo") or "unknown"),
         "path": str(metadata.get("path") or ""),
     }
-    for key in ("line_start", "line_end", "page", "commit", "snippet_id"):
+    for key in ("line_start", "line_end", "page", "commit", "snippet_id", "resolver_profile"):
+        value = metadata.get(key)
+        if value not in ("", None, 0):
+            record[key] = value
+    for key in ("ip", "ip_version"):
         value = metadata.get(key)
         if value not in ("", None, 0):
             record[key] = value
@@ -1941,7 +3048,7 @@ def _dedupe_source_records(records: Iterable[object]) -> List[Dict[str, object]]
             "repo": str(raw_record.get("repo") or "unknown"),
             "path": str(raw_record.get("path") or ""),
         }
-        for key in ("line_start", "line_end", "page", "commit", "snippet_id"):
+        for key in ("line_start", "line_end", "page", "commit", "snippet_id", "ip", "ip_version", "resolver_profile"):
             value = raw_record.get(key)
             if value not in ("", None, 0):
                 record[key] = value
@@ -1956,6 +3063,21 @@ def _dedupe_source_records(records: Iterable[object]) -> List[Dict[str, object]]
         if any(str(record.get(key) or "") not in {"", "unknown"} for key in ("corpus_id", "repo", "path"))
     ]
     return concrete or result or [_unknown_source_record()]
+
+
+def _dedupe_mapping_records(records: Iterable[object]) -> List[Dict[str, object]]:
+    result: List[Dict[str, object]] = []
+    seen: set[tuple[object, ...]] = set()
+    for raw_record in records:
+        if not isinstance(raw_record, Mapping):
+            continue
+        record = {str(key): value for key, value in raw_record.items() if value not in ("", None, 0)}
+        key = tuple(sorted((key, json.dumps(value, sort_keys=True, default=str)) for key, value in record.items()))
+        if key in seen:
+            continue
+        seen.add(key)
+        result.append(record)
+    return result
 
 
 def _unknown_source_record() -> Dict[str, object]:
@@ -2038,6 +3160,35 @@ def _merge_graph_metadata(base: Mapping[str, object], override: Optional[Mapping
     return merged
 
 
+def _tokens_look_like_exact_symbols(tokens: Iterable[str]) -> bool:
+    token_list = [str(token).strip() for token in tokens if str(token).strip()]
+    if not token_list:
+        return False
+    return all("_" in token or re.search(r"\d", token) for token in token_list)
+
+
+def _symbol_aliases_for_query_tokens(tokens: Iterable[str]) -> List[str]:
+    aliases: List[str] = []
+    for token in tokens:
+        text = str(token).strip()
+        if not text:
+            continue
+        variants = [text]
+        upper = text.upper()
+        lower = text.lower()
+        for candidate in (upper, lower):
+            if candidate not in variants:
+                variants.append(candidate)
+        if _tokens_look_like_exact_symbols([text]):
+            canonical = _register_symbol_for_graph(upper)
+            for prefix in ("", "reg", "mm", "smn"):
+                candidate = f"{prefix}{canonical}" if prefix else canonical
+                if candidate not in variants:
+                    variants.append(candidate)
+        aliases.extend(variants)
+    return _dedupe_strings(aliases)
+
+
 def _label_for_graph_node_id(node_id: str) -> str:
     if ":" in node_id:
         return node_id.rsplit(":", 1)[-1]
@@ -2112,8 +3263,10 @@ def _normalize_graph_kind(kind: str) -> str:
     normalized = kind.lower()
     if normalized in {"function", "func"}:
         return "function"
-    if normalized in {"register", "macro"}:
+    if normalized in {"register"}:
         return "register"
+    if normalized in {"macro", "context"}:
+        return "macro"
     if normalized in {"field"}:
         return "field"
     if normalized in {"doc_section", "section"}:
@@ -2130,38 +3283,7 @@ def _normalize_graph_kind(kind: str) -> str:
 
 
 def _normalize_graph_relation(relation: str) -> str:
-    normalized = re.sub(r"[^a-z0-9]+", "_", relation.lower()).strip("_")
-    if normalized in {"read", "reads", "field_get", "field_read", "field_mask", "field_shift"}:
-        return "reads"
-    if normalized in {"write", "writes", "field_write", "field_value"}:
-        return "writes"
-    if normalized in {
-        "field_set",
-        "sets_field",
-        "set_field",
-        "sets_field_value",
-        "reg_set_field",
-        "read_modify_write",
-        "read_modify_writes",
-    }:
-        return "sets_field"
-    if normalized in {"maps_base", "map_base", "address", "offset", "maps_offset"}:
-        return "maps_base"
-    if normalized in {"calls", "call"}:
-        return "calls"
-    if normalized in {"contains", "contains_box"}:
-        return "contains"
-    if normalized in {"documents", "documents_register", "documented_by", "section_mentions", "explains"}:
-        return "documents"
-    if normalized in {"depends_on", "requires"}:
-        return "depends_on"
-    if normalized in {"configures", "programs"}:
-        return "configures"
-    if normalized in {"resets", "reset"}:
-        return "resets"
-    if normalized in {"wraps", "defined_in", "appears_in_code", "appears_in_doc", "appears_in_pdf", "has_field"}:
-        return ""
-    return "relates_to"
+    return normalize_product_relation(relation) or ""
 
 
 def _kind_for_graph_symbol(symbol: str) -> str:
@@ -2179,8 +3301,10 @@ def _kind_for_graph_symbol(symbol: str) -> str:
         return "pdf"
     if re.search(r"ENABLE|DISABLE|PENDING|MASK|SHIFT|RESET_REQUEST|INVALIDATE|FIELD", symbol):
         return "field"
+    if re.match(r"^CP_HQD_", symbol):
+        return "register"
     if _has_register_prefix_alias(symbol) or re.search(
-        r"CNTL|STATUS|RESET|BASE|SIZE|VMID|DOORBELL|QUEUE|REGISTER",
+        r"CNTL|CONTROL|STATUS|RESET|BASE|SIZE|VMID|DOORBELL|QUEUE|REGISTER",
         symbol,
     ):
         return "register"
@@ -2220,7 +3344,7 @@ def _ordered_graph_pair(
 def _operation_relation_for_graph(access_type: str) -> str:
     if access_type in {"field_set", "read", "write", "read_modify_write"}:
         return access_type
-    return "mentions"
+    return "relates_to"
 
 
 def _section_node_for_graph_row(row: sqlite3.Row) -> tuple[str, str]:
@@ -2376,9 +3500,17 @@ def _metadata_from_networkx_edge_data(data: Mapping[str, object], endpoint: str)
         "language",
         "model",
         "provider",
+        "resolver_profile",
+        "resolver_profile_ids",
         "resolver_wrappers",
         "wrapper",
         "job_id",
+        "original_relation",
+        "original_relations",
+        "call_kind",
+        "dispatch_scope",
+        "callback_ambiguous",
+        "callback_candidate_count",
     ):
         value = provenance.get(key)
         if value not in ("", None, 0):
@@ -2412,9 +3544,17 @@ def _metadata_from_edge_provenance(row: sqlite3.Row, endpoint: str) -> Dict[str,
         "language",
         "model",
         "provider",
+        "resolver_profile",
+        "resolver_profile_ids",
         "resolver_wrappers",
         "wrapper",
         "job_id",
+        "original_relation",
+        "original_relations",
+        "call_kind",
+        "dispatch_scope",
+        "callback_ambiguous",
+        "callback_candidate_count",
     ):
         value = provenance.get(key)
         if value not in ("", None, 0):
@@ -2758,14 +3898,38 @@ def _function_scope_for_graph_node_id(node_id: str) -> str:
 
 
 def _normalize_job_status(status: str) -> str:
+    return normalize_job_status(status)
+
+
+def normalize_job_status(status: str) -> str:
     normalized = str(status or "").strip().lower()
-    if normalized in {"queued", "indexing", "succeeded", "failed"}:
+    if normalized in {"queued", "indexing", "succeeded", "failed", "superseded"}:
         return normalized
     if normalized in {"running", "started", "in_progress"}:
         return "indexing"
     if normalized in {"error", "errored"}:
         return "failed"
     return "succeeded"
+
+
+def _semantic_graph_job_matches_provider(row: sqlite3.Row, expected_provider: str, expected_model: str) -> bool:
+    if not expected_provider and not expected_model:
+        return True
+    try:
+        metadata = json.loads(str(row["metadata_json"] or "{}"))
+    except json.JSONDecodeError:
+        metadata = {}
+    provider_settings = metadata.get("provider_settings") if isinstance(metadata, Mapping) else None
+    edge_settings = provider_settings.get("edge") if isinstance(provider_settings, Mapping) else None
+    if not isinstance(edge_settings, Mapping):
+        return False
+    provider = str(edge_settings.get("provider") or "ollama").strip()
+    model = str(edge_settings.get("model") or edge_settings.get("preferred") or "").strip()
+    if expected_provider and provider != expected_provider:
+        return False
+    if expected_model and model != expected_model:
+        return False
+    return True
 
 
 def _is_protected_global_edge(edge: Mapping[str, object]) -> bool:

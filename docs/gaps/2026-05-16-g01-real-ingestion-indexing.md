@@ -29,17 +29,47 @@ The index path must build ASIP evidence from raw inputs, not from an already gen
 - A real AMD MI300 PDF converter smoke produced page-preserving chunks outside the main index path; this proves extraction feasibility, not final indexed acceptance.
 - The historical clean provider AQ01-AQ09 artifact passed the older runner matrix, but all nine query rows reported `source_types: ["code"]`. This means it proved live query mechanics/provider plumbing, not final multi-source ingestion closure.
 - Current code now classifies generated register-header-style files such as `*_offset.h`, `*_sh_mask.h`, `*_d.h`, and paths under `asic_reg`/`register*` as `source_type: "register"`, and configured indexing includes those register headers in the non-query supplemental pass.
+- 2026-05-19 register-header inventory follow-up: the source-type-specific
+  register-header symbol filter now keeps real AMD register/header symbols such
+  as `CP_HQD_ACTIVE`, `CP_HQD_PQ_WPTR_LO`, and
+  `CP_HQD_ACTIVE__ACTIVE_MASK`, while rejecting low-signal tokens such as `A`,
+  `tmp`, and `adapt`. Regression coverage:
+  `test_register_header_inventory_classifies_cp_hqd_registers_and_skips_low_signal_tokens`.
+- 2026-05-18 amdgpu subfolder correction: `linux-amdgpu` corpus configs now support scanning both `drivers/gpu/drm/amd/amdgpu` and sibling `drivers/gpu/drm/amd/include/asic_reg` under one logical corpus through structured `subfolders`. The local sparse checkout was expanded to include `include/asic_reg` with `476` header files; the configured scanner now sees `625` amdgpu files plus `476` register headers for `1101` unique files. A real temp index succeeded in `1758.77s` with `477 documents`, `120850 chunks`, `4784408 evidence`, and `27559 edges`, including all `476` asic_reg docs. QA is recorded in `docs/qa/2026-05-18-g01-g04-amdgpu-subfolder-corpus-qa.md`.
 - Source-gated acceptance rerun `docs/qa/2026-05-17-acceptance-clean-qwen35-source-gated-current.json` and `.md` correctly marks the old `/tmp/asip-acceptance-clean-2026-05-17.db` as failed: `mxgpu` is still `indexing`, index job 3 failed, and AQ05 is missing `pdf`.
 - Synthetic multi-source fixture acceptance `docs/qa/2026-05-17-acceptance-multisource-fixture.json` and `.md` proves the current gate can pass when the index actually contains multiple source classes: `/tmp/asip-multisource-clean-2026-05-17.db` has `documents` counts `code=1`, `doc=1`, `pdf=1`, `register=2`, and `evidence` counts `code=23`, `doc=3`, `pdf=4`, `register=4`. AQ05 passes with `code`, `doc`, `pdf`, and `register`; AQ06 passes with `code` and `register`.
 - Clean-final AMD verification now exists at `/tmp/asip-clean-amd-gemma4-final-current-2026-05-18.db` with `documents=124`, `chunks=21884`, `evidence=860516`, `edges=41893`, and `embeddings=32`. Document source counts are `code=7`, `doc=20`, `pdf=1`, `register=96`; evidence source counts are `code=126`, `doc=5664`, `pdf=5`, `register=854721`.
 - Final current acceptance artifact `docs/qa/2026-05-18-acceptance-clean-amd-gemma4-final-current.json` and `.md` records AQ01-AQ09 as `9 passed, 0 partial, 0 failed` against that clean-final AMD DB with DB health pass and `gemma4:e4b` semantic-edge provider smoke. `docs/qa/2026-05-18-clean-final-stage2-and-macro-qa.md` records the current deterministic graph rebuild, real Stage 2 semantic/doc-node jobs, and macro endpoint audit.
 - Empty-DB raw re-index QA is recorded in `docs/qa/2026-05-18-g15-empty-db-raw-corpus-reindex.md` and `.json`: two fresh `/tmp` SQLite DBs rebuilt from `/tmp/asip-mxgpu`, `/tmp/asip-linux-amdgpu`, and `docs/fixtures/amd-amdgpu-docs` in `506.75s` and `507.07s`, both ending with `documents=124`, `chunks=21884`, `evidence=860516`, and final SQLite graph edges `39199`. The same artifact records real `gemma4:e4b` Stage 2 reruns, 11 real queries, and a graph endpoint audit with zero `tmp/adapt/GC/WREG32/RREG32/REG_SET_FIELD/SOC15_REG_OFFSET` nodes.
+- 2026-05-19 DB audit correction: the current live `data/asip.db` must not be
+  cited as a complete Linux register-header default DB. It contains real
+  `mxgpu` and docs data, but `linux-amdgpu` documents currently include only
+  one code file and zero `drivers/gpu/drm/amd/include/asic_reg` documents.
+  Current default-DB source coverage is therefore weaker than the expanded
+  multi-subfolder config. The replacement gate is a fresh `/tmp` rebuild from
+  `configs/edge_cases/clean-amd-gemma4-e4b.json`, explicit
+  `linux-amdgpu` `include/asic_reg` document counts, Stage 1/Stage 2 reruns,
+  and acceptance before copying or citing it as the default production DB.
+- 2026-05-20 continuation: live `data/asip.db` was re-indexed for the expanded
+  `linux-amdgpu` registered corpus and job `10` succeeded with `1101`
+  documents, `125962` chunks, `4438962` evidence rows, and `27533` newly
+  indexed edges. Read-only DB checks show `625` code documents plus `476`
+  `drivers/gpu/drm/amd/include/asic_reg` register documents, with `4195965`
+  evidence rows from the register-header path. Job hygiene now marks the old
+  interrupted job `9` as `superseded`. The refreshed acceptance artifact
+  `docs/qa/2026-05-20-acceptance-data-asip-expanded.json` / `.md` has database
+  health `pass`, product graph schema `pass` for AQ01-AQ09, and AQ05 source
+  diversity restored across `code`, `doc`, `pdf`, and `register`. This corrects
+  the default DB source coverage, but it is still not final-production proof:
+  Web/browser QA is currently blocked by local `listen EPERM`, AQ09 live
+  semantic-edge provider smoke is blocked by `Operation not permitted`, and the
+  expanded evidence volume still needs final performance/hygiene review.
 
 ## Remaining Gap
 
 The first live slice now has real SQLite indexing for MxGPU/Linux snippets plus configured docs/PDF/register sources, and the clean AMD DB proves code, docs, generated register headers, and a reduced AMD amdgpu PDF fixture in one repeatable CLI/core path. The old clean provider AQ pass remains superseded because its recorded source diversity is code-only, while the new clean AMD provider artifact is the current acceptance evidence.
 
-The configured raw-corpus path deliberately remains query-focused for code sources and supplemental for docs/register/PDF to avoid unbounded symbol evidence explosions. Empty-DB raw re-index timing is now measured for the current selective raw path, while a future full all-file code indexer would still need a more selective parser before changing that scope. Current clean-final Web/API/browser product-surface QA is recorded in the final evidence package, while G11 still owns final documentation review, commit, push, and explicit residual-boundary acceptance.
+The configured raw-corpus path deliberately remains query-focused for code sources and supplemental for docs/register/PDF to avoid unbounded symbol evidence explosions. The expanded `asic_reg` temp index proved the plumbing works but also exposed that register-header evidence was too broad: it produced `4,784,398` register evidence rows and `1,514,784` distinct symbols, including low-signal tokens such as `A`. A first register-header inventory filter is now implemented and tested. The 2026-05-20 live default DB refresh now includes the Linux `include/asic_reg` documents and stale job hygiene is repaired, but the expanded default DB is still a current-state candidate rather than closure evidence because Web/browser QA, live provider semantic-edge smoke, and performance review remain open. Empty-DB raw re-index timing is now measured for the current selective raw path, while a future full all-file code indexer would still need a more selective parser before changing that scope. Current clean-final Web/API/browser product-surface QA is recorded in the final evidence package, while G11 still owns final documentation review, commit, push, and explicit residual-boundary acceptance.
 
 Final closure must link to [Final Clean Evidence Package Gate](2026-05-17-final-clean-evidence-package.md) and include real source roots, DB health, source-type counts, query evidence, graph counts, provider state, visual QA, and performance.
 
@@ -59,6 +89,10 @@ Final closure must link to [Final Clean Evidence Package Gate](2026-05-17-final-
 - Core integration test: registered doc and PDF corpus text becomes queryable evidence without symbol-like code identifiers.
 - Core integration test: configured include globs index non-query doc/PDF files into queryable evidence.
 - Core integration test: generated register headers are classified and queried as `source_type: register`. Implemented in `test_generated_register_headers_are_indexed_as_register_source_type`.
+- Core integration test: register-header inventory keeps real CP_HQD register
+  symbols but skips low-signal generated-header tokens. Implemented in
+  `test_register_header_inventory_classifies_cp_hqd_registers_and_skips_low_signal_tokens`.
+- Core integration test: one repo can contribute multiple repo-relative subfolder filters to a single corpus without scanning sibling directories accidentally. Implemented for configured and registered corpus paths.
 - Web API/E2E test: `Run index` creates or updates a real index job and shows resulting status.
 - Real AMD smoke: default config produces nonzero code/doc/register/PDF evidence counts and records source roots.
 

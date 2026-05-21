@@ -1,0 +1,45 @@
+- generic [active] [ref=e1] [box=0,0,2048,1280]:
+  - generic [ref=e2] [box=0,0,2048,1280]:
+    - banner [ref=e3] [box=0,0,2048,72]:
+      - generic [ref=e5] [box=64,26,171,20]: ASIP Evidence Workbench
+      - generic [ref=e6] [box=328,18,1117,36]:
+        - img [box=338,28,15,15]
+        - textbox "Global symbol search" [ref=e7] [box=328,18,1117,36]:
+          - /placeholder: Search indexed symbols
+      - generic "Workbench status" [ref=e8] [box=1461,24,443,24]:
+        - generic [ref=e9] [box=1461,24,150,24]: "Provider: unverified"
+        - generic [ref=e11] [box=1619,24,186,24]: "Edge: Ollama / gemma4:e4b"
+        - generic [ref=e12] [box=1813,24,92,24]: "Index: ready"
+      - button "Switch to light theme" [ref=e13] [cursor=pointer] [box=1921,18,87,36]:
+        - img [box=1936,28,16,16]
+        - text: Light
+    - main [ref=e14] [box=0,72,2048,1208]:
+      - navigation "ASIP sections" [ref=e15] [box=0,72,288,1208]:
+        - link "Evidence Search" [ref=e16] [cursor=pointer] [box=24,96,239,34]:
+          - /url: /
+        - link "Graph Explorer" [ref=e17] [cursor=pointer] [box=24,134,239,34]:
+          - /url: /graph
+        - link "Corpus" [ref=e18] [cursor=pointer] [box=24,172,239,34]:
+          - /url: /corpus
+        - link "Resolver Profiles" [ref=e19] [cursor=pointer] [box=24,210,239,34]:
+          - /url: /resolver-profiles
+        - link "Acceptance Tests" [ref=e20] [cursor=pointer] [box=24,248,239,34]:
+          - /url: /acceptance
+        - link "Settings" [ref=e21] [cursor=pointer] [box=24,286,239,34]:
+          - /url: /settings
+      - region "Graph relationship workspace" [ref=e22] [box=288,72,1248,1208]:
+        - generic [ref=e23] [box=312,96,1185,36]
+        - generic "Page metrics" [ref=e31] [box=312,144,1185,24]
+        - generic "Evidence source filters" [ref=e35] [box=312,178,1185,36]
+        - generic [ref=e40] [box=312,226,1185,946]
+        - table "Evidence results" [ref=e74] [box=313,1209,1183,1025]
+      - complementary [ref=e94] [box=1536,72,488,1208]:
+        - generic [ref=e95] [box=1561,96,424,24]
+        - heading "Relationship Panel" [level=3] [ref=e99] [box=1561,168,424,18]
+        - generic [ref=e100] [box=1561,194,424,960]
+        - button "Generate semantic edges" [ref=e103] [cursor=pointer] [box=1561,1170,424,36]
+        - button "Generate batch semantic edges" [ref=e104] [cursor=pointer] [box=1561,1222,424,36]
+        - button "Extract document nodes" [ref=e105] [cursor=pointer] [box=1561,1274,424,36]
+        - paragraph [ref=e463] [box=1561,1318,424,17]: "Query ran: who will write/read CP_HQD_* regs"
+        - generic "Semantic generation controls" [ref=e106] [box=1561,1336,424,120]
+  - alert [ref=e464] [box=-1,1279,1,1]

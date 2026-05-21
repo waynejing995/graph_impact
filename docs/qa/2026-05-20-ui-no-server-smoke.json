@@ -1,0 +1,181 @@
+{
+  "source": "asip.web.no_server_smoke",
+  "generated_at": "2026-05-20T14:43:58.919Z",
+  "gate_status": "pass",
+  "current_artifact_args": [
+    "--browser-json",
+    "docs/qa/2026-05-20-browser-e2e-current.json",
+    "--in-app-browser-json",
+    "docs/qa/2026-05-20-in-app-browser-probe.json",
+    "--provider-json",
+    "docs/qa/2026-05-20-provider-gate-current.json",
+    "--runtime-semantic-json",
+    "docs/qa/2026-05-20-runtime-semantic-freshness-qa.json",
+    "--acceptance-json",
+    "docs/qa/2026-05-20-acceptance-data-asip-expanded-current.json",
+    "--web-acceptance-json",
+    "docs/qa/2026-05-20-acceptance-data-asip-expanded-web-current.json",
+    "--completion-json",
+    "docs/qa/2026-05-20-current-goal-completion-gate.json",
+    "--web-package-json",
+    "apps/web/package.json"
+  ],
+  "current_artifact_inputs": [
+    {
+      "option": "--browser-json",
+      "path": "docs/qa/2026-05-20-browser-e2e-current.json",
+      "resolved_path": "/Volumes/data/User/wayne/Code/graph_impact/docs/qa/2026-05-20-browser-e2e-current.json",
+      "status": "loaded",
+      "bytes": 3066,
+      "hash_policy": "sha256",
+      "sha256": "0a02e0daa294efb78658e7eba486d5c45650092c10ece7be78619db8cf5cbdbf"
+    },
+    {
+      "option": "--in-app-browser-json",
+      "path": "docs/qa/2026-05-20-in-app-browser-probe.json",
+      "resolved_path": "/Volumes/data/User/wayne/Code/graph_impact/docs/qa/2026-05-20-in-app-browser-probe.json",
+      "status": "loaded",
+      "bytes": 1194,
+      "hash_policy": "sha256",
+      "sha256": "c47ccb3ffafb0afc4d46e02589926c42f163b47303f0a54a3c912ef2787f69d7"
+    },
+    {
+      "option": "--provider-json",
+      "path": "docs/qa/2026-05-20-provider-gate-current.json",
+      "resolved_path": "/Volumes/data/User/wayne/Code/graph_impact/docs/qa/2026-05-20-provider-gate-current.json",
+      "status": "loaded",
+      "bytes": 3060,
+      "hash_policy": "sha256",
+      "sha256": "f0df4fc8abbb59ec595ddf70eaf9d96757a6b30148cb262c599bda5ff2eac1e9"
+    },
+    {
+      "option": "--runtime-semantic-json",
+      "path": "docs/qa/2026-05-20-runtime-semantic-freshness-qa.json",
+      "resolved_path": "/Volumes/data/User/wayne/Code/graph_impact/docs/qa/2026-05-20-runtime-semantic-freshness-qa.json",
+      "status": "loaded",
+      "bytes": 3184,
+      "hash_policy": "sha256",
+      "sha256": "281814054234d86534ea900eebf1fd42c2363e45f01b9a50127d1e1242358655"
+    },
+    {
+      "option": "--acceptance-json",
+      "path": "docs/qa/2026-05-20-acceptance-data-asip-expanded-current.json",
+      "resolved_path": "/Volumes/data/User/wayne/Code/graph_impact/docs/qa/2026-05-20-acceptance-data-asip-expanded-current.json",
+      "status": "loaded",
+      "bytes": 29038,
+      "hash_policy": "sha256",
+      "sha256": "88e8cdae1fdb5a303fd11885fc4b446773f164ac741ec961cb7dc57490865159"
+    },
+    {
+      "option": "--web-acceptance-json",
+      "path": "docs/qa/2026-05-20-acceptance-data-asip-expanded-web-current.json",
+      "resolved_path": "/Volumes/data/User/wayne/Code/graph_impact/docs/qa/2026-05-20-acceptance-data-asip-expanded-web-current.json",
+      "status": "loaded",
+      "bytes": 31472,
+      "hash_policy": "sha256",
+      "sha256": "422459408b8db7cb7bc987f2eb9f0928194ce804e7691ca8fa14bd4c288da890"
+    },
+    {
+      "option": "--completion-json",
+      "path": "docs/qa/2026-05-20-current-goal-completion-gate.json",
+      "resolved_path": "/Volumes/data/User/wayne/Code/graph_impact/docs/qa/2026-05-20-current-goal-completion-gate.json",
+      "status": "loaded",
+      "bytes": 10533,
+      "hash_policy": "self-referential-not-final-gate-input",
+      "sha256": ""
+    },
+    {
+      "option": "--web-package-json",
+      "path": "apps/web/package.json",
+      "resolved_path": "/Volumes/data/User/wayne/Code/graph_impact/apps/web/package.json",
+      "status": "loaded",
+      "bytes": 1345,
+      "hash_policy": "informational",
+      "sha256": ""
+    }
+  ],
+  "summary": {
+    "total": 9,
+    "passed": 9,
+    "failed": 0
+  },
+  "checks": [
+    {
+      "label": "dbPath no-fallback route smoke",
+      "status": "pass",
+      "exit_code": 0,
+      "expected_output": [],
+      "rejected_output": []
+    },
+    {
+      "label": "request path helper smoke",
+      "status": "pass",
+      "exit_code": 0,
+      "expected_output": [],
+      "rejected_output": []
+    },
+    {
+      "label": "Playwright config smoke",
+      "status": "pass",
+      "exit_code": 0,
+      "expected_output": [],
+      "rejected_output": []
+    },
+    {
+      "label": "no-mock Playwright hygiene smoke",
+      "status": "pass",
+      "exit_code": 0,
+      "expected_output": [],
+      "rejected_output": []
+    },
+    {
+      "label": "acceptance route command wiring smoke",
+      "status": "pass",
+      "exit_code": 0,
+      "expected_output": [],
+      "rejected_output": []
+    },
+    {
+      "label": "current artifact invariants smoke",
+      "status": "pass",
+      "exit_code": 0,
+      "expected_output": [],
+      "rejected_output": []
+    },
+    {
+      "label": "browser e2e artifact producer smoke",
+      "status": "pass",
+      "exit_code": 0,
+      "expected_output": [],
+      "rejected_output": []
+    },
+    {
+      "label": "Playwright discovery smoke",
+      "status": "pass",
+      "exit_code": 0,
+      "expected_output": [
+        "Total: 109 tests in 3 files",
+        "acceptance page runs no-mock AQ01 through the real workbench API"
+      ],
+      "rejected_output": []
+    },
+    {
+      "label": "Browser preflight existing-target shape smoke",
+      "status": "pass",
+      "exit_code": 0,
+      "expected_output": [
+        "\"preflight_mode\": \"existing_target\"",
+        "\"listen_capability\"",
+        "\"target_port\"",
+        "\"target_connect\"",
+        "\"status\": \"skipped\"",
+        "\"code\": \"NOT_APPLICABLE\""
+      ],
+      "rejected_output": [
+        "local listen capability blocked",
+        "target port 3100 blocked"
+      ]
+    }
+  ],
+  "failure_reasons": []
+}

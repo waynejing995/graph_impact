@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { defaultDbPath, ensureWorkbenchIndex, runAsipCli } from "@/lib/asip-cli";
+import { explicitTextOrError } from "@/lib/request-paths";
 import { configuredInt, readWorkbenchLimits } from "@/lib/workbench-limits";
 
 type SemanticEdgesRequest = {
@@ -16,7 +17,15 @@ type SemanticEdgesRequest = {
 export async function POST(request: Request) {
   const body = (await request.json().catch(() => ({}))) as SemanticEdgesRequest;
   const limits = readWorkbenchLimits();
-  const dbPath = body.dbPath?.trim() || defaultDbPath;
+  let dbPath = defaultDbPath;
+  try {
+    dbPath = explicitTextOrError(body.dbPath, "dbPath") ?? defaultDbPath;
+  } catch (error) {
+    return NextResponse.json(
+      { error: error instanceof Error ? error.message : "dbPath cannot be blank" },
+      { status: 400 }
+    );
+  }
   const query = (body.q ?? body.query ?? "").trim();
   const limit = configuredInt(body.limit) ?? limits.semantic?.queryLimit;
   const batchLimit = configuredInt(body.limit) ?? limits.semantic?.batchCandidateLimit;

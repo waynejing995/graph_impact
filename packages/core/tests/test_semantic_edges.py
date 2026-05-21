@@ -6,14 +6,16 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
-from asip import cli
+from asip import cli, semantic_edges
 from asip.cli import parse_source_roots
+from asip.graph_schema import ALLOWED_PRODUCT_RELATIONS
 from asip.semantic_edges import (
     EdgeModelConfig,
     FakeEdgeProvider,
     FullCorpus,
     FullCorpusEdgeConfig,
     FullCorpusQuery,
+    FullCorpusSubfolder,
     OllamaEdgeProvider,
     OpenAICompatibleEdgeProvider,
     build_full_corpus_prompt,
@@ -32,6 +34,23 @@ from asip.semantic_edges import (
 
 
 class SemanticEdgeFeatureTests(unittest.TestCase):
+    def test_edge_prompt_uses_product_relation_enum(self):
+        system_prompt = semantic_edges._edge_messages("CASE q\nTERMS: GCVM_L2_CNTL")[0]["content"]
+
+        for relation in sorted(ALLOWED_PRODUCT_RELATIONS):
+            self.assertIn(relation, system_prompt)
+        for rejected_relation in ["checks_mask", "assigns_doorbell", "waits_for", "mentions"]:
+            self.assertNotIn(rejected_relation, system_prompt)
+
+    def test_doc_node_prompt_uses_document_schema_not_semantic_case_schema(self):
+        system_prompt = semantic_edges._doc_node_messages("DOCUMENT docs/a.md#intro")[0]["content"]
+
+        self.assertIn('"documents"', system_prompt)
+        self.assertIn('"boxes"', system_prompt)
+        self.assertIn('"relationships"', system_prompt)
+        self.assertNotIn('"cases"', system_prompt)
+        self.assertNotIn("Do not use file paths as src or dst", system_prompt)
+
     def test_committed_real_case_config_has_more_than_five_queries(self):
         config = load_edge_case_config(Path("configs/edge_cases/mxgpu-real-qwen35.json"))
 
@@ -903,6 +922,96 @@ class SemanticEdgeFeatureTests(unittest.TestCase):
 
             self.assertEqual(scanned["summary"]["corpora"]["fixture"]["file_count"], 1)
             self.assertEqual(scanned["queries"][0]["snippets"][0]["path"], "src/gpu/keep.c")
+
+    def test_full_corpus_can_scan_multiple_subfolders_in_one_repo(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            amdgpu = root / "drivers/gpu/drm/amd/amdgpu"
+            asic_reg = root / "drivers/gpu/drm/amd/include/asic_reg"
+            display = root / "drivers/gpu/drm/amd/display"
+            amdgpu.mkdir(parents=True)
+            asic_reg.mkdir(parents=True)
+            display.mkdir(parents=True)
+            (amdgpu / "gfx.c").write_text("WREG32(regGCVM_L2_CNTL, 1);\n", encoding="utf-8")
+            (asic_reg / "gc_11_0_0_offset.h").write_text(
+                "#define regHEADER_ONLY_REGISTER 0x1234\n",
+                encoding="utf-8",
+            )
+            (display / "display.c").write_text("WREG32(regDISPLAY_ONLY_REGISTER, 1);\n", encoding="utf-8")
+            config = FullCorpusEdgeConfig(
+                name="multi-subfolder-fixture",
+                model=EdgeModelConfig(preferred="gemma4:e4b", fallback=""),
+                corpora=[
+                    FullCorpus(
+                        id="linux-amdgpu",
+                        repo="torvalds/linux",
+                        default_source_root=str(root),
+                        subfolders=[
+                            FullCorpusSubfolder(
+                                relative_root="drivers/gpu/drm/amd/amdgpu",
+                                include=["**/*.c"],
+                            ),
+                            FullCorpusSubfolder(
+                                relative_root="drivers/gpu/drm/amd/include/asic_reg",
+                                include=["**/*.h"],
+                            ),
+                        ],
+                    )
+                ],
+                queries=[
+                    FullCorpusQuery(
+                        id="header-register",
+                        corpus="linux-amdgpu",
+                        question="Where is the generated register defined?",
+                        terms=["HEADER_ONLY_REGISTER"],
+                        expected_terms=["HEADER_ONLY_REGISTER"],
+                    )
+                ],
+            )
+
+            scanned = scan_full_corpus_queries(config, {})
+
+            summary = scanned["summary"]["corpora"]["linux-amdgpu"]
+            self.assertEqual(summary["file_count"], 2)
+            self.assertEqual(len(summary["scan_roots"]), 2)
+            self.assertEqual(scanned["queries"][0]["snippets"][0]["path"], "drivers/gpu/drm/amd/include/asic_reg/gc_11_0_0_offset.h")
+            all_paths = "\n".join(snippet["path"] for query in scanned["queries"] for snippet in query["snippets"])
+            self.assertNotIn("display/display.c", all_paths)
+
+    def test_full_corpus_rejects_subfolder_filters_outside_source_root(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            (root / "drivers/gpu/drm/amd/amdgpu").mkdir(parents=True)
+            config = FullCorpusEdgeConfig(
+                name="unsafe-subfolder-fixture",
+                model=EdgeModelConfig(preferred="gemma4:e4b", fallback=""),
+                corpora=[
+                    FullCorpus(
+                        id="linux-amdgpu",
+                        repo="torvalds/linux",
+                        default_source_root=str(root),
+                        subfolders=[
+                            FullCorpusSubfolder(
+                                relative_root="../outside",
+                                include=["**/*.c"],
+                            )
+                        ],
+                    )
+                ],
+                queries=[
+                    FullCorpusQuery(
+                        id="unsafe",
+                        corpus="linux-amdgpu",
+                        question="Where is an unsafe register?",
+                        terms=["UNSAFE_REGISTER"],
+                        expected_terms=["UNSAFE_REGISTER"],
+                    )
+                ],
+            )
+
+            with self.assertRaises(ValueError) as raised:
+                scan_full_corpus_queries(config, {})
+            self.assertIn("repo-relative", str(raised.exception))
 
     def test_full_corpus_prompt_forbids_file_path_edge_endpoints(self):
         prompt = build_full_corpus_prompt(

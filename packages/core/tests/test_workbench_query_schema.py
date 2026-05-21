@@ -5,7 +5,7 @@ from unittest.mock import patch
 
 from asip import workbench
 from asip.storage import AsipStore
-from asip.workbench import graph_for_rows, index_configured_corpora, query_evidence
+from asip.workbench import expand_query_graph, graph_for_rows, index_configured_corpora, query_evidence
 
 from workbench_fixture import write_live_fixture
 
@@ -29,6 +29,33 @@ REQUIRED_EVIDENCE_FIELDS = {
 
 
 class WorkbenchQuerySchemaTests(unittest.TestCase):
+    def _add_linux_amdgpu_resolver_profile(self, store: AsipStore) -> None:
+        store.upsert_resolver_profile(
+            "linux-amdgpu",
+            "cpp",
+            ["WREG32"],
+            "write",
+            "configs/resolvers/linux-amdgpu.yaml",
+            config={
+                "id": "linux-amdgpu",
+                "language": "cpp",
+                "wrappers": {"WREG32": {"symbol_arg": 0, "access": "write"}},
+                "graph": {
+                    "function_normalization": {
+                        "enabled": True,
+                        "rules": [
+                            {
+                                "id": "amd-ip-versioned-functions",
+                                "enabled": True,
+                                "match": r"^(?P<ip_block>gfxhub|mmhub|gfx|sdma|gmc|nbio|df|ih)_v(?P<ip_version>\d+_\d+(?:_\d+)?)_(?P<operation>.+)$",
+                                "canonical": "{ip_block}_{operation}",
+                            }
+                        ],
+                    }
+                },
+            },
+        )
+
     def test_graph_for_rows_merges_doc_overlay_source_into_seed_register(self):
         with tempfile.TemporaryDirectory() as tmpdir:
             db_path = Path(tmpdir) / "asip.db"
@@ -62,9 +89,20 @@ class WorkbenchQuerySchemaTests(unittest.TestCase):
                 register_nodes[0]["attr"]["source"],
             )
             self.assertIn(
-                ("note.md#lines-1", "documents", "register:unknown:unknown:G04_CLEAN_FLOW_REGISTER"),
+                ("note.md#lines-1", "documents", "register:unknown:G04_CLEAN_FLOW_REGISTER"),
                 {(edge["src"], edge["relation"], edge["dst"]) for edge in graph["edges"]},
             )
+
+    def test_empty_db_graph_fallback_rejects_non_product_seed_nodes(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            db_path = Path(tmpdir) / "empty.db"
+            db_path.write_text("", encoding="utf-8")
+
+            graph = expand_query_graph(db_path, "ENABLE_L2_CACHE")
+
+            self.assertEqual(graph["nodes"], [])
+            self.assertEqual(graph["edges"], [])
+            self.assertEqual(graph["empty_state"], "ENABLE_L2_CACHE is not a product graph entity")
 
     def test_graph_for_rows_returns_empty_multi_seed_graph_without_second_networkx_build(self):
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -95,18 +133,18 @@ class WorkbenchQuerySchemaTests(unittest.TestCase):
             with patch.object(AsipStore, "to_networkx", counting_to_networkx):
                 graph = graph_for_rows(rows, db_path)
 
-            self.assertEqual(calls, 1)
+            self.assertEqual(calls, 0)
             self.assertEqual(graph["queryId"], "MISSING_CNTL_A, MISSING_CNTL_B")
             self.assertEqual(graph["edges"], [])
             self.assertEqual(
                 [node["id"] for node in graph["nodes"]],
                 [
-                    "register:unknown:unknown:MISSING_CNTL_A",
-                    "register:unknown:unknown:MISSING_CNTL_B",
+                    "register:unknown:MISSING_CNTL_A",
+                    "register:unknown:MISSING_CNTL_B",
                 ],
             )
 
-    def test_graph_for_rows_expands_multiple_query_seeds_with_single_networkx_build(self):
+    def test_graph_for_rows_expands_multiple_query_seeds_without_full_networkx_scan(self):
         with tempfile.TemporaryDirectory() as tmpdir:
             db_path = Path(tmpdir) / "asip.db"
             store = AsipStore.connect(str(db_path))
@@ -142,23 +180,74 @@ class WorkbenchQuerySchemaTests(unittest.TestCase):
             with patch.object(AsipStore, "to_networkx", counting_to_networkx):
                 graph = graph_for_rows(rows, db_path)
 
-            self.assertEqual(calls, 1)
+            self.assertEqual(calls, 0)
             edge_triples = {(edge["src"], edge["relation"], edge["dst"]) for edge in graph["edges"]}
             for index in range(4):
                 self.assertIn(
                     (
                         f"function:fixture:driver_{index}.c:writer_{index}",
                         "writes",
-                        f"register:unknown:unknown:TEST_REG_CNTL_{index}",
+                        f"register:unknown:TEST_REG_CNTL_{index}",
                     ),
                     edge_triples,
                 )
+
+    def test_register_query_graph_uses_concept_function_with_raw_implementations(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            db_path = Path(tmpdir) / "asip.db"
+            store = AsipStore.connect(str(db_path))
+            store.migrate()
+            self._add_linux_amdgpu_resolver_profile(store)
+            for raw_function, version in [
+                ("gfxhub_v11_5_0_gart_enable", "11_5_0"),
+                ("gfxhub_v12_0_gart_enable", "12_0"),
+            ]:
+                store.add_edge(
+                    raw_function,
+                    "GCVM_L2_CNTL",
+                    "writes",
+                    0.95,
+                    stage="deterministic",
+                    source="clang_text_spans",
+                    path=f"drivers/gpu/drm/amd/amdgpu/gfxhub_v{version}.c",
+                    line_start=10,
+                    provenance={
+                        "extractor": "code_graph",
+                        "function": raw_function,
+                        "corpus_id": "linux-amdgpu",
+                        "repo": "linux",
+                        "path": f"drivers/gpu/drm/amd/amdgpu/gfxhub_v{version}.c",
+                        "ip": "GC",
+                        "ip_version": version,
+                        "resolver_profile": "linux-amdgpu",
+                    },
+                )
+
+            graph = graph_for_rows([{"symbol": "GCVM_L2_CNTL"}], db_path)
+
+        function_nodes = [node for node in graph["nodes"] if node["kind"] == "function"]
+        self.assertEqual(len(function_nodes), 1)
+        self.assertTrue(any("raw_implementations" in node["attr"] for node in function_nodes))
+        self.assertCountEqual(
+            function_nodes[0]["attr"]["raw_function_names"],
+            ["gfxhub_v11_5_0_gart_enable", "gfxhub_v12_0_gart_enable"],
+        )
+        self.assertEqual(len(function_nodes[0]["attr"]["raw_implementations"]), 2)
+        self.assertIn(
+            (
+                "function:linux-amdgpu:concept:linux-amdgpu:amd-ip-versioned-functions:gfxhub_gart_enable",
+                "writes",
+                "register:GC:GCVM_L2_CNTL",
+            ),
+            {(edge["src"], edge["relation"], edge["dst"]) for edge in graph["edges"]},
+        )
 
     def test_register_query_graph_expands_to_common_callback_backbone(self):
         with tempfile.TemporaryDirectory() as tmpdir:
             db_path = Path(tmpdir) / "asip.db"
             store = AsipStore.connect(str(db_path))
             store.migrate()
+            self._add_linux_amdgpu_resolver_profile(store)
             store.add_edge(
                 "amdgpu_device_init",
                 "gfx_v11_0_hw_init",
@@ -177,6 +266,7 @@ class WorkbenchQuerySchemaTests(unittest.TestCase):
                     "repo": "https://github.com/torvalds/linux",
                     "callee_path": "drivers/gpu/drm/amd/amdgpu/gfx_v11_0.c",
                     "callee_line": 4,
+                    "resolver_profile": "linux-amdgpu",
                 },
             )
             store.add_edge(
@@ -195,6 +285,7 @@ class WorkbenchQuerySchemaTests(unittest.TestCase):
                     "ip_version": "11.0",
                     "corpus_id": "linux-amdgpu",
                     "repo": "https://github.com/torvalds/linux",
+                    "resolver_profile": "linux-amdgpu",
                 },
             )
 
@@ -205,15 +296,15 @@ class WorkbenchQuerySchemaTests(unittest.TestCase):
                 (
                     "function:linux-amdgpu:drivers/gpu/drm/amd/amdgpu/amdgpu_device.c:amdgpu_device_init",
                     "calls",
-                    "function:linux-amdgpu:drivers/gpu/drm/amd/amdgpu/gfx_v11_0.c:gfx_v11_0_hw_init",
+                    "function:linux-amdgpu:concept:linux-amdgpu:amd-ip-versioned-functions:gfx_hw_init",
                 ),
                 edge_triples,
             )
             self.assertIn(
                 (
-                    "function:linux-amdgpu:drivers/gpu/drm/amd/amdgpu/gfx_v11_0.c:gfx_v11_0_hw_init",
+                    "function:linux-amdgpu:concept:linux-amdgpu:amd-ip-versioned-functions:gfx_hw_init",
                     "writes",
-                    "register:GC:11.0:GCVM_L2_CNTL",
+                    "register:GC:GCVM_L2_CNTL",
                 ),
                 edge_triples,
             )
@@ -329,6 +420,202 @@ class WorkbenchQuerySchemaTests(unittest.TestCase):
 
             self.assertEqual({row["source_type"] for row in filtered["rows"]}, {"doc"})
             self.assertEqual(filtered["filters"]["source_types"], ["doc"])
+
+    def test_natural_language_register_wildcard_query_uses_symbol_prefix_not_regs_noise(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            db_path = Path(tmpdir) / "asip.db"
+            store = AsipStore.connect(str(db_path))
+            store.migrate()
+            noisy_doc = store.add_document("fixture", "register", "include/noisy_regs.h")
+            noisy_chunk = store.add_chunk(
+                noisy_doc,
+                "#define CPM_CONTROL__REFCLK_REGS_GATE_ENABLE_MASK 0x1",
+                1,
+                1,
+            )
+            store.add_evidence(
+                noisy_chunk,
+                "fixture",
+                "register",
+                "local",
+                "include/noisy_regs.h",
+                "CPM_CONTROL__REFCLK_REGS_GATE_ENABLE_MASK",
+                "field",
+                "mention",
+                0.99,
+                "#define CPM_CONTROL__REFCLK_REGS_GATE_ENABLE_MASK 0x1",
+                "register header -> CPM_CONTROL__REFCLK_REGS_GATE_ENABLE_MASK",
+                line_start=1,
+                line_end=1,
+            )
+            cp_doc = store.add_document("fixture", "register", "include/cp_hqd_regs.h")
+            cp_chunk = store.add_chunk(
+                cp_doc,
+                "#define CP_HQD_PQ_CONTROL 0x0\n#define CP_HQD_ACTIVE 0x1",
+                1,
+                2,
+            )
+            for symbol in ("CP_HQD_PQ_CONTROL", "CP_HQD_ACTIVE"):
+                store.add_evidence(
+                    cp_chunk,
+                    "fixture",
+                    "register",
+                    "local",
+                    "include/cp_hqd_regs.h",
+                    symbol,
+                    "register",
+                    "mention",
+                    0.7,
+                    f"#define {symbol} 0x0",
+                    f"register header -> {symbol}",
+                    line_start=1,
+                    line_end=2,
+                    ip_block="CP",
+                )
+            store.add_edge(
+                "gfx_mqd_program",
+                "CP_HQD_PQ_CONTROL",
+                "writes",
+                0.95,
+                stage="deterministic",
+                source="clang_text_spans",
+                path="drivers/gpu/drm/amd/amdgpu/gfx_mqd.c",
+                line_start=21,
+                provenance={"extractor": "code_graph", "function": "gfx_mqd_program", "corpus_id": "linux-amdgpu"},
+            )
+            store.add_edge(
+                "gfx_hqd_readback",
+                "CP_HQD_PQ_CONTROL",
+                "reads",
+                0.95,
+                stage="deterministic",
+                source="clang_text_spans",
+                path="drivers/gpu/drm/amd/amdgpu/gfx_mqd.c",
+                line_start=34,
+                provenance={"extractor": "code_graph", "function": "gfx_hqd_readback", "corpus_id": "linux-amdgpu"},
+            )
+
+            class UnexpectedVectorTransport:
+                def post_json(self, url, payload, headers=None, timeout=30):
+                    raise AssertionError("symbol-prefix queries should not run provider vector search")
+
+            result = query_evidence(
+                db_path,
+                "who will write/read CP_HQD_* regs",
+                limit=3,
+                embedding_transport=UnexpectedVectorTransport(),
+            )
+
+            self.assertFalse(result["empty"])
+            self.assertEqual(result["query_embedding"]["source"], "skipped-symbol-prefix")
+            self.assertIn(result["rows"][0]["relation"], {"reads", "writes"})
+            self.assertEqual(result["rows"][0]["source_type"], "code")
+            self.assertIn(result["rows"][0]["symbol"], {"gfx_hqd_readback", "gfx_mqd_program"})
+            self.assertTrue(
+                all(
+                    str(row.get("symbol", "")).startswith("CP_HQD_")
+                    or str(row.get("target_symbol", "")).startswith("CP_HQD_")
+                    for row in result["rows"]
+                ),
+                result["rows"],
+            )
+            edge_relations = {edge["relation"] for edge in result["graph"]["edges"]}
+            self.assertIn("writes", edge_relations)
+            self.assertIn("reads", edge_relations)
+
+    def test_query_can_return_compact_graph_metadata_for_web_rendering(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            db_path = Path(tmpdir) / "asip.db"
+            store = AsipStore.connect(str(db_path))
+            store.migrate()
+            doc = store.add_document("fixture", "register", "include/cp_hqd_regs.h")
+            chunk = store.add_chunk(doc, "#define CP_HQD_ACTIVE 0x1", 1, 1)
+            store.add_evidence(
+                chunk,
+                "fixture",
+                "register",
+                "local",
+                "include/cp_hqd_regs.h",
+                "CP_HQD_ACTIVE",
+                "register",
+                "mention",
+                0.8,
+                "#define CP_HQD_ACTIVE 0x1",
+                "register header -> CP_HQD_ACTIVE",
+                line_start=1,
+                line_end=1,
+            )
+            store.add_edge(
+                "gfx_kiq_init_register",
+                "CP_HQD_ACTIVE",
+                "writes",
+                0.97,
+                stage="deterministic",
+                source="clang_text_spans",
+                path="drivers/gpu/drm/amd/amdgpu/gfx_v10_0.c",
+                line_start=7031,
+                provenance={
+                    "extractor": "code_graph",
+                    "source": [
+                        {
+                            "corpus_id": "linux-amdgpu",
+                            "repo": "repo",
+                            "path": "drivers/gpu/drm/amd/amdgpu/gfx_v10_0.c",
+                            "line_start": 7031,
+                            "line_end": 7031,
+                        }
+                    ],
+                    "implementations": [{"raw_function_name": f"impl_{index}"} for index in range(20)],
+                    "dispatch": "matched_slot",
+                    "callback_candidate_count": 1,
+                },
+            )
+
+            result = query_evidence(db_path, "CP_HQD_*", limit=3, compact_graph=True)
+
+            self.assertFalse(result["empty"])
+            self.assertEqual(result["graph"]["metadata_mode"], "compact")
+            [edge] = result["graph"]["edges"]
+            self.assertEqual(edge["attr"]["callback_candidate_count"], 1)
+            self.assertEqual(edge["attr"]["source"][0]["path"], "drivers/gpu/drm/amd/amdgpu/gfx_v10_0.c")
+            self.assertNotIn("implementations", edge["attr"])
+
+    def test_exact_symbol_query_skips_provider_vector_scan(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            db_path = Path(tmpdir) / "asip.db"
+            store = AsipStore.connect(str(db_path))
+            store.migrate()
+            doc = store.add_document("fixture", "register", "include/cp_hqd_regs.h")
+            chunk = store.add_chunk(doc, "#define CP_HQD_ACTIVE 0x1", 1, 1)
+            store.add_evidence(
+                chunk,
+                "fixture",
+                "register",
+                "local",
+                "include/cp_hqd_regs.h",
+                "CP_HQD_ACTIVE",
+                "register",
+                "write",
+                0.8,
+                "#define CP_HQD_ACTIVE 0x1",
+                "register header -> CP_HQD_ACTIVE",
+                line_start=1,
+                line_end=1,
+            )
+
+            class UnexpectedVectorTransport:
+                def post_json(self, url, payload, headers=None, timeout=30):
+                    raise AssertionError("exact symbol queries should not run provider vector search")
+
+            result = query_evidence(
+                db_path,
+                "Who writes CP_HQD_ACTIVE?",
+                limit=3,
+                embedding_transport=UnexpectedVectorTransport(),
+            )
+
+            self.assertFalse(result["empty"])
+            self.assertEqual(result["query_embedding"]["source"], "skipped-symbol-token")
 
     def test_query_evidence_merges_vector_backed_evidence_without_lexical_overlap(self):
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -505,7 +792,7 @@ class WorkbenchQuerySchemaTests(unittest.TestCase):
 
             result = query_evidence(
                 db_path,
-                "GCVM_L2_CNTL fallback",
+                "lexical fallback evidence",
                 embedding_transport=FailingQueryEmbeddingTransport(),
             )
 
@@ -717,10 +1004,11 @@ class WorkbenchQuerySchemaTests(unittest.TestCase):
 
             nodes = {node["id"]: node for node in result["graph"]["nodes"]}
             edges = {(edge["src"], edge["relation"], edge["dst"]) for edge in result["graph"]["edges"]}
-            self.assertEqual(nodes["docs/manual.pdf#page-3"]["kind"], "pdf_section")
+            self.assertEqual(nodes["docs/manual.pdf#page-3"]["kind"], "doc")
+            self.assertEqual(nodes["docs/manual.pdf#page-3"]["attr"]["doc_kind"], "pdf_section")
             self.assertEqual(nodes["docs/manual.pdf#page-3"]["attr"]["source"][0]["page"], 3)
             self.assertIn(
-                ("docs/manual.pdf#page-3", "documents", "register:GC:unknown:GCVM_L2_CNTL"),
+                ("docs/manual.pdf#page-3", "documents", "register:GC:GCVM_L2_CNTL"),
                 edges,
             )
 
@@ -794,6 +1082,25 @@ class WorkbenchQuerySchemaTests(unittest.TestCase):
         source_types = {row["source_type"] for row in selected}
         self.assertIn("register", source_types)
         self.assertIn("doc", source_types)
+        self.assertLessEqual(len(selected), 5)
+
+    def test_diverse_selection_preserves_code_when_register_rows_dominate(self):
+        rows = [
+            {"id": index, "source_type": "register", "rank_score": 20 - index}
+            for index in range(1, 8)
+        ] + [
+            {"id": 20, "source_type": "code", "rank_score": 1},
+            {"id": 21, "source_type": "doc", "rank_score": 1},
+            {"id": 22, "source_type": "pdf", "rank_score": 1},
+        ]
+
+        selected = workbench._select_diverse_rows(rows, limit=5)
+
+        source_types = {row["source_type"] for row in selected}
+        self.assertIn("code", source_types)
+        self.assertIn("register", source_types)
+        self.assertIn("doc", source_types)
+        self.assertIn("pdf", source_types)
         self.assertLessEqual(len(selected), 5)
 
     def test_query_diverse_selection_preserves_multiple_injected_source_types(self):

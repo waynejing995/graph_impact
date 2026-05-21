@@ -1,0 +1,252 @@
+{
+  "config": {
+    "configFile": "/Volumes/data/User/wayne/Code/graph_impact/apps/web/playwright.config.ts",
+    "rootDir": "/Volumes/data/User/wayne/Code/graph_impact/apps/web/tests",
+    "forbidOnly": false,
+    "fullyParallel": false,
+    "globalSetup": null,
+    "globalTeardown": null,
+    "globalTimeout": 0,
+    "grep": {},
+    "grepInvert": null,
+    "maxFailures": 0,
+    "metadata": {
+      "actualWorkers": 1
+    },
+    "preserveOutput": "always",
+    "projects": [
+      {
+        "outputDir": "/Volumes/data/User/wayne/Code/graph_impact/apps/web/test-results",
+        "repeatEach": 1,
+        "retries": 0,
+        "metadata": {
+          "actualWorkers": 1
+        },
+        "id": "chromium",
+        "name": "chromium",
+        "testDir": "/Volumes/data/User/wayne/Code/graph_impact/apps/web/tests",
+        "testIgnore": [],
+        "testMatch": [
+          "**/*.@(spec|test).?(c|m)[jt]s?(x)"
+        ],
+        "timeout": 30000
+      }
+    ],
+    "quiet": false,
+    "reporter": [
+      [
+        "json"
+      ]
+    ],
+    "reportSlowTests": {
+      "max": 5,
+      "threshold": 300000
+    },
+    "shard": null,
+    "tags": [],
+    "updateSnapshots": "missing",
+    "updateSourceMethod": "patch",
+    "version": "1.60.0",
+    "workers": 1,
+    "webServer": null
+  },
+  "suites": [
+    {
+      "title": "workbench-smoke.spec.ts",
+      "file": "workbench-smoke.spec.ts",
+      "column": 0,
+      "line": 0,
+      "specs": [
+        {
+          "title": "acceptance page runs no-mock AQ01 through the real workbench API",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 90000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "chromium",
+              "projectName": "chromium",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 3070,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-05-20T14:27:29.170Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "3dbfe7ceaa8811aca2fd-77ff8b5364645466f1d1",
+          "file": "workbench-smoke.spec.ts",
+          "line": 1395,
+          "column": 1
+        },
+        {
+          "title": "graph page uses URL dbPath for no-mock graph and query requests",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 90000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "chromium",
+              "projectName": "chromium",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 9306,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-05-20T14:27:32.358Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "3dbfe7ceaa8811aca2fd-883cff4fc544f4576019",
+          "file": "workbench-smoke.spec.ts",
+          "line": 1858,
+          "column": 1
+        },
+        {
+          "title": "graph page loads current data/asip.db through browser and API",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 120000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "chromium",
+              "projectName": "chromium",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 15465,
+                  "errors": [],
+                  "stdout": [
+                    {
+                      "text": "ASIP_BROWSER_CURRENT_DB_PROBE [{\"surface\":\"graph_page_api_request\",\"url\":\"http://127.0.0.1:3111/api/workbench/graph?limit=3000&dbPath=data%2Fasip.db&functionView=concept\",\"db_path\":\"data/asip.db\",\"status\":200,\"node_count\":2552,\"edge_count\":3000,\"response_sha256\":\"bc66effe88b0eba6f2b46d429f4a59b47f4b41df8380917950a7f6a91591adab\",\"latest_index_job_id\":\"10\",\"latest_graph_rebuild_job_id\":\"13\"},{\"surface\":\"direct_api_document_request\",\"url\":\"http://127.0.0.1:3111/api/workbench/graph?dbPath=data%2Fasip.db\",\"db_path\":\"data/asip.db\",\"status\":200,\"node_count\":2552,\"edge_count\":3000,\"response_sha256\":\"bc66effe88b0eba6f2b46d429f4a59b47f4b41df8380917950a7f6a91591adab\",\"latest_index_job_id\":\"10\",\"latest_graph_rebuild_job_id\":\"13\"}]\n"
+                    }
+                  ],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-05-20T14:27:41.670Z",
+                  "annotations": [],
+                  "attachments": [
+                    {
+                      "name": "asip-current-db-probes",
+                      "contentType": "application/json",
+                      "body": "WwogIHsKICAgICJzdXJmYWNlIjogImdyYXBoX3BhZ2VfYXBpX3JlcXVlc3QiLAogICAgInVybCI6ICJodHRwOi8vMTI3LjAuMC4xOjMxMTEvYXBpL3dvcmtiZW5jaC9ncmFwaD9saW1pdD0zMDAwJmRiUGF0aD1kYXRhJTJGYXNpcC5kYiZmdW5jdGlvblZpZXc9Y29uY2VwdCIsCiAgICAiZGJfcGF0aCI6ICJkYXRhL2FzaXAuZGIiLAogICAgInN0YXR1cyI6IDIwMCwKICAgICJub2RlX2NvdW50IjogMjU1MiwKICAgICJlZGdlX2NvdW50IjogMzAwMCwKICAgICJyZXNwb25zZV9zaGEyNTYiOiAiYmM2NmVmZmU4OGIwZWJhNmYyYjQ2ZDQyOWY0YTU5YjQ3ZjRiNDFkZjgzODA5MTc5NTBhN2Y2YTkxNTkxYWRhYiIsCiAgICAibGF0ZXN0X2luZGV4X2pvYl9pZCI6ICIxMCIsCiAgICAibGF0ZXN0X2dyYXBoX3JlYnVpbGRfam9iX2lkIjogIjEzIgogIH0sCiAgewogICAgInN1cmZhY2UiOiAiZGlyZWN0X2FwaV9kb2N1bWVudF9yZXF1ZXN0IiwKICAgICJ1cmwiOiAiaHR0cDovLzEyNy4wLjAuMTozMTExL2FwaS93b3JrYmVuY2gvZ3JhcGg/ZGJQYXRoPWRhdGElMkZhc2lwLmRiIiwKICAgICJkYl9wYXRoIjogImRhdGEvYXNpcC5kYiIsCiAgICAic3RhdHVzIjogMjAwLAogICAgIm5vZGVfY291bnQiOiAyNTUyLAogICAgImVkZ2VfY291bnQiOiAzMDAwLAogICAgInJlc3BvbnNlX3NoYTI1NiI6ICJiYzY2ZWZmZTg4YjBlYmE2ZjJiNDZkNDI5ZjRhNTliNDdmNGI0MWRmODM4MDkxNzk1MGE3ZjZhOTE1OTFhZGFiIiwKICAgICJsYXRlc3RfaW5kZXhfam9iX2lkIjogIjEwIiwKICAgICJsYXRlc3RfZ3JhcGhfcmVidWlsZF9qb2JfaWQiOiAiMTMiCiAgfQpd"
+                    }
+                  ]
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "3dbfe7ceaa8811aca2fd-f85a6a3c6c10c69b36f0",
+          "file": "workbench-smoke.spec.ts",
+          "line": 1997,
+          "column": 1
+        },
+        {
+          "title": "graph page filters no-mock graph layers and shows edge provenance",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 90000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "chromium",
+              "projectName": "chromium",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 3738,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-05-20T14:27:57.142Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "3dbfe7ceaa8811aca2fd-0c82a92c7cb2130e37a7",
+          "file": "workbench-smoke.spec.ts",
+          "line": 2155,
+          "column": 1
+        },
+        {
+          "title": "evidence page initial query uses URL dbPath without default DB fallback",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 90000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "chromium",
+              "projectName": "chromium",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 1412,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-05-20T14:28:00.883Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "3dbfe7ceaa8811aca2fd-f1e89e0241d9679c9795",
+          "file": "workbench-smoke.spec.ts",
+          "line": 2202,
+          "column": 1
+        }
+      ]
+    }
+  ],
+  "errors": [],
+  "stats": {
+    "startTime": "2026-05-20T14:27:28.846Z",
+    "duration": 33485.617,
+    "expected": 5,
+    "skipped": 0,
+    "unexpected": 0,
+    "flaky": 0
+  }
+}

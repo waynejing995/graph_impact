@@ -1,0 +1,146 @@
+- generic [ref=e1]:
+  - generic [ref=e2]:
+    - banner [ref=e3]:
+      - generic [ref=e5]: ASIP Evidence Workbench
+      - generic [ref=e6]:
+        - img
+        - textbox "Global symbol search" [ref=e7]:
+          - /placeholder: Search indexed symbols
+      - generic "Workbench status" [ref=e8]:
+        - generic [ref=e9]: "Provider: unverified"
+        - generic [ref=e11]: "Edge: Ollama / gemma4:e4b"
+        - generic [ref=e12]: "Index: ready"
+      - button "Switch to light theme" [ref=e13] [cursor=pointer]:
+        - img
+        - text: Light
+    - main [ref=e14]:
+      - navigation "ASIP sections" [ref=e15]:
+        - link "Evidence Search" [ref=e16] [cursor=pointer]:
+          - /url: /
+        - link "Graph Explorer" [ref=e17] [cursor=pointer]:
+          - /url: /graph
+        - link "Corpus" [ref=e18] [cursor=pointer]:
+          - /url: /corpus
+        - link "Resolver Profiles" [ref=e19] [cursor=pointer]:
+          - /url: /resolver-profiles
+        - link "Acceptance Tests" [ref=e20] [cursor=pointer]:
+          - /url: /acceptance
+        - link "Settings" [ref=e21] [cursor=pointer]:
+          - /url: /settings
+      - region "Graph relationship workspace" [ref=e22]:
+        - generic [ref=e23]:
+          - generic [ref=e24]:
+            - img
+            - textbox "Evidence query" [ref=e25]:
+              - /placeholder: Query live evidence
+          - textbox "IP block filter" [ref=e27]:
+            - /placeholder: IP
+          - textbox "ASIC or generation filter" [ref=e29]:
+            - /placeholder: ASIC
+          - button "Run query" [active] [ref=e30] [cursor=pointer]
+        - generic "Page metrics" [ref=e31]:
+          - generic [ref=e32]: "matches: 24"
+          - generic [ref=e33]: "graph edges: 552"
+          - generic [ref=e34]: "query: live"
+        - generic "Evidence source filters" [ref=e35]:
+          - button "Source filter 1 hop" [ref=e36] [cursor=pointer]:
+            - img
+            - text: 1 hop
+          - button "Source filter 2 hops" [ref=e37] [cursor=pointer]:
+            - img
+            - text: 2 hops
+          - button "Source filter writes" [ref=e38] [cursor=pointer]:
+            - img
+            - text: writes
+          - button "Source filter has_field" [ref=e39] [cursor=pointer]:
+            - img
+            - text: has_field
+        - generic [ref=e40]:
+          - generic [ref=e41]:
+            - generic [ref=e42]: Global Relation Graph
+            - generic [ref=e43]: weighted connections
+            - generic [ref=e245]: "layers deterministic: 552"
+            - generic [ref=e246]: provenance source clang_text_spans source clang_callback
+          - generic "Graph display controls" [ref=e44]:
+            - generic [ref=e45]
+            - generic [ref=e49]
+            - generic [ref=e54]
+            - generic [ref=e59]
+            - generic [ref=e64]
+            - generic "Graph relation filters" [ref=e247]
+            - generic "Graph stage filters" [ref=e270]
+            - generic "Graph source filters" [ref=e277]
+          - img "Global weighted network graph" [ref=e288]:
+            - generic [ref=e292]
+        - table "Evidence results" [ref=e74]:
+          - rowgroup [ref=e75]:
+            - row "Type Symbol Source Relation Score Location" [ref=e76]
+          - rowgroup [ref=e83]:
+            - row "CP_HQD_ACTIVE register mention 0.95 libgv/core/hw/AI/asic_reg/mi200/GC/gc_9_0_sh_mask.h lines 12761-12800" [ref=e322]
+            - row "CP_HQD_ACTIVE register mention 0.95 libgv/core/hw/AI/asic_reg/mi200/GC/gc_9_4_2_sh_mask.h lines 3881-3920" [ref=e332]
+            - row "CP_HQD_ACTIVE register mention 0.95 libgv/core/hw/AI/asic_reg/mi200/GC/gc_9_4_sh_mask.h lines 14801-14840" [ref=e342]
+            - row "CP_HQD_ACTIVE register mention 0.95 libgv/core/hw/AI/asic_reg/mi300/GC/gc_9_4_3_sh_mask.h lines 16321-16360" [ref=e352]
+            - row "CP_HQD_ACTIVE register mention 0.95 libgv/core/hw/navi3/asic_reg/navi3/GC/gc_11_0_3_sh_mask.h lines 19561-19600" [ref=e362]
+            - row "CP_HQD_ACTIVE__ACTIVE_MASK register mention 0.95 libgv/core/hw/AI/asic_reg/mi200/GC/gc_9_0_sh_mask.h lines 12761-12800" [ref=e372]
+            - row "CP_HQD_ACTIVE__ACTIVE_MASK register mention 0.95 libgv/core/hw/AI/asic_reg/mi200/GC/gc_9_4_2_sh_mask.h lines 3881-3920" [ref=e382]
+            - row "CP_HQD_ACTIVE__ACTIVE_MASK register mention 0.95 libgv/core/hw/AI/asic_reg/mi200/GC/gc_9_4_sh_mask.h lines 14801-14840" [ref=e392]
+            - row "CP_HQD_ACTIVE__ACTIVE_MASK register mention 0.95 libgv/core/hw/AI/asic_reg/mi300/GC/gc_9_4_3_sh_mask.h lines 16321-16360" [ref=e402]
+            - row "CP_HQD_ACTIVE__ACTIVE_MASK register mention 0.95 libgv/core/hw/navi3/asic_reg/navi3/GC/gc_11_0_3_sh_mask.h lines 19561-19600" [ref=e412]
+            - row "CP_HQD_ACTIVE__ACTIVE__SHIFT register mention 0.95 libgv/core/hw/AI/asic_reg/mi200/GC/gc_9_0_sh_mask.h lines 12761-12800" [ref=e422]
+            - row "CP_HQD_ACTIVE__ACTIVE__SHIFT register mention 0.95 libgv/core/hw/AI/asic_reg/mi200/GC/gc_9_4_2_sh_mask.h lines 3881-3920" [ref=e432]
+            - row "CP_HQD_ACTIVE__ACTIVE__SHIFT register mention 0.95 libgv/core/hw/AI/asic_reg/mi200/GC/gc_9_4_sh_mask.h lines 14801-14840" [ref=e442]
+            - row "CP_HQD_ACTIVE__ACTIVE__SHIFT register mention 0.95 libgv/core/hw/AI/asic_reg/mi300/GC/gc_9_4_3_sh_mask.h lines 16321-16360" [ref=e452]
+            - row "CP_HQD_ACTIVE__ACTIVE__SHIFT register mention 0.95 libgv/core/hw/navi3/asic_reg/navi3/GC/gc_11_0_3_sh_mask.h lines 19561-19600" [ref=e462]
+            - row "CP_HQD_ACTIVE__BUSY_GATE_MASK register mention 0.95 libgv/core/hw/AI/asic_reg/mi200/GC/gc_9_0_sh_mask.h lines 12801-12840" [ref=e472]
+            - row "CP_HQD_ACTIVE__BUSY_GATE_MASK register mention 0.95 libgv/core/hw/AI/asic_reg/mi200/GC/gc_9_4_2_sh_mask.h lines 3881-3920" [ref=e482]
+            - row "CP_HQD_ACTIVE__BUSY_GATE_MASK register mention 0.95 libgv/core/hw/AI/asic_reg/mi200/GC/gc_9_4_sh_mask.h lines 14801-14840" [ref=e492]
+            - row "CP_HQD_ACTIVE__BUSY_GATE_MASK register mention 0.95 libgv/core/hw/AI/asic_reg/mi300/GC/gc_9_4_3_sh_mask.h lines 16321-16360" [ref=e502]
+            - row "CP_HQD_ACTIVE__BUSY_GATE_MASK register mention 0.95 libgv/core/hw/navi3/asic_reg/navi3/GC/gc_11_0_3_sh_mask.h lines 19561-19600" [ref=e512]
+            - row "CP_HQD_ACTIVE__BUSY_GATE__SHIFT register mention 0.95 libgv/core/hw/AI/asic_reg/mi200/GC/gc_9_0_sh_mask.h lines 12761-12800" [ref=e522]
+            - row "CP_HQD_ACTIVE__BUSY_GATE__SHIFT register mention 0.95 libgv/core/hw/AI/asic_reg/mi200/GC/gc_9_4_2_sh_mask.h lines 3881-3920" [ref=e532]
+            - row "CP_HQD_ACTIVE__BUSY_GATE__SHIFT register mention 0.95 libgv/core/hw/AI/asic_reg/mi200/GC/gc_9_4_sh_mask.h lines 14801-14840" [ref=e542]
+            - row "CP_HQD_ACTIVE__BUSY_GATE__SHIFT register mention 0.95 libgv/core/hw/AI/asic_reg/mi300/GC/gc_9_4_3_sh_mask.h lines 16321-16360" [ref=e552]
+      - complementary [ref=e94]:
+        - generic [ref=e95]:
+          - heading "Global Graph" [level=2] [ref=e96]
+          - generic [ref=e97]:
+            - img
+            - text: live / run 2
+        - heading "Relationship Panel" [level=3] [ref=e99]
+        - generic [ref=e100]:
+          - paragraph [ref=e562]:
+            - code [ref=e563]: function:linux-amdgpu:concept:linux-amdgpu:amd-ip-versioned-functions:gfx_compute_queue_init calls function:linux-amdgpu:concept:linux-amdgpu:amd-ip-versioned-functions:gfx_mqd_deactivate [source clang_text_spans]
+          - paragraph [ref=e564]:
+            - code [ref=e565]: function:linux-amdgpu:concept:linux-amdgpu:amd-ip-versioned-functions:gfx_hw_fini calls function:linux-amdgpu:concept:linux-amdgpu:amd-ip-versioned-functions:gfx_kiq_fini_register [source clang_text_spans]
+          - paragraph [ref=e566]:
+            - code [ref=e567]: function:linux-amdgpu:concept:linux-amdgpu:amd-ip-versioned-functions:gfx_kiq_init_queue calls function:linux-amdgpu:concept:linux-amdgpu:amd-ip-versioned-functions:gfx_kiq_init_register [source clang_text_spans]
+          - paragraph [ref=e568]:
+            - code [ref=e569]: function:linux-amdgpu:concept:linux-amdgpu:amd-ip-versioned-functions:gfx_kiq_init_register calls function:linux-amdgpu:drivers/gpu/drm/amd/amdgpu/gfx_v9_0.c:check_if_enlarge_doorbell_range [source clang_text_spans]
+          - paragraph [ref=e570]:
+            - code [ref=e571]: function:linux-amdgpu:concept:linux-amdgpu:amd-ip-versioned-functions:gfx_kiq_reset_hw_queue calls function:linux-amdgpu:drivers/gpu/drm/amd/amdgpu/amdgpu_rlc.c:amdgpu_gfx_rlc_enter_safe_mode [source clang_text_spans]
+          - paragraph [ref=e572]:
+            - code [ref=e573]: function:linux-amdgpu:concept:linux-amdgpu:amd-ip-versioned-functions:gfx_kiq_reset_hw_queue calls function:linux-amdgpu:drivers/gpu/drm/amd/amdgpu/amdgpu_rlc.c:amdgpu_gfx_rlc_exit_safe_mode [source clang_text_spans]
+          - paragraph [ref=e574]:
+            - code [ref=e575]: function:linux-amdgpu:concept:linux-amdgpu:amd-ip-versioned-functions:gfx_kiq_reset_hw_queue calls function:linux-amdgpu:drivers/gpu/drm/amd/amdgpu/nv.c:nv_grbm_select [source clang_text_spans]
+          - paragraph [ref=e576]:
+            - code [ref=e577]: function:linux-amdgpu:concept:linux-amdgpu:amd-ip-versioned-functions:gfx_kiq_reset_hw_queue calls function:linux-amdgpu:drivers/gpu/drm/amd/amdgpu/soc15.c:soc15_grbm_select [source clang_text_spans]
+          - paragraph [ref=e578]:
+            - code [ref=e579]: function:linux-amdgpu:concept:linux-amdgpu:amd-ip-versioned-functions:gfx_post_soft_reset calls function:linux-amdgpu:concept:linux-amdgpu:amd-ip-versioned-functions:gfx_deactivate_hqd [source clang_text_spans]
+          - paragraph [ref=e580]:
+            - code [ref=e581]: function:linux-amdgpu:concept:linux-amdgpu:amd-ip-versioned-functions:gfx_pre_soft_reset calls function:linux-amdgpu:concept:linux-amdgpu:amd-ip-versioned-functions:gfx_deactivate_hqd [source clang_text_spans]
+          - paragraph [ref=e582]:
+            - code [ref=e583]: function:linux-amdgpu:concept:linux-amdgpu:amd-ip-versioned-functions:gfx_reset_hw_pipe calls function:linux-amdgpu:concept:linux-amdgpu:amd-ip-versioned-functions:gfx_unmap_done [source clang_text_spans]
+          - paragraph [ref=e584]:
+            - code [ref=e585]: function:linux-amdgpu:concept:linux-amdgpu:amd-ip-versioned-functions:gfx_reset_kcq calls function:linux-amdgpu:concept:linux-amdgpu:amd-ip-versioned-functions:gfx_kcq_init_queue [source clang_text_spans]
+        - button "Generate semantic edges" [ref=e103] [cursor=pointer]
+        - button "Generate batch semantic edges" [ref=e104] [cursor=pointer]
+        - button "Extract document nodes" [ref=e105] [cursor=pointer]
+        - paragraph [ref=e586]: "Query ran: who will write/read CP_HQD_* regs"
+        - generic "Semantic generation controls" [ref=e106]:
+          - generic [ref=e107]:
+            - text: Semantic candidate limit
+            - spinbutton "Semantic candidate limit" [ref=e108]
+          - generic [ref=e109]:
+            - text: Semantic batch size
+            - spinbutton "Semantic batch size" [ref=e110]
+  - alert [ref=e122]

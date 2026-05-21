@@ -10,7 +10,7 @@ import re
 import sqlite3
 from dataclasses import dataclass
 from pathlib import Path, PurePosixPath
-from typing import Any, Dict, Iterable, List, Mapping, Optional
+from typing import Any, Dict, Iterable, List, Mapping, Optional, Tuple
 
 from .code_graph import (
     CodeGraphFunctionLocation,
@@ -24,6 +24,7 @@ from .code_graph import (
 )
 from .documents import convert_pdf_to_chunks
 from .graph_filters import is_graph_entity_endpoint, is_resolver_wrapper_name
+from .graph_schema import normalize_product_relation, product_endpoint_kind
 from .limits import DEFAULT_WORKBENCH_LIMITS_PATH, load_workbench_limits
 from .providers import EmbeddingProviderConfig, EmbeddingTransport, create_embedding_provider
 from .resolver_profiles import (
@@ -39,8 +40,11 @@ from .semantic_edges import (
     EdgeModelConfig,
     EdgeProvider,
     FullCorpus,
+    create_doc_node_provider,
     create_edge_provider,
+    full_corpus_scan_folders,
     load_full_corpus_edge_config,
+    normalize_corpus_relative_root,
     normalize_generated_cases,
     scan_full_corpus_queries,
 )
@@ -52,6 +56,11 @@ DEFAULT_CONFIG = Path("configs/edge_cases/full-corpus-gemma4-e4b.json")
 DEFAULT_DB = Path("data/asip.db")
 DEFAULT_RESOLVER_PROFILE_DIR = Path(__file__).resolve().parents[4] / "configs" / "resolvers"
 GENERIC_CALLBACK_RECEIVERS = {"funcs", "ops", "callbacks", "init_func", "init_funcs"}
+DOC_NODE_PROMPT_TEXT_CHARS = 900
+DOC_NODE_PROMPT_TERM_LIMIT = 12
+DOC_NODE_MAX_BATCH_SIZE = 2
+DOC_NODE_MULTI_BATCH_MIN_CTX = 4096
+DOC_NODE_MULTI_BATCH_MIN_PREDICT = 1536
 CALLBACK_TYPE_BY_RECEIVER = {
     "funcs": "amd_ip_funcs",
     "init_func": "amdgv_init_func",
@@ -87,6 +96,13 @@ class IndexedChunk:
     line_start: int
     line_end: int
     page: Optional[int] = None
+
+
+@dataclass(frozen=True)
+class CorpusScanFolder:
+    relative_root: str
+    include: List[str]
+    scan_root: Path
 
 
 def index_configured_corpora(
@@ -140,9 +156,12 @@ def index_configured_corpora(
         }
         for corpus in config.corpora:
             source_root = actual_source_roots[corpus.id]
-            scan_root = source_root / corpus.relative_root if corpus.relative_root else source_root
-            if not scan_root.exists():
-                error_message = f"source root not found: {scan_root}"
+            missing_folder = next(
+                (folder for folder in _configured_corpus_scan_folders(corpus, source_root) if not folder.scan_root.exists()),
+                None,
+            )
+            if missing_folder is not None:
+                error_message = f"source root not found: {missing_folder.scan_root}"
                 store.upsert_corpus(
                     corpus_id=corpus.id,
                     repo=corpus.repo,
@@ -150,7 +169,12 @@ def index_configured_corpora(
                     include=corpus.include,
                     status="failed",
                     file_count=0,
-                    metadata={"relative_root": corpus.relative_root, "scan_root": str(scan_root), "error": error_message},
+                    metadata={
+                        "relative_root": corpus.relative_root,
+                        "scan_roots": _scan_folder_metadata(_configured_corpus_scan_folders(corpus, source_root)),
+                        "subfolders": _full_corpus_subfolder_metadata(corpus),
+                        "error": error_message,
+                    },
                 )
                 raise FileNotFoundError(error_message)
         scan = scan_full_corpus_queries(config, actual_source_roots)
@@ -167,12 +191,18 @@ def index_configured_corpora(
                 include=corpus.include,
                 status="indexing",
                 file_count=int(corpus_summary["file_count"]),
-                metadata={"relative_root": corpus.relative_root, "scan_root": str(corpus_summary["scan_root"])},
+                metadata={
+                    "relative_root": corpus.relative_root,
+                    "scan_root": str(corpus_summary["scan_root"]),
+                    "scan_roots": corpus_summary.get("scan_roots", []),
+                    "subfolders": _full_corpus_subfolder_metadata(corpus),
+                },
             )
 
         for query in scan["queries"]:
             corpus_id = str(query["corpus"])
             corpus = next(item for item in config.corpora if item.id == corpus_id)
+            corpus_resolver_profiles = _resolver_profiles_for_corpus(resolver_profiles, corpus.id, corpus.repo)
             query_config = query_by_id[str(query["id"])]
             for snippet in query["snippets"]:
                 display_path = str(snippet["path"])
@@ -203,15 +233,15 @@ def index_configured_corpora(
                 )
                 chunk_count += 1
                 _index_chunk_embedding(store, indexed, provider_settings, embedding_transport=embedding_transport)
-                evidence_count += _index_chunk_evidence(store, indexed, [query_config], resolver_profiles)
+                evidence_count += _index_chunk_evidence(store, indexed, [query_config], corpus_resolver_profiles)
                 edge_count += _index_chunk_edges(store, indexed, [query_config])
 
         indexed_paths = set(document_ids.keys())
         for corpus in config.corpora:
             source_root = actual_source_roots[corpus.id]
-            scan_root = source_root / corpus.relative_root if corpus.relative_root else source_root
+            corpus_resolver_profiles = _resolver_profiles_for_corpus(resolver_profiles, corpus.id, corpus.repo)
             code_files: List[Path] = []
-            for file_path in _iter_source_files(scan_root, corpus.include):
+            for file_path in _iter_corpus_source_files(_configured_corpus_scan_folders(corpus, source_root)):
                 display_path = _display_source_path(file_path, source_root, source_root)
                 key = (corpus.id, display_path)
                 source_type = _source_type_for_path(file_path)
@@ -248,13 +278,13 @@ def index_configured_corpora(
                     )
                     chunk_count += 1
                     _index_chunk_embedding(store, indexed, provider_settings, embedding_transport=embedding_transport)
-                    evidence_count += _index_chunk_evidence(store, indexed, [], resolver_profiles)
+                    evidence_count += _index_chunk_evidence(store, indexed, [], corpus_resolver_profiles)
                     edge_count += _index_chunk_edges(store, indexed, [])
             edge_count += _index_deterministic_code_graph_files(
                 store,
                 code_files,
                 source_root,
-                resolver_profiles,
+                corpus_resolver_profiles,
                 corpus_id=corpus.id,
                 repo=corpus.repo,
             )
@@ -269,7 +299,12 @@ def index_configured_corpora(
                 include=corpus.include,
                 status="indexed",
                 file_count=int(corpus_summary["file_count"]),
-                metadata={"relative_root": corpus.relative_root, "scan_root": str(corpus_summary["scan_root"])},
+                metadata={
+                    "relative_root": corpus.relative_root,
+                    "scan_root": str(corpus_summary["scan_root"]),
+                    "scan_roots": corpus_summary.get("scan_roots", []),
+                    "subfolders": _full_corpus_subfolder_metadata(corpus),
+                },
             )
         store.finish_job(job_id, "indexed", f"Indexed {document_count} documents")
     except Exception as exc:
@@ -300,7 +335,10 @@ def query_evidence(
     asic_or_generation: str = "",
     source_types: Optional[Iterable[str]] = None,
     embedding_transport: Optional[EmbeddingTransport] = None,
+    function_view: str = "concept",
+    compact_graph: bool = False,
 ) -> Dict[str, Any]:
+    function_view = _normalize_function_view(function_view)
     limits = load_workbench_limits()
     result_limit = limit if limit is not None else limits.int_value("retrieval", "result_limit", minimum=1)
     if result_limit is None:
@@ -320,6 +358,7 @@ def query_evidence(
         return {
             "query": query,
             "queryId": "",
+            "db_path": str(db_path),
             "rows": [],
             "graph": {"queryId": "", "nodes": [], "edges": [], "source": "sqlite"},
             "empty": True,
@@ -333,6 +372,12 @@ def query_evidence(
         }
     store = AsipStore.connect(str(db_path))
     tokens = _query_tokens(query)
+    symbol_prefixes = _query_symbol_prefixes(query)
+    for prefix in symbol_prefixes:
+        token = prefix.rstrip("_")
+        if len(token) > 2 and token not in tokens:
+            tokens.insert(0, token)
+    access_intents = _query_access_intents(query)
     ip_filter = ip_block.strip().lower()
     asic_filter = asic_or_generation.strip().lower()
     fts_chunk_ids: set[int] = set()
@@ -348,7 +393,11 @@ def query_evidence(
     vector_chunk_models: Dict[int, str] = {}
     vector_chunk_embedding_sources: Dict[int, str] = {}
     query_vector: Dict[str, Any] = {"source": "not-run"}
-    if query.strip():
+    if symbol_prefixes:
+        query_vector = {"source": "skipped-symbol-prefix"}
+    elif any(_query_token_looks_like_symbol(token) for token in tokens):
+        query_vector = {"source": "skipped-symbol-token"}
+    elif query.strip():
         query_vector = _query_vector_for_retrieval(db_path, query, embedding_transport=embedding_transport)
         vector_kwargs = {}
         if query_vector.get("source") == "provider":
@@ -394,13 +443,15 @@ def query_evidence(
     for row in candidates:
         if not is_graph_entity_endpoint(str(row.get("symbol") or "")):
             continue
+        if symbol_prefixes and not _row_matches_query_symbol_prefixes(row, symbol_prefixes):
+            continue
         if ip_filter and str(row.get("ip_block") or "").lower() != ip_filter:
             continue
         if asic_filter and str(row.get("asic_or_generation") or "").lower() != asic_filter:
             continue
         if source_type_filter and str(row.get("source_type") or "").lower() not in source_type_filter:
             continue
-        score = _evidence_score(row, tokens, fts_chunk_ids)
+        score = _evidence_score(row, tokens, fts_chunk_ids, access_intents)
         chunk_id = int(row.get("chunk_id") or 0)
         vector_score = vector_chunk_scores.get(chunk_id, 0.0)
         if score <= 0 and tokens and vector_score <= 0:
@@ -442,17 +493,19 @@ def query_evidence(
     rows.sort(key=lambda item: (-float(item["rank_score"]), str(item["symbol"]), int(item["id"])))
     rows = _select_diverse_rows(_dedupe_rows(rows), result_limit)
     if rows:
-        graph = graph_for_rows(rows, db_path)
+        graph = graph_for_rows(rows, db_path, function_view=function_view, compact=compact_graph)
+        rows = _merge_access_intent_edge_rows(rows, graph, symbol_prefixes, access_intents, result_limit)
     else:
         graph_seed = query.strip()
         graph = (
-            expand_query_graph(db_path, graph_seed)
+            expand_query_graph(db_path, graph_seed, function_view=function_view, compact=compact_graph)
             if graph_seed and is_graph_entity_endpoint(graph_seed) and _sqlite_table_exists(db_path, "edges")
-            else graph_for_rows(rows, db_path)
+            else graph_for_rows(rows, db_path, function_view=function_view)
         )
     return {
         "query": query,
         "queryId": _query_id_for_results(query, rows),
+        "db_path": str(db_path),
         "rows": rows,
         "graph": graph,
         "empty": not rows,
@@ -467,6 +520,115 @@ def query_evidence(
         },
         "source": "sqlite",
     }
+
+
+def _merge_access_intent_edge_rows(
+    rows: List[Dict[str, Any]],
+    graph: Mapping[str, Any],
+    symbol_prefixes: List[str],
+    access_intents: set[str],
+    limit: int,
+) -> List[Dict[str, Any]]:
+    if not rows or not symbol_prefixes or not access_intents or limit <= 0:
+        return rows
+    edge_rows: List[Dict[str, Any]] = []
+    for edge in graph.get("edges", []):
+        relation = str(edge.get("relation") or "")
+        if not _access_type_matches_intents(relation, access_intents):
+            continue
+        src = str(edge.get("src") or "")
+        dst = str(edge.get("dst") or "")
+        src_label = _graph_endpoint_label(src)
+        dst_label = _graph_endpoint_label(dst)
+        target_symbol = ""
+        function_symbol = ""
+        if _symbol_matches_query_prefixes(dst_label, symbol_prefixes):
+            target_symbol = dst_label
+            function_symbol = src_label
+        elif _symbol_matches_query_prefixes(src_label, symbol_prefixes):
+            target_symbol = src_label
+            function_symbol = dst_label
+        if not target_symbol or not function_symbol:
+            continue
+        source = _first_edge_source(edge)
+        confidence = float(edge.get("confidence") or edge.get("weight") or 0)
+        path = str(source.get("path") or "")
+        line_start = source.get("line_start")
+        line_end = source.get("line_end") or line_start
+        edge_rows.append(
+            {
+                "id": f"graph-edge:{src}:{relation}:{dst}:{path}:{line_start or ''}",
+                "chunk_id": 0,
+                "corpus_id": str(source.get("corpus_id") or ""),
+                "source_type": "code",
+                "repo": str(source.get("repo") or ""),
+                "path": path,
+                "line_start": line_start,
+                "line_end": line_end,
+                "symbol": function_symbol,
+                "target_symbol": target_symbol,
+                "entity_type": "function",
+                "access_type": relation,
+                "confidence": confidence,
+                "snippet": f"{function_symbol} {relation} {target_symbol}",
+                "resolved_chain": f"{function_symbol} {relation} {target_symbol}",
+                "query_id": "",
+                "rank_score": round(100 + confidence, 4),
+                "tone": "code",
+                "source": "code",
+                "score": f"{confidence:.2f}",
+                "relation": relation,
+                "retrieval_sources": ["graph-edge"],
+                "stage": str(edge.get("stage") or ""),
+                "edge_source": str(edge.get("source") or ""),
+            }
+        )
+    if not edge_rows:
+        return rows
+    merged: List[Dict[str, Any]] = []
+    seen: set[tuple[str, str, str, str, object]] = set()
+    for row in [*edge_rows, *rows]:
+        key = (
+            str(row.get("symbol") or ""),
+            str(row.get("relation") or row.get("access_type") or ""),
+            str(row.get("target_symbol") or ""),
+            str(row.get("path") or ""),
+            row.get("line_start") or row.get("page") or "",
+        )
+        if key in seen:
+            continue
+        seen.add(key)
+        merged.append(row)
+        if len(merged) >= limit:
+            break
+    return merged
+
+
+def _symbol_matches_query_prefixes(symbol: str, symbol_prefixes: List[str]) -> bool:
+    variants = [symbol, _canonical_graph_seed_symbol(symbol)]
+    return any(
+        variant.lower().startswith(prefix)
+        for variant in variants
+        for prefix in symbol_prefixes
+    )
+
+
+def _graph_endpoint_label(endpoint: str) -> str:
+    return endpoint.rsplit(":", 1)[-1] if ":" in endpoint else endpoint
+
+
+def _first_edge_source(edge: Mapping[str, Any]) -> Dict[str, Any]:
+    attr = edge.get("attr")
+    if isinstance(attr, Mapping):
+        for key in ("source", "implementations"):
+            values = attr.get(key)
+            if isinstance(values, list):
+                for value in values:
+                    if isinstance(value, Mapping):
+                        return dict(value)
+            if isinstance(values, Mapping):
+                return dict(values)
+    return {}
 
 
 def _query_id_for_results(query: str, rows: Iterable[Mapping[str, Any]]) -> str:
@@ -520,6 +682,14 @@ def _embedding_metadata_from_vector_match(match: Mapping[str, Any]) -> Dict[str,
     return value if isinstance(value, dict) else {}
 
 
+def _json_object(raw: str) -> Dict[str, Any]:
+    try:
+        value = json.loads(raw)
+    except (TypeError, json.JSONDecodeError):
+        return {}
+    return value if isinstance(value, dict) else {}
+
+
 def _vector_match_compatible_with_query(
     query_vector: Mapping[str, Any],
     embedding_metadata: Mapping[str, Any],
@@ -563,7 +733,14 @@ def explain_entity(db_path: Path, symbol: str) -> Dict[str, Any]:
     }
 
 
-def expand_query_graph(db_path: Path, symbol: str, hops: int = 1) -> Dict[str, Any]:
+def expand_query_graph(
+    db_path: Path,
+    symbol: str,
+    hops: int = 1,
+    function_view: str = "concept",
+    compact: bool = False,
+) -> Dict[str, Any]:
+    function_view = _normalize_function_view(function_view)
     if not is_graph_entity_endpoint(symbol):
         return {
             "queryId": symbol,
@@ -575,21 +752,32 @@ def expand_query_graph(db_path: Path, symbol: str, hops: int = 1) -> Dict[str, A
         }
     graph_seed = _canonical_graph_seed_symbol(symbol)
     if not _sqlite_table_exists(db_path, "edges"):
+        fallback_node = _product_fallback_node(symbol)
+        if fallback_node is None:
+            return {
+                "queryId": symbol,
+                "nodes": [],
+                "edges": [],
+                "source": "networkx",
+                "graph_runtime": "networkx",
+                "empty_state": f"{symbol} is not a product graph entity",
+            }
         return {
             "queryId": symbol,
-            "nodes": [_node_with_kind(symbol)],
+            "nodes": [fallback_node],
             "edges": [],
             "source": "networkx",
             "graph_runtime": "networkx",
         }
     store = AsipStore.connect(str(db_path))
-    graph = store.expand_graph_networkx(graph_seed, hops=hops)
+    graph = store.expand_graph_networkx(graph_seed, hops=hops, function_view=function_view)
     return {
         "queryId": symbol,
-        "nodes": [_graph_node_payload(node) for node in graph["nodes"]],
-        "edges": [_edge_with_weight(edge) for edge in graph["edges"]],
+        "nodes": [_graph_node_payload(node, compact=compact) for node in graph["nodes"]],
+        "edges": [_graph_edge_payload(edge, compact=compact) for edge in graph["edges"]],
         "source": "networkx",
         "graph_runtime": graph["graph_runtime"],
+        "metadata_mode": "compact" if compact else "full",
     }
 
 
@@ -607,7 +795,10 @@ def global_graph(
     include_evidence_derived: bool = False,
     evidence_row_cap: Optional[int] = None,
     all_edges: bool = False,
+    function_view: str = "concept",
+    compact: bool = False,
 ) -> Dict[str, Any]:
+    function_view = _normalize_function_view(function_view)
     limits = load_workbench_limits()
     edge_limit = None if all_edges else (limit if limit is not None else limits.int_value("graph", "edge_budget", minimum=1))
     effective_evidence_cap = (
@@ -630,17 +821,26 @@ def global_graph(
         include_evidence_derived=include_evidence_derived,
         evidence_row_cap=effective_evidence_cap,
         cooccurrence_symbol_limit=cooccurrence_limit,
+        function_view=function_view,
+        compact=compact,
     )
     return {
         "queryId": "global",
-        "nodes": [_graph_node_payload(node) for node in graph["nodes"]],
-        "edges": [_edge_with_weight(edge) for edge in graph["edges"]],
+        "nodes": [_graph_node_payload(node, compact=compact) for node in graph["nodes"]],
+        "edges": [_graph_edge_payload(edge, compact=compact) for edge in graph["edges"]],
         "source": "networkx",
         "graph_runtime": graph["graph_runtime"],
+        "metadata_mode": "compact" if compact else "full",
     }
 
 
-def graph_for_rows(rows: List[Dict[str, Any]], db_path: Path) -> Dict[str, Any]:
+def graph_for_rows(
+    rows: List[Dict[str, Any]],
+    db_path: Path,
+    function_view: str = "concept",
+    compact: bool = False,
+) -> Dict[str, Any]:
+    function_view = _normalize_function_view(function_view)
     if not rows:
         return {"queryId": "", "nodes": [], "edges": [], "source": "sqlite"}
     limits = load_workbench_limits()
@@ -661,23 +861,24 @@ def graph_for_rows(rows: List[Dict[str, Any]], db_path: Path) -> Dict[str, Any]:
         if len(seeds) >= query_seed_limit:
             break
     if not _sqlite_table_exists(db_path, "edges"):
-        return expand_query_graph(db_path, str(rows[0]["symbol"]), hops=query_hops)
+        return expand_query_graph(db_path, str(rows[0]["symbol"]), hops=query_hops, function_view=function_view)
     store = AsipStore.connect(str(db_path))
     graph = store.expand_graph_networkx_many(
         [_canonical_graph_seed_symbol(seed) for seed in seeds],
         hops=query_hops,
+        function_view=function_view,
     )
     for node in graph["nodes"]:
-        _remember_graph_node_payload(node_by_id, node)
+        _remember_graph_node_payload(node_by_id, node, compact=compact)
     for edge in graph["edges"]:
-        ready_edge = _edge_with_weight(edge)
+        ready_edge = _graph_edge_payload(edge, compact=compact)
         key = (str(ready_edge["src"]), str(ready_edge["relation"]), str(ready_edge["dst"]))
         edge_by_key.setdefault(key, ready_edge)
     section_graph = section_overlay_graph_for_evidence_rows(rows)
     for node in section_graph["nodes"]:
-        _remember_graph_node_payload(node_by_id, node)
+        _remember_graph_node_payload(node_by_id, node, compact=compact)
     for edge in section_graph["edges"]:
-        ready_edge = _edge_with_weight(edge)
+        ready_edge = _graph_edge_payload(edge, compact=compact)
         key = (str(ready_edge["src"]), str(ready_edge["relation"]), str(ready_edge["dst"]))
         edge_by_key.setdefault(key, ready_edge)
     if not edge_by_key:
@@ -687,6 +888,7 @@ def graph_for_rows(rows: List[Dict[str, Any]], db_path: Path) -> Dict[str, Any]:
             "edges": [],
             "source": "networkx",
             "graph_runtime": graph["graph_runtime"],
+            "metadata_mode": "compact" if compact else "full",
         }
     return {
         "queryId": ", ".join(seeds),
@@ -697,12 +899,24 @@ def graph_for_rows(rows: List[Dict[str, Any]], db_path: Path) -> Dict[str, Any]:
         ),
         "source": "networkx",
         "graph_runtime": "networkx",
+        "metadata_mode": "compact" if compact else "full",
     }
 
 
-def _remember_graph_node_payload(node_by_id: Dict[str, Dict[str, Any]], node: Mapping[str, Any]) -> None:
+def _normalize_function_view(function_view: str) -> str:
+    view = str(function_view or "concept").strip().lower()
+    if view not in {"concept", "implementation"}:
+        raise ValueError("function_view must be concept or implementation")
+    return view
+
+
+def _remember_graph_node_payload(
+    node_by_id: Dict[str, Dict[str, Any]],
+    node: Mapping[str, Any],
+    compact: bool = False,
+) -> None:
     node_id = str(node["id"])
-    payload = _graph_node_payload(node)
+    payload = _graph_node_payload(node, compact=compact)
     existing = node_by_id.get(node_id)
     if existing is None:
         node_by_id[node_id] = payload
@@ -798,6 +1012,129 @@ def _dedupe_graph_string_values(values: Iterable[Any]) -> List[str]:
     return result
 
 
+def _configured_corpus_scan_folders(corpus: FullCorpus, source_root: Path) -> List[CorpusScanFolder]:
+    return [
+        CorpusScanFolder(
+            relative_root=normalize_corpus_relative_root(folder.relative_root),
+            include=[str(item) for item in (folder.include or corpus.include or ["**/*.c", "**/*.h"])],
+            scan_root=_corpus_scan_root(source_root, folder.relative_root),
+        )
+        for folder in full_corpus_scan_folders(corpus)
+    ]
+
+
+def _registered_corpus_scan_folders(corpus: Mapping[str, Any], source_root: Path) -> List[CorpusScanFolder]:
+    include = [str(item) for item in corpus.get("include", [])] or ["**/*"]
+    metadata = dict(corpus.get("metadata", {})) if isinstance(corpus.get("metadata"), Mapping) else {}
+    raw_subfolders = metadata.get("subfolders", [])
+    folders = _normalize_subfolder_filters(raw_subfolders, default_include=include)
+    if not folders:
+        relative_root = str(metadata.get("relative_root") or "")
+        folders = [{"relative_root": relative_root, "include": include}]
+    return [
+        CorpusScanFolder(
+            relative_root=normalize_corpus_relative_root(folder.get("relative_root") or ""),
+            include=[str(item) for item in folder.get("include", include)] or include,
+            scan_root=_corpus_scan_root(source_root, folder.get("relative_root") or ""),
+        )
+        for folder in folders
+    ]
+
+
+def _corpus_scan_root(source_root: Path, relative_root: Any) -> Path:
+    normalized = normalize_corpus_relative_root(relative_root)
+    scan_root = source_root / normalized if normalized else source_root
+    resolved_source_root = source_root.resolve(strict=False)
+    resolved_scan_root = scan_root.resolve(strict=False)
+    if resolved_scan_root != resolved_source_root and resolved_source_root not in resolved_scan_root.parents:
+        raise ValueError(f"corpus subfolder must be repo-relative: {relative_root}")
+    return scan_root
+
+
+def _iter_corpus_source_files(folders: Iterable[CorpusScanFolder]) -> List[Path]:
+    files: List[Path] = []
+    seen: set[Path] = set()
+    for folder in folders:
+        for file_path in _iter_source_files(folder.scan_root, folder.include):
+            file_key = file_path.resolve(strict=False)
+            if file_key in seen:
+                continue
+            seen.add(file_key)
+            files.append(file_path)
+    return sorted(files)
+
+
+def _scan_folder_metadata(folders: Iterable[CorpusScanFolder]) -> List[Dict[str, Any]]:
+    return [
+        {
+            "relative_root": folder.relative_root,
+            "scan_root": str(folder.scan_root),
+            "include": list(folder.include),
+        }
+        for folder in folders
+    ]
+
+
+def _scan_folder_metadata_with_counts(folders: Iterable[CorpusScanFolder]) -> List[Dict[str, Any]]:
+    metadata = []
+    for folder in folders:
+        files = list(_iter_source_files(folder.scan_root, folder.include))
+        metadata.append(
+            {
+                "relative_root": folder.relative_root,
+                "scan_root": str(folder.scan_root),
+                "include": list(folder.include),
+                "file_count": len(files),
+            }
+        )
+    return metadata
+
+
+def _full_corpus_subfolder_metadata(corpus: FullCorpus) -> List[Dict[str, Any]]:
+    if not corpus.subfolders:
+        return []
+    return [
+        {"relative_root": str(folder.relative_root or ""), "include": [str(item) for item in folder.include]}
+        for folder in corpus.subfolders
+    ]
+
+
+def _normalize_subfolder_filters(raw_subfolders: Any, default_include: Iterable[str]) -> List[Dict[str, Any]]:
+    default_include_list = [str(item) for item in default_include] or ["**/*"]
+    if raw_subfolders in ("", None):
+        return []
+    if isinstance(raw_subfolders, str):
+        raw_items: Iterable[Any] = [item.strip() for item in raw_subfolders.splitlines() if item.strip()]
+    elif isinstance(raw_subfolders, list):
+        raw_items = raw_subfolders
+    else:
+        return []
+    folders: List[Dict[str, Any]] = []
+    for raw in raw_items:
+        if isinstance(raw, str):
+            relative_root, _, include_text = raw.partition(":")
+            if not include_text and "=" in relative_root:
+                relative_root, _, include_text = relative_root.partition("=")
+            include = [item.strip() for item in include_text.split(",") if item.strip()] if include_text else default_include_list
+            folders.append({"relative_root": normalize_corpus_relative_root(relative_root, allow_empty=False), "include": include})
+            continue
+        if not isinstance(raw, Mapping):
+            continue
+        relative_root = normalize_corpus_relative_root(
+            raw.get("relative_root", raw.get("relativeRoot", raw.get("root", raw.get("path", "")))),
+            allow_empty=False,
+        )
+        include_raw = raw.get("include", default_include_list)
+        if isinstance(include_raw, str):
+            include = [item.strip() for item in include_raw.split(",") if item.strip()]
+        elif isinstance(include_raw, list):
+            include = [str(item).strip() for item in include_raw if str(item).strip()]
+        else:
+            include = default_include_list
+        folders.append({"relative_root": relative_root, "include": include or default_include_list})
+    return folders
+
+
 def list_indexed_corpora(db_path: Path, config_path: Optional[Path] = None) -> List[Dict[str, Any]]:
     if not _sqlite_table_exists(db_path, "corpora") and config_path:
         config = load_full_corpus_edge_config(config_path)
@@ -809,7 +1146,10 @@ def list_indexed_corpora(db_path: Path, config_path: Optional[Path] = None) -> L
                 "include": corpus.include,
                 "status": "not_indexed",
                 "file_count": 0,
-                "metadata": {"relative_root": corpus.relative_root},
+                "metadata": {
+                    "relative_root": corpus.relative_root,
+                    "subfolders": _full_corpus_subfolder_metadata(corpus),
+                },
             }
             for corpus in config.corpora
         ]
@@ -828,7 +1168,10 @@ def list_indexed_corpora(db_path: Path, config_path: Optional[Path] = None) -> L
             "include": corpus.include,
             "status": "not_indexed",
             "file_count": 0,
-            "metadata": {"relative_root": corpus.relative_root},
+            "metadata": {
+                "relative_root": corpus.relative_root,
+                "subfolders": _full_corpus_subfolder_metadata(corpus),
+            },
         }
         for corpus in config.corpora
     ]
@@ -848,6 +1191,46 @@ def get_job(db_path: Path, job_id: int) -> Dict[str, Any]:
     return store.get_job(job_id)
 
 
+def supersede_stale_jobs(
+    db_path: Path,
+    *,
+    before_job_id: int,
+    kind: str = "index",
+    message: Optional[str] = None,
+) -> Dict[str, Any]:
+    if not _sqlite_table_exists(db_path, "jobs"):
+        return {
+            "source": "job_hygiene",
+            "db_path": str(db_path),
+            "kind": kind,
+            "before_job_id": before_job_id,
+            "superseded_job_ids": [],
+        }
+    store = AsipStore.connect(str(db_path))
+    stale_rows = store.con.execute(
+        """
+        select id
+        from jobs
+        where kind = ?
+          and id < ?
+          and status in ('queued', 'indexing', 'failed')
+        order by id
+        """,
+        (kind, before_job_id),
+    ).fetchall()
+    stale_ids = [int(row["id"]) for row in stale_rows]
+    supersede_message = message or f"Superseded by job {before_job_id}"
+    for job_id in stale_ids:
+        store.finish_job(job_id, "superseded", supersede_message)
+    return {
+        "source": "job_hygiene",
+        "db_path": str(db_path),
+        "kind": kind,
+        "before_job_id": before_job_id,
+        "superseded_job_ids": stale_ids,
+    }
+
+
 def add_corpus(
     db_path: Path,
     corpus_id: str,
@@ -855,27 +1238,33 @@ def add_corpus(
     source_root: str,
     include: Iterable[str],
     corpus_type: str = "code",
+    subfolders: Any = None,
 ) -> Dict[str, Any]:
     db_path.parent.mkdir(parents=True, exist_ok=True)
     store = AsipStore.connect(str(db_path))
     store.migrate()
+    include_list = [str(item) for item in include]
+    subfolder_filters = _normalize_subfolder_filters(subfolders, default_include=include_list)
+    metadata: Dict[str, Any] = {"type": corpus_type}
+    if subfolder_filters:
+        metadata["subfolders"] = subfolder_filters
     store.upsert_corpus(
         corpus_id=corpus_id,
         repo=repo,
         source_root=source_root,
-        include=include,
+        include=include_list,
         status="not_indexed",
         file_count=0,
-        metadata={"type": corpus_type},
+        metadata=metadata,
     )
     return {
         "id": corpus_id,
         "repo": repo,
         "source_root": source_root,
-        "include": list(include),
+        "include": include_list,
         "status": "not_indexed",
         "file_count": 0,
-        "metadata": {"type": corpus_type},
+        "metadata": metadata,
     }
 
 
@@ -930,6 +1319,11 @@ def index_registered_corpora(
             corpus_id = str(corpus["id"])
             source_root = Path(str(corpus["source_root"])).expanduser()
             include = [str(item) for item in corpus["include"]]
+            corpus_resolver_profiles = _resolver_profiles_for_corpus(
+                resolver_profiles,
+                corpus_id,
+                str(corpus["repo"]),
+            )
             if not source_root.exists():
                 error_message = f"source root not found: {source_root}"
                 store.upsert_corpus(
@@ -942,7 +1336,21 @@ def index_registered_corpora(
                     metadata={**dict(corpus.get("metadata", {})), "error": error_message},
                 )
                 raise FileNotFoundError(error_message)
-            files = list(_iter_source_files(source_root, include))
+            scan_folders = _registered_corpus_scan_folders(corpus, source_root)
+            missing_folder = next((folder for folder in scan_folders if not folder.scan_root.exists()), None)
+            if missing_folder is not None:
+                error_message = f"source root not found: {missing_folder.scan_root}"
+                store.upsert_corpus(
+                    corpus_id=corpus_id,
+                    repo=str(corpus["repo"]),
+                    source_root=str(source_root),
+                    include=include,
+                    status="failed",
+                    file_count=0,
+                    metadata={**dict(corpus.get("metadata", {})), "scan_roots": _scan_folder_metadata(scan_folders), "error": error_message},
+                )
+                raise FileNotFoundError(error_message)
+            files = _iter_corpus_source_files(scan_folders)
             file_count += len(files)
             code_files: List[Path] = []
             store.upsert_corpus(
@@ -952,7 +1360,7 @@ def index_registered_corpora(
                 include=include,
                 status="indexing",
                 file_count=len(files),
-                metadata=dict(corpus.get("metadata", {})),
+                metadata={**dict(corpus.get("metadata", {})), "scan_roots": _scan_folder_metadata_with_counts(scan_folders)},
             )
             for file_path in files:
                 source_type = _source_type_for_path(file_path)
@@ -982,7 +1390,7 @@ def index_registered_corpora(
                     )
                     chunk_count += 1
                     _index_chunk_embedding(store, indexed, provider_settings, embedding_transport=embedding_transport)
-                    evidence_count += _index_chunk_evidence(store, indexed, [], resolver_profiles)
+                    evidence_count += _index_chunk_evidence(store, indexed, [], corpus_resolver_profiles)
                     edge_count += _index_chunk_edges(store, indexed, [])
                 if source_type == "code":
                     code_files.append(file_path)
@@ -990,7 +1398,7 @@ def index_registered_corpora(
                 store,
                 code_files,
                 source_root,
-                resolver_profiles,
+                corpus_resolver_profiles,
                 corpus_id=corpus_id,
                 repo=str(corpus["repo"]),
             )
@@ -1001,7 +1409,7 @@ def index_registered_corpora(
                 include=include,
                 status="indexed",
                 file_count=len(files),
-                metadata=dict(corpus.get("metadata", {})),
+                metadata={**dict(corpus.get("metadata", {})), "scan_roots": _scan_folder_metadata_with_counts(scan_folders)},
             )
         store.finish_job(job_id, "indexed", f"Indexed {document_count} documents")
     except Exception as exc:
@@ -1097,11 +1505,19 @@ def rebuild_deterministic_graph(
         for corpus in selected:
             corpus_id = str(corpus["id"])
             source_root = Path(str(corpus["source_root"])).expanduser()
-            include = [str(item) for item in corpus["include"]]
+            corpus_resolver_profiles = _resolver_profiles_for_corpus(
+                resolver_profiles,
+                corpus_id,
+                str(corpus["repo"]),
+            )
             if not source_root.exists():
                 raise FileNotFoundError(f"source root not found: {source_root}")
             code_files: List[Path] = []
-            for file_path in _iter_source_files(source_root, include):
+            scan_folders = _registered_corpus_scan_folders(corpus, source_root)
+            missing_folder = next((folder for folder in scan_folders if not folder.scan_root.exists()), None)
+            if missing_folder is not None:
+                raise FileNotFoundError(f"source root not found: {missing_folder.scan_root}")
+            for file_path in _iter_corpus_source_files(scan_folders):
                 if _source_type_for_path(file_path) != "code":
                     continue
                 file_count += 1
@@ -1110,7 +1526,7 @@ def rebuild_deterministic_graph(
                 store,
                 code_files,
                 source_root,
-                resolver_profiles,
+                corpus_resolver_profiles,
                 corpus_id=corpus_id,
                 repo=str(corpus["repo"]),
             )
@@ -1151,37 +1567,126 @@ def backfill_provider_embeddings(
     if config is None:
         raise ValueError("embedding provider settings are missing")
     batch_size = max(1, effective_batch_size)
+    applied_limit = int(effective_limit) if effective_limit and effective_limit > 0 else None
+    limit_is_unlimited = applied_limit is None
     job_id = store.start_job(
         "embedding_backfill",
         f"Backfilling provider embeddings with {config.provider}:{config.model}",
-        metadata={"provider_settings": provider_settings, "limit": effective_limit, "batch_size": batch_size},
+        metadata={
+            "provider_settings": provider_settings,
+            "limit": effective_limit,
+            "requested_limit": effective_limit,
+            "applied_limit": applied_limit,
+            "limit_is_unlimited": limit_is_unlimited,
+            "batch_size": batch_size,
+        },
     )
     embedded_chunks = 0
     truncated_chunks = 0
+    context_retry_chunks = 0
+    provider_input_count = 0
+    provider_request_count = 0
+    provider_input_attempt_count = 0
+    total_candidates = 0
+
+    def progress_metadata() -> Dict[str, Any]:
+        return {
+            "total_candidates": total_candidates,
+            "embedded_chunks": embedded_chunks,
+            "provider_input_count": provider_input_count,
+            "provider_request_count": provider_request_count,
+            "provider_input_attempt_count": provider_input_attempt_count,
+            "truncated_chunks": truncated_chunks,
+            "context_retry_chunks": context_retry_chunks,
+        }
+
     try:
         rows = _chunks_missing_provider_embedding(store, config.provider, config.model, limit=effective_limit)
+        total_candidates = len(rows)
+        store.update_job_status(
+            job_id,
+            "indexing",
+            f"Embedding 0/{total_candidates} chunks with {config.provider}:{config.model}",
+            metadata=progress_metadata(),
+        )
         provider = create_embedding_provider(config)
         if embedding_transport is not None and hasattr(provider, "transport"):
             provider.transport = embedding_transport
         for start in range(0, len(rows), batch_size):
-            batch = rows[start : start + batch_size]
-            prepared = [_prepare_embedding_input_text(str(row["text"]), max_text_chars) for row in batch]
-            vectors = _embed_provider_batch(provider, [item["text"] for item in prepared], config)
-            for row, prepared_text, vector in zip(batch, prepared, vectors):
-                metadata = {"source": "provider", **prepared_text["metadata"]}
-                if prepared_text["metadata"].get("embedding_text_truncated"):
+            row_batch = rows[start : start + batch_size]
+            prepared_rows: List[Dict[str, Any]] = []
+            unique_texts: List[str] = []
+            seen_texts = set()
+            for row in row_batch:
+                prepared_text = _prepare_embedding_input_text(str(row["text"]), max_text_chars)
+                text = str(prepared_text["text"])
+                prepared_rows.append({"row": row, "prepared_text": prepared_text, "text": text})
+                if text not in seen_texts:
+                    seen_texts.add(text)
+                    unique_texts.append(text)
+            embedding_by_text: Dict[str, Dict[str, Any]] = {}
+            attempt_stats = {"provider_request_count": 0, "provider_input_attempt_count": 0}
+            try:
+                batch_embeddings = _embed_provider_batch(provider, unique_texts, config, attempt_stats)
+            finally:
+                provider_request_count += attempt_stats["provider_request_count"]
+                provider_input_attempt_count += attempt_stats["provider_input_attempt_count"]
+            for text, embedding in zip(unique_texts, batch_embeddings):
+                embedding_by_text[text] = embedding
+            provider_input_count += len(unique_texts)
+            embedding_rows: List[Dict[str, Any]] = []
+            for item in prepared_rows:
+                row = item["row"]
+                prepared_text = item["prepared_text"]
+                text = item["text"]
+                embedding = embedding_by_text[text]
+                metadata = {"source": "provider", **prepared_text["metadata"], **dict(embedding.get("metadata") or {})}
+                if metadata.get("embedding_text_truncated"):
                     truncated_chunks += 1
-                store.add_embedding(
-                    int(row["id"]),
-                    provider=config.provider,
-                    model=config.model,
-                    vector=vector,
-                    metadata=metadata,
+                if metadata.get("embedding_context_retry"):
+                    context_retry_chunks += 1
+                embedding_rows.append(
+                    {
+                        "chunk_id": int(row["id"]),
+                        "provider": config.provider,
+                        "model": config.model,
+                        "vector": embedding["vector"],
+                        "metadata": metadata,
+                    }
                 )
-                embedded_chunks += 1
+            store.add_embeddings(embedding_rows)
+            embedded_chunks += len(embedding_rows)
+            store.update_job_status(
+                job_id,
+                "indexing",
+                f"Embedded {embedded_chunks}/{total_candidates} chunks with {config.provider}:{config.model}",
+                metadata=progress_metadata(),
+            )
         suffix = f"; truncated {truncated_chunks} long inputs" if truncated_chunks else ""
-        store.finish_job(job_id, "embedded", f"Embedded {embedded_chunks} chunks{suffix}")
+        context_suffix = f"; context retries {context_retry_chunks}" if context_retry_chunks else ""
+        dedupe_suffix = (
+            f"; provider inputs {provider_input_count}/{embedded_chunks}"
+            if provider_input_count != embedded_chunks
+            else ""
+        )
+        attempt_suffix = (
+            f"; provider attempts {provider_input_attempt_count} inputs/{provider_request_count} requests"
+            if provider_input_attempt_count != provider_input_count or provider_request_count != provider_input_count
+            else ""
+        )
+        store.update_job_status(job_id, "indexing", f"Finalizing {embedded_chunks}/{total_candidates} embeddings", metadata=progress_metadata())
+        store.finish_job(
+            job_id,
+            "embedded",
+            f"Embedded {embedded_chunks} chunks{suffix}{context_suffix}{dedupe_suffix}{attempt_suffix}",
+        )
     except Exception as exc:
+        store.update_job_status(
+            job_id,
+            "indexing",
+            f"Failed after {embedded_chunks}/{total_candidates} embeddings",
+            metadata=progress_metadata(),
+        )
         store.finish_job(job_id, "failed", str(exc))
         raise
     return {
@@ -1190,9 +1695,17 @@ def backfill_provider_embeddings(
         "provider": config.provider,
         "model": config.model,
         "embedded_chunks": embedded_chunks,
+        "provider_input_count": provider_input_count,
+        "provider_request_count": provider_request_count,
+        "provider_input_attempt_count": provider_input_attempt_count,
+        "deduped_chunks": embedded_chunks - provider_input_count,
         "truncated_chunks": truncated_chunks,
+        "context_retry_chunks": context_retry_chunks,
         "batch_size": batch_size,
         "limit": limit,
+        "requested_limit": effective_limit,
+        "applied_limit": applied_limit,
+        "limit_is_unlimited": limit_is_unlimited,
         "job_id": job_id,
     }
 
@@ -1210,22 +1723,55 @@ def _prepare_embedding_input_text(text: str, max_text_chars: int) -> Dict[str, A
     }
 
 
-def _embed_provider_batch(provider: Any, texts: List[str], config: EmbeddingProviderConfig) -> List[List[float]]:
+def _embed_provider_batch(
+    provider: Any,
+    texts: List[str],
+    config: EmbeddingProviderConfig,
+    attempt_stats: Optional[Dict[str, int]] = None,
+) -> List[Dict[str, Any]]:
+    if attempt_stats is not None:
+        attempt_stats["provider_request_count"] = int(attempt_stats.get("provider_request_count", 0)) + 1
+        attempt_stats["provider_input_attempt_count"] = int(attempt_stats.get("provider_input_attempt_count", 0)) + len(texts)
     try:
-        return provider.embed(texts, config)
+        return [{"vector": vector, "metadata": {}} for vector in provider.embed(texts, config)]
     except Exception as exc:
         if len(texts) > 1 and _is_provider_context_length_error(exc):
             midpoint = max(1, len(texts) // 2)
             return [
-                *_embed_provider_batch(provider, texts[:midpoint], config),
-                *_embed_provider_batch(provider, texts[midpoint:], config),
+                *_embed_provider_batch(provider, texts[:midpoint], config, attempt_stats),
+                *_embed_provider_batch(provider, texts[midpoint:], config, attempt_stats),
             ]
+        if len(texts) == 1 and _is_provider_context_length_error(exc):
+            shortened = _shorten_embedding_input_after_context_error(texts[0])
+            if shortened != texts[0]:
+                retry = _embed_provider_batch(provider, [shortened], config, attempt_stats)[0]
+                retry_metadata = dict(retry.get("metadata") or {})
+                final_text_chars = int(retry_metadata.get("embedding_text_chars") or len(shortened))
+                original_text_chars = max(
+                    len(texts[0]),
+                    int(retry_metadata.get("original_embedding_text_chars") or 0),
+                )
+                retry_metadata.update(
+                    {
+                        "embedding_context_retry": True,
+                        "embedding_text_truncated": True,
+                        "embedding_text_chars": final_text_chars,
+                        "original_embedding_text_chars": original_text_chars,
+                    }
+                )
+                return [{"vector": retry["vector"], "metadata": retry_metadata}]
         raise
 
 
 def _is_provider_context_length_error(exc: Exception) -> bool:
     message = str(exc).lower()
     return "context length" in message or "input length" in message or "too large" in message
+
+
+def _shorten_embedding_input_after_context_error(text: str) -> str:
+    if len(text) <= 1:
+        return text
+    return text[: max(1, len(text) // 2)]
 
 
 def generate_semantic_edges_for_query(
@@ -1267,6 +1813,7 @@ def generate_semantic_edges_for_query(
             store,
             generated,
             allowed_endpoints=_semantic_edge_allowed_endpoints_from_rows(query, rows),
+            case_grounding=_semantic_edge_grounding_from_rows(rows),
             provenance={
                 "provider": config.provider,
                 "model": config.preferred,
@@ -1344,11 +1891,15 @@ def generate_semantic_edges_batch(
         for start in range(0, len(candidates), batch_size):
             batch = candidates[start : start + batch_size]
             prompt = _semantic_edge_batch_prompt(batch)
-            generated = normalize_generated_cases(provider.generate(prompt, config))
-            edge_count += _persist_generated_edges(
+            try:
+                generated = normalize_generated_cases(provider.generate(prompt, config))
+            except (TypeError, ValueError, json.JSONDecodeError):
+                generated = {"cases": []}
+            persisted = _persist_generated_edges(
                 store,
                 generated,
                 allowed_endpoints=_semantic_edge_allowed_endpoints_from_candidates(batch),
+                case_grounding=_semantic_edge_grounding_from_candidates(batch),
                 provenance={
                     "provider": config.provider,
                     "model": config.preferred,
@@ -1357,6 +1908,29 @@ def generate_semantic_edges_batch(
                 },
                 commit=False,
             )
+            if persisted <= 0 and len(batch) > 1:
+                for candidate in batch:
+                    single_batch = [candidate]
+                    single_prompt = _semantic_edge_batch_prompt(single_batch)
+                    try:
+                        single_generated = normalize_generated_cases(provider.generate(single_prompt, config))
+                    except (TypeError, ValueError, json.JSONDecodeError):
+                        continue
+                    persisted += _persist_generated_edges(
+                        store,
+                        single_generated,
+                        allowed_endpoints=_semantic_edge_allowed_endpoints_from_candidates(single_batch),
+                        case_grounding=_semantic_edge_grounding_from_candidates(single_batch),
+                        provenance={
+                            "provider": config.provider,
+                            "model": config.preferred,
+                            "job_id": job_id,
+                            "mode": "batch",
+                            "fallback_batch_size": 1,
+                        },
+                        commit=False,
+                    )
+            edge_count += persisted
         if edge_count <= 0:
             raise ValueError("semantic edge provider returned no persistable edges")
         store.con.commit()
@@ -1406,7 +1980,8 @@ def generate_doc_nodes_batch(
     if config is None:
         raise ValueError("edge provider settings are missing")
     candidate_limit = max(1, int(limit if limit is not None else configured_candidate_limit))
-    batch_size = max(1, int(batch_size if batch_size is not None else configured_batch_size))
+    requested_batch_size = max(1, int(batch_size if batch_size is not None else configured_batch_size))
+    batch_size = _doc_node_effective_batch_size(requested_batch_size, config)
     candidates = _doc_node_candidates(store, limit=candidate_limit)
     if not candidates:
         raise ValueError("no indexed document candidates found")
@@ -1421,27 +1996,55 @@ def generate_doc_nodes_batch(
             "provider_settings": provider_settings,
         },
     )
-    provider = edge_provider or create_edge_provider(config)
+    provider = edge_provider or create_doc_node_provider(config)
     box_count = 0
     edge_count = 0
     try:
         for start in range(0, len(candidates), batch_size):
             batch = candidates[start : start + batch_size]
             prompt = _doc_node_batch_prompt(batch)
-            generated = provider.generate(prompt, config)
-            persisted = _persist_doc_nodes(
-                store,
-                generated,
-                candidate_by_id,
-                provenance={
-                    "provider": config.provider,
-                    "model": config.preferred,
-                    "job_id": job_id,
-                    "mode": "doc_nodes_batch",
-                },
-            )
+            generated: Mapping[str, Any] = {}
+            batch_failed = False
+            try:
+                generated = provider.generate(prompt, config)
+            except Exception:
+                batch_failed = True
+            persisted = {"boxes": 0, "edges": 0}
+            if not batch_failed:
+                persisted = _persist_doc_nodes(
+                    store,
+                    generated,
+                    candidate_by_id,
+                    provenance={
+                        "provider": config.provider,
+                        "model": config.preferred,
+                        "job_id": job_id,
+                        "mode": "doc_nodes_batch",
+                    },
+                )
             box_count += persisted["boxes"]
             edge_count += persisted["edges"]
+            if (batch_failed or persisted["boxes"] <= 0) and len(batch) > 1:
+                for candidate in batch:
+                    single_prompt = _doc_node_batch_prompt([candidate])
+                    try:
+                        single_generated = provider.generate(single_prompt, config)
+                    except Exception:
+                        continue
+                    single_persisted = _persist_doc_nodes(
+                        store,
+                        single_generated,
+                        candidate_by_id,
+                        provenance={
+                            "provider": config.provider,
+                            "model": config.preferred,
+                            "job_id": job_id,
+                            "mode": "doc_nodes_batch",
+                            "fallback_batch_size": 1,
+                        },
+                    )
+                    box_count += single_persisted["boxes"]
+                    edge_count += single_persisted["edges"]
         if box_count <= 0 or edge_count <= 0:
             raise ValueError("doc node provider returned no persistable boxes")
         store.con.commit()
@@ -1462,6 +2065,12 @@ def generate_doc_nodes_batch(
         "job_id": job_id,
         "graph": global_graph(db_path, limit=post_batch_graph_limit),
     }
+
+
+def _doc_node_effective_batch_size(requested_batch_size: int, config: EdgeModelConfig) -> int:
+    if config.num_ctx < DOC_NODE_MULTI_BATCH_MIN_CTX or config.num_predict < DOC_NODE_MULTI_BATCH_MIN_PREDICT:
+        return 1
+    return min(DOC_NODE_MAX_BATCH_SIZE, max(1, requested_batch_size))
 
 
 def add_resolver_profile(
@@ -1608,7 +2217,7 @@ def _index_chunk_evidence(
     queries: Iterable[Any],
     resolver_profiles: Optional[Iterable[ResolverProfile]] = None,
 ) -> int:
-    symbols = _evidence_symbols_for_chunk(chunk.text, queries, resolver_profiles or [])
+    symbols = _evidence_symbols_for_chunk(chunk.text, queries, resolver_profiles or [], chunk.source_type)
     if not symbols and chunk.source_type in {"doc", "pdf"} and chunk.text.strip():
         symbols = [(_document_anchor_symbol(chunk), "", "mention", f"{chunk.source_type} chunk -> {_document_anchor_symbol(chunk)}")]
     count = 0
@@ -1744,9 +2353,10 @@ def _chunks_missing_provider_embedding(
         from chunks
         left join embeddings
           on embeddings.chunk_id = chunks.id
-         and embeddings.provider = ?
-         and embeddings.model = ?
         where embeddings.chunk_id is null
+           or embeddings.provider != ?
+           or embeddings.model != ?
+           or coalesce(json_extract(embeddings.metadata_json, '$.source'), '') in ('deterministic', 'deterministic-fallback')
         order by chunks.id
     """
     params: List[Any] = [provider, model]
@@ -1760,11 +2370,11 @@ def _semantic_edge_prompt(query: str, rows: Iterable[Mapping[str, Any]]) -> str:
     row_list = list(rows)
     terms = _unique_ordered(
         [
-            *[token.upper() for token in _query_tokens(query) if _is_semantic_graph_endpoint(token)],
+            *[token.upper() for token in _query_tokens(query) if _is_semantic_raw_edge_endpoint(token)],
             *[
                 str(row.get("symbol") or "")
                 for row in row_list
-                if _is_semantic_graph_endpoint(str(row.get("symbol") or ""), str(row.get("entity_type") or ""))
+                if _is_semantic_raw_edge_endpoint(str(row.get("symbol") or ""), str(row.get("entity_type") or ""))
             ],
         ]
     )
@@ -1815,7 +2425,7 @@ def _semantic_edge_batch_candidates(
     candidates: Dict[str, Dict[str, Any]] = {}
     for row in rows:
         symbol = str(row["symbol"] or "").strip()
-        if not symbol or not _is_semantic_graph_endpoint(symbol, str(row["entity_type"] or "")):
+        if not symbol or not _is_semantic_raw_edge_endpoint(symbol, str(row["entity_type"] or "")):
             continue
         candidate_id = _semantic_edge_candidate_id(row)
         candidate = candidates.setdefault(
@@ -1828,14 +2438,18 @@ def _semantic_edge_batch_candidates(
                 "line_end": row["line_end"],
                 "page": row["page"],
                 "terms": [],
+                "term_types": {},
                 "snippets": [],
+                "graph_context": [],
             },
         )
         if symbol not in candidate["terms"]:
             candidate["terms"].append(symbol)
+        candidate["term_types"][symbol] = str(row["entity_type"] or "")
         snippet = str(row["snippet"] or row["chunk_text"] or "").strip()
         if snippet and snippet not in candidate["snippets"]:
             candidate["snippets"].append(snippet[:500])
+        _augment_semantic_edge_candidate_with_graph_context(store, candidate)
     ranked = [
         candidate
         for candidate in candidates.values()
@@ -1843,6 +2457,66 @@ def _semantic_edge_batch_candidates(
     ]
     ranked.sort(key=lambda item: (-len(item.get("terms") or []), str(item["id"])))
     return ranked[: max(1, int(limit))]
+
+
+def _augment_semantic_edge_candidate_with_graph_context(store: AsipStore, candidate: Dict[str, Any]) -> None:
+    if str(candidate.get("source_type") or "") != "code":
+        return
+    path = str(candidate.get("path") or "")
+    line_start = _optional_int(candidate.get("line_start"))
+    line_end = _optional_int(candidate.get("line_end")) or line_start
+    if not path or not line_start:
+        return
+    terms = [str(term) for term in candidate.get("terms", []) or [] if str(term or "").strip()]
+    term_lookup = {term.lower() for term in terms}
+    rows = store.con.execute(
+        """
+        select src, dst, relation, provenance_json
+        from edges
+        where stage = 'deterministic'
+          and path = ?
+          and line_start between ? and ?
+        order by abs(coalesce(line_start, ?) - ?), id asc
+        limit 80
+        """,
+        (path, max(1, line_start - 2), int(line_end) + 2, line_start, line_start),
+    ).fetchall()
+    for row in rows:
+        src = str(row["src"] or "").strip()
+        dst = str(row["dst"] or "").strip()
+        provenance = _json_object(str(row["provenance_json"] or "{}"))
+        field = str(provenance.get("field") or "").strip()
+        if term_lookup and not ({src.lower(), dst.lower(), field.lower()} & term_lookup):
+            continue
+        for endpoint in (src, dst):
+            product_kind = product_endpoint_kind(endpoint)
+            if product_kind in {"function", "register", "doc"}:
+                _add_semantic_candidate_term(candidate, endpoint, product_kind, prepend=product_kind == "function")
+        if product_endpoint_kind(src) == "function" and product_endpoint_kind(dst) == "register":
+            fact = f"{src} {str(row['relation'] or 'relates_to').strip() or 'relates_to'} {dst}"
+            graph_context = candidate.setdefault("graph_context", [])
+            if fact not in graph_context:
+                graph_context.append(fact)
+
+
+def _add_semantic_candidate_term(
+    candidate: Dict[str, Any],
+    term: str,
+    entity_type: str,
+    prepend: bool = False,
+) -> None:
+    endpoint = term.strip()
+    if not endpoint:
+        return
+    terms = candidate.setdefault("terms", [])
+    if endpoint not in terms:
+        if prepend:
+            terms.insert(0, endpoint)
+        else:
+            terms.append(endpoint)
+    term_types = candidate.setdefault("term_types", {})
+    if isinstance(term_types, dict):
+        term_types.setdefault(endpoint, entity_type)
 
 
 def _semantic_edge_batch_prompt(candidates: Iterable[Mapping[str, Any]]) -> str:
@@ -1853,6 +2527,8 @@ def _semantic_edge_batch_prompt(candidates: Iterable[Mapping[str, Any]]) -> str:
         "Use only exact CASE ids, exact TERMS, or exact function/register/doc symbols shown in the prompt for src and dst.",
         "Edges with endpoints outside CASE ids or TERMS are discarded.",
         "Do not create local-variable endpoints such as tmp, ret, data, value, reg, or ring.",
+        "For code CASEs, prefer GRAPH_CONTEXT function/register facts over assignment target variables.",
+        "Return at most two edges per CASE; prefer direct writes or reads over field-level variants.",
     ]
     for candidate in candidates:
         candidate_id = str(candidate.get("id") or "candidate")
@@ -1867,6 +2543,9 @@ def _semantic_edge_batch_prompt(candidates: Iterable[Mapping[str, Any]]) -> str:
             ]
         )
         snippets = list(candidate.get("snippets", []) or [])
+        graph_context = [str(item) for item in candidate.get("graph_context", []) or [] if item]
+        for index, fact in enumerate(graph_context[:5], start=1):
+            lines.append(f"GRAPH_CONTEXT {index}: {fact}")
         for index, snippet in enumerate(snippets[:3], start=1):
             lines.append(f"{index}: {snippet}")
     return "\n".join(lines)
@@ -1882,15 +2561,33 @@ def _doc_node_candidates(store: AsipStore, limit: int) -> List[Dict[str, Any]]:
           chunks.line_start,
           chunks.line_end,
           chunks.page,
-          chunks.text as chunk_text
+          chunks.text as chunk_text,
+          count(evidence.id) as evidence_count,
+          coalesce(sum(case when evidence.entity_type = 'register' then 1 else 0 end), 0) as register_evidence_count,
+          coalesce(sum(case when evidence.entity_type = 'function' then 1 else 0 end), 0) as function_evidence_count
         from chunks
         join documents on documents.id = chunks.document_id
+        left join evidence on evidence.chunk_id = chunks.id
         where documents.source_type in ('doc', 'pdf')
-        order by chunks.id asc
+        group by chunks.id
+        order by register_evidence_count desc,
+                 function_evidence_count desc,
+                 evidence_count desc,
+                 chunks.id asc
         limit ?
         """,
         (max(1, int(limit)),),
     ).fetchall()
+    rows = sorted(
+        rows,
+        key=lambda row: (
+            -int(row["register_evidence_count"] or 0),
+            -int(row["function_evidence_count"] or 0),
+            -int(row["evidence_count"] or 0),
+            int(row["chunk_id"] or 0),
+        ),
+    )[: max(1, int(limit))]
+    terms_by_chunk = _doc_node_candidate_terms(store, [int(row["chunk_id"]) for row in rows])
     candidates = []
     for row in rows:
         candidate = {
@@ -1901,10 +2598,46 @@ def _doc_node_candidates(store: AsipStore, limit: int) -> List[Dict[str, Any]]:
             "line_end": row["line_end"],
             "page": row["page"],
             "chunk_text": str(row["chunk_text"] or ""),
+            "evidence_count": int(row["evidence_count"] or 0),
+            "register_evidence_count": int(row["register_evidence_count"] or 0),
+            "function_evidence_count": int(row["function_evidence_count"] or 0),
         }
         candidate["id"] = _semantic_edge_candidate_id(candidate)
+        candidate_terms = terms_by_chunk.get(int(row["chunk_id"] or 0), {})
+        candidate["terms"] = list(candidate_terms.keys())
+        candidate["term_types"] = candidate_terms
         candidates.append(candidate)
     return candidates
+
+
+def _doc_node_candidate_terms(store: AsipStore, chunk_ids: Iterable[int], per_chunk_limit: int = 24) -> Dict[int, Dict[str, str]]:
+    ids = [int(chunk_id) for chunk_id in chunk_ids if int(chunk_id)]
+    if not ids:
+        return {}
+    placeholders = ",".join("?" for _ in ids)
+    rows = store.con.execute(
+        f"""
+        select chunk_id, symbol, entity_type, confidence, id
+        from evidence
+        where chunk_id in ({placeholders})
+        order by chunk_id asc, confidence desc, id asc
+        """,
+        ids,
+    ).fetchall()
+    terms_by_chunk: Dict[int, Dict[str, str]] = {}
+    for row in rows:
+        chunk_id = int(row["chunk_id"])
+        terms = terms_by_chunk.setdefault(chunk_id, {})
+        if len(terms) >= per_chunk_limit:
+            continue
+        symbol = str(row["symbol"] or "").strip()
+        entity_type = str(row["entity_type"] or "").strip()
+        if not symbol or symbol in terms:
+            continue
+        if not _is_semantic_raw_edge_endpoint(symbol, entity_type):
+            continue
+        terms[symbol] = entity_type
+    return terms_by_chunk
 
 
 def _doc_node_batch_prompt(candidates: Iterable[Mapping[str, Any]]) -> str:
@@ -1914,14 +2647,27 @@ def _doc_node_batch_prompt(candidates: Iterable[Mapping[str, Any]]) -> str:
         "Return only JSON with documents, boxes, and relationships.",
         "Schema: {\"documents\":[{\"id\":string,\"boxes\":[{\"id\":string,\"name\":string,\"summary\":string,\"inputs\":[string],\"outputs\":[string],\"constraints\":[string],\"confidence\":number,\"evidence\":string}],\"relationships\":[{\"src\":string,\"relation\":string,\"dst\":string,\"confidence\":number,\"evidence\":string}]}]}",
         "Keep summaries, inputs, outputs, constraints, and evidence compact. Each evidence value must stay under 140 characters.",
-        "Relationship src/dst may use a box id from the same document or an exact code/register/field symbol found in text.",
+        "Relationship src/dst may use a box id from the same document, a document section id, a code function, or a register symbol found in text. Register fields must be recorded in box inputs/outputs/constraints, not as relationship endpoints.",
+        "Return at most one box and one relationship per document. Prefer the strongest hardware concept or register behavior.",
+        "Every documents[].id must exactly match one DOCUMENT id below.",
+        "Prefer LINKED SYMBOLS for relationship endpoints; do not invent symbols that are not in the document text or LINKED SYMBOLS.",
     ]
     for candidate in candidates:
         candidate_id = str(candidate.get("id") or "document")
         source = _semantic_edge_candidate_source(candidate)
         lines.extend([f"DOCUMENT {candidate_id}", f"SOURCE: {source}", "TEXT:"])
+        terms = [str(term) for term in candidate.get("terms", []) or [] if term]
+        term_types = candidate.get("term_types") if isinstance(candidate.get("term_types"), Mapping) else {}
+        if terms:
+            annotated_terms = [
+                f"{term} ({str(term_types.get(term) or 'symbol')})"
+                for term in terms[:DOC_NODE_PROMPT_TERM_LIMIT]
+            ]
+            lines.append(f"LINKED SYMBOLS: {', '.join(annotated_terms)}")
+        else:
+            lines.append("LINKED SYMBOLS: none")
         text = str(candidate.get("chunk_text") or "").strip()
-        lines.append(text[:2400])
+        lines.append(text[:DOC_NODE_PROMPT_TEXT_CHARS])
     return "\n".join(lines)
 
 
@@ -2052,19 +2798,25 @@ def _persist_generated_edges(
     provenance: Optional[Mapping[str, object]] = None,
     commit: bool = True,
     allowed_endpoints: Optional[set[str]] = None,
+    case_grounding: Optional[Mapping[str, List[Mapping[str, Any]]]] = None,
 ) -> int:
     edge_count = 0
     seen_edges: set[tuple[str, str, str]] = set()
     for case in generated.get("cases", []):
         if not isinstance(case, Mapping):
             continue
+        case_id = str(case.get("id") or "").strip()
+        source_refs = list((case_grounding or {}).get(case_id, []))
         for edge in case.get("edges", []):
             if not isinstance(edge, Mapping):
                 continue
             src = str(edge.get("src") or "").strip()
             dst = str(edge.get("dst") or "").strip()
-            relation = str(edge.get("relation") or "mentions").strip()
+            raw_relation = str(edge.get("relation") or "relates_to").strip()
+            relation = normalize_product_relation(raw_relation)
             if not src or not dst:
+                continue
+            if not relation:
                 continue
             if src == dst:
                 continue
@@ -2087,6 +2839,9 @@ def _persist_generated_edges(
                     **dict(provenance or {}),
                     "extractor": "semantic_edges",
                     "evidence": str(edge.get("evidence") or ""),
+                    **({"case_id": case_id} if case_id else {}),
+                    **({"source_refs": source_refs} if source_refs else {}),
+                    **({"original_relation": raw_relation} if raw_relation != relation else {}),
                 },
                 commit=False,
             )
@@ -2099,19 +2854,19 @@ def _persist_generated_edges(
 
 def _semantic_edge_allowed_endpoints_from_rows(query: str, rows: Iterable[Mapping[str, Any]]) -> set[str]:
     row_list = list(rows)
+    endpoint_types: Dict[str, str] = {}
+    for token in _query_tokens(query):
+        if _is_semantic_graph_endpoint(token):
+            endpoint_types[token] = ""
+    for row in row_list:
+        symbol = str(row.get("symbol") or "").strip()
+        entity_type = str(row.get("entity_type") or "").strip()
+        if _is_semantic_raw_edge_endpoint(symbol, entity_type):
+            endpoint_types[symbol] = entity_type
     return {
         endpoint
-        for endpoint in _unique_ordered(
-            [
-                *[token for token in _query_tokens(query) if _is_semantic_graph_endpoint(token)],
-                *[
-                    str(row.get("symbol") or "")
-                    for row in row_list
-                    if _is_semantic_graph_endpoint(str(row.get("symbol") or ""), str(row.get("entity_type") or ""))
-                ],
-            ]
-        )
-        if endpoint and _is_semantic_graph_endpoint(endpoint)
+        for endpoint in _unique_ordered(endpoint_types.keys())
+        if endpoint and _is_semantic_raw_edge_endpoint(endpoint, endpoint_types.get(endpoint, ""))
     }
 
 
@@ -2121,47 +2876,72 @@ def _semantic_edge_allowed_endpoints_from_candidates(candidates: Iterable[Mappin
         candidate_id = str(candidate.get("id") or "").strip()
         if candidate_id and _is_semantic_graph_endpoint(candidate_id):
             endpoints.add(candidate_id)
+        term_types = candidate.get("term_types") if isinstance(candidate.get("term_types"), Mapping) else {}
         for term in candidate.get("terms", []) or []:
             endpoint = str(term or "").strip()
-            if endpoint and _is_semantic_graph_endpoint(endpoint):
+            entity_type = str(term_types.get(endpoint) or "") if isinstance(term_types, Mapping) else ""
+            if endpoint and _is_semantic_raw_edge_endpoint(endpoint, entity_type):
                 endpoints.add(endpoint)
     return endpoints
+
+
+def _semantic_edge_grounding_from_rows(rows: Iterable[Mapping[str, Any]]) -> Dict[str, List[Mapping[str, Any]]]:
+    refs = [_semantic_edge_source_ref(row) for row in rows]
+    return {"workbench-query": [ref for ref in refs if ref]}
+
+
+def _semantic_edge_grounding_from_candidates(candidates: Iterable[Mapping[str, Any]]) -> Dict[str, List[Mapping[str, Any]]]:
+    grounding: Dict[str, List[Mapping[str, Any]]] = {}
+    for candidate in candidates:
+        candidate_id = str(candidate.get("id") or "").strip()
+        if not candidate_id:
+            continue
+        ref = _semantic_edge_source_ref(candidate)
+        if ref:
+            grounding[candidate_id] = [ref]
+    return grounding
+
+
+def _semantic_edge_source_ref(row: Mapping[str, Any]) -> Dict[str, Any]:
+    ref: Dict[str, Any] = {
+        "source_type": str(row.get("source_type") or ""),
+        "path": str(row.get("path") or ""),
+    }
+    for key in ("corpus_id", "repo", "line_start", "line_end", "page"):
+        value = row.get(key)
+        if value not in (None, ""):
+            ref[key] = value
+    terms = [str(term) for term in row.get("terms", []) or [] if term] if isinstance(row.get("terms", []), list) else []
+    if terms:
+        ref["terms"] = terms
+    return {key: value for key, value in ref.items() if value not in ("", [], {})}
+
+
+def _is_semantic_raw_edge_endpoint(endpoint: str, entity_type: str = "") -> bool:
+    if _is_semantic_graph_endpoint(endpoint, entity_type):
+        return True
+    value = endpoint.strip()
+    if not value or not is_graph_entity_endpoint(value):
+        return False
+    kind = entity_type.strip().lower() or _entity_type_for_symbol(value)
+    return kind == "field"
 
 
 def _is_semantic_graph_endpoint(endpoint: str, entity_type: str = "") -> bool:
     value = endpoint.strip()
     if not value or not is_graph_entity_endpoint(value):
         return False
+    product_kind = product_endpoint_kind(value)
+    if not product_kind:
+        return False
     kind = entity_type.strip().lower()
     if kind:
-        return kind in {"function", "register", "field", "doc_section", "pdf_section", "doc_box"}
-    lower = value.lower()
-    if lower in {
-        "data",
-        "funcs",
-        "gc",
-        "init_func",
-        "ip_version",
-        "local",
-        "ops",
-        "reg",
-        "ret",
-        "ring",
-        "tmp",
-        "value",
-    }:
+        if kind in {"doc_section", "pdf_section", "doc_box"}:
+            return product_kind == "doc"
+        if kind in {"function", "register", "doc"}:
+            return product_kind == kind
         return False
-    if lower.startswith(("data_", "local_", "ret_", "tmp_", "value_")):
-        return False
-    if lower.endswith(("_func", "_funcs")) and not value.startswith(("reg", "mm", "smn")):
-        return False
-    if "#" in value or ":" in value:
-        return True
-    if value.startswith(("reg", "mm", "smn")) and len(value) > 3:
-        return True
-    if "_" in value and (value.upper() == value or any(char.isdigit() for char in value)):
-        return True
-    return False
+    return product_kind in {"function", "register", "doc"}
 
 
 def _semantic_edge_candidate_id(row: Mapping[str, Any]) -> str:
@@ -2244,18 +3024,18 @@ def _index_deterministic_code_graph_files(
     for file_path in file_path_list:
         for location in collect_code_graph_function_locations(file_path, source_root=source_root):
             function_locations.setdefault(location.name, []).append(location)
-        for alias_key, alias_values in collect_code_graph_table_field_aliases(file_path).items():
+        for alias_key, alias_values in collect_code_graph_table_field_aliases(file_path, source_root=source_root).items():
             table_field_aliases.setdefault(str(alias_key), [])
             for alias_value in alias_values:
                 alias_text = str(alias_value)
                 if alias_text not in table_field_aliases[str(alias_key)]:
                     table_field_aliases[str(alias_key)].append(alias_text)
-        for sink_key, sinks in collect_code_graph_version_field_sinks(file_path).items():
+        for sink_key, sinks in collect_code_graph_version_field_sinks(file_path, source_root=source_root).items():
             version_field_sinks.setdefault(str(sink_key), [])
             for sink in sinks:
                 if sink not in version_field_sinks[str(sink_key)]:
                     version_field_sinks[str(sink_key)].append(sink)
-        for alias_key, alias_values in collect_code_graph_return_table_aliases(file_path).items():
+        for alias_key, alias_values in collect_code_graph_return_table_aliases(file_path, source_root=source_root).items():
             return_table_aliases.setdefault(str(alias_key), [])
             for alias_value in alias_values:
                 alias_text = str(alias_value)
@@ -2270,6 +3050,7 @@ def _index_deterministic_code_graph_files(
         for alias_key, alias_values in collect_code_graph_receiver_table_aliases(
             file_path,
             version_field_sinks,
+            source_root=source_root,
         ).items():
             receiver_table_aliases.setdefault(str(alias_key), [])
             for alias_value in alias_values:
@@ -2291,11 +3072,18 @@ def _index_deterministic_code_graph_files(
                 known_receiver_table_aliases=receiver_table_aliases,
                 known_return_table_aliases=return_table_aliases,
             )
-        except Exception:
-            continue
+        except Exception as exc:
+            raise RuntimeError(f"deterministic code graph failed for {file_path}: {exc}") from exc
         graphs.append(graph)
         for edge in graph.edges:
-            count += _persist_code_graph_edge(store, edge, seen, corpus_id=corpus_id, repo=repo)
+            count += _persist_code_graph_edge(
+                store,
+                edge,
+                seen,
+                corpus_id=corpus_id,
+                repo=repo,
+                resolver_profile_ids=[profile.id for profile in profiles],
+            )
 
     callbacks_by_slot: Dict[str, List[Any]] = {}
     for graph in graphs:
@@ -2305,6 +3093,8 @@ def _index_deterministic_code_graph_files(
         for slot_call in graph.slot_calls:
             callbacks = _callbacks_for_code_graph_slot_call(slot_call, callbacks_by_slot)
             call_kind = _code_graph_callback_call_kind(slot_call, callbacks)
+            dispatch_scope = _code_graph_callback_dispatch_scope(slot_call, callbacks, call_kind)
+            callback_ambiguous = dispatch_scope == "ambiguous"
             confidence = 0.72 if call_kind == "vtable_dispatch" else 0.82
             for callback in callbacks:
                 if str(callback.function) == str(slot_call.caller):
@@ -2339,7 +3129,8 @@ def _index_deterministic_code_graph_files(
                             "callback_table_type": str(getattr(callback, "table_type", "") or ""),
                             "callback_initializer_flow": str(getattr(callback, "initializer_flow", "") or ""),
                             "callback_candidate_count": len(callbacks),
-                            "dispatch_scope": "generic_slot" if call_kind == "vtable_dispatch" else "matched_slot",
+                            "dispatch_scope": dispatch_scope,
+                            "callback_ambiguous": callback_ambiguous,
                             "callee_path": str(getattr(callback, "function_path", "") or callback.path),
                             "callback_path": str(callback.path),
                             "callee_line": getattr(callback, "function_line_start", None),
@@ -2349,6 +3140,7 @@ def _index_deterministic_code_graph_files(
                     seen,
                     corpus_id=corpus_id,
                     repo=repo,
+                    resolver_profile_ids=[profile.id for profile in profiles],
                 )
     if count:
         store.con.commit()
@@ -2376,12 +3168,16 @@ def _callbacks_for_code_graph_slot_call(
     if exact:
         return exact
     receiver_type = str(getattr(slot_call, "receiver_type", "") or "").strip()
+    table_prefixes = _code_graph_receiver_ip_block_table_prefixes(receiver)
     if receiver_type:
         typed = [
             callback
             for callback in callbacks
             if str(getattr(callback, "table_type", "") or "") == receiver_type
         ]
+        narrowed = _code_graph_callbacks_matching_table_prefixes(typed, table_prefixes)
+        if narrowed:
+            return narrowed
         return typed
     expected_table_type = _code_graph_expected_callback_table_type(receiver)
     if expected_table_type:
@@ -2390,8 +3186,11 @@ def _callbacks_for_code_graph_slot_call(
             for callback in callbacks
             if str(getattr(callback, "table_type", "") or "") == expected_table_type
         ]
+        narrowed = _code_graph_callbacks_matching_table_prefixes(typed, table_prefixes)
+        if narrowed:
+            return narrowed
         return typed
-    if receiver_leaf in GENERIC_CALLBACK_RECEIVERS:
+    if receiver_leaf in GENERIC_CALLBACK_RECEIVERS and _code_graph_slot_call_receiver_is_likely_callback(slot_call):
         return callbacks
     return []
 
@@ -2410,6 +3209,18 @@ def _code_graph_callback_call_kind(slot_call: Any, callbacks: List[Any]) -> str:
     return "vtable_callback"
 
 
+def _code_graph_callback_dispatch_scope(slot_call: Any, callbacks: List[Any], call_kind: str) -> str:
+    if call_kind != "vtable_dispatch":
+        return "matched_slot"
+    receiver_tables = tuple(str(table) for table in getattr(slot_call, "receiver_tables", ()) if table)
+    if len(receiver_tables) > 1 or len(callbacks) > 1:
+        return "ambiguous"
+    receiver_leaf = _code_graph_receiver_leaf(str(getattr(slot_call, "receiver", "") or ""))
+    if receiver_leaf in GENERIC_CALLBACK_RECEIVERS:
+        return "generic_slot"
+    return "ambiguous"
+
+
 def _code_graph_receiver_leaf(receiver: str) -> str:
     parts = re.split(r"->|\.", receiver.strip())
     leaf = parts[-1] if parts else receiver
@@ -2418,10 +3229,49 @@ def _code_graph_receiver_leaf(receiver: str) -> str:
 
 def _code_graph_expected_callback_table_type(receiver: str) -> str:
     normalized = re.sub(r"\s+", "", receiver.strip())
+    leaf = _code_graph_receiver_leaf(receiver)
+    if leaf == "init_funcs" and "[" in normalized:
+        return ""
     for suffix, table_type in CALLBACK_TYPE_BY_RECEIVER_SUFFIX:
         if normalized.endswith(suffix):
             return table_type
-    return CALLBACK_TYPE_BY_RECEIVER.get(_code_graph_receiver_leaf(receiver), "")
+    return CALLBACK_TYPE_BY_RECEIVER.get(leaf, "")
+
+
+def _code_graph_receiver_ip_block_table_prefixes(receiver: str) -> Tuple[str, ...]:
+    normalized = re.sub(r"\s+", "", receiver)
+    if "->version->funcs" not in normalized and ".version.funcs" not in normalized:
+        return ()
+    base = re.split(r"->|\.", normalized, maxsplit=1)[0]
+    base = re.sub(r"\[[^\]]+\]", "", base).strip("&*()")
+    if not base.endswith("_block"):
+        return ()
+    prefix = base[: -len("_block")]
+    if not prefix or prefix in {"ip", "adev", "block"}:
+        return ()
+    return (prefix,)
+
+
+def _code_graph_callbacks_matching_table_prefixes(callbacks: Iterable[Any], prefixes: Iterable[str]) -> List[Any]:
+    clean_prefixes = tuple(prefix for prefix in prefixes if prefix)
+    if not clean_prefixes:
+        return []
+    return [
+        callback
+        for callback in callbacks
+        if any(str(getattr(callback, "table", "") or "").startswith(f"{prefix}_") for prefix in clean_prefixes)
+    ]
+
+
+def _code_graph_slot_call_receiver_is_likely_callback(slot_call: Any) -> bool:
+    receiver = str(getattr(slot_call, "receiver", "") or "").strip()
+    receiver_leaf = _code_graph_receiver_leaf(receiver)
+    if receiver_leaf == "init_funcs" and "[" in receiver:
+        return False
+    if receiver_leaf in {"init_func", "init_funcs"}:
+        return True
+    receiver_type = str(getattr(slot_call, "receiver_type", "") or "").strip()
+    return bool(receiver_type.endswith(("_funcs", "_ops", "_callbacks", "_func")))
 
 
 @dataclass(frozen=True)
@@ -2444,6 +3294,7 @@ def _persist_code_graph_edge(
     seen: set[tuple[str, str, str, str, int, int]],
     corpus_id: str = "",
     repo: str = "",
+    resolver_profile_ids: Optional[Iterable[str]] = None,
 ) -> int:
     key = (
         str(edge.src),
@@ -2456,6 +3307,10 @@ def _persist_code_graph_edge(
     if key in seen:
         return 0
     seen.add(key)
+    edge_provenance = dict(edge.provenance)
+    scoped_profile_ids = _unique_ordered(str(profile_id) for profile_id in (resolver_profile_ids or []))
+    if "resolver_profile" not in edge_provenance and scoped_profile_ids:
+        edge_provenance["resolver_profile_ids"] = scoped_profile_ids
     edge_id = store.add_edge(
         src=edge.src,
         dst=edge.dst,
@@ -2467,7 +3322,7 @@ def _persist_code_graph_edge(
         line_start=edge.line_start,
         line_end=edge.line_end,
         provenance={
-            **dict(edge.provenance),
+            **edge_provenance,
             **({"corpus_id": corpus_id} if corpus_id else {}),
             **({"repo": repo} if repo else {}),
         },
@@ -2563,6 +3418,7 @@ def _evidence_symbols_for_chunk(
     text: str,
     queries: Iterable[Any],
     resolver_profiles: Iterable[ResolverProfile],
+    source_type: str = "",
 ) -> List[tuple[str, str, Optional[str], Optional[str]]]:
     found: Dict[str, tuple[str, Optional[str], Optional[str]]] = {}
     for query in queries:
@@ -2570,7 +3426,7 @@ def _evidence_symbols_for_chunk(
             if term in text and is_graph_entity_endpoint(str(term)):
                 found[term] = (query.id, None, None)
     for identifier in re.findall(r"\b[A-Za-z_][A-Za-z0-9_]*(?:->[A-Za-z_][A-Za-z0-9_]*)?\b", text):
-        if _is_symbol_like(identifier):
+        if _is_symbol_like_for_source(identifier, source_type):
             found.setdefault(identifier, ("", None, None))
     for profile in resolver_profiles:
         resolved_items = (
@@ -2596,7 +3452,10 @@ def _resolver_profiles_from_store(
     if DEFAULT_RESOLVER_PROFILE_DIR.exists():
         profiles_by_id.update(load_resolver_profiles(DEFAULT_RESOLVER_PROFILE_DIR))
     for row in store.list_resolver_profiles():
+        row_id = str(row.get("id") or "")
         if not row.get("enabled", True):
+            for profile_id in _resolver_profile_aliases_from_store_row(row):
+                profiles_by_id.pop(profile_id, None)
             continue
         wrappers = [str(wrapper) for wrapper in row.get("wrappers", [])]
         language = str(row.get("language") or "cpp")
@@ -2616,6 +3475,8 @@ def _resolver_profiles_from_store(
         else:
             continue
         profiles_by_id[profile.id] = profile
+        if row_id and row_id != profile.id:
+            profiles_by_id[row_id] = profile
     if selected_ids is not None:
         unknown_ids = [profile_id for profile_id in selected_ids if profile_id not in profiles_by_id]
         if unknown_ids:
@@ -2627,6 +3488,80 @@ def _resolver_profiles_from_store(
             key=lambda profile: ({"linux-amdgpu": 0, "amd-mxgpu": 1}.get(profile.id, 2), profile.id),
         )
     )
+
+
+def _resolver_profiles_for_corpus(
+    resolver_profiles: Iterable[ResolverProfile],
+    corpus_id: str,
+    repo: str,
+) -> List[ResolverProfile]:
+    profiles = list(resolver_profiles)
+    if not profiles:
+        return []
+    ranked = sorted(
+        enumerate(profiles),
+        key=lambda item: (
+            0 if _resolver_profile_matches_corpus(item[1], corpus_id, repo) else 1,
+            item[0],
+        ),
+    )
+    return [profile for _index, profile in ranked]
+
+
+def _resolver_profile_matches_corpus(profile: ResolverProfile, corpus_id: str, repo: str) -> bool:
+    scope = _resolver_profile_scope_tokens(corpus_id, repo)
+    for value in (profile.id, *profile.aliases):
+        token = _resolver_profile_scope_token(str(value))
+        if token and token in scope:
+            return True
+    return False
+
+
+def _resolver_profile_scope_tokens(*values: str) -> set[str]:
+    tokens: set[str] = set()
+    for value in values:
+        text = str(value or "")
+        for part in [text, *re.split(r"[^A-Za-z0-9_+-]+", text)]:
+            token = _resolver_profile_scope_token(part)
+            if token:
+                tokens.add(token)
+    return tokens
+
+
+def _resolver_profile_scope_token(value: str) -> str:
+    return re.sub(r"[^a-z0-9]+", "-", str(value or "").lower()).strip("-")
+
+
+def _resolver_profile_aliases_from_store_row(row: Mapping[str, object]) -> List[str]:
+    aliases = [str(row.get("id") or "")]
+    profile = _resolver_profile_from_store_row(row)
+    if profile is not None:
+        aliases.append(profile.id)
+        aliases.extend(profile.aliases)
+    return _dedupe_graph_string_values(aliases)
+
+
+def _resolver_profile_from_store_row(row: Mapping[str, object]) -> Optional[ResolverProfile]:
+    row_id = str(row.get("id") or "")
+    wrappers = [str(wrapper) for wrapper in row.get("wrappers", [])]
+    language = str(row.get("language") or "cpp")
+    access = str(row.get("strategy") or "reference")
+    config = row.get("config", {})
+    config_path = _resolve_resolver_config_path(str(row.get("path") or ""))
+    try:
+        if isinstance(config, Mapping) and config:
+            return resolver_profile_from_config(
+                config,
+                fallback_id=row_id,
+                fallback_language=language,
+                fallback_wrappers=wrappers,
+                fallback_strategy=access,
+            )
+        if config_path.exists():
+            return load_resolver_profile(config_path)
+    except Exception:
+        return None
+    return None
 
 
 def _deterministic_embedding(text: str) -> List[float]:
@@ -2657,6 +3592,78 @@ def _is_symbol_like(identifier: str) -> bool:
     return "_" in identifier or identifier.startswith(("reg", "mm")) or identifier.isupper()
 
 
+def _is_symbol_like_for_source(identifier: str, source_type: str) -> bool:
+    if source_type == "register":
+        return _is_register_header_symbol_like(identifier)
+    return _is_symbol_like(identifier)
+
+
+def _is_register_header_symbol_like(identifier: str) -> bool:
+    if is_resolver_wrapper_name(identifier):
+        return False
+    if len(identifier) <= 2:
+        return False
+    if identifier.lower() in {
+        "adapt",
+        "data",
+        "define",
+        "else",
+        "endif",
+        "if",
+        "ifdef",
+        "ifndef",
+        "local",
+        "reg",
+        "ret",
+        "tmp",
+        "u32",
+        "uint32_t",
+        "value",
+    }:
+        return False
+    if "->" in identifier:
+        return False
+    for prefix in ("reg", "mm", "smn"):
+        if identifier.startswith(prefix) and len(identifier) > len(prefix) and identifier[len(prefix)].isupper():
+            return True
+    upper = identifier.upper()
+    if not re.fullmatch(r"[A-Z][A-Z0-9_]*", identifier):
+        return False
+    if "__" in identifier and re.search(r"(?:__|_)(MASK|SHIFT|DEFAULT)$", upper):
+        return True
+    if "_" not in identifier:
+        return False
+    register_hints = (
+        "ADDR",
+        "BASE",
+        "CNTL",
+        "CONTROL",
+        "CP_HQD",
+        "CP_MQD",
+        "DOORBELL",
+        "GRBM",
+        "HQD",
+        "IH_",
+        "MMHUB",
+        "MQD",
+        "PTR",
+        "QUEUE",
+        "RESET",
+        "RLC",
+        "RPTR",
+        "SDMA",
+        "SIZE",
+        "SMN",
+        "SOFT_RESET",
+        "SQ_",
+        "SRBM",
+        "STATUS",
+        "VMID",
+        "WPTR",
+    )
+    return any(hint in upper for hint in register_hints)
+
+
 def _source_type_for_path(path: Path) -> str:
     suffix = path.suffix.lower()
     normalized = path.as_posix().lower()
@@ -2683,12 +3690,21 @@ def _entity_type_for_symbol(symbol: str) -> str:
         return "field"
     if symbol.startswith(("WREG", "RREG", "REG_")):
         return "macro"
-    if symbol.startswith(("reg", "mm")) or re.search(r"CNTL|STATUS|RESET|BASE|SIZE|VMID|DOORBELL", symbol):
+    if symbol.startswith(("reg", "mm", "smn")) or re.search(
+        r"CNTL|CONTROL|STATUS|RESET|BASE|SIZE|VMID|DOORBELL|HQD|MQD|WPTR|RPTR|QUEUE", symbol
+    ):
         return "register"
     return "function"
 
 
 def _entity_type_for_source_symbol(source_type: str, symbol: str) -> str:
+    if source_type == "register":
+        if re.search(r"ENABLE|DISABLE|PENDING|MASK|SHIFT|RESET_REQUEST|INVALIDATE", symbol):
+            return "field"
+        if symbol.startswith(("WREG", "RREG", "REG_")):
+            return "macro"
+        if _is_register_header_symbol_like(symbol):
+            return "register"
     if source_type in {"doc", "pdf"} and _is_symbol_like(symbol):
         return _entity_type_for_symbol(symbol)
     if source_type == "pdf":
@@ -2775,7 +3791,7 @@ def _relation_for_terms(text: str, src: str, dst: str) -> str:
         return "writes"
     if re.search(r"\bRREG", text):
         return "reads"
-    return "mentions"
+    return "relates_to"
 
 
 def _snippet_for_symbol(text: str, symbol: str) -> str:
@@ -2789,7 +3805,34 @@ def _snippet_for_symbol(text: str, symbol: str) -> str:
 
 
 def _query_tokens(query: str) -> List[str]:
-    stop_words = {"which", "what", "where", "show", "the", "and", "for", "with", "before", "who", "write", "writes", "read", "reads"}
+    stop_words = {
+        "which",
+        "what",
+        "where",
+        "show",
+        "the",
+        "and",
+        "for",
+        "with",
+        "before",
+        "who",
+        "write",
+        "writes",
+        "read",
+        "reads",
+        "will",
+        "would",
+        "can",
+        "could",
+        "should",
+        "does",
+        "do",
+        "did",
+        "reg",
+        "regs",
+        "register",
+        "registers",
+    }
     return [
         token
         for token in re.split(r"[^A-Za-z0-9_]+", query.lower())
@@ -2797,7 +3840,73 @@ def _query_tokens(query: str) -> List[str]:
     ]
 
 
-def _evidence_score(row: Dict[str, object], tokens: List[str], fts_chunk_ids: set[int]) -> float:
+def _query_symbol_prefixes(query: str) -> List[str]:
+    prefixes: List[str] = []
+    for match in re.finditer(r"(?<![A-Za-z0-9_])([A-Za-z][A-Za-z0-9_]*\*)(?![A-Za-z0-9_])", query):
+        raw_prefix = match.group(1)[:-1].strip()
+        if len(raw_prefix.rstrip("_")) <= 2:
+            continue
+        for prefix in _query_symbol_prefix_variants(raw_prefix):
+            lowered = prefix.lower()
+            if lowered not in prefixes:
+                prefixes.append(lowered)
+    return prefixes
+
+
+def _query_symbol_prefix_variants(prefix: str) -> List[str]:
+    variants = [prefix]
+    canonical = _canonical_graph_seed_symbol(prefix)
+    if canonical not in variants:
+        variants.append(canonical)
+    return variants
+
+
+def _query_token_looks_like_symbol(token: str) -> bool:
+    text = str(token).strip()
+    return bool(text and ("_" in text or re.search(r"\d", text)))
+
+
+def _row_matches_query_symbol_prefixes(row: Dict[str, object], symbol_prefixes: List[str]) -> bool:
+    symbol = str(row.get("symbol") or "")
+    symbol_variants = [symbol, _canonical_graph_seed_symbol(symbol)]
+    if any(
+        variant.lower().startswith(prefix)
+        for variant in symbol_variants
+        for prefix in symbol_prefixes
+    ):
+        return True
+    haystack = " ".join(
+        str(row.get(key, ""))
+        for key in ("path", "snippet", "resolved_chain")
+    ).lower()
+    return any(prefix in haystack for prefix in symbol_prefixes)
+
+
+def _query_access_intents(query: str) -> set[str]:
+    lowered = query.lower()
+    intents: set[str] = set()
+    if re.search(r"\bread(?:s|ing|er|ers)?\b", lowered):
+        intents.add("read")
+    if re.search(r"\bwrite(?:s|ing|r|rs)?\b", lowered):
+        intents.add("write")
+    return intents
+
+
+def _access_type_matches_intents(access_type: str, access_intents: set[str]) -> bool:
+    normalized = access_type.lower().replace("-", "_")
+    if "read" in access_intents and normalized in {"read", "reads", "field_read", "read_modify_write"}:
+        return True
+    if "write" in access_intents and normalized in {"write", "writes", "field_set", "field_write", "read_modify_write"}:
+        return True
+    return False
+
+
+def _evidence_score(
+    row: Dict[str, object],
+    tokens: List[str],
+    fts_chunk_ids: set[int],
+    access_intents: Optional[set[str]] = None,
+) -> float:
     if not tokens:
         return 1.0
     haystack = " ".join(str(row.get(key, "")) for key in ("symbol", "path", "snippet", "resolved_chain")).lower()
@@ -2808,7 +3917,11 @@ def _evidence_score(row: Dict[str, object], tokens: List[str], fts_chunk_ids: se
     if token_hits == 0 and fts_hit == 0:
         return 0.0
     code_priority = 1.0 if row.get("source_type") == "code" else 0.0
-    access_priority = 1.0 if row.get("access_type") in {"field_set", "write", "read_modify_write"} else 0.0
+    access_type = str(row.get("access_type") or "")
+    if access_intents:
+        access_priority = 2.0 if _access_type_matches_intents(access_type, access_intents) else 0.0
+    else:
+        access_priority = 1.0 if access_type in {"field_set", "write", "read", "read_modify_write"} else 0.0
     return token_hits + (symbol_hits * 3) + fts_hit + code_priority + access_priority
 
 
@@ -2825,13 +3938,9 @@ def _select_diverse_rows(rows: List[Dict[str, Any]], limit: int) -> List[Dict[st
         return []
     selected = rows[:limit]
     selected_ids = {row.get("id") for row in selected}
-    protected_ids = {
-        row.get("id")
-        for row in selected
-        if str(row.get("source_type") or row.get("source") or "") in {"register", "doc", "pdf"}
-    }
     selected_sources = {str(row.get("source_type") or row.get("source") or "") for row in selected}
-    for source_type in ("register", "doc", "pdf"):
+    protected_ids = _representative_source_row_ids(selected, ("code", "register", "doc", "pdf"))
+    for source_type in ("code", "register", "doc", "pdf"):
         if source_type in selected_sources:
             continue
         candidate = next(
@@ -2848,19 +3957,48 @@ def _select_diverse_rows(rows: List[Dict[str, Any]], limit: int) -> List[Dict[st
         if len(selected) < limit:
             selected.append(candidate)
         else:
-            replace_index = next(
-                (
-                    index
-                    for index in range(len(selected) - 1, -1, -1)
-                    if selected[index].get("id") not in protected_ids
-                ),
-                len(selected) - 1,
-            )
+            replace_index = _diverse_replacement_index(selected, protected_ids)
             selected[replace_index] = candidate
         selected_ids = {row.get("id") for row in selected}
         protected_ids.add(candidate.get("id"))
         selected_sources.add(source_type)
     return selected
+
+
+def _representative_source_row_ids(
+    rows: List[Dict[str, Any]],
+    source_types: Iterable[str],
+) -> set[object]:
+    protected: set[object] = set()
+    for source_type in source_types:
+        representative = next(
+            (
+                row
+                for row in rows
+                if str(row.get("source_type") or row.get("source") or "") == source_type
+            ),
+            None,
+        )
+        if representative is not None:
+            protected.add(representative.get("id"))
+    return protected
+
+
+def _diverse_replacement_index(rows: List[Dict[str, Any]], protected_ids: set[object]) -> int:
+    source_counts: Dict[str, int] = {}
+    for row in rows:
+        source_type = str(row.get("source_type") or row.get("source") or "")
+        source_counts[source_type] = source_counts.get(source_type, 0) + 1
+    for index in range(len(rows) - 1, -1, -1):
+        if rows[index].get("id") in protected_ids:
+            continue
+        source_type = str(rows[index].get("source_type") or rows[index].get("source") or "")
+        if source_counts.get(source_type, 0) > 1:
+            return index
+    for index in range(len(rows) - 1, -1, -1):
+        if rows[index].get("id") not in protected_ids:
+            return index
+    return len(rows) - 1
 
 
 def _json_ready(row: Dict[str, object]) -> Dict[str, Any]:
@@ -2877,16 +4015,162 @@ def _edge_with_weight(edge: Dict[str, object]) -> Dict[str, Any]:
     return result
 
 
+def _graph_edge_payload(edge: Mapping[str, object], compact: bool = False) -> Dict[str, Any]:
+    result = _edge_with_weight(dict(edge))
+    if not compact:
+        return result
+    attr = result.get("attr")
+    if isinstance(attr, Mapping):
+        compact_attr: Dict[str, Any] = {}
+        for key in (
+            "provider",
+            "providers",
+            "model",
+            "models",
+            "job_id",
+            "job_ids",
+            "dispatch",
+            "callback_candidate_count",
+            "callback_ambiguous",
+            "call_kind",
+            "original_relation",
+            "evidence",
+        ):
+            value = attr.get(key)
+            if value not in ("", None, [], {}):
+                compact_attr[key] = value
+        sources = _compact_graph_source_records(attr.get("source", attr.get("sources")), limit=2)
+        if sources:
+            compact_attr["source"] = sources
+        result["attr"] = compact_attr
+    return result
+
+
+def _compact_graph_source_records(value: object, limit: int = 4) -> List[Dict[str, Any]]:
+    if not isinstance(value, list):
+        return []
+    records: List[Dict[str, Any]] = []
+    seen_corpora: set[str] = set()
+    for item in value:
+        if not isinstance(item, Mapping):
+            continue
+        record = {
+            key: item.get(key)
+            for key in ("corpus_id", "repo", "path", "line_start", "line_end", "page", "provider", "model", "job_id")
+            if item.get(key) not in ("", None, [], {})
+        }
+        if record:
+            corpus_key = str(record.get("corpus_id") or record.get("repo") or "")
+            if corpus_key and corpus_key in seen_corpora and len(records) >= limit:
+                continue
+            records.append(record)
+            if corpus_key:
+                seen_corpora.add(corpus_key)
+        if len(records) >= limit and len(seen_corpora) >= min(limit, 2):
+            break
+    return records[:limit]
+
+
+def _compact_graph_attr(attr: Mapping[str, Any]) -> Dict[str, Any]:
+    compact = dict(attr)
+    sources = _compact_graph_source_records(compact.get("source"))
+    if sources:
+        page = compact.get("page")
+        if page not in ("", None):
+            sources = [{**source, **({} if source.get("page") not in ("", None) else {"page": page})} for source in sources]
+        compact["source"] = sources
+    elif "source" in compact:
+        compact.pop("source", None)
+    raw_implementations = compact.get("raw_implementations")
+    if isinstance(raw_implementations, list):
+        compact["raw_implementation_count"] = len(raw_implementations)
+        compact["concept_implementations"] = _compact_concept_implementations(raw_implementations)
+        compact.pop("raw_implementations", None)
+    for key in (
+        "fields",
+        "resolver_wrappers",
+        "ip_versions",
+        "inputs",
+        "outputs",
+        "constraints",
+        "providers",
+        "models",
+        "job_ids",
+        "resolver_profile_ids",
+        "raw_function_names",
+    ):
+        value = compact.get(key)
+        if isinstance(value, list):
+            compact[f"{key}_count"] = len(value)
+            compact[key] = value[:12]
+        if compact.get(key) in (None, "", [], {}):
+            compact.pop(key, None)
+            compact.pop(f"{key}_count", None)
+    return compact
+
+
+def _compact_concept_implementations(value: object, limit: int = 12) -> List[Dict[str, Any]]:
+    if not isinstance(value, list):
+        return []
+    records: List[Dict[str, Any]] = []
+    seen: set[Tuple[str, str, str]] = set()
+    for item in value:
+        if not isinstance(item, Mapping):
+            continue
+        function_name = str(
+            item.get("function_name") or item.get("raw_function_name") or item.get("name") or ""
+        ).strip()
+        path = str(item.get("path") or "").strip()
+        line_start = item.get("line_start")
+        key = (function_name, path, "")
+        if not function_name or key in seen:
+            continue
+        record = {
+            field: item.get(field)
+            for field in (
+                "function_name",
+                "raw_function_name",
+                "path",
+                "line_start",
+                "line_end",
+                "ip_block",
+                "ip",
+                "ip_version",
+                "corpus_id",
+                "repo",
+            )
+            if item.get(field) not in ("", None, [], {})
+        }
+        if not record.get("function_name"):
+            record["function_name"] = function_name
+        record.pop("raw_function_name", None)
+        records.append(record)
+        seen.add(key)
+        if len(records) >= limit:
+            break
+    return records
+
+
 def _node_with_kind(node_id: str) -> Dict[str, Any]:
     return {"id": node_id, "kind": _entity_type_for_symbol(node_id), "weight": 1}
 
 
-def _graph_node_payload(node: Mapping[str, Any]) -> Dict[str, Any]:
+def _product_fallback_node(node_id: str) -> Optional[Dict[str, Any]]:
+    node = _node_with_kind(node_id)
+    if node["kind"] in {"function", "register", "doc"}:
+        return node
+    return None
+
+
+def _graph_node_payload(node: Mapping[str, Any], compact: bool = False) -> Dict[str, Any]:
     node_id = str(node["id"])
     payload = {**_node_with_kind(node_id), **dict(node)}
     payload["id"] = node_id
     payload["kind"] = str(node.get("kind") or payload["kind"])
     payload["weight"] = node.get("weight", 1)
+    if compact:
+        attr = dict(payload.get("attr") if isinstance(payload.get("attr"), Mapping) else {})
+        payload["attr"] = _compact_graph_attr(attr)
     return payload
 
 
@@ -2930,7 +4214,8 @@ def _sqlite_table_exists(db_path: Path, table_name: str) -> bool:
         return False
     con = None
     try:
-        con = sqlite3.connect(f"file:{db_path}?mode=ro", uri=True)
+        con = sqlite3.connect(str(db_path), timeout=5.0)
+        con.execute("pragma query_only = on")
         row = con.execute(
             "select count(*) from sqlite_master where type='table' and name=?",
             (table_name,),
@@ -2956,6 +4241,7 @@ def main(argv: Optional[List[str]] = None) -> int:
     query_parser.add_argument("--q", required=True)
     query_parser.add_argument("--ip-block", default="")
     query_parser.add_argument("--asic", default="")
+    query_parser.add_argument("--compact-graph", action="store_true")
 
     graph_parser = subparsers.add_parser("graph")
     graph_parser.add_argument("--db", default=str(DEFAULT_DB))
@@ -2963,6 +4249,7 @@ def main(argv: Optional[List[str]] = None) -> int:
     graph_parser.add_argument("--hops", type=int)
     graph_parser.add_argument("--limit", type=int)
     graph_parser.add_argument("--all", action="store_true")
+    graph_parser.add_argument("--function-view", choices=["concept", "implementation"], default="concept")
     graph_parser.add_argument("--limits-config", "--budget-config", dest="limits_config", default=str(DEFAULT_WORKBENCH_LIMITS_PATH))
 
     corpora_parser = subparsers.add_parser("corpora")
@@ -2981,15 +4268,21 @@ def main(argv: Optional[List[str]] = None) -> int:
     if args.command == "index":
         payload = index_configured_corpora(Path(args.config), Path(args.db))
     elif args.command == "query":
-        payload = query_evidence(Path(args.db), args.q, ip_block=args.ip_block, asic_or_generation=args.asic)
+        payload = query_evidence(
+            Path(args.db),
+            args.q,
+            ip_block=args.ip_block,
+            asic_or_generation=args.asic,
+            compact_graph=args.compact_graph,
+        )
     elif args.command == "graph":
         limits = load_workbench_limits(Path(args.limits_config))
         hops = args.hops if args.hops is not None else limits.int_value("graph", "default_hops", minimum=1)
         edge_limit = args.limit if args.limit is not None else limits.int_value("graph", "edge_budget", minimum=1)
         payload = (
-            expand_query_graph(Path(args.db), args.symbol, hops=hops or 1)
+            expand_query_graph(Path(args.db), args.symbol, hops=hops or 1, function_view=args.function_view)
             if args.symbol
-            else global_graph(Path(args.db), limit=edge_limit, all_edges=args.all)
+            else global_graph(Path(args.db), limit=edge_limit, all_edges=args.all, function_view=args.function_view)
         )
     elif args.command == "corpora":
         payload = {"corpora": list_indexed_corpora(Path(args.db), Path(args.config))}

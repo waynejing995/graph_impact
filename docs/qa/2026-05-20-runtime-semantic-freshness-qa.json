@@ -1,0 +1,77 @@
+{
+  "source": "asip.runtime_semantic_freshness_qa",
+  "generated_at": "2026-05-20T12:09:23Z",
+  "gate_status": "pass",
+  "db_path": "data/asip.db",
+  "latest_index_job_id": 10,
+  "latest_graph_rebuild_job_id": 13,
+  "latest_semantic_edges_job_id": 18,
+  "latest_doc_nodes_job_id": 20,
+  "summary": {
+    "checks": 7,
+    "passed": 7,
+    "failed": 0
+  },
+  "checks": [
+    {
+      "id": "storage_runtime_stale_semantic_filter",
+      "status": "pass",
+      "message": "Storage graph runtime filters semantic rows whose provider job is older than the latest succeeded index or graph rebuild job."
+    },
+    {
+      "id": "storage_runtime_fresh_semantic_keep",
+      "status": "pass",
+      "message": "Fresh semantic rows from matching provider job 18 remain visible in global product graphs."
+    },
+    {
+      "id": "storage_runtime_fresh_doc_node_keep",
+      "status": "pass",
+      "message": "Fresh doc-node rows from matching doc_nodes_batch job 20 remain visible in global product graphs."
+    },
+    {
+      "id": "storage_runtime_extractor_job_kind_binding",
+      "status": "pass",
+      "message": "Runtime semantic graph rows must use a job kind compatible with their extractor, and semantic_edges/doc_nodes extractor rows without job provenance stay hidden."
+    },
+    {
+      "id": "storage_runtime_provider_mismatch_filter",
+      "status": "pass",
+      "message": "Semantic rows generated under previous provider settings are not exposed by runtime graph when current provider settings differ."
+    },
+    {
+      "id": "real_db_global_graph_semantic_leak_probe",
+      "status": "pass",
+      "message": "global_graph(data/asip.db, all_edges=True) returned 23029 runtime edges with stage counts {'deterministic': 23010, 'mixed': 16, 'semantic': 3}."
+    },
+    {
+      "id": "real_db_query_graph_semantic_leak_probe",
+      "status": "pass",
+      "message": "query_evidence(data/asip.db, 'GCVM_L2_CNTL ENABLE_L2_CACHE', limit=8) returned 8 rows and 0 query graph edges with stage counts {}."
+    }
+  ],
+  "real_db_probe": {
+    "global_edges": 23029,
+    "global_stage_counts": {
+      "deterministic": 23010,
+      "mixed": 16,
+      "semantic": 3
+    },
+    "semantic_edges_visible": 3,
+    "mixed_edges_visible": 16,
+    "query": "GCVM_L2_CNTL ENABLE_L2_CACHE",
+    "query_rows": 8,
+    "query_graph_edges": 0,
+    "query_graph_stage_counts": {}
+  },
+  "test_results": [
+    {
+      "command": "PYTHONPATH=packages/core/src:packages/core/tests:. python3 -m unittest packages.core.tests.test_acceptance_runner.AcceptanceRunnerTests.test_semantic_edge_provenance_passes_when_current_edges_supersede_stale_edges -v",
+      "result": "OK"
+    },
+    {
+      "command": "PYTHONPATH=packages/core/src:packages/core/tests:. python3 -m unittest packages.core.tests.test_completion_gate.CompletionGateTests.test_completion_gate_allows_pass_status_with_superseded_stale_semantic_edge_count -v",
+      "result": "OK"
+    }
+  ],
+  "completion_note": "This artifact is rebound to current semantic_edges_batch job 18 and doc_nodes_batch job 20 after live provider batch hardening. Historical stale job 4/5 rows remain counted but are superseded by current fresh edges."
+}

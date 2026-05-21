@@ -1,0 +1,3814 @@
+{
+  "config": {
+    "configFile": "/Volumes/data/User/wayne/Code/graph_impact/apps/web/playwright.config.ts",
+    "rootDir": "/Volumes/data/User/wayne/Code/graph_impact/apps/web/tests",
+    "forbidOnly": false,
+    "fullyParallel": false,
+    "globalSetup": null,
+    "globalTeardown": null,
+    "globalTimeout": 0,
+    "grep": {},
+    "grepInvert": null,
+    "maxFailures": 0,
+    "metadata": {
+      "actualWorkers": 1
+    },
+    "preserveOutput": "always",
+    "projects": [
+      {
+        "outputDir": "/Volumes/data/User/wayne/Code/graph_impact/apps/web/test-results",
+        "repeatEach": 1,
+        "retries": 0,
+        "metadata": {
+          "actualWorkers": 1
+        },
+        "id": "chromium",
+        "name": "chromium",
+        "testDir": "/Volumes/data/User/wayne/Code/graph_impact/apps/web/tests",
+        "testIgnore": [],
+        "testMatch": [
+          "**/*.@(spec|test).?(c|m)[jt]s?(x)"
+        ],
+        "timeout": 30000
+      }
+    ],
+    "quiet": false,
+    "reporter": [
+      [
+        "json"
+      ]
+    ],
+    "reportSlowTests": {
+      "max": 5,
+      "threshold": 300000
+    },
+    "shard": null,
+    "tags": [],
+    "updateSnapshots": "missing",
+    "updateSourceMethod": "patch",
+    "version": "1.60.0",
+    "workers": 1,
+    "webServer": null
+  },
+  "suites": [
+    {
+      "title": "visual-anchor-routes.spec.ts",
+      "file": "visual-anchor-routes.spec.ts",
+      "column": 0,
+      "line": 0,
+      "specs": [
+        {
+          "title": "graph route renders API-backed weighted relation graph",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 30000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "chromium",
+              "projectName": "chromium",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 1031,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-05-21T01:17:47.792Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "24700302c2227fb49bcf-52c41637eec5cc1d2c4c",
+          "file": "visual-anchor-routes.spec.ts",
+          "line": 47,
+          "column": 1
+        },
+        {
+          "title": "graph route requests global graph without a default seed and renders API_GLOBAL nodes",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 30000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "chromium",
+              "projectName": "chromium",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 824,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-05-21T01:17:48.827Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "24700302c2227fb49bcf-d11715ab934d04506a66",
+          "file": "visual-anchor-routes.spec.ts",
+          "line": 97,
+          "column": 1
+        },
+        {
+          "title": "graph route keeps a global node set instead of collapsing to a tiny seed preview",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 30000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "chromium",
+              "projectName": "chromium",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 812,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-05-21T01:17:49.654Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "24700302c2227fb49bcf-94686826909260d74b9c",
+          "file": "visual-anchor-routes.spec.ts",
+          "line": 147,
+          "column": 1
+        },
+        {
+          "title": "graph route does not truncate large API graph payloads in the canvas layer",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 30000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "chromium",
+              "projectName": "chromium",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 817,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-05-21T01:17:50.470Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "24700302c2227fb49bcf-0b92768cc216948d7e14",
+          "file": "visual-anchor-routes.spec.ts",
+          "line": 181,
+          "column": 1
+        },
+        {
+          "title": "desktop and mobile screenshots keep the workbench styled",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 30000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "chromium",
+              "projectName": "chromium",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 1001,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-05-21T01:17:51.291Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "24700302c2227fb49bcf-21fdea8cac10e1e59276",
+          "file": "visual-anchor-routes.spec.ts",
+          "line": 218,
+          "column": 1
+        },
+        {
+          "title": "theme toggle supports light and dark modes by default",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 30000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "chromium",
+              "projectName": "chromium",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 757,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-05-21T01:17:52.296Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "24700302c2227fb49bcf-e3c554d4db2e79a766c4",
+          "file": "visual-anchor-routes.spec.ts",
+          "line": 233,
+          "column": 1
+        },
+        {
+          "title": "light theme persists across route navigation",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 30000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "chromium",
+              "projectName": "chromium",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 1412,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-05-21T01:17:53.057Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "24700302c2227fb49bcf-1582b340a967552384d0",
+          "file": "visual-anchor-routes.spec.ts",
+          "line": 243,
+          "column": 1
+        },
+        {
+          "title": "all routes share the canonical anchor chrome baseline",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 30000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "chromium",
+              "projectName": "chromium",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 12274,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-05-21T01:17:54.475Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "24700302c2227fb49bcf-5dc3d3bbfcd69e067d28",
+          "file": "visual-anchor-routes.spec.ts",
+          "line": 256,
+          "column": 1
+        },
+        {
+          "title": "graph visualization stays visible in light and dark modes",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 30000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "chromium",
+              "projectName": "chromium",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 1082,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-05-21T01:18:06.754Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "24700302c2227fb49bcf-db199c2b704b02407258",
+          "file": "visual-anchor-routes.spec.ts",
+          "line": 293,
+          "column": 1
+        }
+      ],
+      "suites": [
+        {
+          "title": "visual anchor route readiness",
+          "file": "visual-anchor-routes.spec.ts",
+          "line": 17,
+          "column": 6,
+          "specs": [
+            {
+              "title": "evidence-workbench has a real page for anchor evidence-workbench.png",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 30000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "chromium",
+                  "projectName": "chromium",
+                  "results": [
+                    {
+                      "workerIndex": 0,
+                      "parallelIndex": 0,
+                      "status": "passed",
+                      "duration": 1158,
+                      "errors": [],
+                      "stdout": [],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-05-21T01:17:40.505Z",
+                      "annotations": [],
+                      "attachments": []
+                    }
+                  ],
+                  "status": "expected"
+                }
+              ],
+              "id": "24700302c2227fb49bcf-f4b1460831841970847e",
+              "file": "visual-anchor-routes.spec.ts",
+              "line": 19,
+              "column": 5
+            },
+            {
+              "title": "graph-explorer has a real page for anchor graph-explorer.png",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 30000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "chromium",
+                  "projectName": "chromium",
+                  "results": [
+                    {
+                      "workerIndex": 0,
+                      "parallelIndex": 0,
+                      "status": "passed",
+                      "duration": 1730,
+                      "errors": [],
+                      "stdout": [],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-05-21T01:17:42.029Z",
+                      "annotations": [],
+                      "attachments": []
+                    }
+                  ],
+                  "status": "expected"
+                }
+              ],
+              "id": "24700302c2227fb49bcf-a5309a2fd2e4ece4e2a7",
+              "file": "visual-anchor-routes.spec.ts",
+              "line": 19,
+              "column": 5
+            },
+            {
+              "title": "corpus has a real page for anchor corpus.png",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 30000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "chromium",
+                  "projectName": "chromium",
+                  "results": [
+                    {
+                      "workerIndex": 0,
+                      "parallelIndex": 0,
+                      "status": "passed",
+                      "duration": 923,
+                      "errors": [],
+                      "stdout": [],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-05-21T01:17:43.766Z",
+                      "annotations": [],
+                      "attachments": []
+                    }
+                  ],
+                  "status": "expected"
+                }
+              ],
+              "id": "24700302c2227fb49bcf-284fc38be367c72b49c8",
+              "file": "visual-anchor-routes.spec.ts",
+              "line": 19,
+              "column": 5
+            },
+            {
+              "title": "resolver-profiles has a real page for anchor resolver-profiles.png",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 30000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "chromium",
+                  "projectName": "chromium",
+                  "results": [
+                    {
+                      "workerIndex": 0,
+                      "parallelIndex": 0,
+                      "status": "passed",
+                      "duration": 1207,
+                      "errors": [],
+                      "stdout": [],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-05-21T01:17:44.694Z",
+                      "annotations": [],
+                      "attachments": []
+                    }
+                  ],
+                  "status": "expected"
+                }
+              ],
+              "id": "24700302c2227fb49bcf-b136e0d24cc35965cb79",
+              "file": "visual-anchor-routes.spec.ts",
+              "line": 19,
+              "column": 5
+            },
+            {
+              "title": "acceptance-tests has a real page for anchor acceptance-tests.png",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 30000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "chromium",
+                  "projectName": "chromium",
+                  "results": [
+                    {
+                      "workerIndex": 0,
+                      "parallelIndex": 0,
+                      "status": "passed",
+                      "duration": 993,
+                      "errors": [],
+                      "stdout": [],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-05-21T01:17:45.906Z",
+                      "annotations": [],
+                      "attachments": []
+                    }
+                  ],
+                  "status": "expected"
+                }
+              ],
+              "id": "24700302c2227fb49bcf-abfec9ef0e8b1ae8baaa",
+              "file": "visual-anchor-routes.spec.ts",
+              "line": 19,
+              "column": 5
+            },
+            {
+              "title": "settings has a real page for anchor settings.png",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 30000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "chromium",
+                  "projectName": "chromium",
+                  "results": [
+                    {
+                      "workerIndex": 0,
+                      "parallelIndex": 0,
+                      "status": "passed",
+                      "duration": 884,
+                      "errors": [],
+                      "stdout": [],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-05-21T01:17:46.904Z",
+                      "annotations": [],
+                      "attachments": []
+                    }
+                  ],
+                  "status": "expected"
+                }
+              ],
+              "id": "24700302c2227fb49bcf-95c6ea952c2d1838ed25",
+              "file": "visual-anchor-routes.spec.ts",
+              "line": 19,
+              "column": 5
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "title": "workbench-api.spec.ts",
+      "file": "workbench-api.spec.ts",
+      "column": 0,
+      "line": 0,
+      "specs": [
+        {
+          "title": "corpora API reads configured raw corpus state",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 30000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "chromium",
+              "projectName": "chromium",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 99,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-05-21T01:18:07.856Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "9a10889926602f8dec1f-10adbf37f2aa068c4cd1",
+          "file": "workbench-api.spec.ts",
+          "line": 9,
+          "column": 1
+        },
+        {
+          "title": "corpora API persists user-added corpus state",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 30000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "chromium",
+              "projectName": "chromium",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 175,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-05-21T01:18:07.961Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "9a10889926602f8dec1f-e71fcb694a9c20e8ea8e",
+          "file": "workbench-api.spec.ts",
+          "line": 35,
+          "column": 1
+        },
+        {
+          "title": "corpora API persists user-added corpus subfolder filters",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 30000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "chromium",
+              "projectName": "chromium",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 174,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-05-21T01:18:08.139Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "9a10889926602f8dec1f-83651ac8cb4f7a7cb0ab",
+          "file": "workbench-api.spec.ts",
+          "line": 59,
+          "column": 1
+        },
+        {
+          "title": "corpora API rejects unsafe subfolder filters outside the corpus root",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 30000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "chromium",
+              "projectName": "chromium",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 7,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-05-21T01:18:08.317Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "9a10889926602f8dec1f-189130192ed60b5aec0e",
+          "file": "workbench-api.spec.ts",
+          "line": 112,
+          "column": 1
+        },
+        {
+          "title": "index API honors user-added corpus subfolder filters",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 30000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "chromium",
+              "projectName": "chromium",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 1379,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-05-21T01:18:08.327Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "9a10889926602f8dec1f-6c1f70f388152681d886",
+          "file": "workbench-api.spec.ts",
+          "line": 133,
+          "column": 1
+        },
+        {
+          "title": "corpus API indexes a clean named DB and returns query graph provenance for the new corpus",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 30000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "chromium",
+              "projectName": "chromium",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 369,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-05-21T01:18:09.709Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "9a10889926602f8dec1f-25dd9f5014283bacdb7d",
+          "file": "workbench-api.spec.ts",
+          "line": 194,
+          "column": 1
+        },
+        {
+          "title": "index API passes selected resolver profiles into the indexing job",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 30000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "chromium",
+              "projectName": "chromium",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 886,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-05-21T01:18:10.081Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "9a10889926602f8dec1f-fa38f89b2c1e8548993e",
+          "file": "workbench-api.spec.ts",
+          "line": 281,
+          "column": 1
+        },
+        {
+          "title": "query API ranks live SQLite evidence and graph edges for a free-form query",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 30000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "chromium",
+              "projectName": "chromium",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 391,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-05-21T01:18:10.971Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "9a10889926602f8dec1f-aeeaa1e8b0fce5b44388",
+          "file": "workbench-api.spec.ts",
+          "line": 359,
+          "column": 1
+        },
+        {
+          "title": "query API treats natural language register wildcards as graphable symbol prefixes",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 30000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "chromium",
+              "projectName": "chromium",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 311,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-05-21T01:18:11.366Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "9a10889926602f8dec1f-5e7add3f27776e54a503",
+          "file": "workbench-api.spec.ts",
+          "line": 405,
+          "column": 1
+        },
+        {
+          "title": "query API exposes matching PDF section node with page provenance",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 30000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "chromium",
+              "projectName": "chromium",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 288,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-05-21T01:18:11.680Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "9a10889926602f8dec1f-29fb6c2f916ae63e18b1",
+          "file": "workbench-api.spec.ts",
+          "line": 451,
+          "column": 1
+        },
+        {
+          "title": "Web BFF and MCP agree for the same SQLite query, evidence row, and entity",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 30000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "chromium",
+              "projectName": "chromium",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 2284,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-05-21T01:18:11.971Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "9a10889926602f8dec1f-a78aaf57f589d75082d3",
+          "file": "workbench-api.spec.ts",
+          "line": 488,
+          "column": 1
+        },
+        {
+          "title": "query API applies ASIC and IP metadata filters",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 30000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "chromium",
+              "projectName": "chromium",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 350,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-05-21T01:18:14.259Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "9a10889926602f8dec1f-4ceef95e6b0cfe52a053",
+          "file": "workbench-api.spec.ts",
+          "line": 563,
+          "column": 1
+        },
+        {
+          "title": "query API does not implicitly index or fall back when reading an explicit empty DB",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 30000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "chromium",
+              "projectName": "chromium",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 106,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-05-21T01:18:14.612Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "9a10889926602f8dec1f-1622f2fe320cc31cede0",
+          "file": "workbench-api.spec.ts",
+          "line": 578,
+          "column": 1
+        },
+        {
+          "title": "query API handles more than five real ASIP verification queries",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 30000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "chromium",
+              "projectName": "chromium",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 1440,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-05-21T01:18:14.720Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "9a10889926602f8dec1f-fff8b1f1df11caea151c",
+          "file": "workbench-api.spec.ts",
+          "line": 594,
+          "column": 1
+        },
+        {
+          "title": "acceptance API lists real qwen and gemma QA runs",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 30000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "chromium",
+              "projectName": "chromium",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 9,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-05-21T01:18:16.163Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "9a10889926602f8dec1f-2d941d75d73f4edfe847",
+          "file": "workbench-api.spec.ts",
+          "line": 616,
+          "column": 1
+        },
+        {
+          "title": "acceptance run API executes selected acceptance queries",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 90000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "chromium",
+              "projectName": "chromium",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 39914,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-05-21T01:18:16.175Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "9a10889926602f8dec1f-e9faaf95c24bc03621de",
+          "file": "workbench-api.spec.ts",
+          "line": 708,
+          "column": 1
+        },
+        {
+          "title": "workbench DB-backed APIs reject explicitly blank dbPath without falling back",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 30000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "chromium",
+              "projectName": "chromium",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 1336,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-05-21T01:18:56.094Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "9a10889926602f8dec1f-c9c1606eacfd26cae5b7",
+          "file": "workbench-api.spec.ts",
+          "line": 736,
+          "column": 1
+        },
+        {
+          "title": "acceptance run API exposes AQ09 provider provenance from configured edge and embedding settings",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 30000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "chromium",
+              "projectName": "chromium",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 589,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-05-21T01:18:57.434Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "9a10889926602f8dec1f-076350e22a838c3fbfa1",
+          "file": "workbench-api.spec.ts",
+          "line": 784,
+          "column": 1
+        },
+        {
+          "title": "graph API returns data-driven weighted edges for a selected seed",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 30000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "chromium",
+              "projectName": "chromium",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 547,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-05-21T01:18:58.027Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "9a10889926602f8dec1f-fc9a4389e1cf17726fff",
+          "file": "workbench-api.spec.ts",
+          "line": 856,
+          "column": 1
+        },
+        {
+          "title": "graph API can switch between concept and implementation function views",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 30000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "chromium",
+              "projectName": "chromium",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 515,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-05-21T01:18:58.577Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "9a10889926602f8dec1f-990dbc44706dd87882a4",
+          "file": "workbench-api.spec.ts",
+          "line": 895,
+          "column": 1
+        },
+        {
+          "title": "graph API returns compact metadata for global UI graphs",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 30000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "chromium",
+              "projectName": "chromium",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 240,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-05-21T01:18:59.094Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "9a10889926602f8dec1f-889a2ba32da09c26c70a",
+          "file": "workbench-api.spec.ts",
+          "line": 941,
+          "column": 1
+        },
+        {
+          "title": "graph API rejects resolver operators as selected seed nodes",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 30000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "chromium",
+              "projectName": "chromium",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 264,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-05-21T01:18:59.337Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "9a10889926602f8dec1f-c1615cb6ba5664bd34e3",
+          "file": "workbench-api.spec.ts",
+          "line": 988,
+          "column": 1
+        },
+        {
+          "title": "workbench limits API exposes graph budgets from repo config",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 30000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "chromium",
+              "projectName": "chromium",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 10,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-05-21T01:18:59.604Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "9a10889926602f8dec1f-b7c396acd58215d3ce43",
+          "file": "workbench-api.spec.ts",
+          "line": 1003,
+          "column": 1
+        },
+        {
+          "title": "graph API global view can derive explicit evidence overlay from indexed evidence",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 30000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "chromium",
+              "projectName": "chromium",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 345,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-05-21T01:18:59.618Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "9a10889926602f8dec1f-e47db88ac8d4cb8373bf",
+          "file": "workbench-api.spec.ts",
+          "line": 1020,
+          "column": 1
+        },
+        {
+          "title": "graph API does not implicitly index or fall back when reading an explicit empty DB",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 30000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "chromium",
+              "projectName": "chromium",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 133,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-05-21T01:18:59.965Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "9a10889926602f8dec1f-d32488d1e3dda3daf16a",
+          "file": "workbench-api.spec.ts",
+          "line": 1054,
+          "column": 1
+        },
+        {
+          "title": "semantic edges API generates graph edges from a supplied DB",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 30000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "chromium",
+              "projectName": "chromium",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 314,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-05-21T01:19:00.102Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "9a10889926602f8dec1f-f1f7e01924e950117988",
+          "file": "workbench-api.spec.ts",
+          "line": 1068,
+          "column": 1
+        },
+        {
+          "title": "semantic edges API supports batch generation from indexed candidates",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 30000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "chromium",
+              "projectName": "chromium",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 334,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-05-21T01:19:00.418Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "9a10889926602f8dec1f-b139b90c4125e1af938d",
+          "file": "workbench-api.spec.ts",
+          "line": 1123,
+          "column": 1
+        },
+        {
+          "title": "semantic edges API supports LLM document node extraction",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 30000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "chromium",
+              "projectName": "chromium",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 298,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-05-21T01:19:00.755Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "9a10889926602f8dec1f-87faee38bf0c60bb9a94",
+          "file": "workbench-api.spec.ts",
+          "line": 1188,
+          "column": 1
+        },
+        {
+          "title": "resolver profiles API reads committed configurable profiles",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 30000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "chromium",
+              "projectName": "chromium",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 91,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-05-21T01:19:01.056Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "9a10889926602f8dec1f-3565398b42cc76f73f93",
+          "file": "workbench-api.spec.ts",
+          "line": 1681,
+          "column": 1
+        },
+        {
+          "title": "resolver profiles API persists and validates user profiles",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 30000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "chromium",
+              "projectName": "chromium",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 184,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-05-21T01:19:01.150Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "9a10889926602f8dec1f-b898ce41afe36f375191",
+          "file": "workbench-api.spec.ts",
+          "line": 1712,
+          "column": 1
+        },
+        {
+          "title": "resolver profiles API rejects profiles without existing yaml config",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 30000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "chromium",
+              "projectName": "chromium",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 8,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-05-21T01:19:01.337Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "9a10889926602f8dec1f-308b91a9544ff4576dfe",
+          "file": "workbench-api.spec.ts",
+          "line": 1740,
+          "column": 1
+        },
+        {
+          "title": "index API can target user-added corpora and record provider settings",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 30000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "chromium",
+              "projectName": "chromium",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 452,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-05-21T01:19:01.347Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "9a10889926602f8dec1f-9b0461f6504ce3d28db1",
+          "file": "workbench-api.spec.ts",
+          "line": 1757,
+          "column": 1
+        },
+        {
+          "title": "jobs API exposes durable index job lifecycle events",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 30000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "chromium",
+              "projectName": "chromium",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 425,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-05-21T01:19:01.802Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "9a10889926602f8dec1f-9816cfc28ab4041830d3",
+          "file": "workbench-api.spec.ts",
+          "line": 1816,
+          "column": 1
+        },
+        {
+          "title": "provider smoke API makes a real Ollama status attempt",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 30000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "chromium",
+              "projectName": "chromium",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 301,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-05-21T01:19:02.230Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "9a10889926602f8dec1f-3789a3085ddd4967ddd2",
+          "file": "workbench-api.spec.ts",
+          "line": 1858,
+          "column": 1
+        },
+        {
+          "title": "index API builds the local SQLite evidence store from raw corpora",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 30000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "chromium",
+              "projectName": "chromium",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 179,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-05-21T01:19:02.535Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "9a10889926602f8dec1f-1c98e591ff567a82e7a3",
+          "file": "workbench-api.spec.ts",
+          "line": 1874,
+          "column": 1
+        }
+      ]
+    },
+    {
+      "title": "workbench-smoke.spec.ts",
+      "file": "workbench-smoke.spec.ts",
+      "column": 0,
+      "line": 0,
+      "specs": [
+        {
+          "title": "first screen is the ASIP evidence workbench",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 30000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "chromium",
+              "projectName": "chromium",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 1038,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-05-21T01:19:02.741Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "3dbfe7ceaa8811aca2fd-999af53e658456045a08",
+          "file": "workbench-smoke.spec.ts",
+          "line": 58,
+          "column": 1
+        },
+        {
+          "title": "first screen does not run a static default query or render static evidence rows",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 30000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "chromium",
+              "projectName": "chromium",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 626,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-05-21T01:19:03.787Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "3dbfe7ceaa8811aca2fd-f32de123c613a5a2d21d",
+          "file": "workbench-smoke.spec.ts",
+          "line": 71,
+          "column": 1
+        },
+        {
+          "title": "global symbol search runs a live query from any workbench page",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 30000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "chromium",
+              "projectName": "chromium",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 577,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-05-21T01:19:04.418Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "3dbfe7ceaa8811aca2fd-5ad476c1c7119aa8cbd1",
+          "file": "workbench-smoke.spec.ts",
+          "line": 107,
+          "column": 1
+        },
+        {
+          "title": "graph page initial URL query runs live query and renders graph edge answers",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 30000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "chromium",
+              "projectName": "chromium",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 630,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-05-21T01:19:04.999Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "3dbfe7ceaa8811aca2fd-c5a18175a2ced3fc1d8c",
+          "file": "workbench-smoke.spec.ts",
+          "line": 156,
+          "column": 1
+        },
+        {
+          "title": "global search preserves URL dbPath when navigating from non-query pages",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 30000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "chromium",
+              "projectName": "chromium",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 1385,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-05-21T01:19:05.632Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "3dbfe7ceaa8811aca2fd-55325b635a8bf27d5130",
+          "file": "workbench-smoke.spec.ts",
+          "line": 220,
+          "column": 1
+        },
+        {
+          "title": "settings page persists configurable provider model api and headers",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 30000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "chromium",
+              "projectName": "chromium",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 1778,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-05-21T01:19:07.024Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "3dbfe7ceaa8811aca2fd-3df0d2e1e0dea158ad08",
+          "file": "workbench-smoke.spec.ts",
+          "line": 246,
+          "column": 1
+        },
+        {
+          "title": "settings page uses URL dbPath when saving provider settings",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 30000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "chromium",
+              "projectName": "chromium",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 1013,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-05-21T01:19:08.807Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "3dbfe7ceaa8811aca2fd-5881988364dcf6d37819",
+          "file": "workbench-smoke.spec.ts",
+          "line": 332,
+          "column": 1
+        },
+        {
+          "title": "settings page hydrates backend provider settings without local storage",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 30000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "chromium",
+              "projectName": "chromium",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 677,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-05-21T01:19:09.825Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "3dbfe7ceaa8811aca2fd-e58665a60759aa3b91f1",
+          "file": "workbench-smoke.spec.ts",
+          "line": 352,
+          "column": 1
+        },
+        {
+          "title": "settings page runs provider smoke through the workbench API",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 30000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "chromium",
+              "projectName": "chromium",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 577,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-05-21T01:19:10.507Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "3dbfe7ceaa8811aca2fd-32e4fa9262534d156b81",
+          "file": "workbench-smoke.spec.ts",
+          "line": 393,
+          "column": 1
+        },
+        {
+          "title": "settings page runs AQ09 provider acceptance through the workbench API",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 30000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "chromium",
+              "projectName": "chromium",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 1519,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-05-21T01:19:11.089Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "3dbfe7ceaa8811aca2fd-133af3ef29e13ae75df0",
+          "file": "workbench-smoke.spec.ts",
+          "line": 408,
+          "column": 1
+        },
+        {
+          "title": "settings page can run AQ09 against a user supplied DB through the real workbench API",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 60000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "chromium",
+              "projectName": "chromium",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 1463,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-05-21T01:19:12.612Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "3dbfe7ceaa8811aca2fd-f1af608a60e234673744",
+          "file": "workbench-smoke.spec.ts",
+          "line": 455,
+          "column": 1
+        },
+        {
+          "title": "ollama detection fills edge and embedding models",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 30000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "chromium",
+              "projectName": "chromium",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 489,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-05-21T01:19:14.080Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "3dbfe7ceaa8811aca2fd-a857c33df887c51f74e7",
+          "file": "workbench-smoke.spec.ts",
+          "line": 490,
+          "column": 1
+        },
+        {
+          "title": "free evidence query updates result rows and graph",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 75000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "chromium",
+              "projectName": "chromium",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 40854,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-05-21T01:19:14.572Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "3dbfe7ceaa8811aca2fd-d6ce291fe22d3d4afa00",
+          "file": "workbench-smoke.spec.ts",
+          "line": 514,
+          "column": 1
+        },
+        {
+          "title": "evidence query consumes the workbench query API",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 30000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "chromium",
+              "projectName": "chromium",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 593,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-05-21T01:19:55.431Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "3dbfe7ceaa8811aca2fd-f7af9737af9671771cfd",
+          "file": "workbench-smoke.spec.ts",
+          "line": 534,
+          "column": 1
+        },
+        {
+          "title": "evidence query inspector renders the selected live evidence chain",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 30000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "chromium",
+              "projectName": "chromium",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 779,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-05-21T01:19:56.030Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "3dbfe7ceaa8811aca2fd-2ec0bfd3a7ac40a3cc76",
+          "file": "workbench-smoke.spec.ts",
+          "line": 566,
+          "column": 1
+        },
+        {
+          "title": "evidence results expose source types and PDF page citations in table and inspector",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 30000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "chromium",
+              "projectName": "chromium",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 666,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-05-21T01:19:56.813Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "3dbfe7ceaa8811aca2fd-9a6f32422ef2909076a3",
+          "file": "workbench-smoke.spec.ts",
+          "line": 614,
+          "column": 1
+        },
+        {
+          "title": "evidence query inspector changes when a different live row is selected",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 30000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "chromium",
+              "projectName": "chromium",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 707,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-05-21T01:19:57.483Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "3dbfe7ceaa8811aca2fd-8fd98f4523894f706afa",
+          "file": "workbench-smoke.spec.ts",
+          "line": 676,
+          "column": 1
+        },
+        {
+          "title": "query graph reports omitted graph payload instead of synthesizing static rows",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 30000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "chromium",
+              "projectName": "chromium",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 693,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-05-21T01:19:58.197Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "3dbfe7ceaa8811aca2fd-f3fbfe9eabbd142937f0",
+          "file": "workbench-smoke.spec.ts",
+          "line": 736,
+          "column": 1
+        },
+        {
+          "title": "free evidence query sends IP and ASIC filters to the query API",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 30000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "chromium",
+              "projectName": "chromium",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 748,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-05-21T01:19:58.898Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "3dbfe7ceaa8811aca2fd-c1042f2cb58705f58916",
+          "file": "workbench-smoke.spec.ts",
+          "line": 767,
+          "column": 1
+        },
+        {
+          "title": "source filter controls constrain the free query request",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 30000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "chromium",
+              "projectName": "chromium",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 823,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-05-21T01:19:59.654Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "3dbfe7ceaa8811aca2fd-938a675800818a6ca4f9",
+          "file": "workbench-smoke.spec.ts",
+          "line": 804,
+          "column": 1
+        },
+        {
+          "title": "graph page sends user configured semantic generation limits",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 30000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "chromium",
+              "projectName": "chromium",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 649,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-05-21T01:20:00.483Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "3dbfe7ceaa8811aca2fd-22aa2a16767138c75e8f",
+          "file": "workbench-smoke.spec.ts",
+          "line": 844,
+          "column": 1
+        },
+        {
+          "title": "free evidence query shows no-match empty state instead of fallback rows",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 30000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "chromium",
+              "projectName": "chromium",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 674,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-05-21T01:20:01.136Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "3dbfe7ceaa8811aca2fd-203507f7d7bac1001197",
+          "file": "workbench-smoke.spec.ts",
+          "line": 870,
+          "column": 1
+        },
+        {
+          "title": "evidence query API failure shows an error state without static seed rows or graph nodes",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 30000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "chromium",
+              "projectName": "chromium",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 711,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-05-21T01:20:01.814Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "3dbfe7ceaa8811aca2fd-4a2ae87957bffb5f0a8d",
+          "file": "workbench-smoke.spec.ts",
+          "line": 918,
+          "column": 1
+        },
+        {
+          "title": "corpus page loads the workbench corpora API",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 30000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "chromium",
+              "projectName": "chromium",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 761,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-05-21T01:20:02.529Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "3dbfe7ceaa8811aca2fd-8590c81818ba6fec0ba1",
+          "file": "workbench-smoke.spec.ts",
+          "line": 940,
+          "column": 1
+        },
+        {
+          "title": "corpus page treats empty API corpora as empty instead of default corpora",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 30000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "chromium",
+              "projectName": "chromium",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 787,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-05-21T01:20:03.296Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "3dbfe7ceaa8811aca2fd-a8047988ec01202ce303",
+          "file": "workbench-smoke.spec.ts",
+          "line": 966,
+          "column": 1
+        },
+        {
+          "title": "corpus page submits multiline subfolder filters as structured corpus metadata",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 30000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "chromium",
+              "projectName": "chromium",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 779,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-05-21T01:20:04.090Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "3dbfe7ceaa8811aca2fd-97cd61e1b73db33daaee",
+          "file": "workbench-smoke.spec.ts",
+          "line": 984,
+          "column": 1
+        },
+        {
+          "title": "corpus page runs the index job through the workbench API",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 30000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "chromium",
+              "projectName": "chromium",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 1407,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-05-21T01:20:04.873Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "3dbfe7ceaa8811aca2fd-5bc98d977f0d57808f39",
+          "file": "workbench-smoke.spec.ts",
+          "line": 1043,
+          "column": 1
+        },
+        {
+          "title": "corpus page indexes only the selected corpus and shows indexed status",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 30000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "chromium",
+              "projectName": "chromium",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 612,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-05-21T01:20:06.287Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "3dbfe7ceaa8811aca2fd-444041463242ea33ac35",
+          "file": "workbench-smoke.spec.ts",
+          "line": 1066,
+          "column": 1
+        },
+        {
+          "title": "corpus page sends the selected resolver profiles with the index job",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 30000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "chromium",
+              "projectName": "chromium",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 729,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-05-21T01:20:06.909Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "3dbfe7ceaa8811aca2fd-f28a24a8f829459b188a",
+          "file": "workbench-smoke.spec.ts",
+          "line": 1125,
+          "column": 1
+        },
+        {
+          "title": "corpus page shows durable index job lifecycle events",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 30000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "chromium",
+              "projectName": "chromium",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 472,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-05-21T01:20:07.643Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "3dbfe7ceaa8811aca2fd-5c42f58ad858543989c3",
+          "file": "workbench-smoke.spec.ts",
+          "line": 1196,
+          "column": 1
+        },
+        {
+          "title": "corpus page fetches index jobs from the URL dbPath",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 30000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "chromium",
+              "projectName": "chromium",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 532,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-05-21T01:20:08.119Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "3dbfe7ceaa8811aca2fd-98dc2e9709b2b3c84e58",
+          "file": "workbench-smoke.spec.ts",
+          "line": 1259,
+          "column": 1
+        },
+        {
+          "title": "corpus page marks selected corpus failed when indexing fails",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 30000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "chromium",
+              "projectName": "chromium",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 569,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-05-21T01:20:08.654Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "3dbfe7ceaa8811aca2fd-1eb16db41adf83af39ce",
+          "file": "workbench-smoke.spec.ts",
+          "line": 1282,
+          "column": 1
+        },
+        {
+          "title": "acceptance page loads real run summaries from the workbench API",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 30000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "chromium",
+              "projectName": "chromium",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 657,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-05-21T01:20:09.227Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "3dbfe7ceaa8811aca2fd-416594a618c60e4cab4d",
+          "file": "workbench-smoke.spec.ts",
+          "line": 1321,
+          "column": 1
+        },
+        {
+          "title": "acceptance page runs configurable acceptance queries through the workbench API",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 30000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "chromium",
+              "projectName": "chromium",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 725,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-05-21T01:20:09.887Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "3dbfe7ceaa8811aca2fd-695a50c1d852718374db",
+          "file": "workbench-smoke.spec.ts",
+          "line": 1351,
+          "column": 1
+        },
+        {
+          "title": "acceptance page runs no-mock AQ01 through the real workbench API",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 90000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "chromium",
+              "projectName": "chromium",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 1482,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-05-21T01:20:10.618Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "3dbfe7ceaa8811aca2fd-77ff8b5364645466f1d1",
+          "file": "workbench-smoke.spec.ts",
+          "line": 1396,
+          "column": 1
+        },
+        {
+          "title": "acceptance failures expand with query-level reasons and evidence sources",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 30000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "chromium",
+              "projectName": "chromium",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 487,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-05-21T01:20:12.103Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "3dbfe7ceaa8811aca2fd-b2e56722d83eedd0b9ce",
+          "file": "workbench-smoke.spec.ts",
+          "line": 1449,
+          "column": 1
+        },
+        {
+          "title": "acceptance API failure shows explicit empty state without static QA seed rows",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 30000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "chromium",
+              "projectName": "chromium",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 557,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-05-21T01:20:12.595Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "3dbfe7ceaa8811aca2fd-e5453fdacb921c666580",
+          "file": "workbench-smoke.spec.ts",
+          "line": 1531,
+          "column": 1
+        },
+        {
+          "title": "corpus page adds user corpus rows",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 30000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "chromium",
+              "projectName": "chromium",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 1171,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-05-21T01:20:13.156Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "3dbfe7ceaa8811aca2fd-755ca22a845c7cda3995",
+          "file": "workbench-smoke.spec.ts",
+          "line": 1549,
+          "column": 1
+        },
+        {
+          "title": "corpus page adds indexes and queries a real local corpus through the UI",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 60000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "chromium",
+              "projectName": "chromium",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 2704,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-05-21T01:20:14.331Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "3dbfe7ceaa8811aca2fd-30fb1aa6c0042293bfa6",
+          "file": "workbench-smoke.spec.ts",
+          "line": 1563,
+          "column": 1
+        },
+        {
+          "title": "resolver page adds configurable profiles",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 30000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "chromium",
+              "projectName": "chromium",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 835,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-05-21T01:20:17.039Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "3dbfe7ceaa8811aca2fd-026a6acb2395acc2a85a",
+          "file": "workbench-smoke.spec.ts",
+          "line": 1626,
+          "column": 1
+        },
+        {
+          "title": "resolver page validates configurable profiles from user source",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 30000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "chromium",
+              "projectName": "chromium",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 1491,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-05-21T01:20:17.878Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "3dbfe7ceaa8811aca2fd-77799fb81208ca4255e1",
+          "file": "workbench-smoke.spec.ts",
+          "line": 1641,
+          "column": 1
+        },
+        {
+          "title": "resolver page can add disabled profiles with visible status",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 30000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "chromium",
+              "projectName": "chromium",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 846,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-05-21T01:20:19.373Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "3dbfe7ceaa8811aca2fd-0010c7279e19df8c6bc9",
+          "file": "workbench-smoke.spec.ts",
+          "line": 1654,
+          "column": 1
+        },
+        {
+          "title": "resolver page loads an existing profile into the editor before saving",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 30000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "chromium",
+              "projectName": "chromium",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 657,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-05-21T01:20:20.224Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "3dbfe7ceaa8811aca2fd-f496b00d8e556ec22a3d",
+          "file": "workbench-smoke.spec.ts",
+          "line": 1667,
+          "column": 1
+        },
+        {
+          "title": "resolver page loads resolver profiles from the workbench API",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 30000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "chromium",
+              "projectName": "chromium",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 501,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-05-21T01:20:20.885Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "3dbfe7ceaa8811aca2fd-7bbbeea967897d89a29a",
+          "file": "workbench-smoke.spec.ts",
+          "line": 1732,
+          "column": 1
+        },
+        {
+          "title": "resolver page treats empty API profiles as empty instead of default profiles",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 30000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "chromium",
+              "projectName": "chromium",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 525,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-05-21T01:20:21.390Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "3dbfe7ceaa8811aca2fd-e51df391fa9c43298ed1",
+          "file": "workbench-smoke.spec.ts",
+          "line": 1761,
+          "column": 1
+        },
+        {
+          "title": "graph API failure shows graph error empty state without static seed nodes",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 30000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "chromium",
+              "projectName": "chromium",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 591,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-05-21T01:20:21.919Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "3dbfe7ceaa8811aca2fd-121a529715ae1d0a1a25",
+          "file": "workbench-smoke.spec.ts",
+          "line": 1779,
+          "column": 1
+        },
+        {
+          "title": "graph empty state does not render static seed copy anywhere on the page",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 30000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "chromium",
+              "projectName": "chromium",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 663,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-05-21T01:20:22.515Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "3dbfe7ceaa8811aca2fd-e081e15134009e595c9e",
+          "file": "workbench-smoke.spec.ts",
+          "line": 1802,
+          "column": 1
+        },
+        {
+          "title": "graph page relationship panel is API-backed when graph API succeeds",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 30000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "chromium",
+              "projectName": "chromium",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 747,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-05-21T01:20:23.182Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "3dbfe7ceaa8811aca2fd-779f14e9b854963e71e3",
+          "file": "workbench-smoke.spec.ts",
+          "line": 1826,
+          "column": 1
+        },
+        {
+          "title": "graph page uses URL dbPath for no-mock graph and query requests",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 90000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "chromium",
+              "projectName": "chromium",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 9259,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-05-21T01:20:23.932Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "3dbfe7ceaa8811aca2fd-883cff4fc544f4576019",
+          "file": "workbench-smoke.spec.ts",
+          "line": 1859,
+          "column": 1
+        },
+        {
+          "title": "graph page loads current data/asip.db through browser and API",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 120000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "chromium",
+              "projectName": "chromium",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 20490,
+                  "errors": [],
+                  "stdout": [
+                    {
+                      "text": "ASIP_BROWSER_CURRENT_DB_PROBE [{\"surface\":\"graph_page_api_request\",\"url\":\"http://127.0.0.1:3112/api/workbench/graph?limit=3000&dbPath=%2FVolumes%2Fdata%2FUser%2Fwayne%2FCode%2Fgraph_impact%2Fdata%2Fasip.db&functionView=concept\",\"db_path\":\"/Volumes/data/User/wayne/Code/graph_impact/data/asip.db\",\"status\":200,\"node_count\":2557,\"edge_count\":3000,\"response_sha256\":\"9d54177ec8eae10999468c4c2f0c724081c796db27d5b629394608869d716c1a\",\"latest_index_job_id\":\"10\",\"latest_graph_rebuild_job_id\":\"44\"},{\"surface\":\"direct_api_document_request\",\"url\":\"http://127.0.0.1:3112/api/workbench/graph?dbPath=%2FVolumes%2Fdata%2FUser%2Fwayne%2FCode%2Fgraph_impact%2Fdata%2Fasip.db\",\"db_path\":\"/Volumes/data/User/wayne/Code/graph_impact/data/asip.db\",\"status\":200,\"node_count\":2557,\"edge_count\":3000,\"response_sha256\":\"9d54177ec8eae10999468c4c2f0c724081c796db27d5b629394608869d716c1a\",\"latest_index_job_id\":\"10\",\"latest_graph_rebuild_job_id\":\"44\"}]\n"
+                    }
+                  ],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-05-21T01:20:33.192Z",
+                  "annotations": [],
+                  "attachments": [
+                    {
+                      "name": "asip-current-db-probes",
+                      "contentType": "application/json",
+                      "body": "WwogIHsKICAgICJzdXJmYWNlIjogImdyYXBoX3BhZ2VfYXBpX3JlcXVlc3QiLAogICAgInVybCI6ICJodHRwOi8vMTI3LjAuMC4xOjMxMTIvYXBpL3dvcmtiZW5jaC9ncmFwaD9saW1pdD0zMDAwJmRiUGF0aD0lMkZWb2x1bWVzJTJGZGF0YSUyRlVzZXIlMkZ3YXluZSUyRkNvZGUlMkZncmFwaF9pbXBhY3QlMkZkYXRhJTJGYXNpcC5kYiZmdW5jdGlvblZpZXc9Y29uY2VwdCIsCiAgICAiZGJfcGF0aCI6ICIvVm9sdW1lcy9kYXRhL1VzZXIvd2F5bmUvQ29kZS9ncmFwaF9pbXBhY3QvZGF0YS9hc2lwLmRiIiwKICAgICJzdGF0dXMiOiAyMDAsCiAgICAibm9kZV9jb3VudCI6IDI1NTcsCiAgICAiZWRnZV9jb3VudCI6IDMwMDAsCiAgICAicmVzcG9uc2Vfc2hhMjU2IjogIjlkNTQxNzdlYzhlYWUxMDk5OTQ2OGM0YzJmMGM3MjQwODFjNzk2ZGIyN2Q1YjYyOTM5NDYwODg2OWQ3MTZjMWEiLAogICAgImxhdGVzdF9pbmRleF9qb2JfaWQiOiAiMTAiLAogICAgImxhdGVzdF9ncmFwaF9yZWJ1aWxkX2pvYl9pZCI6ICI0NCIKICB9LAogIHsKICAgICJzdXJmYWNlIjogImRpcmVjdF9hcGlfZG9jdW1lbnRfcmVxdWVzdCIsCiAgICAidXJsIjogImh0dHA6Ly8xMjcuMC4wLjE6MzExMi9hcGkvd29ya2JlbmNoL2dyYXBoP2RiUGF0aD0lMkZWb2x1bWVzJTJGZGF0YSUyRlVzZXIlMkZ3YXluZSUyRkNvZGUlMkZncmFwaF9pbXBhY3QlMkZkYXRhJTJGYXNpcC5kYiIsCiAgICAiZGJfcGF0aCI6ICIvVm9sdW1lcy9kYXRhL1VzZXIvd2F5bmUvQ29kZS9ncmFwaF9pbXBhY3QvZGF0YS9hc2lwLmRiIiwKICAgICJzdGF0dXMiOiAyMDAsCiAgICAibm9kZV9jb3VudCI6IDI1NTcsCiAgICAiZWRnZV9jb3VudCI6IDMwMDAsCiAgICAicmVzcG9uc2Vfc2hhMjU2IjogIjlkNTQxNzdlYzhlYWUxMDk5OTQ2OGM0YzJmMGM3MjQwODFjNzk2ZGIyN2Q1YjYyOTM5NDYwODg2OWQ3MTZjMWEiLAogICAgImxhdGVzdF9pbmRleF9qb2JfaWQiOiAiMTAiLAogICAgImxhdGVzdF9ncmFwaF9yZWJ1aWxkX2pvYl9pZCI6ICI0NCIKICB9Cl0="
+                    }
+                  ]
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "3dbfe7ceaa8811aca2fd-f85a6a3c6c10c69b36f0",
+          "file": "workbench-smoke.spec.ts",
+          "line": 2023,
+          "column": 1
+        },
+        {
+          "title": "corpus page uses URL dbPath for list add and index without route rewriting",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 90000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "chromium",
+              "projectName": "chromium",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 2766,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-05-21T01:20:53.680Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "3dbfe7ceaa8811aca2fd-d14c6fddd97e6bcd75a4",
+          "file": "workbench-smoke.spec.ts",
+          "line": 2147,
+          "column": 1
+        },
+        {
+          "title": "graph page filters no-mock graph layers and shows edge provenance",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 90000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "chromium",
+              "projectName": "chromium",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 4117,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-05-21T01:20:56.451Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "3dbfe7ceaa8811aca2fd-0c82a92c7cb2130e37a7",
+          "file": "workbench-smoke.spec.ts",
+          "line": 2181,
+          "column": 1
+        },
+        {
+          "title": "evidence page initial query uses URL dbPath without default DB fallback",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 90000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "chromium",
+              "projectName": "chromium",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 758,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-05-21T01:21:00.570Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "3dbfe7ceaa8811aca2fd-f1e89e0241d9679c9795",
+          "file": "workbench-smoke.spec.ts",
+          "line": 2228,
+          "column": 1
+        },
+        {
+          "title": "graph page runs semantic edge generation through the workbench API",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 30000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "chromium",
+              "projectName": "chromium",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 712,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-05-21T01:21:01.332Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "3dbfe7ceaa8811aca2fd-80e116785e9d28c7552c",
+          "file": "workbench-smoke.spec.ts",
+          "line": 2264,
+          "column": 1
+        },
+        {
+          "title": "graph page runs batch semantic edge generation through the workbench API",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 30000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "chromium",
+              "projectName": "chromium",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 649,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-05-21T01:21:02.049Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "3dbfe7ceaa8811aca2fd-5cb7141e5feb4df28cb2",
+          "file": "workbench-smoke.spec.ts",
+          "line": 2309,
+          "column": 1
+        },
+        {
+          "title": "graph page runs no-mock batch semantic edge generation against a supplied DB",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 90000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "chromium",
+              "projectName": "chromium",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 1369,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-05-21T01:21:02.701Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "3dbfe7ceaa8811aca2fd-1f74c81efbe762913279",
+          "file": "workbench-smoke.spec.ts",
+          "line": 2361,
+          "column": 1
+        },
+        {
+          "title": "graph page runs LLM document node extraction through the workbench API",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 30000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "chromium",
+              "projectName": "chromium",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 521,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-05-21T01:21:04.073Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "3dbfe7ceaa8811aca2fd-107f772b652a9f629893",
+          "file": "workbench-smoke.spec.ts",
+          "line": 2434,
+          "column": 1
+        },
+        {
+          "title": "shadcn Radix controls keep styled dimensions instead of bare browser defaults",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 30000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "chromium",
+              "projectName": "chromium",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 1332,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-05-21T01:21:04.599Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "3dbfe7ceaa8811aca2fd-8f55c1ee7c8106444be3",
+          "file": "workbench-smoke.spec.ts",
+          "line": 2501,
+          "column": 1
+        },
+        {
+          "title": "page action buttons show visible queued feedback",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 30000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "chromium",
+              "projectName": "chromium",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 500,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-05-21T01:21:05.936Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "3dbfe7ceaa8811aca2fd-a9f83be0186c43ae9489",
+          "file": "workbench-smoke.spec.ts",
+          "line": 2545,
+          "column": 1
+        }
+      ]
+    }
+  ],
+  "errors": [],
+  "stats": {
+    "startTime": "2026-05-21T01:17:40.234Z",
+    "duration": 206255.596,
+    "expected": 109,
+    "skipped": 0,
+    "unexpected": 0,
+    "flaky": 0
+  }
+}

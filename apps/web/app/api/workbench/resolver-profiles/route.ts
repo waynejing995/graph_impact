@@ -2,11 +2,21 @@ import { NextResponse } from "next/server";
 import { existsSync } from "node:fs";
 import path from "node:path";
 import { defaultDbPath, repoRoot, runAsipCli } from "@/lib/asip-cli";
+import { explicitTextOrError } from "@/lib/request-paths";
 import { listResolverProfiles as listCommittedResolverProfiles } from "@/lib/workbench-data";
 
-export function GET() {
+export function GET(request: Request) {
+  let dbPath = defaultDbPath;
   try {
-    const backend = runAsipCli<{ profiles?: Array<{ id: string; path?: string }> }>(["resolver-list", "--db", defaultDbPath]);
+    dbPath = explicitTextOrError(new URL(request.url).searchParams.get("dbPath"), "dbPath") ?? defaultDbPath;
+  } catch (error) {
+    return NextResponse.json(
+      { profiles: [], error: error instanceof Error ? error.message : "dbPath cannot be blank" },
+      { status: 400 }
+    );
+  }
+  try {
+    const backend = runAsipCli<{ profiles?: Array<{ id: string; path?: string }> }>(["resolver-list", "--db", dbPath]);
     const merged = new Map<string, unknown>();
     for (const profile of listCommittedResolverProfiles()) {
       if (resolverConfigExists(profile.path)) {
@@ -36,6 +46,7 @@ export async function POST(request: Request) {
     path?: string;
     enabled?: boolean;
     validateSource?: string;
+    dbPath?: string;
   };
   const id = body.id?.trim();
   if (!id) {
@@ -48,13 +59,22 @@ export async function POST(request: Request) {
       { status: 400 }
     );
   }
+  let dbPath = defaultDbPath;
+  try {
+    dbPath = explicitTextOrError(body.dbPath, "dbPath") ?? defaultDbPath;
+  } catch (error) {
+    return NextResponse.json(
+      { error: error instanceof Error ? error.message : "dbPath cannot be blank" },
+      { status: 400 }
+    );
+  }
   try {
     if (body.validateSource !== undefined) {
       return NextResponse.json(
         runAsipCli<Record<string, unknown>>([
           "resolver-validate",
           "--db",
-          defaultDbPath,
+          dbPath,
           "--id",
           id,
           "--source",
@@ -66,7 +86,7 @@ export async function POST(request: Request) {
     const args = [
       "resolver-add",
       "--db",
-      defaultDbPath,
+      dbPath,
       "--id",
       id,
       "--language",

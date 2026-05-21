@@ -1,0 +1,90 @@
+{
+  "source": "asip.web.browser_e2e",
+  "generated_at": "2026-05-20T14:28:02.361Z",
+  "base_url": "http://127.0.0.1:3111",
+  "db_path": "data/asip.db",
+  "latest_index_job_id": "10",
+  "latest_graph_rebuild_job_id": "13",
+  "target_urls": [
+    "http://127.0.0.1:3111/graph?dbPath=data/asip.db",
+    "http://127.0.0.1:3111/api/workbench/graph?dbPath=data/asip.db"
+  ],
+  "skip_web_server": true,
+  "command": [
+    "pnpm",
+    "exec",
+    "playwright",
+    "test",
+    "--reporter=json",
+    "--grep",
+    "acceptance page runs no-mock AQ01 through the real workbench API|graph page uses URL dbPath for no-mock graph and query requests|graph page loads current data/asip.db through browser and API|graph page filters no-mock graph layers and shows edge provenance|evidence page initial query uses URL dbPath without default DB fallback"
+  ],
+  "report_json": "/Volumes/data/User/wayne/Code/graph_impact/docs/qa/2026-05-20-browser-e2e-current.playwright-report.json",
+  "report_sha256": "69d113fc81957c30c12236e9dd00d1443c5c538e906df2d2894483a63b93e13f",
+  "report_bytes": 9205,
+  "exit_code": 0,
+  "gate_status": "pass",
+  "e2e_status": "pass",
+  "summary": {
+    "total": 5,
+    "passed": 5,
+    "failed": 0,
+    "flaky": 0,
+    "skipped": 0,
+    "duration_ms": 33485.617
+  },
+  "required_tests": [
+    {
+      "title": "acceptance page runs no-mock AQ01 through the real workbench API",
+      "status": "pass",
+      "file": "workbench-smoke.spec.ts"
+    },
+    {
+      "title": "graph page uses URL dbPath for no-mock graph and query requests",
+      "status": "pass",
+      "file": "workbench-smoke.spec.ts"
+    },
+    {
+      "title": "graph page loads current data/asip.db through browser and API",
+      "status": "pass",
+      "file": "workbench-smoke.spec.ts"
+    },
+    {
+      "title": "graph page filters no-mock graph layers and shows edge provenance",
+      "status": "pass",
+      "file": "workbench-smoke.spec.ts"
+    },
+    {
+      "title": "evidence page initial query uses URL dbPath without default DB fallback",
+      "status": "pass",
+      "file": "workbench-smoke.spec.ts"
+    }
+  ],
+  "current_db_probes": [
+    {
+      "surface": "graph_page_api_request",
+      "url": "http://127.0.0.1:3111/api/workbench/graph?limit=3000&dbPath=data%2Fasip.db&functionView=concept",
+      "db_path": "data/asip.db",
+      "status": 200,
+      "node_count": 2552,
+      "edge_count": 3000,
+      "response_sha256": "bc66effe88b0eba6f2b46d429f4a59b47f4b41df8380917950a7f6a91591adab",
+      "latest_index_job_id": "10",
+      "latest_graph_rebuild_job_id": "13"
+    },
+    {
+      "surface": "direct_api_document_request",
+      "url": "http://127.0.0.1:3111/api/workbench/graph?dbPath=data%2Fasip.db",
+      "db_path": "data/asip.db",
+      "status": 200,
+      "node_count": 2552,
+      "edge_count": 3000,
+      "response_sha256": "bc66effe88b0eba6f2b46d429f4a59b47f4b41df8380917950a7f6a91591adab",
+      "latest_index_job_id": "10",
+      "latest_graph_rebuild_job_id": "13"
+    }
+  ],
+  "failure_reasons": [],
+  "stdout_tail": "",
+  "stderr_tail": ""
+}

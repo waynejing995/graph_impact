@@ -1,0 +1,42 @@
+- generic [active] [ref=e1]:
+  - generic [ref=e2]:
+    - banner [ref=e3]:
+      - generic [ref=e5]: ASIP Evidence Workbench
+      - generic [ref=e6]:
+        - img
+        - textbox "Global symbol search" [ref=e7]:
+          - /placeholder: Search indexed symbols
+      - generic "Workbench status" [ref=e8]:
+        - generic [ref=e9]: "Provider: unverified"
+        - generic [ref=e11]: "Edge: Ollama / gemma4:e4b"
+        - generic [ref=e12]: "Index: ready"
+      - button "Switch to light theme" [ref=e13] [cursor=pointer]:
+        - img
+        - text: Light
+    - main [ref=e14]:
+      - navigation "ASIP sections" [ref=e15]:
+        - link "Evidence Search" [ref=e16] [cursor=pointer]:
+          - /url: /
+        - link "Graph Explorer" [ref=e17] [cursor=pointer]:
+          - /url: /graph
+        - link "Corpus" [ref=e18] [cursor=pointer]:
+          - /url: /corpus
+        - link "Resolver Profiles" [ref=e19] [cursor=pointer]:
+          - /url: /resolver-profiles
+        - link "Acceptance Tests" [ref=e20] [cursor=pointer]:
+          - /url: /acceptance
+        - link "Settings" [ref=e21] [cursor=pointer]:
+          - /url: /settings
+      - region "Acceptance test workspace" [ref=e22]:
+        - generic [ref=e23]
+        - generic "Page metrics" [ref=e31]
+        - generic "Evidence source filters" [ref=e35]
+        - generic "Acceptance runner" [ref=e40]
+        - generic [ref=e108]
+        - table "Evidence results" [ref=e75]
+      - complementary [ref=e95]:
+        - generic [ref=e96]
+        - heading "Relationship Panel" [level=3] [ref=e100]
+        - paragraph [ref=e102]
+        - button "Open QA JSON" [ref=e104] [cursor=pointer]
+  - alert [ref=e105]

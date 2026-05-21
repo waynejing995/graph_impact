@@ -1,16 +1,17 @@
 import { existsSync } from "node:fs";
 import path from "node:path";
-import { spawnSync } from "node:child_process";
+import { spawn, spawnSync } from "node:child_process";
 
 export const repoRoot = path.resolve(process.cwd(), "../..");
 export const defaultDbPath = path.join(repoRoot, "data/asip.db");
 export const defaultConfigPath = path.join(repoRoot, "configs/edge_cases/full-corpus-gemma4-e4b.json");
 
-export function runAsipCli<T>(args: string[]): T {
+export function runAsipCli<T>(args: string[], envOverrides: Record<string, string> = {}): T {
   const result = spawnSync("python3", ["-m", "asip.cli", ...args], {
     cwd: repoRoot,
     env: {
       ...process.env,
+      ...envOverrides,
       PYTHONDONTWRITEBYTECODE: "1",
       PYTHONPATH: [path.join(repoRoot, "packages/core/src"), repoRoot].join(":")
     },
@@ -22,6 +23,42 @@ export function runAsipCli<T>(args: string[]): T {
     throw new Error(result.stderr || result.stdout || `asip cli failed: ${args.join(" ")}`);
   }
   return JSON.parse(result.stdout) as T;
+}
+
+export function runAsipCliAsync<T>(args: string[], envOverrides: Record<string, string> = {}): Promise<T> {
+  return new Promise((resolve, reject) => {
+    const child = spawn("python3", ["-m", "asip.cli", ...args], {
+      cwd: repoRoot,
+      env: {
+        ...process.env,
+        ...envOverrides,
+        PYTHONDONTWRITEBYTECODE: "1",
+        PYTHONPATH: [path.join(repoRoot, "packages/core/src"), repoRoot].join(":")
+      }
+    });
+    let stdout = "";
+    let stderr = "";
+    child.stdout.setEncoding("utf8");
+    child.stderr.setEncoding("utf8");
+    child.stdout.on("data", (chunk) => {
+      stdout += chunk;
+    });
+    child.stderr.on("data", (chunk) => {
+      stderr += chunk;
+    });
+    child.on("error", reject);
+    child.on("close", (status) => {
+      if (status !== 0) {
+        reject(new Error(stderr || stdout || `asip cli failed: ${args.join(" ")}`));
+        return;
+      }
+      try {
+        resolve(JSON.parse(stdout) as T);
+      } catch (error) {
+        reject(error);
+      }
+    });
+  });
 }
 
 export function ensureWorkbenchIndex() {

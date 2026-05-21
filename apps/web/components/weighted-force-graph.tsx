@@ -4,7 +4,7 @@ import dynamic from "next/dynamic";
 import { useEffect, useId, useMemo, useRef, useState, type ComponentType } from "react";
 import type { ForceGraphProps, LinkObject, NodeObject } from "react-force-graph-2d";
 
-type WeightedGraphNode = {
+export type WeightedGraphNode = {
   id: string;
   kind?: string;
   label?: string;
@@ -21,7 +21,8 @@ type WeightedGraphEdge = {
   confidence?: number;
   weight?: number;
   stage?: string;
-  sources?: Array<Record<string, unknown>>;
+  source?: string;
+  sources?: Array<string | Record<string, unknown>>;
   attr?: Record<string, unknown>;
 };
 
@@ -30,7 +31,7 @@ export type WeightedGraphPayload = {
   edges: WeightedGraphEdge[];
 };
 
-type ProductGraphKind = "function" | "register" | "doc_section" | "pdf_section" | "doc_box";
+type ProductGraphKind = "function" | "register" | "doc";
 
 type ForceNode = NodeObject<{
   id: string;
@@ -88,6 +89,8 @@ export function WeightedForceGraph({
   maxEdges,
   maxNodes,
   minEdgeWeight = 0,
+  onNodeSelect,
+  selectedNodeId,
   summaryLimit
 }: {
   graph: WeightedGraphPayload;
@@ -95,6 +98,8 @@ export function WeightedForceGraph({
   maxEdges: number;
   maxNodes: number;
   minEdgeWeight?: number;
+  onNodeSelect?: (node: WeightedGraphNode) => void;
+  selectedNodeId?: string;
   summaryLimit: number;
 }) {
   const summaryId = useId();
@@ -170,12 +175,14 @@ export function WeightedForceGraph({
       });
     return { nodes, links };
   }, [graph, maxEdges, maxNodes, minEdgeWeight]);
+  const layoutProfile =
+    graphData.nodes.length >= 150 || graphData.links.length >= 300 ? "dense" : "standard";
 
   useEffect(() => {
     fitPendingRef.current = true;
     setReady(false);
-    configureForceLayout(graphRef.current);
-  }, [graphData.nodes.length, graphData.links.length]);
+    configureForceLayout(graphRef.current, layoutProfile);
+  }, [graphData.nodes.length, graphData.links.length, layoutProfile]);
 
   const topNodes = useMemo(
     () => [...graphData.nodes].sort((left, right) => right.weight - left.weight).slice(0, summaryLimit),
@@ -208,6 +215,7 @@ export function WeightedForceGraph({
       className="force-graph-shell"
       data-edge-count={graphData.links.length}
       data-edge-total={graph.edges.length}
+      data-layout-profile={layoutProfile}
       data-max-edges={maxEdges}
       data-max-nodes={maxNodes}
       data-min-edge-weight={minEdgeWeight.toFixed(2)}
@@ -222,9 +230,9 @@ export function WeightedForceGraph({
       role="img"
     >
       <ForceGraph2D
-        autoPauseRedraw={false}
+        autoPauseRedraw={layoutProfile === "dense"}
         backgroundColor="rgba(0,0,0,0)"
-        cooldownTicks={140}
+        cooldownTicks={layoutProfile === "dense" ? 70 : 140}
         d3AlphaDecay={0.025}
         d3VelocityDecay={0.22}
         enableNodeDrag
@@ -233,17 +241,20 @@ export function WeightedForceGraph({
         enableZoomInteraction
         graphData={graphData}
         height={size.height}
-        linkColor={() => palette.edge}
-        linkDirectionalArrowLength={(link) => (link.weight > 0.72 ? 4 : 0)}
-        linkDirectionalParticles={(link) => (link.weight > 0.78 ? 2 : 0)}
+        linkColor={() => (layoutProfile === "dense" ? "rgba(96, 165, 250, 0.34)" : palette.edge)}
+        linkDirectionalArrowLength={(link) => (link.weight > 0.72 ? (layoutProfile === "dense" ? 2.5 : 4) : 0)}
+        linkDirectionalParticles={(link) => (layoutProfile === "dense" ? 0 : link.weight > 0.78 ? 2 : 0)}
         linkDirectionalParticleWidth={(link) => 1.2 + link.weight * 2}
         linkLabel={(link) => link.label}
-        linkWidth={(link) => 0.8 + link.weight * 4.8}
-        nodeCanvasObject={(node, context, globalScale) => drawNodeLabel(node, context, globalScale, palette)}
+        linkWidth={(link) => (layoutProfile === "dense" ? 0.25 + link.weight * 1.1 : 0.45 + link.weight * 2.4)}
+        nodeCanvasObject={(node, context, globalScale) =>
+          drawNodeLabel(node, context, globalScale, palette, node.id === selectedNodeId)
+        }
         nodeCanvasObjectMode={() => "after"}
         nodeColor={(node) => colorForKind(node.kind, palette)}
         nodeId="id"
         nodeLabel={(node) => `${node.label} (${node.kind}, weight ${node.weight})`}
+        onNodeClick={(node) => onNodeSelect?.(forceNodeToPayload(node))}
         nodeRelSize={4}
         nodeVal={(node) => Math.max(2, node.weight)}
         onEngineStop={() => {
@@ -255,9 +266,9 @@ export function WeightedForceGraph({
         }}
         ref={(instance) => {
           graphRef.current = instance;
-          configureForceLayout(instance);
+          configureForceLayout(instance, layoutProfile);
         }}
-        warmupTicks={90}
+        warmupTicks={layoutProfile === "dense" ? 35 : 90}
         width={size.width}
       />
       <div className="graph-accessibility-summary" id={summaryId}>
@@ -268,7 +279,19 @@ export function WeightedForceGraph({
           <span key={`kind-${kind}`}>{kind} {count}</span>
         ))}
         {summaryNodes.map((node) => (
-          <span key={`node-${node.id}`}>{node.label}</span>
+          onNodeSelect ? (
+            <button
+              aria-pressed={node.id === selectedNodeId}
+              className="graph-summary-node"
+              key={`node-${node.id}`}
+              onClick={() => onNodeSelect(forceNodeToPayload(node))}
+              type="button"
+            >
+              {node.label}
+            </button>
+          ) : (
+            <span key={`node-${node.id}`}>{node.label}</span>
+          )
         ))}
         {topLinks.map((link, index) => (
           <span key={`link-${index}-${link.relation}`}>{link.relation} / {link.weight.toFixed(2)}</span>
@@ -278,25 +301,26 @@ export function WeightedForceGraph({
   );
 }
 
-function configureForceLayout(instance: ForceGraphMethods | null) {
+function configureForceLayout(instance: ForceGraphMethods | null, layoutProfile: "dense" | "standard") {
   if (!instance?.d3Force) {
     return;
   }
   const charge = instance.d3Force("charge") as { strength?: (value: number) => void } | undefined;
-  charge?.strength?.(-120);
+  charge?.strength?.(layoutProfile === "dense" ? -90 : -120);
   const link = instance.d3Force("link") as {
     distance?: (value: number | ((link: ForceLink) => number)) => void;
     strength?: (value: number | ((link: ForceLink) => number)) => void;
   } | undefined;
-  link?.distance?.((link: ForceLink) => 42 + (1 - link.weight) * 96);
-  link?.strength?.((link: ForceLink) => 0.12 + link.weight * 0.38);
+  link?.distance?.((link: ForceLink) => (layoutProfile === "dense" ? 34 : 42) + (1 - link.weight) * (layoutProfile === "dense" ? 70 : 96));
+  link?.strength?.((link: ForceLink) => (layoutProfile === "dense" ? 0.16 : 0.12) + link.weight * (layoutProfile === "dense" ? 0.32 : 0.38));
 }
 
 function drawNodeLabel(
   node: ForceNode,
   context: CanvasRenderingContext2D,
   globalScale: number,
-  palette: GraphPalette
+  palette: GraphPalette,
+  selected = false
 ) {
   if (globalScale < 0.42) {
     return;
@@ -320,6 +344,17 @@ function drawNodeLabel(
     context.stroke();
     context.restore();
   }
+  if (selected) {
+    const radius = Math.max(10, Math.sqrt(Math.max(1, node.weight)) * 4.8);
+    context.save();
+    context.lineWidth = Math.max(2, 3 / globalScale);
+    context.strokeStyle = palette.foreground;
+    context.setLineDash([Math.max(4, 6 / globalScale), Math.max(2, 4 / globalScale)]);
+    context.beginPath();
+    context.arc(x, y, radius + 7 / globalScale, 0, Math.PI * 2);
+    context.stroke();
+    context.restore();
+  }
   context.font = `700 ${fontSize}px ui-monospace, SFMono-Regular, Menlo, Consolas, monospace`;
   context.textAlign = "center";
   context.textBaseline = "middle";
@@ -330,16 +365,25 @@ function drawNodeLabel(
   context.fillText(label, x, y + 13 / globalScale);
 }
 
+function forceNodeToPayload(node: ForceNode): WeightedGraphNode {
+  return {
+    id: node.id,
+    kind: node.kind,
+    label: node.label,
+    weight: node.weight,
+    in: node.in,
+    out: node.out,
+    attr: node.attr
+  };
+}
+
 function normalizeKind(kind: string | undefined) {
   const normalized = String(kind || "").toLowerCase();
-  if (
-    normalized === "register" ||
-    normalized === "function" ||
-    normalized === "doc_section" ||
-    normalized === "doc_box" ||
-    normalized === "pdf_section"
-  ) {
+  if (normalized === "register" || normalized === "function" || normalized === "doc") {
     return normalized as ProductGraphKind;
+  }
+  if (normalized === "doc_section" || normalized === "doc_box" || normalized === "pdf_section") {
+    return "doc";
   }
   return null;
 }
@@ -356,11 +400,8 @@ function colorForKind(kind: string, palette: GraphPalette) {
   if (kind === "register") {
     return palette.register;
   }
-  if (kind === "doc_section" || kind === "doc_box") {
+  if (kind === "doc") {
     return palette.doc;
-  }
-  if (kind === "pdf_section") {
-    return palette.pdf;
   }
   return palette.function;
 }

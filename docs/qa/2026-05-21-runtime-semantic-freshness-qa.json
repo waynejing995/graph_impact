@@ -1,0 +1,70 @@
+{
+  "source": "asip.runtime_semantic_freshness_qa",
+  "generated_at": "2026-05-21T01:05:11+00:00",
+  "db_path": "/Volumes/data/User/wayne/Code/graph_impact/data/asip.db",
+  "latest_index_job_id": 10,
+  "latest_graph_rebuild_job_id": 44,
+  "latest_semantic_edges_job_id": 45,
+  "latest_doc_nodes_job_id": 49,
+  "freshness_floor_job_id": 44,
+  "db_semantic_edge_counts": {
+    "doc_nodes": 4,
+    "semantic_edges": 10
+  },
+  "global_graph_stage_counts": {
+    "deterministic": 18415,
+    "mixed": 8,
+    "semantic": 4
+  },
+  "query_graph_probe": {
+    "query": "GCVM_L2_CNTL",
+    "row_count": 24,
+    "stage_counts": {
+      "semantic": 2,
+      "deterministic": 89
+    }
+  },
+  "gate_status": "pass",
+  "summary": {
+    "checks": 7,
+    "passed": 7,
+    "failed": 0
+  },
+  "checks": [
+    {
+      "id": "storage_runtime_stale_semantic_filter",
+      "status": "pass",
+      "message": "stale extractor edge count=0"
+    },
+    {
+      "id": "storage_runtime_fresh_semantic_keep",
+      "status": "pass",
+      "message": "fresh semantic edge count=10"
+    },
+    {
+      "id": "storage_runtime_fresh_doc_node_keep",
+      "status": "pass",
+      "message": "fresh doc-node edge count=4"
+    },
+    {
+      "id": "storage_runtime_extractor_job_kind_binding",
+      "status": "pass",
+      "message": "bad extractor/job binding count=0"
+    },
+    {
+      "id": "storage_runtime_provider_mismatch_filter",
+      "status": "pass",
+      "message": "provider/model mismatch count=0"
+    },
+    {
+      "id": "real_db_global_graph_semantic_leak_probe",
+      "status": "pass",
+      "message": "global graph stage counts={'deterministic': 18415, 'mixed': 8, 'semantic': 4}"
+    },
+    {
+      "id": "real_db_query_graph_semantic_leak_probe",
+      "status": "pass",
+      "message": "query GCVM_L2_CNTL rows=24; stage counts={'semantic': 2, 'deterministic': 89}"
+    }
+  ]
+}

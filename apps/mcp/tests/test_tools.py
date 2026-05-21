@@ -1,9 +1,11 @@
 import unittest
+import json
 import threading
 from http.server import BaseHTTPRequestHandler, HTTPServer
 from pathlib import Path
 from tempfile import TemporaryDirectory
 
+from apps.mcp import tools as mcp_tools
 from apps.mcp.tools import (
     acceptance_runs,
     corpus_add,
@@ -199,6 +201,50 @@ class McpToolsTests(unittest.TestCase):
                 ]
                 self.assertTrue(register_nodes)
                 self.assertIn("ENABLE_L2_CACHE", register_nodes[0]["attr"]["fields"])
+        finally:
+            server.shutdown()
+            server.server_close()
+
+    def test_semantic_doc_nodes_tool_generates_doc_boxes_from_indexed_documents(self):
+        server = _start_fake_doc_node_server()
+        try:
+            with TemporaryDirectory() as tmpdir:
+                root = Path(tmpdir)
+                db_path = _create_doc_node_sqlite_db(root / "asip.db")
+                provider_settings_save(
+                    {
+                        "edge": {
+                            "provider": "ollama",
+                            "base_url": server.base_url,
+                            "api_path": "/api/chat",
+                            "model": "gemma4:e4b",
+                            "timeout_seconds": 2,
+                        }
+                    },
+                    db_path=db_path,
+                )
+
+                result = mcp_tools.semantic_doc_nodes_generate_batch(db_path=db_path, limit=1, batch_size=1)
+
+                self.assertEqual(result["source"], "doc_node_batch_job")
+                self.assertEqual(result["box_count"], 1)
+                self.assertGreaterEqual(result["edge_count"], 2)
+                nodes = {node["id"]: node for node in result["graph"]["nodes"]}
+                box_id = "docs/guide.md#box-l2-cache-control"
+                self.assertTrue(all(node["kind"] in {"function", "register", "doc"} for node in nodes.values()))
+                self.assertEqual(nodes[box_id]["kind"], "doc")
+                self.assertEqual(nodes[box_id]["attr"]["doc_kind"], "boxmatrix_box")
+                self.assertEqual(nodes["docs/guide.md#programming-local-registers"]["kind"], "doc")
+                self.assertEqual(
+                    nodes["docs/guide.md#programming-local-registers"]["attr"]["doc_kind"],
+                    "markdown_section",
+                )
+                edges = {(edge["src"], edge["relation"], edge["dst"]) for edge in result["graph"]["edges"]}
+                self.assertIn(("docs/guide.md#programming-local-registers", "contains", box_id), edges)
+                self.assertIn((box_id, "documents", "register:GC:GCVM_L2_CNTL"), edges)
+                self.assertEqual(server.errors, [])
+                self.assertEqual(len(server.requests), 1)
+                self.assertEqual(server.requests[0]["body"]["model"], "gemma4:e4b")
         finally:
             server.shutdown()
             server.server_close()
@@ -586,6 +632,43 @@ class _FakeEdgeServer(HTTPServer):
     base_url: str
 
 
+def _read_json_request(handler: BaseHTTPRequestHandler) -> dict:
+    length = int(handler.headers.get("Content-Length") or "0")
+    raw = handler.rfile.read(length)
+    return json.loads(raw.decode("utf-8"))
+
+
+def _ollama_prompt_text(request_body: dict) -> str:
+    parts = []
+    if request_body.get("prompt"):
+        parts.append(str(request_body["prompt"]))
+    for message in request_body.get("messages") or []:
+        content = message.get("content") if isinstance(message, dict) else message
+        if isinstance(content, list):
+            parts.extend(str(item.get("text") if isinstance(item, dict) else item) for item in content)
+        elif content:
+            parts.append(str(content))
+    return "\n".join(parts)
+
+
+def _doc_node_request_errors(request_body: dict) -> list[str]:
+    prompt = _ollama_prompt_text(request_body)
+    schema_terms = ("documents", "boxes", "relationships")
+    checks = [
+        (request_body.get("model") == "gemma4:e4b", "request model should be gemma4:e4b"),
+        (
+            "docs/guide.md" in prompt or "programming-local-registers" in prompt,
+            "prompt should include docs/guide.md or programming-local-registers",
+        ),
+        ("GCVM_L2_CNTL" in prompt, "prompt should include GCVM_L2_CNTL"),
+        (
+            "BoxMatrix" in prompt or all(term in prompt for term in schema_terms),
+            "prompt should include BoxMatrix or documents/boxes/relationships schema terms",
+        ),
+    ]
+    return [message for passed, message in checks if not passed]
+
+
 class _FakeEdgeHandler(BaseHTTPRequestHandler):
     def do_POST(self):
         if self.path != "/api/chat":
@@ -607,9 +690,57 @@ class _FakeEdgeHandler(BaseHTTPRequestHandler):
         return
 
 
+class _FakeDocNodeHandler(BaseHTTPRequestHandler):
+    def do_POST(self):
+        if self.path != "/api/chat":
+            self.send_response(404)
+            self.end_headers()
+            return
+        request_body = _read_json_request(self)
+        errors = _doc_node_request_errors(request_body)
+        self.server.requests.append({"body": request_body, "prompt": _ollama_prompt_text(request_body)})
+        self.server.errors.extend(errors)
+        if errors:
+            body = json.dumps({"errors": errors}).encode("utf-8")
+            self.send_response(400)
+            self.send_header("Content-Type", "application/json")
+            self.send_header("Content-Length", str(len(body)))
+            self.end_headers()
+            self.wfile.write(body)
+            return
+        body = (
+            b'{"message":{"content":"{\\"documents\\":[{\\"id\\":\\"docs/guide.md#programming-local-registers\\",'
+            b'\\"boxes\\":[{\\"id\\":\\"l2-cache-control\\",\\"name\\":\\"L2 cache control\\",'
+            b'\\"summary\\":\\"Programs GCVM_L2_CNTL and ENABLE_L2_CACHE.\\",'
+            b'\\"inputs\\":[\\"GCVM_L2_CNTL\\"],\\"outputs\\":[\\"ENABLE_L2_CACHE\\"],'
+            b'\\"constraints\\":[\\"cache before use\\"],\\"confidence\\":0.92,'
+            b'\\"evidence\\":\\"GCVM_L2_CNTL controls ENABLE_L2_CACHE\\"}],'
+            b'\\"relationships\\":[{\\"src\\":\\"l2-cache-control\\",\\"relation\\":\\"documents_register\\",'
+            b'\\"dst\\":\\"GCVM_L2_CNTL\\",\\"confidence\\":0.9,\\"evidence\\":\\"register section\\"}]}]}"}}'
+        )
+        self.send_response(200)
+        self.send_header("Content-Type", "application/json")
+        self.send_header("Content-Length", str(len(body)))
+        self.end_headers()
+        self.wfile.write(body)
+
+    def log_message(self, format, *args):
+        return
+
+
 def _start_fake_edge_server() -> _FakeEdgeServer:
     server = _FakeEdgeServer(("127.0.0.1", 0), _FakeEdgeHandler)
     server.base_url = f"http://127.0.0.1:{server.server_port}"
+    thread = threading.Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+    return server
+
+
+def _start_fake_doc_node_server() -> _FakeEdgeServer:
+    server = _FakeEdgeServer(("127.0.0.1", 0), _FakeDocNodeHandler)
+    server.base_url = f"http://127.0.0.1:{server.server_port}"
+    server.requests = []
+    server.errors = []
     thread = threading.Thread(target=server.serve_forever, daemon=True)
     thread.start()
     return server
@@ -684,6 +815,21 @@ def _create_live_smoke_sqlite_db(db_path: Path) -> str:
         query_id="fixture_doorbell_interrupt_disable",
     )
     store.add_edge("program_gcvm_l2", "GCVM_L2_CNTL", "sets_field", 0.95, provenance={"fields": ["ENABLE_L2_CACHE"]})
+    return str(db_path)
+
+
+def _create_doc_node_sqlite_db(db_path: Path) -> str:
+    from asip.storage import AsipStore
+
+    store = AsipStore.connect(str(db_path))
+    store.migrate()
+    document_id = store.add_document("docs", "doc", "docs/guide.md")
+    store.add_chunk(
+        document_id,
+        "# Programming local registers\nGCVM_L2_CNTL controls ENABLE_L2_CACHE.",
+        1,
+        2,
+    )
     return str(db_path)
 
 

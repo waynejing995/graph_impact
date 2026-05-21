@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { defaultDbPath, runAsipCli } from "@/lib/asip-cli";
+import { explicitTextOrError } from "@/lib/request-paths";
 
 type RouteContext = {
   params: Promise<{ id: string }>;
@@ -7,7 +8,15 @@ type RouteContext = {
 
 export async function GET(request: NextRequest, context: RouteContext) {
   const { id } = await context.params;
-  const dbPath = request.nextUrl.searchParams.get("dbPath")?.trim() || defaultDbPath;
+  let dbPath = defaultDbPath;
+  try {
+    dbPath = explicitTextOrError(request.nextUrl.searchParams.get("dbPath"), "dbPath") ?? defaultDbPath;
+  } catch (error) {
+    return NextResponse.json(
+      { error: error instanceof Error ? error.message : "dbPath cannot be blank" },
+      { status: 400 }
+    );
+  }
   const jobId = id?.trim();
   if (!jobId) {
     return NextResponse.json({ error: "job id is required" }, { status: 400 });

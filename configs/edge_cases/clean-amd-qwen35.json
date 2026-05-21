@@ -26,8 +26,31 @@
       "id": "linux-amdgpu",
       "repo": "https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git",
       "default_source_root": "data/corpora/linux",
-      "relative_root": "drivers/gpu/drm/amd/amdgpu",
-      "include": ["**/*.c", "**/*.h", "**/*.md", "**/*.rst", "**/*.pdf"]
+      "relative_root": "drivers/gpu/drm/amd",
+      "include": [
+        "amdgpu/*.c",
+        "amdgpu/**/*.c",
+        "amdgpu/*.h",
+        "amdgpu/**/*.h",
+        "amdgpu/*.md",
+        "amdgpu/**/*.md",
+        "amdgpu/*.rst",
+        "amdgpu/**/*.rst",
+        "amdgpu/*.pdf",
+        "amdgpu/**/*.pdf",
+        "include/asic_reg/*.h",
+        "include/asic_reg/**/*.h"
+      ],
+      "subfolders": [
+        {
+          "relative_root": "drivers/gpu/drm/amd/amdgpu",
+          "include": ["**/*.c", "**/*.h", "**/*.md", "**/*.rst", "**/*.pdf"]
+        },
+        {
+          "relative_root": "drivers/gpu/drm/amd/include/asic_reg",
+          "include": ["**/*.h"]
+        }
+      ]
     },
     {
       "id": "amd-amdgpu-docs",

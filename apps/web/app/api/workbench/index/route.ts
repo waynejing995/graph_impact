@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { defaultConfigPath, defaultDbPath, runAsipCli } from "@/lib/asip-cli";
+import { explicitTextOrError, normalizeStringList, textOrFallback } from "@/lib/request-paths";
 
 export async function POST(request: Request) {
   const body = (await request.json().catch(() => ({}))) as {
@@ -9,12 +10,21 @@ export async function POST(request: Request) {
     resolverProfileIds?: string[];
     resolver_profile_ids?: string[];
   };
-  const configPath = body.configPath ?? defaultConfigPath;
-  const dbPath = body.dbPath ?? defaultDbPath;
-  const resolverProfileIds = body.resolverProfileIds ?? body.resolver_profile_ids ?? [];
+  const configPath = textOrFallback(body.configPath, defaultConfigPath);
+  let dbPath = defaultDbPath;
+  try {
+    dbPath = explicitTextOrError(body.dbPath, "dbPath") ?? defaultDbPath;
+  } catch (error) {
+    return NextResponse.json(
+      { status: "failed", error: error instanceof Error ? error.message : "dbPath cannot be blank" },
+      { status: 400 }
+    );
+  }
+  const corpusIds = normalizeStringList(body.corpusIds);
+  const resolverProfileIds = normalizeStringList(body.resolverProfileIds ?? body.resolver_profile_ids);
   try {
     const args = ["index", "--config", configPath, "--db", dbPath];
-    for (const corpusId of body.corpusIds ?? []) {
+    for (const corpusId of corpusIds) {
       args.push("--corpus-id", corpusId);
     }
     for (const profileId of resolverProfileIds) {
@@ -39,7 +49,7 @@ export async function POST(request: Request) {
       jobStatus: summary.job_status ?? "succeeded",
       source: summary.source,
       dbPath: summary.db_path === defaultDbPath ? "data/asip.db" : summary.db_path,
-      corpusIds: summary.corpus_ids ?? body.corpusIds ?? [],
+      corpusIds: summary.corpus_ids ?? corpusIds,
       resolverProfileIds: summary.resolver_profile_ids ?? resolverProfileIds,
       documents: summary.documents,
       chunks: summary.chunks,

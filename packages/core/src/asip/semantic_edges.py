@@ -11,7 +11,10 @@ from pathlib import Path, PurePosixPath
 from typing import Any, Dict, Iterable, List, Mapping, Optional, Protocol, Tuple
 
 from .config_values import expand_extra_headers
+from .graph_schema import ALLOWED_PRODUCT_RELATIONS
 from .limits import load_workbench_limits
+
+PRODUCT_RELATION_PROMPT = ", ".join(sorted(ALLOWED_PRODUCT_RELATIONS))
 
 
 @dataclass(frozen=True)
@@ -56,16 +59,43 @@ class EdgeCaseConfig:
 
 
 @dataclass(frozen=True)
-class FullCorpus:
-    id: str
-    repo: str
-    default_source_root: str
+class FullCorpusSubfolder:
     relative_root: str = ""
     include: List[str] = None  # type: ignore[assignment]
 
     def __post_init__(self) -> None:
         if self.include is None:
             object.__setattr__(self, "include", ["**/*.c", "**/*.h"])
+
+
+@dataclass(frozen=True)
+class FullCorpus:
+    id: str
+    repo: str
+    default_source_root: str
+    relative_root: str = ""
+    include: List[str] = None  # type: ignore[assignment]
+    subfolders: List[FullCorpusSubfolder] = None  # type: ignore[assignment]
+
+    def __post_init__(self) -> None:
+        if self.include is None:
+            object.__setattr__(self, "include", ["**/*.c", "**/*.h"])
+        if self.subfolders is None:
+            object.__setattr__(self, "subfolders", [])
+
+
+def normalize_corpus_relative_root(relative_root: Any, *, allow_empty: bool = True) -> str:
+    text = str(relative_root or "").strip().replace("\\", "/")
+    if text in {"", "."}:
+        if allow_empty:
+            return ""
+        raise ValueError("corpus subfolder must be a repo-relative path")
+    if text.startswith("~"):
+        raise ValueError(f"corpus subfolder must be repo-relative: {text}")
+    path = PurePosixPath(text)
+    if path.is_absolute() or any(part in {"", ".", ".."} for part in path.parts) or ":" in text:
+        raise ValueError(f"corpus subfolder must be repo-relative: {text}")
+    return str(path)
 
 
 @dataclass(frozen=True)
@@ -166,6 +196,34 @@ class OllamaEdgeProvider:
         return parse_ollama_json_message(data)
 
 
+class OllamaDocNodeProvider(OllamaEdgeProvider):
+    """Ollama HTTP provider for BoxMatrix-style document node extraction."""
+
+    def _generate_with_model(self, prompt: str, model: EdgeModelConfig, model_name: str) -> Dict[str, Any]:
+        body = {
+            "model": model_name,
+            "stream": False,
+            "format": model.format,
+            "think": model.think,
+            "keep_alive": model.keep_alive,
+            "options": {
+                "num_ctx": model.num_ctx,
+                "num_predict": model.num_predict,
+                "temperature": model.temperature,
+            },
+            "messages": _doc_node_messages(prompt),
+        }
+        request = urllib.request.Request(
+            _request_url(model, self.base_url, "/api/chat"),
+            data=json.dumps(body).encode("utf-8"),
+            headers=_request_headers(model),
+            method="POST",
+        )
+        with urllib.request.urlopen(request, timeout=model.timeout_seconds) as response:
+            data = json.loads(response.read().decode("utf-8"))
+        return parse_ollama_json_message(data)
+
+
 class OpenAICompatibleEdgeProvider:
     """OpenAI-compatible chat completions provider for semantic edge generation."""
 
@@ -207,12 +265,45 @@ class OpenAICompatibleEdgeProvider:
         return parse_openai_compatible_json_message(data)
 
 
+class OpenAICompatibleDocNodeProvider(OpenAICompatibleEdgeProvider):
+    """OpenAI-compatible provider for BoxMatrix-style document node extraction."""
+
+    def _generate_with_model(self, prompt: str, model: EdgeModelConfig, model_name: str) -> Dict[str, Any]:
+        body: Dict[str, Any] = {
+            "model": model_name,
+            "stream": False,
+            "temperature": model.temperature,
+            "max_tokens": model.num_predict,
+            "messages": _doc_node_messages(prompt),
+        }
+        if model.format == "json":
+            body["response_format"] = {"type": "json_object"}
+        request = urllib.request.Request(
+            _request_url(model, self.base_url, "/v1/chat/completions"),
+            data=json.dumps(body).encode("utf-8"),
+            headers=_request_headers(model),
+            method="POST",
+        )
+        with urllib.request.urlopen(request, timeout=model.timeout_seconds) as response:
+            data = json.loads(response.read().decode("utf-8"))
+        return parse_openai_compatible_json_message(data)
+
+
 def create_edge_provider(model: EdgeModelConfig) -> EdgeProvider:
     provider = _normalize_provider_id(model.provider)
     if provider == "ollama":
         return OllamaEdgeProvider()
     if provider in {"openai", "openai-compatible"}:
         return OpenAICompatibleEdgeProvider()
+    raise ValueError(f"Unsupported edge provider: {model.provider}")
+
+
+def create_doc_node_provider(model: EdgeModelConfig) -> EdgeProvider:
+    provider = _normalize_provider_id(model.provider)
+    if provider == "ollama":
+        return OllamaDocNodeProvider()
+    if provider in {"openai", "openai-compatible"}:
+        return OpenAICompatibleDocNodeProvider()
     raise ValueError(f"Unsupported edge provider: {model.provider}")
 
 
@@ -232,11 +323,34 @@ def _edge_messages(prompt: str) -> List[Dict[str, str]]:
                 "Each supplied TERMS identifier must appear in src or dst of at least one edge when the snippet supports it. "
                 "Emit at most six edges per case. Keep evidence under 12 words and include line numbers when available. "
                 "Do not use markdown fences. "
-                "Use relation names from: reads, writes, sets_field, checks_mask, "
-                "maps_base, assigns_doorbell, waits_for. "
+                f"Use relation names from: {PRODUCT_RELATION_PROMPT}. "
                 "Schema: {\"cases\":[{\"id\":string,\"edges\":[{\"src\":string,"
                 "\"relation\":string,\"dst\":string,\"confidence\":number,"
                 "\"evidence\":string}]}]}"
+            ),
+        },
+        {"role": "user", "content": f"/no_think\n{prompt}"},
+    ]
+
+
+def _doc_node_messages(prompt: str) -> List[Dict[str, str]]:
+    return [
+        {
+            "role": "system",
+            "content": (
+                "/no_think "
+                "Return only valid JSON for ASIP document graph extraction. "
+                "Use the exact DOCUMENT ids provided by the user as documents[].id. "
+                "Extract BoxMatrix boxes only when the text contains a concrete hardware concept, workflow, "
+                "constraint, register behavior, telemetry metric, RAS event, or API surface. "
+                "Use linked register or function symbols as relationship endpoints when provided; "
+                "put fields and enum values inside box inputs, outputs, or constraints instead of endpoints. "
+                "Do not emit markdown fences or prose. "
+                "Schema: {\"documents\":[{\"id\":string,\"boxes\":[{\"id\":string,"
+                "\"name\":string,\"summary\":string,\"inputs\":[string],\"outputs\":[string],"
+                "\"constraints\":[string],\"confidence\":number,\"evidence\":string}],"
+                "\"relationships\":[{\"src\":string,\"relation\":string,\"dst\":string,"
+                "\"confidence\":number,\"evidence\":string}]}]}"
             ),
         },
         {"role": "user", "content": f"/no_think\n{prompt}"},
@@ -314,6 +428,7 @@ def load_full_corpus_edge_config(path: Path) -> FullCorpusEdgeConfig:
                 default_source_root=item["default_source_root"],
                 relative_root=item.get("relative_root", ""),
                 include=list(item.get("include", ["**/*.c", "**/*.h"])),
+                subfolders=_load_corpus_subfolders(item),
             )
             for item in data["corpora"]
         ],
@@ -331,6 +446,58 @@ def load_full_corpus_edge_config(path: Path) -> FullCorpusEdgeConfig:
             for item in data["queries"]
         ],
     )
+
+
+def _load_corpus_subfolders(item: Mapping[str, Any]) -> List[FullCorpusSubfolder]:
+    include = list(item.get("include", ["**/*.c", "**/*.h"]))
+    raw_subfolders = item.get("subfolders", item.get("filters", []))
+    if not raw_subfolders and item.get("relative_roots"):
+        raw_subfolders = [{"relative_root": value, "include": include} for value in item.get("relative_roots", [])]
+    if not isinstance(raw_subfolders, list):
+        return []
+    subfolders: List[FullCorpusSubfolder] = []
+    for raw in raw_subfolders:
+        if isinstance(raw, str):
+            subfolders.append(
+                FullCorpusSubfolder(
+                    relative_root=normalize_corpus_relative_root(raw, allow_empty=False),
+                    include=include,
+                )
+            )
+            continue
+        if not isinstance(raw, Mapping):
+            continue
+        relative_root = normalize_corpus_relative_root(
+            raw.get("relative_root", raw.get("relativeRoot", raw.get("root", raw.get("path", "")))),
+            allow_empty=False,
+        )
+        subfolder_include = raw.get("include", include)
+        if isinstance(subfolder_include, str):
+            subfolder_include = [item.strip() for item in subfolder_include.split(",") if item.strip()]
+        subfolders.append(
+            FullCorpusSubfolder(
+                relative_root=relative_root,
+                include=list(subfolder_include or include),
+            )
+        )
+    return subfolders
+
+
+def full_corpus_scan_folders(corpus: FullCorpus) -> List[FullCorpusSubfolder]:
+    if corpus.subfolders:
+        return [
+            FullCorpusSubfolder(
+                relative_root=normalize_corpus_relative_root(folder.relative_root),
+                include=list(folder.include),
+            )
+            for folder in corpus.subfolders
+        ]
+    return [
+        FullCorpusSubfolder(
+            relative_root=normalize_corpus_relative_root(corpus.relative_root),
+            include=corpus.include,
+        )
+    ]
 
 
 def read_snippet(case: EdgeCase, source_root: Path) -> str:
@@ -389,13 +556,37 @@ def scan_full_corpus_queries(
 
     for corpus in config.corpora:
         source_root = Path(source_roots.get(corpus.id, Path(corpus.default_source_root))).expanduser()
-        scan_root = source_root / corpus.relative_root if corpus.relative_root else source_root
-        files = list(_iter_source_files(scan_root, corpus.include))
+        files: List[Path] = []
+        seen_files: set[Path] = set()
+        scan_roots: List[Dict[str, Any]] = []
+        for folder in full_corpus_scan_folders(corpus):
+            scan_root = source_root / folder.relative_root if folder.relative_root else source_root
+            resolved_source_root = source_root.resolve(strict=False)
+            resolved_scan_root = scan_root.resolve(strict=False)
+            if resolved_scan_root != resolved_source_root and resolved_source_root not in resolved_scan_root.parents:
+                raise ValueError(f"corpus subfolder must be repo-relative: {folder.relative_root}")
+            folder_files = list(_iter_source_files(scan_root, folder.include))
+            for file_path in folder_files:
+                file_key = file_path.resolve(strict=False)
+                if file_key in seen_files:
+                    continue
+                seen_files.add(file_key)
+                files.append(file_path)
+            scan_roots.append(
+                {
+                    "relative_root": folder.relative_root,
+                    "scan_root": str(scan_root),
+                    "include": list(folder.include),
+                    "file_count": len(folder_files),
+                }
+            )
         scanned_files[corpus.id] = files
+        first_scan_root = scan_roots[0]["scan_root"] if scan_roots else str(source_root)
         corpus_summary[corpus.id] = {
             "repo": corpus.repo,
             "source_root": str(source_root),
-            "scan_root": str(scan_root),
+            "scan_root": first_scan_root,
+            "scan_roots": scan_roots,
             "relative_root": corpus.relative_root,
             "file_count": len(files),
             "commit": git_short_commit(source_root),
@@ -409,7 +600,7 @@ def scan_full_corpus_queries(
             query=query,
             files=scanned_files[corpus.id],
             source_root=source_root,
-            scan_root=source_root / corpus.relative_root if corpus.relative_root else source_root,
+            scan_root=source_root,
         )
         resolved_queries.append(
             {
@@ -445,6 +636,7 @@ def build_full_corpus_prompt(scan: Dict[str, Any]) -> str:
         "Every edge must be grounded in the provided SOURCE and preserve exact C identifiers.",
         "If a case has multiple snippets, emit only edges supported by at least one snippet.",
         "Use code/register/field/function identifiers as src and dst. Do not use file paths as src or dst.",
+        f"Use relation names from: {PRODUCT_RELATION_PROMPT}.",
         "Every supplied TERMS identifier that appears in the snippet must appear in src or dst of at least one edge.",
         "",
         "SCAN SUMMARY:",
@@ -985,7 +1177,7 @@ def _fake_case(case_id: str, terms: List[str]) -> Dict[str, Any]:
     edges = [
         {
             "src": unique_terms[0],
-            "relation": "mentions",
+            "relation": "relates_to",
             "dst": unique_terms[index],
             "confidence": 1.0,
             "evidence": "deterministic test edge",

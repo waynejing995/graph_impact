@@ -1,10 +1,23 @@
 # G15 Performance Smoke And Deterministic Rebuild
 
-Status: Current performance pass with explicit residuals; fixture smoke, repeat real-corpus graph rebuild, query timing, full local provider backfill, and empty-DB raw re-index timing exist
+Status: Current performance pass with explicit residuals; fixture smoke, repeat real-corpus graph rebuild, query timing, full local provider backfill, and empty-DB raw re-index timing exist. The 2026-05-19 integration plan now requires layered profiling before any full-node/edge loading optimization.
 
 ## Requirement
 
 MVP-1 must include basic local performance smoke checks so the workbench is not only correct on tiny mocked paths but also practical on a developer machine.
+
+2026-05-19 update: query and global graph loading felt slow in the browser, so
+the next optimization pass must start with profiling rather than guessing.
+Profile layers are now defined in
+[`docs/specs/2026-05-19-asip-graph-integration-plan.md`](../specs/2026-05-19-asip-graph-integration-plan.md):
+
+- browser fetch/JSON/layout/canvas readiness;
+- Next BFF Python spawn, stdout size, and JSON parse time;
+- Python query stages: FTS, vector/provider search, scoring, candidate
+  overfetch, and graph expansion;
+- SQLite/NetworkX edge scan, aggregation, component selection, and node
+  metadata hydration;
+- acceptance runner per-query elapsed time and graph/provider detail.
 
 The MVP-1 design sets these initial targets:
 
@@ -42,6 +55,13 @@ Real-corpus performance targets should be measured after the first full AMD inde
   - `test_query_evidence_uses_configured_vector_limit`
   - `test_semantic_batch_candidate_overfetch_multiplier_is_configurable`
 - 2026-05-18 fixture performance smoke is now a product CLI path and core test, not just a hand-written benchmark. `asip.cli performance-smoke` rebuilds a small fixture from empty SQLite twice, compares table counts, and times live queries. `docs/qa/2026-05-18-performance-smoke-fixture.json` records two matching rebuilds over `docs/fixtures/performance-smoke`: `documents=2`, `chunks=2`, `evidence=19`, `edges=4`, with elapsed times `0.053971s` and `0.042888s`. Five fixture queries all returned rows and stayed under one second: `0.099421s`, `0.002901s`, `0.002733s`, `0.007449s`, and `0.005412s`.
+- 2026-05-20 current-tree fixture performance rerun is recorded in
+  `docs/qa/2026-05-20-performance-smoke-fixture-current.md` and `.json`.
+  The same product CLI path rebuilt the fixture twice from empty DBs with
+  stable counts (`documents=2`, `chunks=2`, `evidence=19`, `edges=4`) in
+  `0.087929s` and `0.053608s`. Five fixture queries all returned `8` rows and
+  stayed under one second: `0.141931s`, `0.003118s`, `0.002944s`,
+  `0.002214s`, and `0.002795s`.
 - 2026-05-18 query-graph performance correction is recorded in `docs/qa/2026-05-18-query-graph-performance-qa.md`. `graph_for_rows()` now expands multiple query seeds with one NetworkX build and reuses the multi-seed empty result instead of rebuilding through `expand_query_graph()`. The no-edge multi-seed storage path now returns seed nodes instead of raising `NameError`, and callable-symbol snippet checks no longer compile a regex per evidence row.
 - After that correction, six real queries over the dirty local `data/asip.db` returned rows and query graphs in `4.161s`, `3.845s`, `0.878s`, `2.135s`, `2.093s`, and `2.084s`. The two GCVM paths dropped from roughly 10 seconds to about 4 seconds. The Web Playwright acceptance route for AQ01 completed in `26.3s`, below the 30s e2e timeout.
 - 2026-05-18 repeat real-corpus graph rebuild QA is recorded in `docs/qa/2026-05-18-g15-real-corpus-repeat-graph-rebuild.md` and `.json`. Two SQLite backup copies of live `data/asip.db` ran `python3 -m asip.cli graph-rebuild --corpus-id linux-amdgpu --corpus-id mxgpu`. Run 1 took `131.639s`, run 2 took `126.034s`; both processed `1225` files, rebuilt `41923` deterministic edges, and ended with stable counts (`documents=124`, `chunks=21884`, `evidence=860516`, `edges=41936`, `embeddings=32`) plus matching edge source/relation counts.
@@ -55,7 +75,23 @@ Real-corpus performance targets should be measured after the first full AMD inde
 
 The repo now proves that a small fixture index can be rebuilt from scratch quickly with stable table counts across two empty-DB runs, and that five fixture queries stay below the initial one-second smoke target.
 
-The current AMD corpus path now has practical query latency fixes, real query timing over more than five ASIP queries, a repeat deterministic graph rebuild benchmark, bounded provider embedding smoke, a full local Ollama provider embedding backfill timing on a temp DB, two measured empty-DB raw re-index runs, and an edge-count summary/table fix. Remaining performance risk is product-quality and scale: semantic ranking quality, local model latency, and hosted-provider throughput remain explicit follow-ups.
+The current AMD corpus path now has practical query latency fixes, real query timing over more than five ASIP queries, a repeat deterministic graph rebuild benchmark, bounded provider embedding smoke, a full local Ollama provider embedding backfill timing on a temp DB, two measured empty-DB raw re-index runs, and an edge-count summary/table fix. Remaining performance risk is product-quality and scale: semantic ranking quality, local model latency, hosted-provider throughput, and full-node/edge global graph loading remain explicit follow-ups.
+
+Next optimization work must record a before/after profile for at least one slow
+query and one global graph load. Candidate changes such as materialized graph
+summaries, DB-mtime/job-id cache keys, metadata hydration after edge selection,
+streamed/paged graph payloads, warm API workers, or renderer reducers are not
+accepted without profile evidence showing the bottleneck.
+
+2026-05-19 Product Graph V2 profiling boundary: full graph loading must not be
+optimized by hiding another hardcoded limit. The UI may default to a budgeted
+global graph, but it must expose loaded/visible/total counts, weight threshold,
+relation/stage/source filters, and an explicit full/all action. The profile
+must record browser fetch/JSON/canvas readiness, Next BFF spawn and parse time,
+Python `global_graph()` time, SQLite/NetworkX selection time, payload bytes,
+node/edge counts, and memory where practical. Only after that evidence should
+the implementation choose cache, precomputed summaries, paged/streamed graph
+payloads, warm workers, renderer reducers, or a Sigma/Graphology migration.
 
 ## Acceptance Criteria
 
@@ -64,6 +100,14 @@ The current AMD corpus path now has practical query latency fixes, real query ti
 - At least five fixture/live queries record elapsed time; fixture query time is under one second on the development machine. Implemented for the fixture smoke.
 - Real AMD deterministic graph rebuild records repeat elapsed time and stable counts without pretending that unmeasured full raw re-index targets have been met.
 - Provider-backed runs distinguish local deterministic fallback time from live Ollama/OpenAI-compatible provider time. Implemented for bounded 128-chunk Ollama smoke and full local temp-copy Ollama backfill; credentialed hosted provider throughput remains open.
+- Slow query and global graph optimization begins with cProfile/curl/browser
+  timing evidence, not a blind limit tweak.
+- Full global graph loading exposes explicit user controls and reports loaded
+  versus visible totals; UI-only filters must not be mistaken for backend
+  budget changes.
+- Full graph performance work records the actual bottleneck layer before
+  changing backend budgets, CLI defaults, renderer package, or force-layout
+  parameters.
 
 ## Required Tests
 
@@ -79,6 +123,8 @@ The current AMD corpus path now has practical query latency fixes, real query ti
 The final QA package includes both sides of the performance story:
 
 - repeatable fixture rebuild/query timing, now recorded in `docs/qa/2026-05-18-performance-smoke-fixture.md/json`;
+- current-tree repeatable fixture rebuild/query timing, now recorded in
+  `docs/qa/2026-05-20-performance-smoke-fixture-current.md/json`;
 - repeat real-corpus deterministic graph rebuild timing, query latency budget review, bounded provider timing, and full local temp-copy provider embedding coverage timing are recorded;
 - full raw corpus re-index timing is measured for the current selective raw path in `docs/qa/2026-05-18-g15-empty-db-raw-corpus-reindex.md`.
 

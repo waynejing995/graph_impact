@@ -1,0 +1,226 @@
+{
+  "call_kind_counts": {
+    "vtable_callback": 47,
+    "vtable_dispatch": 4538,
+    "vtable_table_alias": 16
+  },
+  "db_path": "data/asip.db",
+  "dispatch_scope_counts": {
+    "ambiguous": 4530,
+    "generic_slot": 8,
+    "matched_slot": 63
+  },
+  "failure_reasons": [],
+  "gate_status": "pass",
+  "generated_at": "2026-05-21T01:24:20+00:00",
+  "parser_pollution_samples": [],
+  "real_oracles": [
+    {
+      "match_count": 80,
+      "message": "ok",
+      "oracle": "drivers/gpu/drm/amd/amdgpu/amdgpu_device.c:amdgpu_device_ip_hw_init_phase1",
+      "sample": {
+        "call_kind": "vtable_dispatch",
+        "dst": "acp_hw_init",
+        "line_start": 2132,
+        "path": "drivers/gpu/drm/amd/amdgpu/amdgpu_device.c",
+        "src": "amdgpu_device_ip_hw_init_phase1",
+        "type_flow": ""
+      },
+      "status": "pass"
+    }
+  ],
+  "source": "asip.callback_edge_audit",
+  "summary": {
+    "ambiguous_callback_edge_count": 4530,
+    "callback_edge_count": 4601,
+    "explained_dynamic_dispatch_edge_count": 4514,
+    "parser_pollution_candidate_count": 0,
+    "real_oracle_passed": 1,
+    "real_oracle_total": 1,
+    "unexplained_ambiguous_callback_edge_count": 16,
+    "unique_ambiguous_callers": 498,
+    "unique_unexplained_ambiguous_callers": 2
+  },
+  "top_ambiguous_fanout": [
+    {
+      "ambiguous_edge_count": 240,
+      "src": "amdgv_device_func_sw_init"
+    },
+    {
+      "ambiguous_edge_count": 238,
+      "src": "amdgpu_device_ip_init"
+    },
+    {
+      "ambiguous_edge_count": 86,
+      "src": "amdgv_gpumon_handle_sched_event"
+    },
+    {
+      "ambiguous_edge_count": 80,
+      "src": "amdgpu_device_fw_loading"
+    },
+    {
+      "ambiguous_edge_count": 80,
+      "src": "amdgpu_device_ip_hw_init_phase1"
+    },
+    {
+      "ambiguous_edge_count": 80,
+      "src": "amdgpu_device_ip_hw_init_phase2"
+    },
+    {
+      "ambiguous_edge_count": 80,
+      "src": "amdgpu_device_ip_reinit_early_sriov"
+    },
+    {
+      "ambiguous_edge_count": 80,
+      "src": "amdgpu_device_ip_reinit_late_sriov"
+    },
+    {
+      "ambiguous_edge_count": 80,
+      "src": "amdgpu_ip_block_hw_fini"
+    },
+    {
+      "ambiguous_edge_count": 80,
+      "src": "amdgv_device_func_hw_init"
+    },
+    {
+      "ambiguous_edge_count": 78,
+      "src": "amdgpu_device_ip_early_init"
+    },
+    {
+      "ambiguous_edge_count": 77,
+      "src": "amdgpu_device_set_cg_state"
+    },
+    {
+      "ambiguous_edge_count": 73,
+      "src": "amdgpu_device_ip_fini"
+    },
+    {
+      "ambiguous_edge_count": 67,
+      "src": "amdgpu_device_set_pg_state"
+    },
+    {
+      "ambiguous_edge_count": 40,
+      "src": "amdgv_device_func_hw_engine_fini"
+    },
+    {
+      "ambiguous_edge_count": 40,
+      "src": "amdgv_device_func_hw_engine_init"
+    },
+    {
+      "ambiguous_edge_count": 40,
+      "src": "amdgv_device_func_hw_fini"
+    },
+    {
+      "ambiguous_edge_count": 40,
+      "src": "amdgv_device_func_sw_fini"
+    },
+    {
+      "ambiguous_edge_count": 40,
+      "src": "gmc_v10_0_gart_enable"
+    },
+    {
+      "ambiguous_edge_count": 39,
+      "src": "amdgpu_gmc_flush_gpu_tlb_pasid"
+    }
+  ],
+  "top_explained_dynamic_fanout": [
+    {
+      "dynamic_edge_count": 240,
+      "src": "amdgv_device_func_sw_init"
+    },
+    {
+      "dynamic_edge_count": 238,
+      "src": "amdgpu_device_ip_init"
+    },
+    {
+      "dynamic_edge_count": 86,
+      "src": "amdgv_gpumon_handle_sched_event"
+    },
+    {
+      "dynamic_edge_count": 80,
+      "src": "amdgpu_device_fw_loading"
+    },
+    {
+      "dynamic_edge_count": 80,
+      "src": "amdgpu_device_ip_hw_init_phase1"
+    },
+    {
+      "dynamic_edge_count": 80,
+      "src": "amdgpu_device_ip_hw_init_phase2"
+    },
+    {
+      "dynamic_edge_count": 80,
+      "src": "amdgpu_device_ip_reinit_early_sriov"
+    },
+    {
+      "dynamic_edge_count": 80,
+      "src": "amdgpu_device_ip_reinit_late_sriov"
+    },
+    {
+      "dynamic_edge_count": 80,
+      "src": "amdgpu_ip_block_hw_fini"
+    },
+    {
+      "dynamic_edge_count": 80,
+      "src": "amdgv_device_func_hw_init"
+    },
+    {
+      "dynamic_edge_count": 78,
+      "src": "amdgpu_device_ip_early_init"
+    },
+    {
+      "dynamic_edge_count": 77,
+      "src": "amdgpu_device_set_cg_state"
+    },
+    {
+      "dynamic_edge_count": 73,
+      "src": "amdgpu_device_ip_fini"
+    },
+    {
+      "dynamic_edge_count": 67,
+      "src": "amdgpu_device_set_pg_state"
+    },
+    {
+      "dynamic_edge_count": 40,
+      "src": "amdgv_device_func_hw_engine_fini"
+    },
+    {
+      "dynamic_edge_count": 40,
+      "src": "amdgv_device_func_hw_engine_init"
+    },
+    {
+      "dynamic_edge_count": 40,
+      "src": "amdgv_device_func_hw_fini"
+    },
+    {
+      "dynamic_edge_count": 40,
+      "src": "amdgv_device_func_sw_fini"
+    },
+    {
+      "dynamic_edge_count": 40,
+      "src": "gmc_v10_0_gart_enable"
+    },
+    {
+      "dynamic_edge_count": 39,
+      "src": "amdgpu_gmc_flush_gpu_tlb_pasid"
+    }
+  ],
+  "top_unexplained_ambiguous_fanout": [
+    {
+      "ambiguous_edge_count": 9,
+      "src": "aca_bank_parser"
+    },
+    {
+      "ambiguous_edge_count": 7,
+      "src": "aca_bank_is_valid"
+    }
+  ],
+  "type_flow_counts": {
+    "": 3867,
+    "clang_ast_json": 707,
+    "local_receiver_path_alias": 2,
+    "local_receiver_path_alias_ambiguous": 21,
+    "source_receiver_table_alias_ambiguous": 4
+  }
+}

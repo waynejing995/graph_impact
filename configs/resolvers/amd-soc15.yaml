@@ -2,6 +2,23 @@ id: amd-soc15
 language: cpp
 context_vars: [adev, adapt]
 symbol_prefixes: [reg, mm, smn]
+graph:
+  function_normalization:
+    enabled: true
+    rules:
+      - id: amd-ip-versioned-functions
+        enabled: true
+        match: "^(?P<ip_block>athub|df|gc|gmc|gfxhub|gfx|hdp|ih|jpeg|mmhub|mp1|mp|nbio|oss|psp|sdma|smu|umc|uvd|vce|vcn|xgmi)_v(?P<ip_version>\\d+(?:_\\d+){0,2})_(?P<operation>.+)$"
+        canonical: "{ip_block}_{operation}"
+        merge_policy:
+          mode: concept_with_implementations
+          warn_register_overlap_below: 0.35
+          split_register_overlap_below: 0.10
+  register_normalization:
+    identity: "register:{ip}:{symbol}"
+    merge_across_repos_when_ip_and_symbol_match: true
+    merge_across_ip_versions: true
+    merge_across_ip_blocks: false
 wrappers:
   SOC15_REG_OFFSET:
     symbol_arg: 2

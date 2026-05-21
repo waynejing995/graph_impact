@@ -17,6 +17,7 @@ from asip.workbench import (
     expand_query_graph,
     generate_semantic_edges_batch,
     generate_semantic_edges_for_query,
+    generate_doc_nodes_batch,
     get_evidence_detail,
     get_job,
     index_registered_corpora,
@@ -42,16 +43,25 @@ def search_evidence(
     ip_block: str = "",
     asic_or_generation: str = "",
     asic: str = "",
+    function_view: str = "concept",
+    compact_graph: bool = False,
 ) -> Dict[str, Any]:
     db = Path(db_path) if db_path else DEFAULT_DB
-    payload = query_evidence(db, query, ip_block=ip_block, asic_or_generation=asic_or_generation or asic)
+    payload = query_evidence(
+        db,
+        query,
+        ip_block=ip_block,
+        asic_or_generation=asic_or_generation or asic,
+        function_view=function_view,
+        compact_graph=compact_graph,
+    )
     payload["query_id"] = payload.get("queryId", "")
     return payload
 
 
-def graph_expand(seed: str, db_path: str | None = None) -> Dict[str, Any]:
+def graph_expand(seed: str, db_path: str | None = None, function_view: str = "concept") -> Dict[str, Any]:
     db = Path(db_path) if db_path else DEFAULT_DB
-    payload = expand_query_graph(db, seed)
+    payload = expand_query_graph(db, seed, function_view=function_view)
     payload["query_id"] = payload.get("queryId", seed)
     return payload
 
@@ -68,6 +78,15 @@ def semantic_edges_generate_batch(
 ) -> Dict[str, Any]:
     db = Path(db_path) if db_path else DEFAULT_DB
     return generate_semantic_edges_batch(db, limit=limit, batch_size=batch_size)
+
+
+def semantic_doc_nodes_generate_batch(
+    db_path: str | None = None,
+    limit: int | None = None,
+    batch_size: int | None = None,
+) -> Dict[str, Any]:
+    db = Path(db_path) if db_path else DEFAULT_DB
+    return generate_doc_nodes_batch(db, limit=limit, batch_size=batch_size)
 
 
 def resolver_inspect(profile_id: str) -> Dict[str, Any]:

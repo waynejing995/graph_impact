@@ -66,6 +66,7 @@ class McpServerTests(unittest.TestCase):
                     "resolver_profile_validate",
                     "resolver_profiles_list",
                     "run_acceptance",
+                    "semantic_doc_nodes_generate_batch",
                     "search_evidence",
                     "semantic_edges_generate_batch",
                     "semantic_edges_generate",

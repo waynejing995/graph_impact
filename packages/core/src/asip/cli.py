@@ -7,7 +7,9 @@ import json
 from pathlib import Path
 from typing import Dict, List, Optional
 
-from .acceptance import DEFAULT_ACCEPTANCE_QUERIES, run_acceptance_queries
+from .acceptance import DEFAULT_ACCEPTANCE_QUERIES, run_acceptance_queries, run_provider_gate
+from .closure_gates import run_git_gate, run_residual_acceptance_gate
+from .completion_gate import run_completion_gate
 from .limits import DEFAULT_WORKBENCH_LIMITS_PATH, load_workbench_limits
 from .performance_smoke import run_fixture_performance_smoke
 from .semantic_edges import run_full_corpus_generation, run_generation
@@ -32,6 +34,7 @@ from .workbench import (
     query_evidence,
     rebuild_deterministic_graph,
     save_provider_settings,
+    supersede_stale_jobs,
     validate_resolver_profile,
 )
 
@@ -85,7 +88,7 @@ def main(argv: Optional[List[str]] = None) -> int:
     edges_full.add_argument("--limits-config", default=str(DEFAULT_WORKBENCH_LIMITS_PATH))
 
     index = subcommands.add_parser("index", help="Index configured raw corpora into the ASIP SQLite store")
-    index.add_argument("--config", required=True)
+    index.add_argument("--config")
     index.add_argument("--db", required=True)
     index.add_argument("--corpus-id", action="append", default=[])
     index.add_argument("--resolver-profile-id", action="append", default=[])
@@ -103,6 +106,8 @@ def main(argv: Optional[List[str]] = None) -> int:
     query.add_argument("--asic", default="")
     query.add_argument("--source-type", action="append", default=[])
     query.add_argument("--limit", type=int)
+    query.add_argument("--function-view", choices=["concept", "implementation"], default="concept")
+    query.add_argument("--compact-graph", action="store_true", help="Return compact graph metadata for UI rendering")
     query.add_argument("--limits-config", default=str(DEFAULT_WORKBENCH_LIMITS_PATH))
 
     semantic_edges = subcommands.add_parser("semantic-edges", help="Generate semantic edges from indexed evidence")
@@ -167,6 +172,8 @@ def main(argv: Optional[List[str]] = None) -> int:
     graph.add_argument("--all", action="store_true", help="Return the full global graph without the configured edge budget")
     graph.add_argument("--include-evidence-derived", action="store_true")
     graph.add_argument("--evidence-row-cap", type=int)
+    graph.add_argument("--function-view", choices=["concept", "implementation"], default="concept")
+    graph.add_argument("--compact", action="store_true", help="Return compact global graph metadata for UI rendering")
     graph.add_argument("--limits-config", "--budget-config", dest="limits_config", default=str(DEFAULT_WORKBENCH_LIMITS_PATH))
 
     acceptance = subcommands.add_parser("acceptance", help="Run ASIP MVP acceptance queries against a SQLite store")
@@ -185,6 +192,8 @@ def main(argv: Optional[List[str]] = None) -> int:
     jobs.add_argument("--db", required=True)
     jobs.add_argument("--id", type=int)
     jobs.add_argument("--limit", type=int, default=50)
+    jobs.add_argument("--kind", default="index")
+    jobs.add_argument("--supersede-stale-before-id", type=int)
 
     corpus_add = subcommands.add_parser("corpus-add", help="Add a corpus entry to the ASIP SQLite store")
     corpus_add.add_argument("--db", required=True)
@@ -192,6 +201,12 @@ def main(argv: Optional[List[str]] = None) -> int:
     corpus_add.add_argument("--repo", default="local")
     corpus_add.add_argument("--source-root", required=True)
     corpus_add.add_argument("--include", action="append", default=[])
+    corpus_add.add_argument(
+        "--subfolder",
+        action="append",
+        default=[],
+        help="Add a scan subfolder as relative/path:glob,glob. May be passed more than once.",
+    )
     corpus_add.add_argument("--type", default="code")
 
     provider_save = subcommands.add_parser("provider-save", help="Persist provider settings JSON")
@@ -209,6 +224,53 @@ def main(argv: Optional[List[str]] = None) -> int:
     provider_embeddings.add_argument("--limit", type=int)
     provider_embeddings.add_argument("--batch-size", type=int)
     provider_embeddings.add_argument("--limits-config", default=str(DEFAULT_WORKBENCH_LIMITS_PATH))
+
+    provider_gate = subcommands.add_parser(
+        "provider-gate",
+        help="Run fast provider provenance and live reachability checks",
+    )
+    provider_gate.add_argument("--db", required=True)
+    provider_gate.add_argument("--output-json")
+    provider_gate.add_argument("--full", action="store_true", help="Print the full provider-gate payload")
+
+    completion_gate = subcommands.add_parser(
+        "completion-gate",
+        help="Aggregate current ASIP final-goal artifacts into one pass/blocked gate",
+    )
+    completion_gate.add_argument("--db", required=True)
+    completion_gate.add_argument("--acceptance-json")
+    completion_gate.add_argument("--web-acceptance-json")
+    completion_gate.add_argument("--provider-json")
+    completion_gate.add_argument("--runtime-semantic-json")
+    completion_gate.add_argument("--browser-json")
+    completion_gate.add_argument("--in-app-browser-json")
+    completion_gate.add_argument("--no-server-json")
+    completion_gate.add_argument("--performance-json")
+    completion_gate.add_argument("--residual-acceptance-json")
+    completion_gate.add_argument("--git-gate-json")
+    completion_gate.add_argument("--output-json")
+    completion_gate.add_argument("--output-md")
+    completion_gate.add_argument(
+        "--full-integrity-check",
+        action="store_true",
+        help="Use SQLite integrity_check instead of the faster quick_check",
+    )
+    completion_gate.add_argument("--full", action="store_true", help="Print the full completion-gate payload")
+
+    residual_gate = subcommands.add_parser(
+        "residual-gate",
+        help="Record whether G13 residual boundaries have explicit user acceptance",
+    )
+    residual_gate.add_argument("--residual-doc", default="docs/gaps/2026-05-16-g13-mvp-boundary-deferrals.md")
+    residual_gate.add_argument("--accepted", action="store_true")
+    residual_gate.add_argument("--accepted-residual", action="append", default=[])
+    residual_gate.add_argument("--output-json")
+    residual_gate.add_argument("--full", action="store_true", help="Print the full residual-gate payload")
+
+    git_gate = subcommands.add_parser("git-gate", help="Record final diff, commit, and push gate state")
+    git_gate.add_argument("--repo-root", default=".")
+    git_gate.add_argument("--output-json")
+    git_gate.add_argument("--full", action="store_true", help="Print the full git-gate payload")
 
     resolver_list = subcommands.add_parser("resolver-list", help="List resolver profiles from backend state")
     resolver_list.add_argument("--db", required=True)
@@ -268,6 +330,8 @@ def main(argv: Optional[List[str]] = None) -> int:
                 )
             )
         else:
+            if not args.config:
+                parser.error("--config is required unless --corpus-id is provided")
             print(
                 json.dumps(
                     index_configured_corpora(
@@ -292,6 +356,8 @@ def main(argv: Optional[List[str]] = None) -> int:
                     ip_block=args.ip_block,
                     asic_or_generation=args.asic,
                     source_types=args.source_type,
+                    function_view=args.function_view,
+                    compact_graph=args.compact_graph,
                 ),
                 indent=2,
             )
@@ -373,7 +439,12 @@ def main(argv: Optional[List[str]] = None) -> int:
         edge_limit = args.limit if args.limit is not None else limits.int_value("graph", "edge_budget", minimum=1)
         evidence_row_cap = args.evidence_row_cap if args.evidence_row_cap is not None else limits.int_value("graph", "evidence_row_cap", minimum=0)
         if args.seed:
-            print(json.dumps(expand_query_graph(Path(args.db), args.seed, hops=hops or 1), indent=2))
+            print(
+                json.dumps(
+                    expand_query_graph(Path(args.db), args.seed, hops=hops or 1, function_view=args.function_view),
+                    indent=2,
+                )
+            )
         else:
             print(
                 json.dumps(
@@ -383,6 +454,8 @@ def main(argv: Optional[List[str]] = None) -> int:
                         include_evidence_derived=args.include_evidence_derived,
                         evidence_row_cap=evidence_row_cap,
                         all_edges=args.all,
+                        function_view=args.function_view,
+                        compact=args.compact,
                     ),
                     indent=2,
                 )
@@ -411,6 +484,18 @@ def main(argv: Optional[List[str]] = None) -> int:
         )
         return 0
     if args.command == "jobs":
+        if args.supersede_stale_before_id is not None:
+            print(
+                json.dumps(
+                    supersede_stale_jobs(
+                        Path(args.db),
+                        before_job_id=args.supersede_stale_before_id,
+                        kind=args.kind,
+                    ),
+                    indent=2,
+                )
+            )
+            return 0
         if args.id is not None:
             print(json.dumps(get_job(Path(args.db), args.id), indent=2))
         else:
@@ -426,6 +511,7 @@ def main(argv: Optional[List[str]] = None) -> int:
                     source_root=args.source_root,
                     include=args.include or ["**/*"],
                     corpus_type=args.type,
+                    subfolders=args.subfolder,
                 ),
                 indent=2,
             )
@@ -447,6 +533,48 @@ def main(argv: Optional[List[str]] = None) -> int:
                 indent=2,
             )
         )
+        return 0
+    if args.command == "provider-gate":
+        result = run_provider_gate(
+            Path(args.db),
+            output_json=Path(args.output_json) if args.output_json else None,
+        )
+        print(json.dumps(result if args.full else result["summary"], indent=2))
+        return 0
+    if args.command == "completion-gate":
+        result = run_completion_gate(
+            Path(args.db),
+            acceptance_json=Path(args.acceptance_json) if args.acceptance_json else None,
+            web_acceptance_json=Path(args.web_acceptance_json) if args.web_acceptance_json else None,
+            provider_json=Path(args.provider_json) if args.provider_json else None,
+            runtime_semantic_json=Path(args.runtime_semantic_json) if args.runtime_semantic_json else None,
+            browser_json=Path(args.browser_json) if args.browser_json else None,
+            in_app_browser_json=Path(args.in_app_browser_json) if args.in_app_browser_json else None,
+            no_server_json=Path(args.no_server_json) if args.no_server_json else None,
+            performance_json=Path(args.performance_json) if args.performance_json else None,
+            residual_acceptance_json=Path(args.residual_acceptance_json) if args.residual_acceptance_json else None,
+            git_gate_json=Path(args.git_gate_json) if args.git_gate_json else None,
+            output_json=Path(args.output_json) if args.output_json else None,
+            output_md=Path(args.output_md) if args.output_md else None,
+            full_integrity_check=args.full_integrity_check,
+        )
+        print(json.dumps(result if args.full else result["summary"], indent=2))
+        return 0
+    if args.command == "residual-gate":
+        result = run_residual_acceptance_gate(
+            Path(args.residual_doc),
+            accepted=args.accepted,
+            accepted_residuals=args.accepted_residual,
+            output_json=Path(args.output_json) if args.output_json else None,
+        )
+        print(json.dumps(result if args.full else {"gate_status": result["gate_status"]}, indent=2))
+        return 0
+    if args.command == "git-gate":
+        result = run_git_gate(
+            Path(args.repo_root),
+            output_json=Path(args.output_json) if args.output_json else None,
+        )
+        print(json.dumps(result if args.full else {"gate_status": result["gate_status"]}, indent=2))
         return 0
     if args.command == "resolver-list":
         print(json.dumps({"profiles": list_resolver_profiles(Path(args.db))}, indent=2))

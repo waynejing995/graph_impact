@@ -13,6 +13,13 @@ ASIP has both an MVP-1 design doc and a long-range full technical spec. Long-ran
 - The current implementation is SQLite-first and Web/API/MCP oriented, matching MVP-1 more closely than the long-range architecture.
 - The final-candidate QA package records residual boundaries for system-Python sqlite-vec fallback, credentialed OpenAI-compatible live QA, partial provider embeddings, OCR, and full all-code indexing.
 - 2026-05-18 follow-up narrowed several previous residuals: G07 now has deterministic structured resolved-chain explanations, Web/MCP graph parity, and bundled-Python real MCP runtime smoke; G15 now has repeat deterministic graph rebuild timing over live AMD DB backups plus empty-DB raw timing for the current selective path; G06 now has full local temp-copy Ollama provider embedding coverage timing plus query-time provider rerank wiring. These do not close full clangd/libclang cross-TU vtable/type-flow, credentialed OpenAI-compatible live QA, production-scale semantic rerank quality, scanned-PDF OCR, or future full all-file code indexing beyond the current selective path.
+- 2026-05-20 gate hardening: `asip residual-gate` now parses ledger rows that
+  explicitly need acceptance and blocks partial acceptance where only some of
+  those rows are listed in `accepted_residuals`. The current artifact
+  `docs/qa/2026-05-20-residual-acceptance-gate.json` records
+  `acceptance_required_rows` for hybrid retrieval semantic quality and
+  provider/OpenAI-compatible live QA boundaries, and still blocks because
+  explicit user acceptance has not been recorded.
 
 ## Remaining Gap
 

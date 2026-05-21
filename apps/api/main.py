@@ -27,12 +27,34 @@ from apps.mcp.tools import (
     resolver_profiles_list,
     run_acceptance,
     search_evidence,
+    semantic_doc_nodes_generate_batch,
     semantic_edges_generate_batch,
     semantic_edges_generate,
 )
 
 
 app = FastAPI(title="ASIP Workbench API")
+
+
+def _normalize_api_function_view(value: Optional[str]) -> str:
+    normalized = (value or "concept").strip().lower()
+    if normalized not in {"concept", "implementation"}:
+        raise HTTPException(status_code=400, detail="function_view must be concept or implementation")
+    return normalized
+
+
+def _normalize_semantic_mode(value: str) -> str:
+    normalized = (value or "query").strip().lower().replace("_", "-")
+    aliases = {
+        "query": "query",
+        "batch": "batch",
+        "doc-node": "doc-nodes",
+        "doc-nodes": "doc-nodes",
+        "docnodes": "doc-nodes",
+    }
+    if normalized not in aliases:
+        raise HTTPException(status_code=400, detail="semantic edge mode must be query, batch, or doc-nodes")
+    return aliases[normalized]
 
 
 class AcceptanceRunRequest(BaseModel):
@@ -99,24 +121,44 @@ def query(
     ip_block: str = "",
     asic: str = "",
     asic_or_generation: str = "",
+    function_view: str = "concept",
+    functionView: Optional[str] = None,
+    compact_graph: bool = False,
+    compactGraph: Optional[bool] = None,
 ):
+    selected_function_view = _normalize_api_function_view(functionView or function_view)
     return search_evidence(
         q,
         db_path=db_path,
         ip_block=ip_block,
         asic_or_generation=asic_or_generation or asic,
+        function_view=selected_function_view,
+        compact_graph=compactGraph if compactGraph is not None else compact_graph,
     )
 
 
 @app.get("/graph")
-def graph(query_id: str, db_path: Optional[str] = None):
-    return graph_expand(query_id, db_path=db_path)
+def graph(
+    query_id: str,
+    db_path: Optional[str] = None,
+    function_view: str = "concept",
+    functionView: Optional[str] = None,
+):
+    selected_function_view = _normalize_api_function_view(functionView or function_view)
+    return graph_expand(query_id, db_path=db_path, function_view=selected_function_view)
 
 
 @app.post("/semantic-edges")
 def semantic_edges(request: SemanticEdgesRequest):
+    mode = _normalize_semantic_mode(request.mode)
     try:
-        if request.mode.lower() == "batch":
+        if mode == "doc-nodes":
+            return semantic_doc_nodes_generate_batch(
+                db_path=request.db_path,
+                limit=request.limit,
+                batch_size=request.batch_size,
+            )
+        if mode == "batch":
             return semantic_edges_generate_batch(
                 db_path=request.db_path,
                 limit=request.limit,

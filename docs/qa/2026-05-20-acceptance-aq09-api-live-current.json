@@ -1,0 +1,308 @@
+{
+  "source": "asip.acceptance",
+  "generated_at": "2026-05-20T16:44:38+00:00",
+  "db_path": "data/asip.db",
+  "database_health": {
+    "status": "pass",
+    "failure_reasons": []
+  },
+  "provider_settings": {
+    "edge": {
+      "provider": "ollama",
+      "base_url": "http://localhost:11434",
+      "api_path": "/api/chat",
+      "model": "gemma4:e4b",
+      "fallback_model": "",
+      "extra_headers": {},
+      "think": false,
+      "timeout_seconds": 900,
+      "num_ctx": 2048,
+      "num_predict": 1024,
+      "temperature": 0
+    },
+    "embedding": {
+      "provider": "ollama",
+      "base_url": "http://localhost:11434",
+      "api_path": "/api/embed",
+      "model": "nomic-embed-text:latest",
+      "extra_headers": {},
+      "timeout_seconds": 900
+    }
+  },
+  "provider_checks": {
+    "embedding": {
+      "status": "partial",
+      "provenance_status": "pass",
+      "coverage_status": "partial",
+      "message": "provider embedding provenance exists but 98246 deterministic fallback embeddings remain; 49595/147841 embeddings match the configured provider",
+      "provider": "ollama",
+      "model": "nomic-embed-text:latest",
+      "embedding_count": 49595,
+      "total_count": 147841,
+      "provider_embedding_count": 49595,
+      "fallback_count": 98246,
+      "total_chunks": 147841,
+      "embedded_chunks": 147841,
+      "missing_embedding_chunks": 0
+    },
+    "embedding_live": {
+      "status": "pass",
+      "provider": "ollama",
+      "model": "nomic-embed-text:latest",
+      "embedding_count": 1,
+      "vector_dimension": 768
+    },
+    "semantic_edge_provenance": {
+      "status": "pass",
+      "provider": "ollama",
+      "model": "gemma4:e4b",
+      "edge_count": 18,
+      "extractor_edge_count": 18,
+      "job_ids": [
+        18
+      ],
+      "latest_index_job_id": 10,
+      "latest_graph_rebuild_job_id": 13,
+      "stale_edge_count": 0,
+      "stale_job_ids": [],
+      "ignored_edge_count": 3,
+      "missing_or_invalid_job_edge_count": 0
+    },
+    "doc_node_provenance": {
+      "status": "pass",
+      "provider": "ollama",
+      "model": "gemma4:e4b",
+      "edge_count": 3,
+      "extractor_edge_count": 3,
+      "job_ids": [
+        20
+      ],
+      "latest_index_job_id": 10,
+      "latest_graph_rebuild_job_id": 13,
+      "stale_edge_count": 0,
+      "stale_job_ids": [],
+      "ignored_edge_count": 18,
+      "missing_or_invalid_job_edge_count": 0
+    },
+    "semantic_edge": {
+      "status": "pass",
+      "provider": "ollama",
+      "model": "gemma4:e4b",
+      "edge_count": 1,
+      "persistable_edge_count": 1
+    }
+  },
+  "surfaces_checked": [
+    "CLI",
+    "API",
+    "API_LIVE",
+    "MCP",
+    "MCP_PROTOCOL"
+  ],
+  "summary": {
+    "total": 1,
+    "passed": 0,
+    "partial": 0,
+    "failed": 1
+  },
+  "gate_status": "blocked",
+  "queries": [
+    {
+      "id": "AQ09",
+      "query": "Run embedding and optional semantic-edge extraction through a configured Ollama provider, then switch to an OpenAI-compatible provider without changing retrieval or resolver code.",
+      "gap_ids": [
+        "G06",
+        "G09",
+        "G10",
+        "G17"
+      ],
+      "required_surfaces": [
+        "CLI",
+        "API",
+        "MCP"
+      ],
+      "required_source_types": [],
+      "surfaces_checked": [
+        "CLI",
+        "API",
+        "API_LIVE",
+        "MCP",
+        "MCP_PROTOCOL"
+      ],
+      "surface_results": [
+        {
+          "surface": "CLI",
+          "transport": "core.query_evidence",
+          "status": "pass",
+          "db_path": "data/asip.db",
+          "row_count": 24,
+          "graph_node_count": 2,
+          "graph_edge_count": 0,
+          "message": "ok"
+        },
+        {
+          "surface": "API",
+          "transport": "fastapi.testclient.query",
+          "status": "pass",
+          "db_path": "data/asip.db",
+          "row_count": 24,
+          "graph_node_count": 2,
+          "graph_edge_count": 0,
+          "message": "ok"
+        },
+        {
+          "surface": "API_LIVE",
+          "transport": "fastapi.uvicorn.http.query",
+          "status": "pass",
+          "db_path": "data/asip.db",
+          "row_count": 24,
+          "graph_node_count": 2,
+          "graph_edge_count": 0,
+          "message": "ok"
+        },
+        {
+          "surface": "MCP",
+          "transport": "mcp.tool-direct.search_evidence",
+          "status": "pass",
+          "db_path": "data/asip.db",
+          "row_count": 24,
+          "graph_node_count": 2,
+          "graph_edge_count": 0,
+          "message": "ok",
+          "server_registered": true
+        },
+        {
+          "surface": "MCP_PROTOCOL",
+          "transport": "mcp.stdio.protocol.search_evidence",
+          "status": "pass",
+          "db_path": "data/asip.db",
+          "row_count": 24,
+          "graph_node_count": 2,
+          "graph_edge_count": 0,
+          "message": "ok",
+          "tool_count": 22,
+          "server_registered": true
+        }
+      ],
+      "missing_surfaces": [],
+      "failure_reasons": [
+        "embedding provider check failed: provider embedding provenance exists but 98246 deterministic fallback embeddings remain; 49595/147841 embeddings match the configured provider"
+      ],
+      "provider_checks": {
+        "embedding": {
+          "status": "partial",
+          "provenance_status": "pass",
+          "coverage_status": "partial",
+          "message": "provider embedding provenance exists but 98246 deterministic fallback embeddings remain; 49595/147841 embeddings match the configured provider",
+          "provider": "ollama",
+          "model": "nomic-embed-text:latest",
+          "embedding_count": 49595,
+          "total_count": 147841,
+          "provider_embedding_count": 49595,
+          "fallback_count": 98246,
+          "total_chunks": 147841,
+          "embedded_chunks": 147841,
+          "missing_embedding_chunks": 0
+        },
+        "embedding_live": {
+          "status": "pass",
+          "provider": "ollama",
+          "model": "nomic-embed-text:latest",
+          "embedding_count": 1,
+          "vector_dimension": 768
+        },
+        "semantic_edge_provenance": {
+          "status": "pass",
+          "provider": "ollama",
+          "model": "gemma4:e4b",
+          "edge_count": 18,
+          "extractor_edge_count": 18,
+          "job_ids": [
+            18
+          ],
+          "latest_index_job_id": 10,
+          "latest_graph_rebuild_job_id": 13,
+          "stale_edge_count": 0,
+          "stale_job_ids": [],
+          "ignored_edge_count": 3,
+          "missing_or_invalid_job_edge_count": 0
+        },
+        "doc_node_provenance": {
+          "status": "pass",
+          "provider": "ollama",
+          "model": "gemma4:e4b",
+          "edge_count": 3,
+          "extractor_edge_count": 3,
+          "job_ids": [
+            20
+          ],
+          "latest_index_job_id": 10,
+          "latest_graph_rebuild_job_id": 13,
+          "stale_edge_count": 0,
+          "stale_job_ids": [],
+          "ignored_edge_count": 18,
+          "missing_or_invalid_job_edge_count": 0
+        },
+        "semantic_edge": {
+          "status": "pass",
+          "provider": "ollama",
+          "model": "gemma4:e4b",
+          "edge_count": 1,
+          "persistable_edge_count": 1
+        }
+      },
+      "status": "fail",
+      "row_count": 24,
+      "schema_status": "pass",
+      "schema_failure_reasons": [],
+      "evidence_ids": [
+        66414,
+        93524,
+        66415,
+        93496,
+        66417,
+        93525,
+        66418,
+        93499,
+        66419,
+        93526,
+        66420,
+        93500,
+        26748,
+        55387,
+        106839,
+        26749,
+        55361,
+        106812,
+        26750,
+        55388,
+        106840,
+        860512,
+        128,
+        860517
+      ],
+      "source_paths": [
+        "README.md",
+        "amdgpu-driver-source-tree.pdf",
+        "drivers/gpu/drm/amd/amdgpu/ObjectID.h",
+        "libgv/core/hw/AI/asic_reg/mi200/GC/gc_9_0_sh_mask.h",
+        "libgv/core/hw/AI/asic_reg/mi200/GC/gc_9_4_2_sh_mask.h",
+        "libgv/core/hw/AI/asic_reg/mi200/GC/gc_9_4_sh_mask.h"
+      ],
+      "source_types": [
+        "code",
+        "doc",
+        "pdf",
+        "register"
+      ],
+      "retrieval_sources": [
+        "fts5",
+        "lexical"
+      ],
+      "graph_node_count": 2,
+      "graph_edge_count": 0,
+      "graph_runtime": "networkx",
+      "empty_state": ""
+    }
+  ]
+}

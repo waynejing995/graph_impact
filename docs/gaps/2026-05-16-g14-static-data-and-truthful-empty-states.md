@@ -133,7 +133,7 @@ Visual route Playwright: 15 passed
 Combined Web API + smoke + visual Playwright: 90 passed
 FastAPI/MCP unittest: 47 OK, 1 optional MCP runtime skip
 Bundled-Python MCP runtime: 29 OK, 0 skips
-Core unittest discovery: 236 OK, 2 optional sqlite-vec skips
+Core unittest discovery: 239 OK, 2 optional sqlite-vec skips
 Lint and TypeScript: passed
 In-app browser final visual pack: six routes, dark/light, 2048 x 1280
 ```

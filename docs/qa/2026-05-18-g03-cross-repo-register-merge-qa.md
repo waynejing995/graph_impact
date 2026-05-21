@@ -28,15 +28,14 @@ node attribute, not part of register identity.
 Register node identity is now:
 
 ```text
-register:{ip}:{ip_version}:{symbol}
+register:{ip}:{symbol}
 ```
 
 Source records are merged into `attr.source`. Known different IP versions still
 stay separate, for example:
 
 ```text
-register:GC:11.0:GCVM_L2_CNTL
-register:GC:12.0:GCVM_L2_CNTL
+register:GC:GCVM_L2_CNTL attr.ip_versions = ["11.0", "12.0", ...]
 ```
 
 ## Live DB Evidence
@@ -67,10 +66,7 @@ for n in regs:
 PY
 
 4
-register:IH:unknown:IH_RB_CNTL ['linux-amdgpu', 'mxgpu'] 48
-register:IH:6.0:IH_RB_CNTL ['linux-amdgpu'] 5
-register:IH:6.1:IH_RB_CNTL ['linux-amdgpu'] 5
-register:IH:7.0:IH_RB_CNTL ['linux-amdgpu'] 5
+register:IH:IH_RB_CNTL ['linux-amdgpu', 'mxgpu'] 63
 ```
 
 Product graph evidence through the live Web BFF at `http://127.0.0.1:3100`:
@@ -88,11 +84,8 @@ for n in regs:
     print(n.get('id'), sorted({s.get('corpus_id') for s in sources}), len(sources))
 PY
 
-nodes 15919 edges 34225 IH_RB_CNTL nodes 4
-register:IH:unknown:IH_RB_CNTL ['linux-amdgpu', 'mxgpu'] 48
-register:IH:6.0:IH_RB_CNTL ['linux-amdgpu'] 5
-register:IH:6.1:IH_RB_CNTL ['linux-amdgpu'] 5
-register:IH:7.0:IH_RB_CNTL ['linux-amdgpu'] 5
+nodes 14640 edges 34225 IH_RB_CNTL nodes 1
+register:IH:IH_RB_CNTL ['linux-amdgpu', 'mxgpu'] 63
 ```
 
 Default-budget product graph evidence through core:
@@ -110,24 +103,24 @@ for limit in (300, 1000, 3000, 8000):
             if 'linux-amdgpu' in srcs and 'mxgpu' in srcs:
                 shared.append(n)
     ih = [n for n in shared if n['label'] == 'IH_RB_CNTL']
-    related = [e for e in g['edges'] if 'register:IH:unknown:IH_RB_CNTL' in (str(e.get('src')), str(e.get('dst')))]
+    related = [e for e in g['edges'] if 'register:IH:IH_RB_CNTL' in (str(e.get('src')), str(e.get('dst')))]
     print(f"limit={limit} nodes={len(g['nodes'])} edges={len(g['edges'])} shared_regs={len(shared)} ih={len(ih)} ih_edges={len(related)}")
     for e in related[:2]:
         print(" ", e['src'], e['relation'], e['dst'], e['weight'])
 PY
 
 limit=300 nodes=317 edges=300 shared_regs=19 ih=1 ih_edges=2
-  function:linux-amdgpu:drivers/gpu/drm/amd/amdgpu/cik_ih.c:cik_ih_disable_interrupts reads register:IH:unknown:IH_RB_CNTL 0.97
-  function:mxgpu:libgv/core/hw/AI/mi200/mi200_irqmgr.c:mi200_ih_get_wptr maps_base register:IH:unknown:IH_RB_CNTL 0.97
+  function:linux-amdgpu:drivers/gpu/drm/amd/amdgpu/cik_ih.c:cik_ih_disable_interrupts reads register:IH:IH_RB_CNTL 0.97
+  function:mxgpu:libgv/core/hw/AI/mi200/mi200_irqmgr.c:mi200_ih_get_wptr maps_base register:IH:IH_RB_CNTL 0.97
 limit=1000 nodes=1015 edges=1000 shared_regs=57 ih=1 ih_edges=2
-  function:linux-amdgpu:drivers/gpu/drm/amd/amdgpu/cik_ih.c:cik_ih_disable_interrupts reads register:IH:unknown:IH_RB_CNTL 0.97
-  function:mxgpu:libgv/core/hw/AI/mi200/mi200_irqmgr.c:mi200_ih_get_wptr maps_base register:IH:unknown:IH_RB_CNTL 0.97
+  function:linux-amdgpu:drivers/gpu/drm/amd/amdgpu/cik_ih.c:cik_ih_disable_interrupts reads register:IH:IH_RB_CNTL 0.97
+  function:mxgpu:libgv/core/hw/AI/mi200/mi200_irqmgr.c:mi200_ih_get_wptr maps_base register:IH:IH_RB_CNTL 0.97
 limit=3000 nodes=2813 edges=3000 shared_regs=150 ih=1 ih_edges=2
-  function:linux-amdgpu:drivers/gpu/drm/amd/amdgpu/cik_ih.c:cik_ih_disable_interrupts reads register:IH:unknown:IH_RB_CNTL 0.97
-  function:mxgpu:libgv/core/hw/AI/mi200/mi200_irqmgr.c:mi200_ih_get_wptr maps_base register:IH:unknown:IH_RB_CNTL 0.97
+  function:linux-amdgpu:drivers/gpu/drm/amd/amdgpu/cik_ih.c:cik_ih_disable_interrupts reads register:IH:IH_RB_CNTL 0.97
+  function:mxgpu:libgv/core/hw/AI/mi200/mi200_irqmgr.c:mi200_ih_get_wptr maps_base register:IH:IH_RB_CNTL 0.97
 limit=8000 nodes=7030 edges=8000 shared_regs=176 ih=1 ih_edges=14
-  function:linux-amdgpu:drivers/gpu/drm/amd/amdgpu/cik_ih.c:cik_ih_disable_interrupts reads register:IH:unknown:IH_RB_CNTL 0.97
-  function:mxgpu:libgv/core/hw/AI/mi200/mi200_irqmgr.c:mi200_ih_get_wptr maps_base register:IH:unknown:IH_RB_CNTL 0.97
+  function:linux-amdgpu:drivers/gpu/drm/amd/amdgpu/cik_ih.c:cik_ih_disable_interrupts reads register:IH:IH_RB_CNTL 0.97
+  function:mxgpu:libgv/core/hw/AI/mi200/mi200_irqmgr.c:mi200_ih_get_wptr maps_base register:IH:IH_RB_CNTL 0.97
 ```
 
 Default-budget product graph evidence through the live Web BFF:
@@ -144,17 +137,17 @@ for n in g.get('nodes', []):
         if 'linux-amdgpu' in srcs and 'mxgpu' in srcs:
             shared.append(n)
 ih = [n for n in shared if n.get('label') == 'IH_RB_CNTL']
-related = [e for e in g.get('edges', []) if 'register:IH:unknown:IH_RB_CNTL' in (str(e.get('src')), str(e.get('dst')))]
+related = [e for e in g.get('edges', []) if 'register:IH:IH_RB_CNTL' in (str(e.get('src')), str(e.get('dst')))]
 print('nodes', len(g.get('nodes', [])), 'edges', len(g.get('edges', [])))
 print('shared_regs', len(shared), 'ih', len(ih), 'ih_edges', len(related))
 for e in related[:2]:
     print(e.get('src'), e.get('relation'), e.get('dst'), e.get('weight'))
 PY
 
-nodes 2813 edges 3000
-shared_regs 150 ih 1 ih_edges 2
-function:linux-amdgpu:drivers/gpu/drm/amd/amdgpu/cik_ih.c:cik_ih_disable_interrupts reads register:IH:unknown:IH_RB_CNTL 0.97
-function:mxgpu:libgv/core/hw/AI/mi200/mi200_irqmgr.c:mi200_ih_get_wptr maps_base register:IH:unknown:IH_RB_CNTL 0.97
+nodes 2687 edges 3000
+shared_regs 149 ih 1 ih_edges 2
+function:linux-amdgpu:drivers/gpu/drm/amd/amdgpu/cik_ih.c:cik_ih_disable_interrupts reads register:IH:IH_RB_CNTL 0.97
+function:mxgpu:libgv/core/hw/AI/mi200/mi200_irqmgr.c:mi200_ih_get_wptr maps_base register:IH:IH_RB_CNTL 0.97
 ```
 
 Browser QA:

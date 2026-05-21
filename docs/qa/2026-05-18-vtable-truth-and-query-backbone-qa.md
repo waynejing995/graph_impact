@@ -110,3 +110,81 @@ visible graph summary: nodes 1000, edges 1216, doc_box 6, doc_section 1, functio
 ## Residual
 
 This QA does not close full clangd/libclang vtable/type-flow parsing. It only fixes the product-visible query graph hiding the existing conservative callback backbone and proves cross-repo register convergence through normalized register nodes.
+
+## 2026-05-19 Subagent Review And Current DB Smoke
+
+A read-only subagent audit rechecked the current tree and classified the
+vtable/callback evidence as strong for the MVP/product graph layer, but still
+explicitly residual for full clangd/libclang cross-translation-unit vtable
+correctness. The current implementation is source-span deterministic graph
+extraction plus selective clang AST JSON receiver/initializer hints, not a full
+clangd/libclang cursor traversal.
+
+Focused tests were rerun by the subagent across `test_code_graph`,
+`test_workbench_live`, and `test_storage_graph`; the audited vtable/alias/type
+coverage passed. The remaining weak point was proving that the current
+`data/asip.db` still projects callback/vtable edges into valid product graph
+nodes. A current-DB smoke was run for that:
+
+```text
+PYTHONPATH=packages/core/src python3 - <<'PY'
+import json
+import sqlite3
+from collections import Counter
+from pathlib import Path
+from asip.graph_filters import is_resolver_wrapper_name
+
+db = Path("data/asip.db")
+con = sqlite3.connect(db)
+con.row_factory = sqlite3.Row
+edge_rows = [dict(row) for row in con.execute("""
+select src, dst, relation, source, provenance_json
+from edges
+where source = 'clang_callback'
+   or provenance_json like '%vtable_dispatch%'
+   or provenance_json like '%callback%'
+""")]
+call_kinds = Counter()
+type_flows = Counter()
+initializer_flows = Counter()
+wrapper_endpoints = [
+  endpoint
+  for row in edge_rows
+  for endpoint in (row["src"], row["dst"])
+  if is_resolver_wrapper_name(str(endpoint))
+]
+for row in edge_rows:
+    prov = json.loads(row.get("provenance_json") or "{}")
+    if prov.get("call_kind"):
+        call_kinds[str(prov.get("call_kind"))] += 1
+    if prov.get("type_flow"):
+        type_flows[str(prov.get("type_flow"))] += 1
+    if prov.get("callback_initializer_flow"):
+        initializer_flows[str(prov.get("callback_initializer_flow"))] += 1
+print(len(edge_rows), dict(call_kinds), dict(type_flows), dict(initializer_flows), len(wrapper_endpoints))
+PY
+```
+
+Result summary:
+
+```text
+raw_callback_like_edges=6133
+call_kinds:
+  vtable_dispatch=6042
+  vtable_callback=70
+  vtable_table_alias=21
+type_flows:
+  clang_ast_json=2248
+callback_initializer_flows:
+  text=6127
+  clang_ast_json=6
+wrapper_endpoint_count=0
+```
+
+A follow-up expansion smoke sampled five callback/vtable seeds from the same
+DB. Each sample expanded through `AsipStore.expand_graph_networkx(...,
+function_view="concept")` into product graph nodes with `node_kinds =
+["function"]`; sampled edges preserved `source = clang_callback`, `relation =
+calls`, source path/line provenance, and raw implementation metadata. This
+strengthens the current DB evidence, but it is still not a completion claim for
+full clangd/libclang vtable parsing.

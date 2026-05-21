@@ -1,0 +1,181 @@
+{
+  "source": "asip.web.no_server_smoke",
+  "generated_at": "2026-05-21T01:22:29.803Z",
+  "gate_status": "pass",
+  "current_artifact_args": [
+    "--browser-json",
+    "docs/qa/2026-05-21-browser-e2e-current.json",
+    "--in-app-browser-json",
+    "docs/qa/2026-05-20-in-app-browser-probe.json",
+    "--provider-json",
+    "docs/qa/2026-05-21-provider-gate-current.json",
+    "--runtime-semantic-json",
+    "docs/qa/2026-05-21-runtime-semantic-freshness-qa.json",
+    "--acceptance-json",
+    "docs/qa/2026-05-21-acceptance-data-asip-live-web-current.json",
+    "--web-acceptance-json",
+    "docs/qa/2026-05-21-acceptance-data-asip-live-web-current.json",
+    "--completion-json",
+    "docs/qa/2026-05-21-current-goal-completion-gate.json",
+    "--web-package-json",
+    "apps/web/package.json"
+  ],
+  "current_artifact_inputs": [
+    {
+      "option": "--browser-json",
+      "path": "docs/qa/2026-05-21-browser-e2e-current.json",
+      "resolved_path": "/Volumes/data/User/wayne/Code/graph_impact/docs/qa/2026-05-21-browser-e2e-current.json",
+      "status": "loaded",
+      "bytes": 3052,
+      "hash_policy": "sha256",
+      "sha256": "cb0f40df6de5c5ad89e0e32db2da11b72d10d3c70732eb6e8d7b8b26ce3a67dd"
+    },
+    {
+      "option": "--in-app-browser-json",
+      "path": "docs/qa/2026-05-20-in-app-browser-probe.json",
+      "resolved_path": "/Volumes/data/User/wayne/Code/graph_impact/docs/qa/2026-05-20-in-app-browser-probe.json",
+      "status": "loaded",
+      "bytes": 1194,
+      "hash_policy": "sha256",
+      "sha256": "c47ccb3ffafb0afc4d46e02589926c42f163b47303f0a54a3c912ef2787f69d7"
+    },
+    {
+      "option": "--provider-json",
+      "path": "docs/qa/2026-05-21-provider-gate-current.json",
+      "resolved_path": "/Volumes/data/User/wayne/Code/graph_impact/docs/qa/2026-05-21-provider-gate-current.json",
+      "status": "loaded",
+      "bytes": 2660,
+      "hash_policy": "sha256",
+      "sha256": "cb343307c2ff51111f1484df4d02f9e9c4825b8f12eb59c4105be3017b955043"
+    },
+    {
+      "option": "--runtime-semantic-json",
+      "path": "docs/qa/2026-05-21-runtime-semantic-freshness-qa.json",
+      "resolved_path": "/Volumes/data/User/wayne/Code/graph_impact/docs/qa/2026-05-21-runtime-semantic-freshness-qa.json",
+      "status": "loaded",
+      "bytes": 1869,
+      "hash_policy": "sha256",
+      "sha256": "6199e4278d803264e129a4bff98b9597f1820c7393aba138e746caf737ed684f"
+    },
+    {
+      "option": "--acceptance-json",
+      "path": "docs/qa/2026-05-21-acceptance-data-asip-live-web-current.json",
+      "resolved_path": "/Volumes/data/User/wayne/Code/graph_impact/docs/qa/2026-05-21-acceptance-data-asip-live-web-current.json",
+      "status": "loaded",
+      "bytes": 39599,
+      "hash_policy": "sha256",
+      "sha256": "1fa0bb6a13be708bb7f41e858cd859c17e3c9817ffa203ca03404621f09c7589"
+    },
+    {
+      "option": "--web-acceptance-json",
+      "path": "docs/qa/2026-05-21-acceptance-data-asip-live-web-current.json",
+      "resolved_path": "/Volumes/data/User/wayne/Code/graph_impact/docs/qa/2026-05-21-acceptance-data-asip-live-web-current.json",
+      "status": "loaded",
+      "bytes": 39599,
+      "hash_policy": "sha256",
+      "sha256": "1fa0bb6a13be708bb7f41e858cd859c17e3c9817ffa203ca03404621f09c7589"
+    },
+    {
+      "option": "--completion-json",
+      "path": "docs/qa/2026-05-21-current-goal-completion-gate.json",
+      "resolved_path": "/Volumes/data/User/wayne/Code/graph_impact/docs/qa/2026-05-21-current-goal-completion-gate.json",
+      "status": "loaded",
+      "bytes": 9169,
+      "hash_policy": "self-referential-not-final-gate-input",
+      "sha256": ""
+    },
+    {
+      "option": "--web-package-json",
+      "path": "apps/web/package.json",
+      "resolved_path": "/Volumes/data/User/wayne/Code/graph_impact/apps/web/package.json",
+      "status": "loaded",
+      "bytes": 1345,
+      "hash_policy": "informational",
+      "sha256": ""
+    }
+  ],
+  "summary": {
+    "total": 9,
+    "passed": 9,
+    "failed": 0
+  },
+  "checks": [
+    {
+      "label": "dbPath no-fallback route smoke",
+      "status": "pass",
+      "exit_code": 0,
+      "expected_output": [],
+      "rejected_output": []
+    },
+    {
+      "label": "request path helper smoke",
+      "status": "pass",
+      "exit_code": 0,
+      "expected_output": [],
+      "rejected_output": []
+    },
+    {
+      "label": "Playwright config smoke",
+      "status": "pass",
+      "exit_code": 0,
+      "expected_output": [],
+      "rejected_output": []
+    },
+    {
+      "label": "no-mock Playwright hygiene smoke",
+      "status": "pass",
+      "exit_code": 0,
+      "expected_output": [],
+      "rejected_output": []
+    },
+    {
+      "label": "acceptance route command wiring smoke",
+      "status": "pass",
+      "exit_code": 0,
+      "expected_output": [],
+      "rejected_output": []
+    },
+    {
+      "label": "current artifact invariants smoke",
+      "status": "pass",
+      "exit_code": 0,
+      "expected_output": [],
+      "rejected_output": []
+    },
+    {
+      "label": "browser e2e artifact producer smoke",
+      "status": "pass",
+      "exit_code": 0,
+      "expected_output": [],
+      "rejected_output": []
+    },
+    {
+      "label": "Playwright discovery smoke",
+      "status": "pass",
+      "exit_code": 0,
+      "expected_output": [
+        "Total: 109 tests in 3 files",
+        "acceptance page runs no-mock AQ01 through the real workbench API"
+      ],
+      "rejected_output": []
+    },
+    {
+      "label": "Browser preflight existing-target shape smoke",
+      "status": "pass",
+      "exit_code": 0,
+      "expected_output": [
+        "\"preflight_mode\": \"existing_target\"",
+        "\"listen_capability\"",
+        "\"target_port\"",
+        "\"target_connect\"",
+        "\"status\": \"skipped\"",
+        "\"code\": \"NOT_APPLICABLE\""
+      ],
+      "rejected_output": [
+        "local listen capability blocked",
+        "target port 3100 blocked"
+      ]
+    }
+  ],
+  "failure_reasons": []
+}

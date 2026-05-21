@@ -38,6 +38,7 @@ export type EvidenceRow = {
   source: string;
   tone: SourceTone;
   symbol: string;
+  target_symbol?: string;
   relation: string;
   score: string;
   path: string;

@@ -1,0 +1,211 @@
+{
+  "source": "asip.stale_semantic_edge_prune",
+  "generated_at": "2026-05-20T14:02:48+00:00",
+  "db_path": "data/asip.db",
+  "freshness_floor_job_id": 13,
+  "latest_index_job_id": 10,
+  "latest_graph_rebuild_job_id": 13,
+  "deleted_edge_count": 25,
+  "deleted_edges": [
+    {
+      "id": 41869,
+      "src": "tmp",
+      "dst": "GCVM_L2_CNTL",
+      "relation": "writes",
+      "extractor": "semantic_edges",
+      "job_id": 4
+    },
+    {
+      "id": 41870,
+      "src": "tmp",
+      "dst": "GCVM_L2_CNTL",
+      "relation": "writes",
+      "extractor": "semantic_edges",
+      "job_id": 4
+    },
+    {
+      "id": 41871,
+      "src": "tmp",
+      "dst": "GCVM_L2_CNTL",
+      "relation": "writes",
+      "extractor": "semantic_edges",
+      "job_id": 4
+    },
+    {
+      "id": 41872,
+      "src": "tmp",
+      "dst": "GCVM_L2_CNTL",
+      "relation": "writes",
+      "extractor": "semantic_edges",
+      "job_id": 4
+    },
+    {
+      "id": 41873,
+      "src": "GC",
+      "dst": "regGCVM_L2_CNTL",
+      "relation": "writes",
+      "extractor": "semantic_edges",
+      "job_id": 4
+    },
+    {
+      "id": 41874,
+      "src": "tmp",
+      "dst": "GCVM_L2_CNTL",
+      "relation": "writes",
+      "extractor": "semantic_edges",
+      "job_id": 4
+    },
+    {
+      "id": 41875,
+      "src": "tmp",
+      "dst": "GCVM_L2_CNTL",
+      "relation": "writes",
+      "extractor": "semantic_edges",
+      "job_id": 4
+    },
+    {
+      "id": 41876,
+      "src": "tmp",
+      "dst": "GCVM_L2_CNTL",
+      "relation": "writes",
+      "extractor": "semantic_edges",
+      "job_id": 4
+    },
+    {
+      "id": 41877,
+      "src": "adapt",
+      "dst": "regRLC_FED_DRVR_STATUS",
+      "relation": "reads",
+      "extractor": "semantic_edges",
+      "job_id": 4
+    },
+    {
+      "id": 41878,
+      "src": "adapt",
+      "dst": "RLC_FED_DRVR_STATUS",
+      "relation": "reads",
+      "extractor": "semantic_edges",
+      "job_id": 4
+    },
+    {
+      "id": 41879,
+      "src": "adapt",
+      "dst": "AMDGV_TIMEOUT",
+      "relation": "reads",
+      "extractor": "semantic_edges",
+      "job_id": 4
+    },
+    {
+      "id": 41880,
+      "src": "adapt",
+      "dst": "AMDGV_WAIT_CHECK_EQ",
+      "relation": "writes",
+      "extractor": "semantic_edges",
+      "job_id": 4
+    },
+    {
+      "id": 41881,
+      "src": "adapt",
+      "dst": "AMDGV_WARN",
+      "relation": "writes",
+      "extractor": "semantic_edges",
+      "job_id": 4
+    },
+    {
+      "id": 41882,
+      "src": "adapt",
+      "dst": "GC",
+      "relation": "writes",
+      "extractor": "semantic_edges",
+      "job_id": 4
+    },
+    {
+      "id": 41883,
+      "src": "README.md#gim",
+      "dst": "README.md#box-gim",
+      "relation": "contains_box",
+      "extractor": "doc_nodes",
+      "job_id": 5
+    },
+    {
+      "id": 41884,
+      "src": "README.md#gim",
+      "dst": "README.md#box-gpu-iov-init",
+      "relation": "contains_box",
+      "extractor": "doc_nodes",
+      "job_id": 5
+    },
+    {
+      "id": 41885,
+      "src": "README.md#gim",
+      "dst": "README.md#box-vf-config",
+      "relation": "contains_box",
+      "extractor": "doc_nodes",
+      "job_id": 5
+    },
+    {
+      "id": 41886,
+      "src": "README.md#gim",
+      "dst": "README.md#box-gpu-scheduling",
+      "relation": "contains_box",
+      "extractor": "doc_nodes",
+      "job_id": 5
+    },
+    {
+      "id": 41887,
+      "src": "README.md#gim",
+      "dst": "README.md#box-hang-detection",
+      "relation": "contains_box",
+      "extractor": "doc_nodes",
+      "job_id": 5
+    },
+    {
+      "id": 41888,
+      "src": "README.md#gim",
+      "dst": "README.md#box-pf-vf-handshake",
+      "relation": "contains_box",
+      "extractor": "doc_nodes",
+      "job_id": 5
+    },
+    {
+      "id": 41889,
+      "src": "README.md#box-gim",
+      "dst": "README.md#box-gpu-iov-init",
+      "relation": "is_responsible_for",
+      "extractor": "doc_nodes",
+      "job_id": 5
+    },
+    {
+      "id": 41890,
+      "src": "README.md#box-gim",
+      "dst": "README.md#box-vf-config",
+      "relation": "is_responsible_for",
+      "extractor": "doc_nodes",
+      "job_id": 5
+    },
+    {
+      "id": 41891,
+      "src": "README.md#box-gim",
+      "dst": "README.md#box-gpu-scheduling",
+      "relation": "is_responsible_for",
+      "extractor": "doc_nodes",
+      "job_id": 5
+    },
+    {
+      "id": 41892,
+      "src": "README.md#box-gim",
+      "dst": "README.md#box-hang-detection",
+      "relation": "is_responsible_for",
+      "extractor": "doc_nodes",
+      "job_id": 5
+    },
+    {
+      "id": 41893,
+      "src": "README.md#box-gim",
+      "dst": "README.md#box-pf-vf-handshake",
+      "relation": "is_responsible_for",
+      "extractor": "doc_nodes",
+      "job_id": 5
+    }
+  ]
+}

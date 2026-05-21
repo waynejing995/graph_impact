@@ -3,6 +3,15 @@
 Generated: 2026-05-17
 Status: Current final-candidate evidence with explicit residuals; this document is not a goal-complete claim
 
+2026-05-20 supersession note: the latest current-default gate is
+`docs/qa/2026-05-20-current-goal-completion-audit.md` plus
+`docs/qa/2026-05-20-browser-gate-preflight.json`,
+`docs/qa/2026-05-20-provider-gate-preflight.json`, and
+`docs/qa/2026-05-20-acceptance-data-asip-expanded.md`. The browser/provider
+results below remain final-candidate or historical evidence; they do not close
+the current expanded `data/asip.db` gate while browser listen and live provider
+calls are blocked.
+
 ## Evidence Classes
 
 This package intentionally separates three evidence classes:
@@ -89,15 +98,18 @@ ops=0
 hw_init=0
 ```
 
-Product graph sample:
+Current product graph sample with the 2026-05-19 projection layer:
 
 ```text
 global_graph(limit=20000)
-nodes=15154
+nodes=14578
 edges=20000
-node kinds: function=13662, register=1485, doc_box=6, doc_section=1
+node kinds: doc=7, function=13878, register=693
+doc kinds: boxmatrix_box=6, markdown_section=1
 edge stages: deterministic=19989, semantic=11
-visible macro/wrapper nodes: false for IP_VERSION/WREG32/REG_SET_FIELD/SOC15_REG_OFFSET/funcs/ops/hw_init
+visible bad node kinds: 0
+visible macro/wrapper/provider/tmp nodes: 0
+concept functions without resolver profile: 0
 ```
 
 Stage 2 and macro QA: `docs/qa/2026-05-18-clean-final-stage2-and-macro-qa.md`.
@@ -106,7 +118,9 @@ Cross-repo shared-register graph QA:
 `docs/qa/2026-05-18-g03-cross-repo-register-merge-qa.md` proves the default
 `limit=3000` global graph includes `150` shared linux-amdgpu/mxgpu register
 nodes and bridge edges from both repos into the merged
-`register:IH:unknown:IH_RB_CNTL` node.
+`register:IH:IH_RB_CNTL` node. The follow-up register identity pass also
+records `ip_version` as attr/provenance instead of splitting register identity;
+see `docs/qa/2026-05-18-g03-register-ip-version-merge-and-profile-qa.md`.
 
 Semantic endpoint hygiene note: older raw `stage=semantic` rows from job 4 in
 `data/asip.db` and the clean-final temp artifact still contain historical
@@ -118,14 +132,16 @@ job 4 rows as clean semantic-edge proof.
 
 Clean-final PDF section QA: `docs/qa/2026-05-18-pdf-section-clean-final-qa.md`
 proves the default Web/API query path can expose
-`amdgpu-driver-source-tree.pdf#page-1` as `kind=pdf_section` with page
-provenance. Screenshot:
+`amdgpu-driver-source-tree.pdf#page-1` with page provenance. That artifact
+predates the 2026-05-19 product projection; current product graph output must
+project the node as `kind=doc` with `attr.doc_kind=pdf_section`. Screenshot:
 `docs/qa/browser/pdf-section-query-clean-final-3100-2k.png`.
 
 ## Acceptance
 
-- Artifact: `docs/qa/2026-05-18-acceptance-clean-amd-gemma4-final-current.json`
-- Markdown: `docs/qa/2026-05-18-acceptance-clean-amd-gemma4-final-current.md`
+- Current artifact: `docs/qa/2026-05-19-acceptance-clean-amd-current.json`
+- Current Markdown: `docs/qa/2026-05-19-acceptance-clean-amd-current.md`
+- Previous clean-final artifact: `docs/qa/2026-05-18-acceptance-clean-amd-gemma4-final-current.json`
 - Result: 9 total, 9 passed, 0 partial, 0 failed
 - Surfaces labelled: CLI, API, Web, MCP
 - Provider checks: embedding pass with `nomic-embed-text:latest`; semantic edge pass with `gemma4:e4b`
@@ -148,7 +164,9 @@ It ran 10 CLI/core queries over
 queries returned rows plus graph neighborhoods, and two exact function-node
 queries returned zero evidence rows but live graph neighborhoods from persisted
 Stage 1 graph edges. The same artifact records a 3,000-edge global graph with
-2,805 nodes: `function=2532`, `register=266`, `doc_box=6`, `doc_section=1`.
+2,805 nodes in the pre-projection graph view. Current product graph output
+must expose the document nodes as `kind=doc` with `attr.doc_kind` values such
+as `boxmatrix_box` and `markdown_section`.
 
 ## Visual QA
 
@@ -159,9 +177,9 @@ Stage 1 graph edges. The same artifact records a 3,000-edge global graph with
 - Result: 6 passed, 0 failed
 - Themes: dark and light screenshots captured for every route
 - Historical `/graph` screenshot in that artifact: 12 nodes and 4 weighted edges visible in both themes before the later dense graph QA
-- Fresh in-app browser QA at `http://127.0.0.1:3100/graph` after the clean-final DB was copied to `data/asip.db` and before later G03 typed-callback rebuilds: top bar shows `Edge: Ollama / gemma4:e4b`; `/graph` loads the live global graph with `3,000` graph edges, `1,000 / 2,883` visible nodes, `3,000 / 3,000` visible edges, rendered canvas edge count `1,132`, layer provenance `deterministic: 2989 semantic: 11`, and visible node classes `doc_box=6`, `doc_section=1`, `function=836`, `register=157`. Browser artifacts: `docs/qa/browser/graph-clean-final-default-3100-2k.png` and `docs/qa/browser/graph-clean-final-default-3100-snapshot.json`.
-- Fresh in-app browser snapshot after the cross-file common-helper fix shows the live `/graph` page with `Loaded edge budget 3000 / 20000`, `Visible nodes 1000 / 2797`, `Visible edges 3000 / 3000`, and the accessibility summary lists `nodes 1000`, `edges 1216`, `function 787`, `register 206`, `doc_box 6`, and `doc_section 1`; the underlying full product graph sample below records `control-keyword function nodes named "if": 0`.
-- Fresh in-app browser QA at `http://127.0.0.1:3100/` with source filter `pdf` and query `amdgpu documentation driver source tree PDF QA` shows one clean-final PDF result and a graph summary of `nodes 1`, `edges 0`, `pdf_section 1`, with inspector source `amdgpu-driver-source-tree.pdf page 1`. Browser artifact: `docs/qa/browser/pdf-section-query-clean-final-3100-2k.png`.
+- Fresh in-app browser QA at `http://127.0.0.1:3100/graph` after the clean-final DB was copied to `data/asip.db` and before later G03 typed-callback rebuilds: top bar shows `Edge: Ollama / gemma4:e4b`; `/graph` loads the live global graph with `3,000` graph edges, `1,000 / 2,883` visible nodes, `3,000 / 3,000` visible edges, rendered canvas edge count `1,132`, and layer provenance `deterministic: 2989 semantic: 11`. Browser artifacts: `docs/qa/browser/graph-clean-final-default-3100-2k.png` and `docs/qa/browser/graph-clean-final-default-3100-snapshot.json`. Document subtype labels in that snapshot are historical pre-projection labels.
+- Fresh in-app browser snapshot after the cross-file common-helper fix shows the live `/graph` page with `Loaded edge budget 3000 / 20000`, `Visible nodes 1000 / 2797`, `Visible edges 3000 / 3000`, and the underlying full product graph sample below records `control-keyword function nodes named "if": 0`. Document subtype labels in that snapshot are historical pre-projection labels.
+- Fresh in-app browser QA at `http://127.0.0.1:3100/` with source filter `pdf` and query `amdgpu documentation driver source tree PDF QA` shows one clean-final PDF result and inspector source `amdgpu-driver-source-tree.pdf page 1`. Browser artifact: `docs/qa/browser/pdf-section-query-clean-final-3100-2k.png`. Current product graph output projects the PDF endpoint as `kind=doc` with `attr.doc_kind=pdf_section`.
 - Latest in-app browser QA after the full provider/static-cleanup/function-query slice shows `/graph` with `graph edges: 3000`, `layers deterministic: 2989 semantic: 11`, and `visible nodes: 1000 / 2805`; querying `gfx_v11_0_hw_init` shows `matches: 0` but `graph edges: 36` and live function-call relationships. Browser artifacts: `docs/qa/browser/graph-after-full-backfill-and-query-fallback-2k.png`, `docs/qa/browser/graph-after-full-backfill-and-query-fallback-deep-snapshot.md`, `docs/qa/browser/graph-function-query-fallback-2k.png`, and `docs/qa/browser/graph-function-query-fallback-2k-snapshot.md`.
 - Latest in-app browser QA after the shared-register visibility fix shows
   `/graph` with `graph edges: 3000`, `nodes 1000`, `edges 1220`, and
@@ -174,11 +192,18 @@ Stage 1 graph edges. The same artifact records a 3,000-edge global graph with
 
 ## Automated Verification
 
-- `PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=packages/core/src:packages/core/tests:. python3 -m unittest discover -s packages/core/tests -p 'test_*.py' -v`: 236 tests OK, 2 sqlite-vec optional skips
+- `PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=packages/core/src:packages/core/tests:. python3 -m unittest discover -s packages/core/tests -p 'test_*.py' -v`: 239 tests OK, 2 sqlite-vec optional skips
 - `PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=packages/core/src:packages/core/tests:. python3 -m unittest apps.api.tests.test_app apps.mcp.tests.test_tools apps.mcp.tests.test_server -v`: 47 tests OK, 1 optional MCP runtime skip under system Python 3.9
 - `PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=packages/core/src:. /Users/chenjingwen/.cache/codex-runtimes/codex-primary-runtime/dependencies/python/bin/python3 -m unittest apps.mcp.tests.test_tools apps.mcp.tests.test_server -v`: 29 tests OK, 0 skips with real `mcp 1.27.1` runtime
 - `pnpm --filter web run lint`: passed
 - `pnpm --filter web exec tsc --noEmit`: passed
+- `PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=packages/core/src:packages/core/tests:. python3 -m unittest packages.core.tests.test_storage_graph packages.core.tests.test_workbench_query_schema packages.core.tests.test_workbench_backend_state -v`: 87 tests OK, 2 optional sqlite-vec extension skips
+- `pnpm --filter web exec playwright test apps/web/tests/workbench-api.spec.ts --grep "acceptance API lists real qwen and gemma QA runs" --reporter=list`: 1 passed after updating the acceptance artifact listing assertion to include the 2026-05-19 clean current run.
+- `pnpm --filter web exec playwright test apps/web/tests/workbench-smoke.spec.ts --grep "graph page runs (semantic edge generation|batch semantic edge generation|LLM document node extraction)" --reporter=list`: 3 passed, proving query/batch/doc-node graph actions preserve explicit URL `dbPath` in their POST body.
+- `pnpm --filter web exec playwright test apps/web/tests/workbench-api.spec.ts apps/web/tests/workbench-smoke.spec.ts --reporter=list`: 82 passed
+- `pnpm --filter web exec playwright test apps/web/tests/visual-anchor-routes.spec.ts --reporter=list`: 15 passed
+- In-app browser current graph QA at 2048 x 1280: `docs/qa/browser/asip-graph-current-2026-05-19-2k.png` and `docs/qa/browser/asip-graph-current-2026-05-19-snapshot.md`.
+- In-app browser current acceptance QA at 2048 x 1280: `docs/qa/browser/asip-acceptance-current-2026-05-19-2k.png` and `docs/qa/browser/asip-acceptance-current-2026-05-19-snapshot.md`.
 - `pnpm --filter web exec playwright test tests/visual-anchor-routes.spec.ts --reporter=list`: 15 passed
 - `pnpm --filter web exec playwright test tests/workbench-api.spec.ts tests/workbench-smoke.spec.ts tests/visual-anchor-routes.spec.ts --reporter=list`: 90 passed
 - `git diff --check`: passed

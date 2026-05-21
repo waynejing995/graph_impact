@@ -5,7 +5,12 @@ from __future__ import annotations
 import re
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Dict, Iterable, List, Mapping, Optional, Sequence
+from typing import Any, Dict, Iterable, List, Mapping, Optional, Sequence
+
+try:
+    import yaml as _yaml
+except Exception:  # pragma: no cover - exercised only when PyYAML is unavailable
+    _yaml = None
 
 
 @dataclass(frozen=True)
@@ -19,13 +24,57 @@ class WrapperRule:
 
 
 @dataclass(frozen=True)
+class GraphMergePolicy:
+    mode: str = "concept_with_implementations"
+    warn_register_overlap_below: float = 0.35
+    split_register_overlap_below: float = 0.10
+
+
+@dataclass(frozen=True)
+class GraphFunctionNormalizationRule:
+    id: str
+    match: str
+    canonical: str
+    enabled: bool = True
+    merge_policy: GraphMergePolicy = field(default_factory=GraphMergePolicy)
+
+
+@dataclass(frozen=True)
+class GraphFunctionNormalization:
+    enabled: bool = False
+    rules: List[GraphFunctionNormalizationRule] = field(default_factory=list)
+
+
+@dataclass(frozen=True)
+class GraphRegisterNormalization:
+    identity: str = "register:{ip}:{symbol}"
+    merge_across_repos_when_ip_and_symbol_match: bool = True
+    merge_across_ip_versions: bool = True
+    merge_across_ip_blocks: bool = False
+
+
+@dataclass(frozen=True)
+class GraphNormalizationConfig:
+    function_normalization: GraphFunctionNormalization = field(default_factory=GraphFunctionNormalization)
+    register_normalization: GraphRegisterNormalization = field(default_factory=GraphRegisterNormalization)
+    access_relation_map: Dict[str, str] = field(default_factory=dict)
+    graph_profiles: Dict[str, object] = field(default_factory=dict)
+
+
+@dataclass(frozen=True)
 class ResolverProfile:
     id: str
     language: str
+    aliases: List[str] = field(default_factory=list)
     wrappers: Dict[str, WrapperRule] = field(default_factory=dict)
     symbol_prefixes: List[str] = field(default_factory=list)
     context_vars: List[str] = field(default_factory=list)
     python_extractors: List[str] = field(default_factory=list)
+    graph: GraphNormalizationConfig = field(default_factory=GraphNormalizationConfig)
+
+    @classmethod
+    def from_mapping(cls, config: Mapping[str, object]) -> "ResolverProfile":
+        return resolver_profile_from_config(config)
 
 
 @dataclass(frozen=True)
@@ -67,12 +116,14 @@ def resolver_profile_from_config(
     return ResolverProfile(
         id=profile_id,
         language=language,
+        aliases=_string_list(config.get("aliases", [])),
         wrappers=wrappers,
         symbol_prefixes=_string_list(config.get("symbol_prefixes", [])),
         context_vars=_string_list(config.get("context_vars", [])),
         python_extractors=_string_list(
             config.get("python_extractors", fallback_wrappers if language == "python" else [])
         ),
+        graph=_graph_normalization_from_config(config.get("graph")),
     )
 
 
@@ -83,14 +134,19 @@ def resolver_profile_to_config(profile: ResolverProfile) -> Dict[str, object]:
         if rule.symbol_args:
             wrapper_config["symbol_args"] = list(rule.symbol_args)
         wrappers[name] = wrapper_config
-    return {
+    result = {
         "id": profile.id,
         "language": profile.language,
+        "aliases": list(profile.aliases),
         "context_vars": list(profile.context_vars),
         "symbol_prefixes": list(profile.symbol_prefixes),
         "python_extractors": list(profile.python_extractors),
         "wrappers": wrappers,
     }
+    graph_config = _graph_normalization_to_config(profile.graph)
+    if graph_config:
+        result["graph"] = graph_config
+    return result
 
 
 def resolve_cpp_register_call(source: str, profile: ResolverProfile) -> Optional[ResolvedSymbol]:
@@ -178,6 +234,146 @@ def _wrapper_rules_from_config(wrappers_data: Mapping[str, object]) -> Dict[str,
             symbol_args=symbol_args,
         )
     return wrappers
+
+
+def _graph_normalization_from_config(value: object) -> GraphNormalizationConfig:
+    data = value if isinstance(value, Mapping) else {}
+    function_data = data.get("function_normalization", {}) if isinstance(data, Mapping) else {}
+    register_data = data.get("register_normalization", {}) if isinstance(data, Mapping) else {}
+    access_data = data.get("access_relation_map", {}) if isinstance(data, Mapping) else {}
+    profiles_data = data.get("graph_profiles", {}) if isinstance(data, Mapping) else {}
+    function_normalization = _function_normalization_from_config(
+        function_data if isinstance(function_data, Mapping) else {}
+    )
+    register_normalization = _register_normalization_from_config(
+        register_data if isinstance(register_data, Mapping) else {}
+    )
+    return GraphNormalizationConfig(
+        function_normalization=function_normalization,
+        register_normalization=register_normalization,
+        access_relation_map=_access_relation_map_from_config(access_data),
+        graph_profiles=dict(profiles_data) if isinstance(profiles_data, Mapping) else {},
+    )
+
+
+def _function_normalization_from_config(data: Mapping[str, object]) -> GraphFunctionNormalization:
+    enabled = _bool_value(data.get("enabled", False))
+    raw_rules = data.get("rules", [])
+    rules: List[GraphFunctionNormalizationRule] = []
+    if isinstance(raw_rules, list):
+        for index, raw_rule in enumerate(raw_rules):
+            if not isinstance(raw_rule, Mapping):
+                continue
+            rule_enabled = _bool_value(raw_rule.get("enabled", True))
+            rule_id = str(raw_rule.get("id") or "").strip()
+            match = str(raw_rule.get("match") or "").strip()
+            canonical = str(raw_rule.get("canonical") or "").strip()
+            if enabled and rule_enabled and (not rule_id or not match or not canonical):
+                raise ValueError(
+                    f"graph.function_normalization.rules[{index}] requires id, match, and canonical"
+                )
+            if not rule_id or not match or not canonical:
+                continue
+            merge_policy_raw = raw_rule.get("merge_policy", {})
+            merge_policy = _merge_policy_from_config(merge_policy_raw if isinstance(merge_policy_raw, Mapping) else {})
+            rules.append(
+                GraphFunctionNormalizationRule(
+                    id=rule_id,
+                    match=match,
+                    canonical=canonical,
+                    enabled=rule_enabled,
+                    merge_policy=merge_policy,
+                )
+            )
+    return GraphFunctionNormalization(enabled=enabled, rules=rules)
+
+
+def _merge_policy_from_config(data: Mapping[str, object]) -> GraphMergePolicy:
+    return GraphMergePolicy(
+        mode=str(data.get("mode", "concept_with_implementations") or "concept_with_implementations"),
+        warn_register_overlap_below=_float_value(data.get("warn_register_overlap_below"), 0.35),
+        split_register_overlap_below=_float_value(data.get("split_register_overlap_below"), 0.10),
+    )
+
+
+def _register_normalization_from_config(data: Mapping[str, object]) -> GraphRegisterNormalization:
+    default = GraphRegisterNormalization()
+    return GraphRegisterNormalization(
+        identity=str(data.get("identity", default.identity) or default.identity),
+        merge_across_repos_when_ip_and_symbol_match=_bool_value(
+            data.get(
+                "merge_across_repos_when_ip_and_symbol_match",
+                default.merge_across_repos_when_ip_and_symbol_match,
+            )
+        ),
+        merge_across_ip_versions=_bool_value(data.get("merge_across_ip_versions", default.merge_across_ip_versions)),
+        merge_across_ip_blocks=_bool_value(data.get("merge_across_ip_blocks", default.merge_across_ip_blocks)),
+    )
+
+
+def _access_relation_map_from_config(value: object) -> Dict[str, str]:
+    if not isinstance(value, Mapping):
+        return {}
+    result: Dict[str, str] = {}
+    for access, raw_relation in value.items():
+        if isinstance(raw_relation, Mapping):
+            relation = raw_relation.get("relation", "")
+        else:
+            relation = raw_relation
+        if relation not in ("", None, 0):
+            result[str(access)] = str(relation)
+    return result
+
+
+def _graph_normalization_to_config(graph: GraphNormalizationConfig) -> Dict[str, object]:
+    result: Dict[str, object] = {}
+    if graph.function_normalization.enabled or graph.function_normalization.rules:
+        result["function_normalization"] = {
+            "enabled": graph.function_normalization.enabled,
+            "rules": [
+                {
+                    "id": rule.id,
+                    "enabled": rule.enabled,
+                    "match": rule.match,
+                    "canonical": rule.canonical,
+                    "merge_policy": {
+                        "mode": rule.merge_policy.mode,
+                        "warn_register_overlap_below": rule.merge_policy.warn_register_overlap_below,
+                        "split_register_overlap_below": rule.merge_policy.split_register_overlap_below,
+                    },
+                }
+                for rule in graph.function_normalization.rules
+            ],
+        }
+    if graph.register_normalization != GraphRegisterNormalization():
+        result["register_normalization"] = {
+            "identity": graph.register_normalization.identity,
+            "merge_across_repos_when_ip_and_symbol_match": graph.register_normalization.merge_across_repos_when_ip_and_symbol_match,
+            "merge_across_ip_versions": graph.register_normalization.merge_across_ip_versions,
+            "merge_across_ip_blocks": graph.register_normalization.merge_across_ip_blocks,
+        }
+    if graph.access_relation_map:
+        result["access_relation_map"] = dict(graph.access_relation_map)
+    if graph.graph_profiles:
+        result["graph_profiles"] = dict(graph.graph_profiles)
+    return result
+
+
+def _bool_value(value: object) -> bool:
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, str):
+        return value.strip().lower() in {"1", "true", "yes", "on"}
+    return bool(value)
+
+
+def _float_value(value: object, default: float) -> float:
+    try:
+        if value in ("", None):
+            return default
+        return float(value)
+    except (TypeError, ValueError):
+        return default
 
 
 def _iter_configured_cpp_calls(source: str, profile: ResolverProfile) -> Iterable[tuple[str, str]]:
@@ -326,6 +522,13 @@ def _string_list(value: object) -> List[str]:
 
 
 def _parse_profile_yaml(text: str) -> Dict[str, object]:
+    if _yaml is not None:
+        loaded = _yaml.safe_load(text) or {}
+        if isinstance(loaded, Mapping):
+            data = dict(loaded)
+            data.setdefault("wrappers", {})
+            return data
+        return {"wrappers": {}}
     data: Dict[str, object] = {"wrappers": {}}
     section: Optional[str] = None
     active_wrapper: Optional[str] = None

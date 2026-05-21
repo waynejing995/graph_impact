@@ -1,0 +1,109 @@
+{
+  "source": "asip.provider_gate",
+  "generated_at": "2026-05-20T09:57:50+00:00",
+  "db_path": "data/asip.db",
+  "database_health": {
+    "status": "pass",
+    "failure_reasons": []
+  },
+  "provider_settings": {
+    "edge": {
+      "provider": "ollama",
+      "base_url": "http://localhost:11434",
+      "api_path": "/api/chat",
+      "model": "gemma4:e4b",
+      "fallback_model": "",
+      "extra_headers": {},
+      "think": false,
+      "timeout_seconds": 900,
+      "num_ctx": 2048,
+      "num_predict": 1024,
+      "temperature": 0
+    },
+    "embedding": {
+      "provider": "ollama",
+      "base_url": "http://localhost:11434",
+      "api_path": "/api/embeddings",
+      "model": "nomic-embed-text:latest",
+      "extra_headers": {},
+      "timeout_seconds": 900
+    }
+  },
+  "provider_checks": {
+    "embedding": {
+      "status": "partial",
+      "provenance_status": "pass",
+      "coverage_status": "partial",
+      "message": "provider embedding provenance exists but 125962 deterministic fallback embeddings remain; 27/125989 embeddings match the configured provider; 21852 chunks have no embeddings; 125989/147841 chunks have embeddings",
+      "provider": "ollama",
+      "model": "nomic-embed-text:latest",
+      "embedding_count": 27,
+      "total_count": 125989,
+      "provider_embedding_count": 27,
+      "fallback_count": 125962,
+      "total_chunks": 147841,
+      "embedded_chunks": 125989,
+      "missing_embedding_chunks": 21852
+    },
+    "embedding_live": {
+      "status": "fail",
+      "message": "embedding provider failed: <urlopen error [Errno 1] Operation not permitted>",
+      "provider": "ollama",
+      "model": "nomic-embed-text:latest"
+    },
+    "semantic_edge_provenance": {
+      "status": "partial",
+      "message": "persisted semantic edges are older than latest succeeded index or graph rebuild job",
+      "provider": "ollama",
+      "model": "gemma4:e4b",
+      "edge_count": 0,
+      "extractor_edge_count": 14,
+      "job_ids": [],
+      "stale_edge_count": 14,
+      "stale_job_ids": [
+        4
+      ],
+      "latest_index_job_id": 10,
+      "latest_graph_rebuild_job_id": 13,
+      "ignored_edge_count": 11,
+      "missing_or_invalid_job_edge_count": 0
+    },
+    "doc_node_provenance": {
+      "status": "partial",
+      "message": "persisted doc-node semantic edges are older than latest succeeded index or graph rebuild job",
+      "provider": "ollama",
+      "model": "gemma4:e4b",
+      "edge_count": 0,
+      "extractor_edge_count": 11,
+      "job_ids": [],
+      "stale_edge_count": 11,
+      "stale_job_ids": [
+        5
+      ],
+      "latest_index_job_id": 10,
+      "latest_graph_rebuild_job_id": 13,
+      "ignored_edge_count": 14,
+      "missing_or_invalid_job_edge_count": 0
+    },
+    "semantic_edge": {
+      "status": "fail",
+      "message": "semantic edge provider failed: Ollama edge generation failed: gemma4:e4b: <urlopen error [Errno 1] Operation not permitted>",
+      "provider": "ollama",
+      "model": "gemma4:e4b"
+    }
+  },
+  "summary": {
+    "total": 5,
+    "passed": 0,
+    "partial": 3,
+    "failed": 2
+  },
+  "gate_status": "blocked",
+  "failure_reasons": [
+    "embedding provider check failed: provider embedding provenance exists but 125962 deterministic fallback embeddings remain; 27/125989 embeddings match the configured provider; 21852 chunks have no embeddings; 125989/147841 chunks have embeddings",
+    "embedding_live provider check failed: embedding provider failed: <urlopen error [Errno 1] Operation not permitted>",
+    "semantic_edge_provenance provider check failed: persisted semantic edges are older than latest succeeded index or graph rebuild job",
+    "doc_node_provenance provider check failed: persisted doc-node semantic edges are older than latest succeeded index or graph rebuild job",
+    "semantic_edge provider check failed: semantic edge provider failed: Ollama edge generation failed: gemma4:e4b: <urlopen error [Errno 1] Operation not permitted>"
+  ]
+}

@@ -19,6 +19,7 @@ from pathlib import Path
 from typing import Any, Iterable, List, Mapping, Optional
 
 from .graph_filters import is_graph_entity_endpoint
+from .graph_schema import normalize_product_relation
 from .resolver_profiles import ResolverProfile, ResolvedSymbol, resolve_cpp_register_calls
 
 
@@ -153,11 +154,15 @@ def build_deterministic_code_graph(
     display_path = _display_path(source_path, source_root)
     compile_args = _compile_command_args(source_path, source_root)
     effective_clang_args = [*compile_args, *list(clang_args)]
+    defined_symbols = _preprocessor_defined_symbols_from_args(effective_clang_args)
+    scan_source_text = _mask_non_code_for_call_scan(source_text, defined_symbols=defined_symbols)
     spans, analysis_mode, diagnostics = _function_spans_from_clang(source_path, source_text, effective_clang_args)
     if not spans:
-        spans = _function_spans_from_text(source_text)
+        spans = _function_spans_from_text(scan_source_text)
         analysis_mode = "text_fallback"
         diagnostics.append("clang did not return function spans; used text fallback")
+    else:
+        spans = [span for span in spans if _span_contains_unmasked_code(scan_source_text, span)]
     ast_json = _clang_ast_json(
         source_path,
         source_text,
@@ -181,7 +186,7 @@ def build_deterministic_code_graph(
     function_lines = {span.name: span.line_start for span in spans}
     callback_slots = _merge_callback_slots(
         _callback_slots_from_text(
-            source_text,
+            scan_source_text,
             function_names,
             function_lines,
             display_path,
@@ -199,26 +204,27 @@ def build_deterministic_code_graph(
     )
     table_field_aliases = _merge_table_field_aliases(
         known_table_field_aliases or {},
-        _table_field_aliases_from_text(source_text),
+        _table_field_aliases_from_text(scan_source_text),
     )
     version_field_sinks = _merge_version_field_sinks(
         known_version_field_sinks or {},
-        _version_field_sinks_from_spans(source_text, spans),
+        _version_field_sinks_from_spans(scan_source_text, spans),
     )
     return_table_aliases = _merge_table_field_aliases(
         known_return_table_aliases or {},
-        _return_table_aliases_from_spans(source_text, spans),
+        _return_table_aliases_from_spans(scan_source_text, spans),
     )
     receiver_table_aliases = _merge_table_field_aliases(
         known_receiver_table_aliases or {},
-        _direct_receiver_table_aliases_from_text(source_text),
-        _receiver_table_aliases_from_version_sink_calls(source_text, spans, version_field_sinks),
+        _direct_receiver_table_aliases_from_text(scan_source_text),
+        _receiver_table_aliases_from_version_sink_calls(scan_source_text, spans, version_field_sinks),
     )
     slot_calls: List[CodeGraphSlotCall] = []
     for span in spans:
         function_text = source_text[span.offset_start : span.offset_end + 1]
+        scan_function_text = scan_source_text[span.offset_start : span.offset_end + 1]
         function_line_start = max(1, span.line_start)
-        for callee, call_offset in _direct_function_calls(function_text, callable_function_names, span.name):
+        for callee, call_offset in _direct_function_calls(scan_function_text, callable_function_names, span.name):
             line_number = _line_number_for_offset(source_text, span.offset_start + call_offset)
             callee_location = _callee_location_for_direct_call(
                 callee,
@@ -252,11 +258,12 @@ def build_deterministic_code_graph(
                 ),
             )
         for receiver, slot, slot_offset, receiver_type, receiver_tables, alias_type_flow in _slot_calls_for_function(
-            function_text,
+            scan_function_text,
             table_field_aliases,
             version_field_sinks,
             receiver_table_aliases,
             return_table_aliases,
+            defined_symbols,
         ):
             line_number = _line_number_for_offset(source_text, span.offset_start + slot_offset)
             ast_hint = _ast_slot_call_hint_for(
@@ -278,12 +285,12 @@ def build_deterministic_code_graph(
                     line_start=line_number,
                 )
             )
-        analysis_inputs = [(function_text, analysis_mode)]
+        analysis_inputs = [(scan_function_text, analysis_mode)]
         preprocessed_span = preprocessed_spans.get(span.name)
         if preprocessed_span is not None:
-            preprocessed_function_text = preprocessed_text[
+            preprocessed_function_text = _mask_non_code_for_call_scan(preprocessed_text[
                 preprocessed_span.offset_start : preprocessed_span.offset_end + 1
-            ]
+            ])
             if preprocessed_function_text and preprocessed_function_text != function_text:
                 analysis_inputs.append((preprocessed_function_text, "clang_preprocess"))
         for analysis_text, edge_source in analysis_inputs:
@@ -291,7 +298,7 @@ def build_deterministic_code_graph(
                 for resolved in resolve_cpp_register_calls(analysis_text, profile):
                     if not is_graph_entity_endpoint(resolved.symbol):
                         continue
-                    relation = _function_relation_for_resolved(resolved)
+                    relation = _function_relation_for_resolved(resolved, profile)
                     line_number = _line_for_symbol(source_text, span.offset_start, resolved.symbol, function_line_start)
                     _append_edge(
                         edges,
@@ -311,6 +318,8 @@ def build_deterministic_code_graph(
                                 "resolver_profile": resolved.profile_id,
                                 "wrapper": resolved.wrapper,
                                 "symbol_argument": resolved.symbol_argument,
+                                "access": resolved.access,
+                                "mapped_relation": relation,
                                 "field": resolved.field_symbol,
                                 "analysis_mode": edge_source,
                             },
@@ -322,6 +331,8 @@ def build_deterministic_code_graph(
     for slot_call in slot_calls:
         callbacks = _callbacks_for_slot_call(slot_call, callbacks_by_slot)
         call_kind = _callback_call_kind(slot_call, callbacks)
+        dispatch_scope = _callback_dispatch_scope(slot_call, callbacks, call_kind)
+        callback_ambiguous = dispatch_scope == "ambiguous"
         confidence = 0.72 if call_kind == "vtable_dispatch" else 0.84
         for callback in callbacks:
             if callback.function == slot_call.caller:
@@ -352,7 +363,8 @@ def build_deterministic_code_graph(
                         "callback_table_type": callback.table_type,
                         "callback_initializer_flow": callback.initializer_flow,
                         "callback_candidate_count": len(callbacks),
-                        "dispatch_scope": "generic_slot" if call_kind == "vtable_dispatch" else "matched_slot",
+                        "dispatch_scope": dispatch_scope,
+                        "callback_ambiguous": callback_ambiguous,
                         "callee_path": callback.function_path or callback.path,
                         "callback_path": callback.path,
                         "callee_line": callback.function_line_start,
@@ -382,7 +394,10 @@ def collect_code_graph_function_locations(
         source_text = source_path.read_text(encoding="utf-8", errors="replace")
     except OSError:
         return []
-    spans = _function_spans_from_text(source_text)
+    effective_clang_args = [*_compile_command_args(source_path, source_root), *list(clang_args)]
+    defined_symbols = _preprocessor_defined_symbols_from_args(effective_clang_args)
+    scan_source_text = _mask_non_code_for_call_scan(source_text, defined_symbols=defined_symbols)
+    spans = _function_spans_from_text(scan_source_text)
     display_path = _display_path(source_path, source_root)
     return [
         CodeGraphFunctionLocation(
@@ -395,49 +410,74 @@ def collect_code_graph_function_locations(
     ]
 
 
-def collect_code_graph_table_field_aliases(source_path: Path) -> Mapping[str, tuple[str, ...]]:
-    source_path = source_path.expanduser()
-    try:
-        source_text = source_path.read_text(encoding="utf-8", errors="replace")
-    except OSError:
-        return {}
-    return _table_field_aliases_from_text(source_text)
-
-
-def collect_code_graph_version_field_sinks(source_path: Path) -> Mapping[str, tuple[CodeGraphVersionFieldSink, ...]]:
-    source_path = source_path.expanduser()
-    try:
-        source_text = source_path.read_text(encoding="utf-8", errors="replace")
-    except OSError:
-        return {}
-    spans = _function_spans_from_text(source_text)
-    return _version_field_sinks_from_spans(source_text, spans)
-
-
-def collect_code_graph_receiver_table_aliases(
+def collect_code_graph_table_field_aliases(
     source_path: Path,
-    known_version_field_sinks: Mapping[str, Iterable[CodeGraphVersionFieldSink]],
+    source_root: Optional[Path] = None,
+    clang_args: Iterable[str] = (),
 ) -> Mapping[str, tuple[str, ...]]:
     source_path = source_path.expanduser()
     try:
         source_text = source_path.read_text(encoding="utf-8", errors="replace")
     except OSError:
         return {}
-    spans = _function_spans_from_text(source_text)
-    return _merge_table_field_aliases(
-        _direct_receiver_table_aliases_from_text(source_text),
-        _receiver_table_aliases_from_version_sink_calls(source_text, spans, known_version_field_sinks),
-    )
+    effective_clang_args = [*_compile_command_args(source_path, source_root), *list(clang_args)]
+    defined_symbols = _preprocessor_defined_symbols_from_args(effective_clang_args)
+    return _table_field_aliases_from_text(_mask_non_code_for_call_scan(source_text, defined_symbols=defined_symbols))
 
 
-def collect_code_graph_return_table_aliases(source_path: Path) -> Mapping[str, tuple[str, ...]]:
+def collect_code_graph_version_field_sinks(
+    source_path: Path,
+    source_root: Optional[Path] = None,
+    clang_args: Iterable[str] = (),
+) -> Mapping[str, tuple[CodeGraphVersionFieldSink, ...]]:
     source_path = source_path.expanduser()
     try:
         source_text = source_path.read_text(encoding="utf-8", errors="replace")
     except OSError:
         return {}
-    spans = _function_spans_from_text(source_text)
-    return _return_table_aliases_from_spans(source_text, spans)
+    effective_clang_args = [*_compile_command_args(source_path, source_root), *list(clang_args)]
+    defined_symbols = _preprocessor_defined_symbols_from_args(effective_clang_args)
+    scan_source_text = _mask_non_code_for_call_scan(source_text, defined_symbols=defined_symbols)
+    spans = _function_spans_from_text(scan_source_text)
+    return _version_field_sinks_from_spans(scan_source_text, spans)
+
+
+def collect_code_graph_receiver_table_aliases(
+    source_path: Path,
+    known_version_field_sinks: Mapping[str, Iterable[CodeGraphVersionFieldSink]],
+    source_root: Optional[Path] = None,
+    clang_args: Iterable[str] = (),
+) -> Mapping[str, tuple[str, ...]]:
+    source_path = source_path.expanduser()
+    try:
+        source_text = source_path.read_text(encoding="utf-8", errors="replace")
+    except OSError:
+        return {}
+    effective_clang_args = [*_compile_command_args(source_path, source_root), *list(clang_args)]
+    defined_symbols = _preprocessor_defined_symbols_from_args(effective_clang_args)
+    scan_source_text = _mask_non_code_for_call_scan(source_text, defined_symbols=defined_symbols)
+    spans = _function_spans_from_text(scan_source_text)
+    return _merge_table_field_aliases(
+        _direct_receiver_table_aliases_from_text(scan_source_text),
+        _receiver_table_aliases_from_version_sink_calls(scan_source_text, spans, known_version_field_sinks),
+    )
+
+
+def collect_code_graph_return_table_aliases(
+    source_path: Path,
+    source_root: Optional[Path] = None,
+    clang_args: Iterable[str] = (),
+) -> Mapping[str, tuple[str, ...]]:
+    source_path = source_path.expanduser()
+    try:
+        source_text = source_path.read_text(encoding="utf-8", errors="replace")
+    except OSError:
+        return {}
+    effective_clang_args = [*_compile_command_args(source_path, source_root), *list(clang_args)]
+    defined_symbols = _preprocessor_defined_symbols_from_args(effective_clang_args)
+    scan_source_text = _mask_non_code_for_call_scan(source_text, defined_symbols=defined_symbols)
+    spans = _function_spans_from_text(scan_source_text)
+    return _return_table_aliases_from_spans(scan_source_text, spans)
 
 
 def _merge_table_field_aliases(
@@ -664,7 +704,7 @@ def _source_may_have_slot_calls(source_text: str) -> bool:
 
 
 def _source_may_have_callback_initializers(source_text: str) -> bool:
-    if not re.search(r"\b(?:funcs|ops|callbacks|func)\b", source_text):
+    if not re.search(r"\b(?:funcs|ops|callbacks|func)\b|\b[A-Za-z_]\w*_(?:funcs|ops|callbacks|func)\b", source_text):
         return False
     if re.search(r"\.[A-Za-z_]\w*\s*=", source_text):
         return True
@@ -952,6 +992,74 @@ def _sanitize_compile_command_args(command_args: List[str], directory: Path, sou
     return sanitized
 
 
+def _preprocessor_defined_symbols_from_args(args: Iterable[str]) -> dict[str, str]:
+    symbols: dict[str, str] = {}
+    args_list = list(args)
+    skip_next = False
+    for index, arg in enumerate(args_list):
+        if skip_next:
+            skip_next = False
+            continue
+        define_value = ""
+        undef_value = ""
+        if arg == "-D" and index + 1 < len(args_list):
+            define_value = args_list[index + 1]
+            skip_next = True
+        elif arg.startswith("-D") and len(arg) > 2:
+            define_value = arg[2:]
+        elif arg == "-U" and index + 1 < len(args_list):
+            undef_value = args_list[index + 1]
+            skip_next = True
+        elif arg.startswith("-U") and len(arg) > 2:
+            undef_value = arg[2:]
+        elif arg in {"-include", "-imacros"} and index + 1 < len(args_list):
+            symbols.update(_preprocessor_symbols_from_forced_include(args_list[index + 1]))
+            skip_next = True
+        if define_value:
+            symbol, value = _preprocessor_define_symbol(define_value)
+            if symbol:
+                symbols[symbol] = value
+        if undef_value:
+            symbol, _ = _preprocessor_define_symbol(undef_value)
+            if symbol:
+                symbols.pop(symbol, None)
+    return symbols
+
+
+def _preprocessor_symbols_from_forced_include(path_value: str) -> dict[str, str]:
+    path = Path(path_value).expanduser()
+    if not path.exists() or not path.is_file():
+        return {}
+    symbols: dict[str, str] = {}
+    try:
+        lines = path.read_text(encoding="utf-8", errors="ignore").splitlines()
+    except OSError:
+        return symbols
+    for line in lines:
+        define = re.match(r"\s*#\s*define\s+(?P<symbol>[A-Za-z_]\w*)(?P<rest>.*)$", line)
+        if define:
+            symbol = define.group("symbol")
+            rest = define.group("rest").strip()
+            if rest.startswith("("):
+                continue
+            rest = re.sub(r"/\*.*?\*/", "", rest).split("//", 1)[0].strip()
+            symbols[symbol] = rest or "1"
+            continue
+        undef = re.match(r"\s*#\s*undef\s+(?P<symbol>[A-Za-z_]\w*)", line)
+        if undef:
+            symbols.pop(undef.group("symbol"), None)
+    return symbols
+
+
+def _preprocessor_define_symbol(value: str) -> tuple[str, str]:
+    parts = value.split("=", 1)
+    match = re.match(r"\s*(?P<symbol>[A-Za-z_]\w*)", value.split("=", 1)[0])
+    if not match:
+        return "", "1"
+    macro_value = parts[1].strip() if len(parts) == 2 else "1"
+    return match.group("symbol"), macro_value or "1"
+
+
 def _absolute_compile_path(value: str, directory: Path) -> str:
     path = Path(value).expanduser()
     if path.is_absolute():
@@ -981,6 +1089,10 @@ def _function_spans_from_text(source_text: str) -> List[_FunctionSpan]:
             )
         )
     return spans
+
+
+def _span_contains_unmasked_code(source_text: str, span: _FunctionSpan) -> bool:
+    return any(character.strip() for character in source_text[span.offset_start : span.offset_end + 1])
 
 
 def _callback_slots_from_text(
@@ -1069,7 +1181,8 @@ def _direct_function_calls(
 ) -> List[tuple[str, int]]:
     calls: List[tuple[str, int]] = []
     seen: set[str] = set()
-    for match in re.finditer(r"\b(?P<callee>[A-Za-z_]\w*)\s*\(", function_text):
+    scan_text = function_text
+    for match in re.finditer(r"\b(?P<callee>[A-Za-z_]\w*)\s*\(", scan_text):
         callee = match.group("callee")
         if callee == caller or callee not in function_names or _looks_like_preprocessor_macro(callee):
             continue
@@ -1077,6 +1190,307 @@ def _direct_function_calls(
             seen.add(callee)
             calls.append((callee, match.start("callee")))
     return calls
+
+
+def _mask_non_code_for_call_scan(
+    text: str,
+    defined_symbols: Iterable[str] = (),
+) -> str:
+    masked = _mask_comments_and_literals(text)
+    disabled = _disabled_preprocessor_mask(masked, defined_symbols=defined_symbols)
+    if not any(disabled):
+        return masked
+    chars = list(masked)
+    for index, is_disabled in enumerate(disabled):
+        if is_disabled and chars[index] != "\n":
+            chars[index] = " "
+    return "".join(chars)
+
+
+def _mask_comments_and_literals(text: str) -> str:
+    chars = list(text)
+    index = 0
+    state = ""
+    while index < len(text):
+        char = text[index]
+        next_char = text[index + 1] if index + 1 < len(text) else ""
+        if state == "line_comment":
+            if char == "\n":
+                state = ""
+            else:
+                chars[index] = " "
+            index += 1
+            continue
+        if state == "block_comment":
+            if char != "\n":
+                chars[index] = " "
+            if char == "*" and next_char == "/":
+                chars[index] = " "
+                chars[index + 1] = " "
+                index += 2
+                state = ""
+            else:
+                index += 1
+            continue
+        if state in {"string", "char"}:
+            quote = '"' if state == "string" else "'"
+            if char != "\n":
+                chars[index] = " "
+            if char == "\\" and index + 1 < len(text):
+                if next_char != "\n":
+                    chars[index + 1] = " "
+                index += 2
+                continue
+            if char == quote:
+                state = ""
+            index += 1
+            continue
+        if char == "/" and next_char == "/":
+            chars[index] = " "
+            chars[index + 1] = " "
+            index += 2
+            state = "line_comment"
+            continue
+        if char == "/" and next_char == "*":
+            chars[index] = " "
+            chars[index + 1] = " "
+            index += 2
+            state = "block_comment"
+            continue
+        if char == '"':
+            chars[index] = " "
+            index += 1
+            state = "string"
+            continue
+        if char == "'":
+            chars[index] = " "
+            index += 1
+            state = "char"
+            continue
+        index += 1
+    return "".join(chars)
+
+
+def _disabled_preprocessor_mask(
+    text: str,
+    defined_symbols: Iterable[str] = (),
+) -> list[bool]:
+    disabled = [False] * len(text)
+    branch_stack: list[dict[str, bool]] = []
+    defined_symbol_values = _preprocessor_symbol_value_map(defined_symbols)
+    offset = 0
+    directive_pattern = re.compile(r"\s*#\s*(?P<kind>if|ifdef|ifndef|elif|else|endif)\b(?P<expr>.*)")
+    for line in text.splitlines(keepends=True):
+        match = directive_pattern.match(line)
+        parent_disabled = any(frame["disabled"] for frame in branch_stack[:-1])
+        effective_disabled = any(frame["disabled"] for frame in branch_stack)
+        line_disabled = effective_disabled
+        if match:
+            kind = match.group("kind")
+            expr = match.group("expr")
+            if kind == "if":
+                branch_disabled = _preprocessor_if_expression_is_zero(expr, defined_symbol_values)
+                line_disabled = effective_disabled or branch_disabled
+                branch_stack.append({"disabled": branch_disabled, "taken": not branch_disabled})
+            elif kind in {"ifdef", "ifndef"}:
+                symbol_defined = _preprocessor_symbol_is_assumed_defined(expr, defined_symbol_values)
+                branch_disabled = not symbol_defined if kind == "ifdef" else symbol_defined
+                line_disabled = effective_disabled or branch_disabled
+                branch_stack.append({"disabled": branch_disabled, "taken": not branch_disabled})
+            elif kind == "else" and branch_stack:
+                line_disabled = effective_disabled
+                if not parent_disabled:
+                    taken = branch_stack[-1]["taken"]
+                    branch_stack[-1]["disabled"] = taken
+                    branch_stack[-1]["taken"] = True
+            elif kind == "elif" and branch_stack:
+                line_disabled = effective_disabled
+                if not parent_disabled:
+                    if branch_stack[-1]["taken"]:
+                        branch_stack[-1]["disabled"] = True
+                    else:
+                        branch_disabled = _preprocessor_if_expression_is_zero(expr, defined_symbol_values)
+                        branch_stack[-1]["disabled"] = branch_disabled
+                        branch_stack[-1]["taken"] = not branch_disabled
+            elif kind == "endif":
+                line_disabled = effective_disabled
+                if branch_stack:
+                    branch_stack.pop()
+        if line_disabled:
+            for index in range(offset, offset + len(line)):
+                disabled[index] = True
+        offset += len(line)
+    return disabled
+
+
+def _preprocessor_if_expression_is_zero(
+    expr: str,
+    defined_symbols: Iterable[str] = (),
+) -> bool:
+    expression = _strip_preprocessor_outer_parens(expr.strip())
+    truthy = _preprocessor_expression_truthy(expression, defined_symbols)
+    return truthy is False
+
+
+def _strip_preprocessor_outer_parens(expression: str) -> str:
+    while expression.startswith("(") and expression.endswith(")"):
+        depth = 0
+        wraps = True
+        for index, character in enumerate(expression):
+            if character == "(":
+                depth += 1
+            elif character == ")":
+                depth -= 1
+                if depth == 0 and index != len(expression) - 1:
+                    wraps = False
+                    break
+            if depth < 0:
+                wraps = False
+                break
+        if not wraps or depth != 0:
+            break
+        expression = expression[1:-1].strip()
+    return expression
+
+
+def _preprocessor_symbol_is_assumed_defined(
+    expr: str,
+    defined_symbols: Iterable[str] = (),
+) -> bool:
+    symbol = expr.strip()
+    match = re.match(r"(?P<symbol>[A-Za-z_]\w*)", symbol)
+    defined_symbol_values = _preprocessor_symbol_value_map(defined_symbols)
+    if match and match.group("symbol") in set(defined_symbol_values) | {"linux", "__linux__", "__GNUC__", "__clang__"}:
+        return True
+    return False
+
+
+def _preprocessor_expression_truthy(
+    expression: str,
+    defined_symbols: Iterable[str] = (),
+) -> Optional[bool]:
+    if not expression:
+        return None
+    defined_symbol_values = _preprocessor_symbol_value_map(defined_symbols)
+    normalized = re.sub(
+        r"\bdefined\s*(?:\(\s*(?P<paren>[A-Za-z_]\w*)\s*\)|(?P<bare>[A-Za-z_]\w*))",
+        lambda match: _preprocessor_symbol_defined_token(
+            match.group("paren") or match.group("bare") or "",
+            defined_symbol_values,
+        ),
+        expression,
+    )
+    normalized = re.sub(
+        r"\bIS_(?P<kind>ENABLED|REACHABLE|BUILTIN)\s*\(\s*(?P<symbol>[A-Za-z_]\w*)\s*\)",
+        lambda match: _preprocessor_config_helper_token(
+            match.group("kind"),
+            match.group("symbol"),
+            defined_symbol_values,
+        ),
+        normalized,
+    )
+    normalized = re.sub(
+        r"\bCONFIG_[A-Za-z0-9_]+\b",
+        lambda match: _preprocessor_symbol_value_token(match.group(0), defined_symbol_values),
+        normalized,
+    )
+    for symbol in ("linux", "__linux__", "__GNUC__", "__clang__"):
+        normalized = re.sub(rf"\b{re.escape(symbol)}\b", "1", normalized)
+    if re.search(r"[A-Za-z_]", normalized):
+        return None
+    if not re.fullmatch(r"[0-9\s!&|()=<>+-]+", normalized):
+        return None
+    if re.search(r"(?<![=!<>])=(?!=)", normalized):
+        return None
+    if re.search(r"(?<!&)&(?!&)|(?<!\|)\|(?!\|)", normalized):
+        return None
+    python_expression = normalized.replace("&&", " and ").replace("||", " or ")
+    python_expression = re.sub(r"!(?!=)", " not ", python_expression)
+    try:
+        return bool(eval(python_expression, {"__builtins__": {}}, {}))
+    except (SyntaxError, ValueError, TypeError, NameError):
+        return None
+
+
+def _preprocessor_symbol_value_map(defined_symbols: Iterable[str]) -> Mapping[str, str]:
+    if isinstance(defined_symbols, Mapping):
+        return {str(symbol): str(value) for symbol, value in defined_symbols.items() if symbol}
+    return {str(symbol): "1" for symbol in defined_symbols if symbol}
+
+
+def _preprocessor_symbol_defined_token(
+    symbol: str,
+    defined_symbols: Iterable[str] = (),
+) -> str:
+    defined_symbol_values = _preprocessor_symbol_value_map(defined_symbols)
+    return "1" if symbol in defined_symbol_values or symbol in {"linux", "__linux__", "__GNUC__", "__clang__"} else "0"
+
+
+def _preprocessor_symbol_value_token(
+    symbol: str,
+    defined_symbols: Iterable[str] = (),
+) -> str:
+    defined_symbol_values = _preprocessor_symbol_value_map(defined_symbols)
+    if symbol in {"linux", "__linux__", "__GNUC__", "__clang__"}:
+        return "1"
+    if symbol not in defined_symbol_values:
+        return "0"
+    return _preprocessor_macro_value_token(defined_symbol_values[symbol])
+
+
+def _preprocessor_config_helper_token(
+    helper_kind: str,
+    symbol: str,
+    defined_symbols: Iterable[str] = (),
+) -> str:
+    builtin = _preprocessor_symbol_value_token(symbol, defined_symbols)
+    if helper_kind == "BUILTIN":
+        return builtin
+    module = _preprocessor_symbol_value_token(f"{symbol}_MODULE", defined_symbols)
+    if helper_kind == "REACHABLE":
+        module_build = _preprocessor_symbol_value_token("MODULE", defined_symbols)
+        if _preprocessor_value_token_is_truthy(builtin) or (
+            _preprocessor_value_token_is_truthy(module)
+            and _preprocessor_value_token_is_truthy(module_build)
+        ):
+            return "1"
+        if "UNKNOWN" in {builtin, module, module_build}:
+            return "UNKNOWN"
+        return "0"
+    if helper_kind == "ENABLED":
+        if _preprocessor_value_token_is_truthy(builtin) or _preprocessor_value_token_is_truthy(module):
+            return "1"
+        if "UNKNOWN" in {builtin, module}:
+            return "UNKNOWN"
+    return "0"
+
+
+def _preprocessor_value_token_is_truthy(token: str) -> bool:
+    if token == "UNKNOWN":
+        return False
+    try:
+        return int(token, 0) != 0
+    except ValueError:
+        return False
+
+
+def _preprocessor_macro_value_token(value: str) -> str:
+    normalized = str(value).strip().strip("\"'")
+    lowered = normalized.lower()
+    if not normalized:
+        return "1"
+    if lowered in {"y", "m", "true"}:
+        return "1"
+    if lowered in {"n", "false"}:
+        return "0"
+    if re.fullmatch(r"[-+]?\d+", normalized):
+        return normalized
+    if re.fullmatch(r"[-+]?0[xX][0-9a-fA-F]+", normalized):
+        try:
+            return str(int(normalized, 0))
+        except ValueError:
+            return "UNKNOWN"
+    return "UNKNOWN"
 
 
 def _looks_like_preprocessor_macro(name: str) -> bool:
@@ -1105,31 +1519,34 @@ def _slot_calls_for_function(
     version_field_sinks: Optional[Mapping[str, Iterable[CodeGraphVersionFieldSink]]] = None,
     global_receiver_table_aliases: Optional[Mapping[str, Iterable[str]]] = None,
     return_table_aliases: Optional[Mapping[str, Iterable[str]]] = None,
+    defined_symbols: Iterable[str] = (),
 ) -> List[tuple[str, str, int, str, tuple[str, ...], str]]:
     slots: List[tuple[str, str, int, str, tuple[str, ...], str]] = []
-    seen: set[tuple[str, str]] = set()
+    seen: set[tuple[str, str, int]] = set()
+    scan_text = _mask_non_code_for_call_scan(function_text, defined_symbols=defined_symbols)
     active_table_field_aliases = table_field_aliases or {}
-    receiver_type_hints = _receiver_type_hints_for_function(function_text)
-    local_receiver_aliases, alias_type_flows = _receiver_table_aliases_for_function(
-        function_text,
-        version_field_sinks or {},
-        return_table_aliases or {},
-        global_receiver_table_aliases or {},
-    )
-    receiver_table_aliases = _merge_table_field_aliases(
-        global_receiver_table_aliases or {},
-        local_receiver_aliases,
-    )
+    receiver_type_hints = _receiver_type_hints_for_function(scan_text)
+    global_receiver_aliases = global_receiver_table_aliases or {}
     receiver_part = r"[A-Za-z_]\w*(?:\s*\[[^\]]+\])?"
     for match in re.finditer(
         rf"\b(?P<receiver>{receiver_part}(?:\s*(?:->|\.)\s*{receiver_part})*)\s*(?:->|\.)\s*(?P<slot>[A-Za-z_]\w*)\s*\)?\s*\(",
-        function_text,
+        scan_text,
     ):
         receiver = re.sub(r"\s+", "", match.group("receiver"))
         slot = match.group("slot")
-        item = (receiver, slot)
+        item = (receiver, slot, match.start("slot"))
         if item not in seen:
             seen.add(item)
+            scoped_receiver_aliases, alias_type_flows = _receiver_table_aliases_for_function(
+                scan_text[: match.start("slot")],
+                version_field_sinks or {},
+                return_table_aliases or {},
+                global_receiver_aliases,
+            )
+            receiver_table_aliases = _merge_table_field_aliases(
+                global_receiver_aliases,
+                scoped_receiver_aliases,
+            )
             receiver_leaf = _receiver_leaf(receiver)
             receiver_tables = receiver_table_aliases.get(receiver)
             if receiver_tables is None:
@@ -1345,11 +1762,10 @@ def _receiver_table_aliases_for_function(
             table = match.group("table")
             if receiver == table:
                 continue
-            if not (_looks_like_callback_table_name(table) or table.endswith("_ip_block")):
+            if not _looks_like_receiver_table_target(table):
                 continue
-            aliases.setdefault(receiver, [])
-            if table not in aliases[receiver]:
-                aliases[receiver].append(table)
+            aliases[receiver] = [table]
+            type_flows.pop(receiver, None)
         for match in returned_table_alias.finditer(line):
             receiver = re.sub(r"\s+", "", match.group("receiver"))
             callee = match.group("callee")
@@ -1358,12 +1774,10 @@ def _receiver_table_aliases_for_function(
                 continue
             for table in callee_tables:
                 table_text = str(table)
-                if not (_looks_like_callback_table_name(table_text) or table_text.endswith("_ip_block")):
+                if not _looks_like_receiver_table_target(table_text):
                     continue
-                aliases.setdefault(receiver, [])
-                if table_text not in aliases[receiver]:
-                    aliases[receiver].append(table_text)
-                type_flows.setdefault(receiver, "source_return_table_alias")
+                aliases[receiver] = [table_text]
+                type_flows[receiver] = "source_return_table_alias"
         visible_receiver_aliases = _merge_table_field_aliases(known_receiver_table_aliases, aliases)
         for match in receiver_alias.finditer(line):
             receiver = re.sub(r"\s+", "", match.group("receiver"))
@@ -1377,28 +1791,21 @@ def _receiver_table_aliases_for_function(
                     source,
                     visible_receiver_aliases,
                 ).items():
-                    aliases.setdefault(derived_receiver, [])
-                    for table_text in derived_tables:
-                        if table_text not in aliases[derived_receiver]:
-                            aliases[derived_receiver].append(table_text)
+                    aliases[derived_receiver] = list(derived_tables)
                     type_flows.setdefault(
                         derived_receiver,
                         _receiver_alias_type_flow("local_receiver_path_alias", derived_tables),
                     )
                 continue
-            aliases.setdefault(receiver, [])
-            for table_text in source_tables:
-                if table_text not in aliases[receiver]:
-                    aliases[receiver].append(table_text)
-            type_flows.setdefault(
-                receiver,
-                _receiver_alias_type_flow("source_receiver_table_alias", source_tables),
-            )
+            aliases[receiver] = list(source_tables)
+            type_flows[receiver] = _receiver_alias_type_flow("source_receiver_table_alias", source_tables)
     _collect_version_sink_call_aliases(function_text, version_field_sinks, aliases)
     return aliases, type_flows
 
 
-def _direct_receiver_table_aliases_from_text(source_text: str) -> dict[str, tuple[str, ...]]:
+def _direct_receiver_table_aliases_from_text(
+    source_text: str,
+) -> dict[str, tuple[str, ...]]:
     aliases: dict[str, list[str]] = {}
     assignment = re.compile(
         r"\b(?P<receiver>[A-Za-z_]\w*(?:\s*(?:->|\.)\s*[A-Za-z_]\w*(?:\s*\[[^\]]+\])?)*)"
@@ -1412,9 +1819,12 @@ def _direct_receiver_table_aliases_from_text(source_text: str) -> dict[str, tupl
             table = match.group("table")
             if receiver == table:
                 continue
-            if not _is_global_receiver_table_alias(receiver):
+            if _receiver_leaf(receiver) == "init_funcs" and "[" in receiver:
                 continue
-            if not (_looks_like_callback_table_name(table) or table.endswith("_ip_block")):
+            version_alias = _receiver_leaf(receiver) == "version" and table.endswith(("_ip_block", "_ip_block_version"))
+            if not version_alias and not _is_global_receiver_table_alias(receiver):
+                continue
+            if not _looks_like_receiver_table_target(table):
                 continue
             aliases.setdefault(receiver, [])
             if table not in aliases[receiver]:
@@ -1506,7 +1916,7 @@ def _return_table_aliases_from_spans(
         body = function_text[body_open + 1 :]
         for match in re.finditer(r"\breturn\s*&?\s*(?P<table>[A-Za-z_]\w*)\s*;", body):
             table = match.group("table")
-            if not (_looks_like_callback_table_name(table) or table.endswith("_ip_block")):
+            if not _looks_like_receiver_table_target(table):
                 continue
             aliases.setdefault(span.name, [])
             if table not in aliases[span.name]:
@@ -1517,7 +1927,7 @@ def _return_table_aliases_from_spans(
     )
     for match in simple_return.finditer(source_text):
         table = match.group("table")
-        if not (_looks_like_callback_table_name(table) or table.endswith("_ip_block")):
+        if not _looks_like_receiver_table_target(table):
             continue
         function = match.group("function")
         aliases.setdefault(function, [])
@@ -1586,6 +1996,10 @@ def _looks_like_callback_table_name(name: str) -> bool:
     return bool(re.search(r"(?:funcs|ops|callbacks|func)$", name))
 
 
+def _looks_like_receiver_table_target(name: str) -> bool:
+    return _looks_like_callback_table_name(name) or name.endswith(("_ip_block", "_ip_block_version"))
+
+
 def _receiver_type_hints_for_function(function_text: str) -> dict[str, str]:
     hints: dict[str, str] = {}
     signature_open = function_text.find("(")
@@ -1628,16 +2042,62 @@ def _callbacks_for_slot_call(
     if exact:
         return exact
     receiver_type = str(getattr(slot_call, "receiver_type", "") or "").strip()
+    table_prefixes = _receiver_ip_block_table_prefixes(receiver)
     if receiver_type:
         typed = [callback for callback in callbacks if callback.table_type == receiver_type]
+        narrowed = _callbacks_matching_table_prefixes(typed, table_prefixes)
+        if narrowed:
+            return narrowed
         return typed
     expected_table_type = _expected_callback_table_type(receiver)
     if expected_table_type:
         typed = [callback for callback in callbacks if callback.table_type == expected_table_type]
+        narrowed = _callbacks_matching_table_prefixes(typed, table_prefixes)
+        if narrowed:
+            return narrowed
         return typed
-    if receiver_leaf in _GENERIC_CALLBACK_RECEIVERS:
+    if receiver_leaf in _GENERIC_CALLBACK_RECEIVERS and _slot_call_receiver_is_likely_callback(slot_call):
         return callbacks
     return []
+
+
+def _slot_call_receiver_is_likely_callback(slot_call: CodeGraphSlotCall) -> bool:
+    receiver = slot_call.receiver.strip()
+    receiver_leaf = _receiver_leaf(receiver)
+    if receiver_leaf == "init_funcs" and "[" in receiver:
+        return False
+    if receiver_leaf in {"init_func", "init_funcs"}:
+        return True
+    receiver_type = str(getattr(slot_call, "receiver_type", "") or "")
+    return bool(receiver_type.endswith(("_funcs", "_ops", "_callbacks", "_func")))
+
+
+def _receiver_ip_block_table_prefixes(receiver: str) -> tuple[str, ...]:
+    normalized = re.sub(r"\s+", "", receiver)
+    if "->version->funcs" not in normalized and ".version.funcs" not in normalized:
+        return ()
+    base = re.split(r"->|\.", normalized, maxsplit=1)[0]
+    base = re.sub(r"\[[^\]]+\]", "", base).strip("&*()")
+    if not base.endswith("_block"):
+        return ()
+    prefix = base[: -len("_block")]
+    if not prefix or prefix in {"ip", "adev", "block"}:
+        return ()
+    return (prefix,)
+
+
+def _callbacks_matching_table_prefixes(
+    callbacks: Iterable[CodeGraphCallbackSlot],
+    prefixes: Iterable[str],
+) -> List[CodeGraphCallbackSlot]:
+    clean_prefixes = tuple(prefix for prefix in prefixes if prefix)
+    if not clean_prefixes:
+        return []
+    return [
+        callback
+        for callback in callbacks
+        if any(callback.table.startswith(f"{prefix}_") for prefix in clean_prefixes)
+    ]
 
 
 def _callback_call_kind(
@@ -1657,6 +2117,22 @@ def _callback_call_kind(
     return "vtable_callback"
 
 
+def _callback_dispatch_scope(
+    slot_call: CodeGraphSlotCall,
+    callbacks: List[CodeGraphCallbackSlot],
+    call_kind: str,
+) -> str:
+    if call_kind != "vtable_dispatch":
+        return "matched_slot"
+    receiver_tables = tuple(str(table) for table in getattr(slot_call, "receiver_tables", ()) if table)
+    if len(receiver_tables) > 1 or len(callbacks) > 1:
+        return "ambiguous"
+    receiver_leaf = _receiver_leaf(slot_call.receiver)
+    if receiver_leaf in _GENERIC_CALLBACK_RECEIVERS:
+        return "generic_slot"
+    return "ambiguous"
+
+
 def _receiver_leaf(receiver: str) -> str:
     parts = re.split(r"->|\.", receiver.strip())
     leaf = parts[-1] if parts else receiver
@@ -1665,10 +2141,12 @@ def _receiver_leaf(receiver: str) -> str:
 
 def _expected_callback_table_type(receiver: str) -> str:
     normalized = re.sub(r"\s+", "", receiver.strip())
+    leaf = _receiver_leaf(receiver)
+    if leaf == "init_funcs" and "[" in normalized:
+        return ""
     for suffix, table_type in _CALLBACK_TYPE_BY_RECEIVER_SUFFIX:
         if normalized.endswith(suffix):
             return table_type
-    leaf = _receiver_leaf(receiver)
     if leaf in _CALLBACK_TYPE_BY_RECEIVER:
         return _CALLBACK_TYPE_BY_RECEIVER[leaf]
     return ""
@@ -1700,7 +2178,11 @@ def _matching_paren(source_text: str, open_index: int) -> int:
     return -1
 
 
-def _function_relation_for_resolved(resolved: ResolvedSymbol) -> str:
+def _function_relation_for_resolved(resolved: ResolvedSymbol, profile: Optional[ResolverProfile] = None) -> str:
+    if profile is not None:
+        mapped_relation = profile.graph.access_relation_map.get(resolved.access)
+        if mapped_relation:
+            return normalize_product_relation(mapped_relation) or "relates_to"
     if resolved.access == "read":
         return "reads"
     if resolved.access == "write":
@@ -1713,7 +2195,7 @@ def _function_relation_for_resolved(resolved: ResolvedSymbol) -> str:
         return "reads"
     if resolved.access == "address":
         return "maps_base"
-    return resolved.access or "mentions"
+    return resolved.access or "relates_to"
 
 
 def _line_for_symbol(source_text: str, span_start: int, symbol: str, default_line: int) -> int:
