@@ -141,10 +141,28 @@ if (browserArtifactIsE2e) {
   const currentDbProbeSurfaces = new Set((browserGate.current_db_probes ?? []).map((probe) => probe.surface));
   assert.ok(currentDbProbeSurfaces.has("graph_page_api_request"));
   assert.ok(currentDbProbeSurfaces.has("direct_api_document_request"));
+  assert.ok(currentDbProbeSurfaces.has("graph_page_concept_detail_selection"));
   assert.ok((browserGate.current_db_probes ?? []).every((probe) => String(probe.url ?? "").includes("dbPath=")));
   assert.ok((browserGate.current_db_probes ?? []).every((probe) => Number(probe.status ?? 0) === 200));
   assert.ok((browserGate.current_db_probes ?? []).every((probe) => Number(probe.node_count ?? 0) > 0));
   assert.ok((browserGate.current_db_probes ?? []).every((probe) => Number(probe.edge_count ?? 0) > 0));
+  const conceptDetailProbe = (browserGate.current_db_probes ?? []).find(
+    (probe) => probe.surface === "graph_page_concept_detail_selection"
+  );
+  assert.ok(String(conceptDetailProbe?.selected_node_id ?? "").includes(":concept:"));
+  assert.equal(conceptDetailProbe?.selected_kind, "function");
+  assert.ok(Number(conceptDetailProbe?.implementation_count ?? 0) > 1);
+  assert.equal(
+    Number(conceptDetailProbe?.listed_implementation_count ?? 0),
+    Number(conceptDetailProbe?.implementation_count ?? -1)
+  );
+  assert.ok(
+    Number(conceptDetailProbe?.raw_implementation_record_count ?? conceptDetailProbe?.implementation_count ?? 0) >=
+      Number(conceptDetailProbe?.implementation_count ?? 0)
+  );
+  assert.ok(String(conceptDetailProbe?.selected_implementation ?? "").trim());
+  assert.equal(conceptDetailProbe?.detail_heading, "Concept Generated From");
+  assert.equal(conceptDetailProbe?.detail_truncated, false);
   assert.ok((browserGate.command ?? []).join(" ").includes("pnpm exec playwright test"));
   assert.ok(String(browserGate.report_json ?? "").includes("playwright-report.json"));
 } else if (browserGate.gate_status === "pass") {

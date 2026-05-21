@@ -1,13 +1,12 @@
 {
   "source": "asip.web.browser_e2e",
-  "generated_at": "2026-05-21T01:21:06.510Z",
+  "generated_at": "2026-05-21T03:04:08.927Z",
   "base_url": "http://127.0.0.1:3112",
   "db_path": "/Volumes/data/User/wayne/Code/graph_impact/data/asip.db",
   "latest_index_job_id": "10",
   "latest_graph_rebuild_job_id": "44",
   "target_urls": [
-    "http://127.0.0.1:3112/graph?dbPath=/Volumes/data/User/wayne/Code/graph_impact/data/asip.db",
-    "http://127.0.0.1:3112/api/workbench/graph?dbPath=/Volumes/data/User/wayne/Code/graph_impact/data/asip.db"
+    "http://127.0.0.1:3112/graph?dbPath=/Volumes/data/User/wayne/Code/graph_impact/data/asip.db"
   ],
   "skip_web_server": true,
   "command": [
@@ -18,8 +17,8 @@
     "--reporter=json"
   ],
   "report_json": "/Volumes/data/User/wayne/Code/graph_impact/docs/qa/2026-05-21-browser-e2e-current.playwright-report.json",
-  "report_sha256": "69c2010359b82885617e050751245f46cff84f5fb4462317945789f3f5ff3bd5",
-  "report_bytes": 122584,
+  "report_sha256": "ded5238201d567e9aa0447bb278e91283e14e46f6065943e0d0e0d6e961da088",
+  "report_bytes": 124650,
   "exit_code": 0,
   "gate_status": "pass",
   "e2e_status": "pass",
@@ -29,7 +28,7 @@
     "failed": 0,
     "flaky": 0,
     "skipped": 0,
-    "duration_ms": 206255.596
+    "duration_ms": 189162.691
   },
   "required_tests": [
     {
@@ -66,7 +65,7 @@
       "status": 200,
       "node_count": 2557,
       "edge_count": 3000,
-      "response_sha256": "9d54177ec8eae10999468c4c2f0c724081c796db27d5b629394608869d716c1a",
+      "response_sha256": "9c74470a3ed7db3747fbbb8c8d73338248af64479aabf54e6b084228dcd210c7",
       "latest_index_job_id": "10",
       "latest_graph_rebuild_job_id": "44"
     },
@@ -77,9 +76,29 @@
       "status": 200,
       "node_count": 2557,
       "edge_count": 3000,
-      "response_sha256": "9d54177ec8eae10999468c4c2f0c724081c796db27d5b629394608869d716c1a",
+      "response_sha256": "9c74470a3ed7db3747fbbb8c8d73338248af64479aabf54e6b084228dcd210c7",
       "latest_index_job_id": "10",
       "latest_graph_rebuild_job_id": "44"
+    },
+    {
+      "surface": "graph_page_concept_detail_selection",
+      "url": "http://127.0.0.1:3112/graph?dbPath=%2FVolumes%2Fdata%2FUser%2Fwayne%2FCode%2Fgraph_impact%2Fdata%2Fasip.db",
+      "db_path": "/Volumes/data/User/wayne/Code/graph_impact/data/asip.db",
+      "status": 200,
+      "node_count": 2557,
+      "edge_count": 3000,
+      "response_sha256": "9c74470a3ed7db3747fbbb8c8d73338248af64479aabf54e6b084228dcd210c7",
+      "latest_index_job_id": "10",
+      "latest_graph_rebuild_job_id": "44",
+      "selected_node_id": "function:linux-amdgpu:concept:linux-amdgpu:amd-ip-versioned-functions:gfx_hw_init",
+      "selected_kind": "function",
+      "selected_label": "gfx_hw_init",
+      "implementation_count": 9,
+      "listed_implementation_count": 9,
+      "raw_implementation_record_count": 92,
+      "selected_implementation": "gfx_v10_0_hw_init",
+      "detail_heading": "Concept Generated From",
+      "detail_truncated": false
     }
   ],
   "failure_reasons": [],

@@ -1,6 +1,6 @@
 {
   "source": "asip.web.no_server_smoke",
-  "generated_at": "2026-05-21T02:19:46.801Z",
+  "generated_at": "2026-05-21T03:04:57.688Z",
   "gate_status": "pass",
   "current_artifact_args": [
     "--browser-json",
@@ -26,9 +26,9 @@
       "path": "docs/qa/2026-05-21-browser-e2e-current.json",
       "resolved_path": "/Volumes/data/User/wayne/Code/graph_impact/docs/qa/2026-05-21-browser-e2e-current.json",
       "status": "loaded",
-      "bytes": 3052,
+      "bytes": 3891,
       "hash_policy": "sha256",
-      "sha256": "cb0f40df6de5c5ad89e0e32db2da11b72d10d3c70732eb6e8d7b8b26ce3a67dd"
+      "sha256": "d16bbec5771931a9523b9d690f689eb9508b4c79523bf44d9116e9af42cbb63a"
     },
     {
       "option": "--in-app-browser-json",
@@ -80,7 +80,7 @@
       "path": "docs/qa/2026-05-21-current-goal-completion-gate.json",
       "resolved_path": "/Volumes/data/User/wayne/Code/graph_impact/docs/qa/2026-05-21-current-goal-completion-gate.json",
       "status": "loaded",
-      "bytes": 8666,
+      "bytes": 9228,
       "hash_policy": "self-referential-not-final-gate-input",
       "sha256": ""
     },

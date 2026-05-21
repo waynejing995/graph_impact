@@ -2921,7 +2921,7 @@ function conceptImplementationLines(attr: Record<string, unknown>): string[] {
       lines.push(functionName);
     }
   }
-  const count = Number(attr.raw_implementation_count ?? attr.raw_function_names_count ?? lines.length);
+  const count = Number(attr.concept_implementation_count ?? attr.raw_function_names_count ?? attr.raw_implementation_count ?? lines.length);
   if (Number.isFinite(count) && count > lines.length) {
     lines.push(`+${count - lines.length} more implementations in the current graph payload`);
   }

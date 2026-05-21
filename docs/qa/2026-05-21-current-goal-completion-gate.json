@@ -1,14 +1,14 @@
 {
   "source": "asip.completion_gate",
-  "generated_at": "2026-05-21T02:21:09+00:00",
-  "db_path": "/Volumes/data/User/wayne/Code/graph_impact/data/asip.db",
+  "generated_at": "2026-05-21T03:04:47+00:00",
+  "db_path": "data/asip.db",
   "database": {
     "status": "pass",
-    "path": "/Volumes/data/User/wayne/Code/graph_impact/data/asip.db",
+    "path": "data/asip.db",
     "integrity_check_type": "quick_check",
     "integrity_check": "ok",
     "counts": {
-      "corpora": 3,
+      "corpora": 5,
       "documents": 1224,
       "chunks": 147841,
       "evidence": 5299434,
@@ -89,7 +89,7 @@
         "failed": 0,
         "flaky": 0,
         "skipped": 0,
-        "duration_ms": 206255.596
+        "duration_ms": 189162.691
       },
       "failure_reasons": []
     },
@@ -260,15 +260,18 @@
     {
       "id": "git_gate",
       "title": "Final diff, commit, and push gate",
-      "status": "pass",
-      "evidence": "diff_check=pass; worktree_status=clean; committed=True; pushed=True",
-      "failure_reasons": []
+      "status": "blocked",
+      "evidence": "diff_check=pass; worktree_status=clean; committed=True; pushed=True; artifact_head=12216b4e8dfe; current_head=b80b3c524d0e; artifact_branch=main; current_branch=main; current_worktree=dirty:14; artifact_upstream=origin/main; current_upstream=origin/main; current_ahead=0; current_behind=0",
+      "failure_reasons": [
+        "head does not match current HEAD: artifact=12216b4e8dfe70c5c6ec556a4d0ec1dbfb68de84 current=b80b3c524d0e32097fae911177101fdd99d7446b",
+        "current worktree has 14 changed/untracked paths"
+      ]
     }
   ],
   "summary": {
     "total": 17,
-    "passed": 16,
-    "blocked": 1,
+    "passed": 15,
+    "blocked": 2,
     "failed": 0,
     "missing": 0
   },
@@ -278,6 +281,8 @@
     "residual_acceptance: residual document status remains open: Status: Partial; deferral ledger exists, final user acceptance of residual boundaries remains blocking",
     "residual_acceptance: explicit user acceptance has not been recorded",
     "residual_acceptance: accepted is not true",
-    "residual_acceptance: accepted_residuals is empty"
+    "residual_acceptance: accepted_residuals is empty",
+    "git_gate: head does not match current HEAD: artifact=12216b4e8dfe70c5c6ec556a4d0ec1dbfb68de84 current=b80b3c524d0e32097fae911177101fdd99d7446b",
+    "git_gate: current worktree has 14 changed/untracked paths"
   ]
 }

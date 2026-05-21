@@ -54,6 +54,7 @@ _REQUIRED_BROWSER_E2E_TEST_FILE = "workbench-smoke.spec.ts"
 _REQUIRED_BROWSER_CURRENT_DB_PROBE_SURFACES = (
     "graph_page_api_request",
     "direct_api_document_request",
+    "graph_page_concept_detail_selection",
 )
 _NO_SERVER_ARTIFACT_INPUT_OPTIONS = {
     "--browser-json": "browser_gate",
@@ -1214,6 +1215,41 @@ def _browser_current_db_probe_failures(
                 f"browser e2e {surface} latest_graph_rebuild_job_id={probe.get('latest_graph_rebuild_job_id')} "
                 f"does not match current latest_graph_rebuild_job_id={latest_graph_rebuild_job_id}"
             )
+        if surface == "graph_page_concept_detail_selection":
+            failures.extend(_browser_concept_detail_probe_failures(probe))
+    return failures
+
+
+def _browser_concept_detail_probe_failures(probe: Mapping[str, Any]) -> List[str]:
+    failures: List[str] = []
+    selected_node_id = str(probe.get("selected_node_id") or "")
+    if ":concept:" not in selected_node_id:
+        failures.append("browser e2e concept detail selected_node_id is not a concept node")
+    if str(probe.get("selected_kind") or "") != "function":
+        failures.append(f"browser e2e concept detail selected_kind={probe.get('selected_kind')}")
+    if not str(probe.get("selected_label") or "").strip():
+        failures.append("browser e2e concept detail selected_label is missing")
+    implementation_count = _coerce_int(probe.get("implementation_count"))
+    if implementation_count is None or implementation_count <= 1:
+        failures.append(f"browser e2e concept detail implementation_count={probe.get('implementation_count')}")
+    listed_implementation_count = _coerce_int(probe.get("listed_implementation_count"))
+    if listed_implementation_count is None or listed_implementation_count != implementation_count:
+        failures.append(
+            f"browser e2e concept detail listed_implementation_count={probe.get('listed_implementation_count')} "
+            f"does not match implementation_count={probe.get('implementation_count')}"
+        )
+    raw_record_count = _coerce_int(probe.get("raw_implementation_record_count"))
+    if raw_record_count is not None and implementation_count is not None and raw_record_count < implementation_count:
+        failures.append(
+            f"browser e2e concept detail raw_implementation_record_count={probe.get('raw_implementation_record_count')} "
+            f"is below implementation_count={probe.get('implementation_count')}"
+        )
+    if not str(probe.get("selected_implementation") or "").strip():
+        failures.append("browser e2e concept detail selected_implementation is missing")
+    if str(probe.get("detail_heading") or "") != "Concept Generated From":
+        failures.append(f"browser e2e concept detail heading={probe.get('detail_heading')}")
+    if probe.get("detail_truncated") is not False:
+        failures.append(f"browser e2e concept detail_truncated={probe.get('detail_truncated')}")
     return failures
 
 

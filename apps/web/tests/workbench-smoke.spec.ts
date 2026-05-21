@@ -2068,7 +2068,18 @@ test("graph page loads current data/asip.db through browser and API", async ({ p
   const graphPayload = JSON.parse(graphPayloadText) as {
     source?: string;
     graph_runtime?: string;
-    nodes: Array<{ id?: string; kind?: string; attr?: { source?: Array<{ corpus_id?: string; path?: string }> } }>;
+    nodes: Array<{
+      id?: string;
+      kind?: string;
+      label?: string;
+      attr?: {
+        concept_implementations?: Array<{ function_name?: string; path?: string }>;
+        concept_implementation_count?: number;
+        raw_function_names?: string[];
+        raw_implementation_count?: number;
+        source?: Array<{ corpus_id?: string; path?: string }>;
+      };
+    }>;
     edges: Array<{ src: string; relation?: string; dst: string; stage?: string }>;
   };
   expect(graphPayload.source).toBe("networkx");
@@ -2090,11 +2101,57 @@ test("graph page loads current data/asip.db through browser and API", async ({ p
       (edge) => edge.stage === "semantic" || ["calls", "writes", "reads", "sets_field"].includes(edge.relation ?? "")
     )
   ).toBe(true);
+  const currentDbConcept = graphPayload.nodes.find(
+    (node) =>
+      node.kind === "function" &&
+      String(node.id ?? "").includes(":concept:") &&
+      ((node.attr?.concept_implementations?.length ?? 0) > 0 || (node.attr?.raw_function_names?.length ?? 0) > 0)
+  );
+  expect(currentDbConcept).toBeTruthy();
+  expect(currentDbConcept?.attr?.raw_implementation_count ?? 0).toBeGreaterThan(1);
+  expect(currentDbConcept?.attr?.concept_implementation_count ?? 0).toBeGreaterThan(1);
+  expect(currentDbConcept?.attr?.raw_implementation_count ?? 0).toBeGreaterThanOrEqual(
+    currentDbConcept?.attr?.concept_implementation_count ?? 0
+  );
+  expect(currentDbConcept?.attr?.concept_implementations?.length ?? 0).toBe(
+    currentDbConcept?.attr?.concept_implementation_count
+  );
+  const currentDbConceptImplementation = currentDbConcept?.attr?.concept_implementations?.find((item) =>
+    item.function_name
+  );
+  expect(currentDbConceptImplementation?.function_name).toBeTruthy();
 
   const forceGraph = page.getByTestId("force-graph");
   await expect(forceGraph).toHaveAttribute("data-ready", "true", { timeout: 30_000 });
   await expect.poll(async () => Number(await forceGraph.getAttribute("data-node-total"))).toBe(graphPayload.nodes.length);
   await expect.poll(async () => Number(await forceGraph.getAttribute("data-edge-total"))).toBe(graphPayload.edges.length);
+  const currentDbConceptLabel = String(currentDbConcept?.label ?? currentDbConcept?.id ?? "");
+  await forceGraph.getByRole("button", { name: currentDbConceptLabel, exact: true }).click();
+  await expect(page.getByRole("heading", { name: `Graph Node: ${currentDbConceptLabel}` })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Concept Generated From" })).toBeVisible();
+  await expect(page.locator(".details-pane")).toContainText(String(currentDbConceptImplementation?.function_name));
+  await expect(page.locator(".details-pane")).not.toContainText("more implementations");
+  const graphPayloadSha256 = createHash("sha256").update(graphPayloadText).digest("hex");
+  const conceptDetailProbe = {
+    surface: "graph_page_concept_detail_selection",
+    url: page.url(),
+    db_path: dbPath,
+    status: graphResponse.status(),
+    node_count: graphPayload.nodes.length,
+    edge_count: graphPayload.edges.length,
+    response_sha256: graphPayloadSha256,
+    latest_index_job_id: latestIndexJobId,
+    latest_graph_rebuild_job_id: latestGraphRebuildJobId,
+    selected_node_id: currentDbConcept?.id,
+    selected_kind: currentDbConcept?.kind,
+    selected_label: currentDbConceptLabel,
+    implementation_count: currentDbConcept?.attr?.concept_implementation_count,
+    listed_implementation_count: currentDbConcept?.attr?.concept_implementations?.length,
+    raw_implementation_record_count: currentDbConcept?.attr?.raw_implementation_count,
+    selected_implementation: currentDbConceptImplementation?.function_name,
+    detail_heading: "Concept Generated From",
+    detail_truncated: false
+  };
   expect(graphRequestUrls.length).toBeGreaterThanOrEqual(1);
   expect(graphRequestUrls.every((url) => url.includes(expectedDbParam))).toBe(true);
 
@@ -2121,7 +2178,7 @@ test("graph page loads current data/asip.db through browser and API", async ({ p
       status: graphResponse.status(),
       node_count: graphPayload.nodes.length,
       edge_count: graphPayload.edges.length,
-      response_sha256: createHash("sha256").update(graphPayloadText).digest("hex"),
+      response_sha256: graphPayloadSha256,
       latest_index_job_id: latestIndexJobId,
       latest_graph_rebuild_job_id: latestGraphRebuildJobId
     },
@@ -2135,7 +2192,8 @@ test("graph page loads current data/asip.db through browser and API", async ({ p
       response_sha256: createHash("sha256").update(directPayloadText).digest("hex"),
       latest_index_job_id: latestIndexJobId,
       latest_graph_rebuild_job_id: latestGraphRebuildJobId
-    }
+    },
+    conceptDetailProbe
   ];
   console.log(`ASIP_BROWSER_CURRENT_DB_PROBE ${JSON.stringify(currentDbProbes)}`);
   await test.info().attach("asip-current-db-probes", {

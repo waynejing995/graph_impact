@@ -4084,7 +4084,9 @@ def _compact_graph_attr(attr: Mapping[str, Any]) -> Dict[str, Any]:
     raw_implementations = compact.get("raw_implementations")
     if isinstance(raw_implementations, list):
         compact["raw_implementation_count"] = len(raw_implementations)
-        compact["concept_implementations"] = _compact_concept_implementations(raw_implementations)
+        concept_implementations = _compact_concept_implementations(raw_implementations)
+        compact["concept_implementation_count"] = len(concept_implementations)
+        compact["concept_implementations"] = concept_implementations
         compact.pop("raw_implementations", None)
     for key in (
         "fields",
@@ -4109,7 +4111,7 @@ def _compact_graph_attr(attr: Mapping[str, Any]) -> Dict[str, Any]:
     return compact
 
 
-def _compact_concept_implementations(value: object, limit: int = 12) -> List[Dict[str, Any]]:
+def _compact_concept_implementations(value: object, limit: Optional[int] = None) -> List[Dict[str, Any]]:
     if not isinstance(value, list):
         return []
     records: List[Dict[str, Any]] = []
@@ -4146,9 +4148,9 @@ def _compact_concept_implementations(value: object, limit: int = 12) -> List[Dic
         record.pop("raw_function_name", None)
         records.append(record)
         seen.add(key)
-        if len(records) >= limit:
+        if limit is not None and len(records) >= limit:
             break
-    return records
+    return records if limit is None else records[:limit]
 
 
 def _node_with_kind(node_id: str) -> Dict[str, Any]:

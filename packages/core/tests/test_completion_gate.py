@@ -1616,6 +1616,48 @@ class CompletionGateTests(unittest.TestCase):
             self.assertEqual(by_id["browser_e2e"]["status"], "blocked")
             self.assertIn("browser e2e current_db_probes are missing", by_id["browser_e2e"]["failure_reasons"])
 
+    def test_completion_gate_blocks_browser_e2e_artifact_without_current_db_concept_detail_probe(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            db_path = self._write_gate_db(root / "asip.db")
+            acceptance_json = self._write_json(root / "acceptance.json", self._acceptance_payload(["CLI", "API", "MCP"], db_path=db_path))
+            web_json = self._write_json(root / "web-acceptance.json", self._acceptance_payload(["CLI", "API", "Web", "MCP"], db_path=db_path))
+            provider_json = self._write_json(root / "provider.json", self._provider_payload("pass", db_path=db_path))
+            runtime_json = self._write_json(root / "runtime-semantic.json", self._runtime_semantic_payload("pass", db_path=db_path))
+            browser_payload = self._browser_e2e_payload("pass", db_path=db_path)
+            browser_payload["current_db_probes"] = [
+                probe
+                for probe in browser_payload["current_db_probes"]
+                if probe["surface"] != "graph_page_concept_detail_selection"
+            ]
+            browser_json = self._write_json(root / "browser.json", browser_payload)
+            no_server_json = self._write_json(root / "no-server.json", self._no_server_payload("pass"))
+            performance_json = self._write_json(root / "performance.json", self._performance_payload("pass"))
+            residual_json = self._write_json(root / "residual.json", self._residual_payload("pass"))
+            git_json = self._write_json(root / "git.json", self._git_payload("pass"))
+
+            result = run_completion_gate(
+                db_path,
+                acceptance_json=acceptance_json,
+                web_acceptance_json=web_json,
+                provider_json=provider_json,
+                runtime_semantic_json=runtime_json,
+                browser_json=browser_json,
+                no_server_json=no_server_json,
+                performance_json=performance_json,
+                residual_acceptance_json=residual_json,
+                git_gate_json=git_json,
+                minimum_counts=self._fixture_minimum_counts(),
+            )
+
+            by_id = {item["id"]: item for item in result["requirements"]}
+            self.assertEqual(result["gate_status"], "blocked")
+            self.assertEqual(by_id["browser_e2e"]["status"], "blocked")
+            self.assertIn(
+                "browser e2e current_db_probes missing surface: graph_page_concept_detail_selection",
+                by_id["browser_e2e"]["failure_reasons"],
+            )
+
     def test_completion_gate_blocks_browser_e2e_artifact_when_raw_report_lacks_required_tests(self):
         with tempfile.TemporaryDirectory() as tmpdir:
             root = Path(tmpdir)
@@ -2310,6 +2352,26 @@ class CompletionGateTests(unittest.TestCase):
                     "response_sha256": "b" * 64,
                     "latest_index_job_id": 1,
                     "latest_graph_rebuild_job_id": 2,
+                },
+                {
+                    "surface": "graph_page_concept_detail_selection",
+                    "url": f"http://127.0.0.1:3100/graph?dbPath={db_path}",
+                    "db_path": str(db_path),
+                    "status": 200,
+                    "node_count": 2,
+                    "edge_count": 1,
+                    "response_sha256": "c" * 64,
+                    "latest_index_job_id": 1,
+                    "latest_graph_rebuild_job_id": 2,
+                    "selected_node_id": "function:linux-amdgpu:concept:linux-amdgpu:amd-ip-versioned-functions:gfx_hw_init",
+                    "selected_kind": "function",
+                    "selected_label": "gfx_hw_init",
+                    "implementation_count": 2,
+                    "listed_implementation_count": 2,
+                    "raw_implementation_record_count": 3,
+                    "selected_implementation": "gfx_v11_0_hw_init",
+                    "detail_heading": "Concept Generated From",
+                    "detail_truncated": False,
                 },
             ],
             "failure_reasons": [] if gate_status == "pass" else ["browser e2e failed"],

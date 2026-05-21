@@ -13,7 +13,11 @@ const requiredBrowserE2eTests = [
 ];
 const requiredBrowserE2eTestFile = "workbench-smoke.spec.ts";
 const currentDbProbePrefix = "ASIP_BROWSER_CURRENT_DB_PROBE ";
-const requiredCurrentDbProbeSurfaces = ["graph_page_api_request", "direct_api_document_request"];
+const requiredCurrentDbProbeSurfaces = [
+  "graph_page_api_request",
+  "direct_api_document_request",
+  "graph_page_concept_detail_selection"
+];
 
 function parseArgs(argv) {
   const args = {
@@ -440,6 +444,48 @@ function collectCurrentDbProbeFailureReasons(probes, args) {
     ) {
       reasons.push(`browser e2e ${surface} latest_graph_rebuild_job_id does not match current DB`);
     }
+    if (surface === "graph_page_concept_detail_selection") {
+      reasons.push(...collectConceptDetailProbeFailureReasons(probe));
+    }
+  }
+  return reasons;
+}
+
+function collectConceptDetailProbeFailureReasons(probe) {
+  const reasons = [];
+  if (!String(probe.selected_node_id ?? "").includes(":concept:")) {
+    reasons.push("browser e2e concept detail selected_node_id is not a concept node");
+  }
+  if (String(probe.selected_kind ?? "") !== "function") {
+    reasons.push(`browser e2e concept detail selected_kind=${probe.selected_kind ?? "missing"}`);
+  }
+  if (!String(probe.selected_label ?? "").trim()) {
+    reasons.push("browser e2e concept detail selected_label is missing");
+  }
+  if (Number(probe.implementation_count ?? 0) <= 1) {
+    reasons.push(`browser e2e concept detail implementation_count=${probe.implementation_count ?? "missing"}`);
+  }
+  if (Number(probe.listed_implementation_count ?? 0) !== Number(probe.implementation_count ?? -1)) {
+    reasons.push(
+      `browser e2e concept detail listed_implementation_count=${probe.listed_implementation_count ?? "missing"} does not match implementation_count=${probe.implementation_count ?? "missing"}`
+    );
+  }
+  if (
+    probe.raw_implementation_record_count !== undefined &&
+    Number(probe.raw_implementation_record_count ?? 0) < Number(probe.implementation_count ?? 0)
+  ) {
+    reasons.push(
+      `browser e2e concept detail raw_implementation_record_count=${probe.raw_implementation_record_count} is below implementation_count=${probe.implementation_count}`
+    );
+  }
+  if (!String(probe.selected_implementation ?? "").trim()) {
+    reasons.push("browser e2e concept detail selected_implementation is missing");
+  }
+  if (String(probe.detail_heading ?? "") !== "Concept Generated From") {
+    reasons.push(`browser e2e concept detail heading=${probe.detail_heading ?? "missing"}`);
+  }
+  if (probe.detail_truncated !== false) {
+    reasons.push(`browser e2e concept detail_truncated=${probe.detail_truncated ?? "missing"}`);
   }
   return reasons;
 }

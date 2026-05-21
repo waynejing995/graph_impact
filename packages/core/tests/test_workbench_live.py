@@ -814,6 +814,8 @@ class WorkbenchLiveTests(unittest.TestCase):
             self.assertNotIn('"implementations":', serialized)
             concept_node = next(node for node in graph["nodes"] if node["kind"] == "function")
             self.assertEqual(len(concept_node["attr"]["concept_implementations"]), 8)
+            self.assertEqual(concept_node["attr"]["concept_implementation_count"], 8)
+            self.assertEqual(concept_node["attr"]["raw_implementation_count"], 8)
 
     def test_global_graph_derives_weighted_connections_from_indexed_evidence(self):
         with tempfile.TemporaryDirectory() as tmpdir:
