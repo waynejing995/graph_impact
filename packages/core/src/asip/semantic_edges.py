@@ -319,7 +319,7 @@ def _edge_messages(prompt: str) -> List[Dict[str, str]]:
                 "/no_think "
                 "Return only valid JSON. Preserve exact C identifiers. "
                 "For every case, include edges that mention every supplied TERMS identifier when the snippets support it. "
-                "Use only code, register, field, or function identifiers as src and dst. Do not use file paths as src or dst. "
+                "Use only function, register, or document identifiers as src and dst. Do not use file paths, field identifiers, helper tokens, or provider names as src or dst. "
                 "Each supplied TERMS identifier must appear in src or dst of at least one edge when the snippet supports it. "
                 "Emit at most six edges per case. Keep evidence under 12 words and include line numbers when available. "
                 "Do not use markdown fences. "
@@ -635,7 +635,7 @@ def build_full_corpus_prompt(scan: Dict[str, Any]) -> str:
         "Extract semantic graph edges from real source snippets discovered by scanning full repositories.",
         "Every edge must be grounded in the provided SOURCE and preserve exact C identifiers.",
         "If a case has multiple snippets, emit only edges supported by at least one snippet.",
-        "Use code/register/field/function identifiers as src and dst. Do not use file paths as src or dst.",
+        "Use function/register/document identifiers as src and dst. Do not use file paths, field identifiers, helper tokens, or provider names as src or dst.",
         f"Use relation names from: {PRODUCT_RELATION_PROMPT}.",
         "Every supplied TERMS identifier that appears in the snippet must appear in src or dst of at least one edge.",
         "",
