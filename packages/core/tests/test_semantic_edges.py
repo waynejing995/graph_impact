@@ -1043,7 +1043,7 @@ class SemanticEdgeFeatureTests(unittest.TestCase):
             }
         )
 
-        self.assertIn("Do not use file paths as src or dst.", prompt)
+        self.assertIn("Do not use file paths, field identifiers, helper tokens", prompt)
         self.assertIn("Every supplied TERMS identifier", prompt)
 
     def test_full_corpus_verification_rejects_ungrounded_edges(self):

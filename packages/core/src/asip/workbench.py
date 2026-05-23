@@ -2614,7 +2614,12 @@ def _doc_node_candidates(store: AsipStore, limit: int) -> List[Dict[str, Any]]:
         from chunks
         join documents on documents.id = chunks.document_id
         left join evidence on evidence.chunk_id = chunks.id
-        where documents.source_type in ('doc', 'pdf')
+        where (
+          documents.source_type in ('doc', 'pdf')
+          or (documents.source_type = 'code'
+              and chunks.text glob '*RREG32*'
+              and chunks.text not glob '*Copyright*')
+        )
         group by chunks.id
         order by register_evidence_count desc,
                  function_evidence_count desc,
@@ -2690,11 +2695,11 @@ def _doc_node_batch_prompt(candidates: Iterable[Mapping[str, Any]]) -> str:
     lines = [
         "Use an LLM call to extract ASIP document graph nodes. Do not use a skill.",
         "Follow the BoxMatrix idea: a Box is a self-contained concept, requirement, register behavior, workflow, or constraint; the Matrix is the relationship network between boxes and indexed hardware symbols.",
-        "Return only JSON with documents, boxes, and relationships.",
-        "Schema: {\"documents\":[{\"id\":string,\"boxes\":[{\"id\":string,\"name\":string,\"summary\":string,\"inputs\":[string],\"outputs\":[string],\"constraints\":[string],\"confidence\":number,\"evidence\":string}],\"relationships\":[{\"src\":string,\"relation\":string,\"dst\":string,\"confidence\":number,\"evidence\":string}]}]}",
+        "Use the per-type extraction rules in the system message (classify then extract by type).",
+        "Return only valid JSON with documents, boxes, and relationships.",
         "Keep summaries, inputs, outputs, constraints, and evidence compact. Each evidence value must stay under 140 characters.",
         "Relationship src/dst may use a box id from the same document, a document section id, a code function, or a register symbol found in text. Register fields must be recorded in box inputs/outputs/constraints, not as relationship endpoints.",
-        "Return at most one box and one relationship per document. Prefer the strongest hardware concept or register behavior.",
+        "Return at most one box and one relationship per document when multiple candidates are present.",
         "Every documents[].id must exactly match one DOCUMENT id below.",
         "Prefer LINKED SYMBOLS for relationship endpoints; do not invent symbols that are not in the document text or LINKED SYMBOLS.",
     ]
@@ -2713,7 +2718,9 @@ def _doc_node_batch_prompt(candidates: Iterable[Mapping[str, Any]]) -> str:
         else:
             lines.append("LINKED SYMBOLS: none")
         text = str(candidate.get("chunk_text") or "").strip()
-        lines.append(text[:DOC_NODE_PROMPT_TEXT_CHARS])
+        source_type = str(candidate.get("source_type") or "")
+        text_chars = DOC_NODE_PROMPT_TEXT_CHARS * 2 if source_type == "code" else DOC_NODE_PROMPT_TEXT_CHARS
+        lines.append(text[:text_chars])
     return "\n".join(lines)
 
 
@@ -3736,8 +3743,25 @@ def _entity_type_for_symbol(symbol: str) -> str:
         return "field"
     if symbol.startswith(("WREG", "RREG", "REG_")):
         return "macro"
-    if symbol.startswith(("reg", "mm", "smn")) or re.search(
-        r"CNTL|CONTROL|STATUS|RESET|BASE|SIZE|VMID|DOORBELL|HQD|MQD|WPTR|RPTR|QUEUE", symbol
+    if symbol.startswith(("reg", "mm", "smn")):
+        return "register"
+    name = symbol.rsplit(":", 1)[-1]
+    if not name:
+        return "function"
+    register_keywords = (
+        "CNTL", "CTRL", "CONTROL", "STATUS", "RESET", "BASE", "SIZE",
+        "VMID", "DOORBELL", "HQD", "MQD", "WPTR", "RPTR", "QUEUE",
+    )
+    if re.search("|".join(register_keywords), name):
+        if len(name) > 6 or re.search(r"[A-Z][a-z]{2,}", name):
+            return "register"
+        return "function"
+    mixed_parts = name.split("_")
+    if (
+        len(mixed_parts) >= 3
+        and mixed_parts[0].isupper()
+        and any(p.isupper() for p in mixed_parts)
+        and any(p[0].isupper() and not p.isupper() and len(p) > 1 for p in mixed_parts)
     ):
         return "register"
     return "function"

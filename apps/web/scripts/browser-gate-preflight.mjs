@@ -159,22 +159,32 @@ const capability =
   preflightMode === "fresh_server"
     ? await listenProbe(target.host, 0, args.timeoutMs)
     : skippedProbe("fresh-server local listen capability probe skipped for existing-target mode");
+const targetConnect = await connectProbe(target.host, target.port, args.timeoutMs);
 const targetPort =
   preflightMode === "fresh_server"
-    ? await listenProbe(target.host, target.port, args.timeoutMs)
+    ? {
+        status: "pass",
+        code: "CONNECT_PROBE_OK",
+        message: targetConnect.status === "pass"
+          ? "target port is occupied by an existing service"
+          : "target port is free (ECONNREFUSED)",
+        bound_port: target.port,
+        elapsed_ms: targetConnect.elapsed_ms
+      }
     : skippedProbe("fresh-server target-port listen probe skipped for existing-target mode");
-const existingTarget = await connectProbe(target.host, target.port, args.timeoutMs);
 
 if (preflightMode === "fresh_server") {
   if (capability.status !== "pass") {
     failureReasons.push(`local listen capability ${capability.status}: ${capability.code} ${capability.message}`);
   }
-  if (targetPort.status !== "pass") {
-    failureReasons.push(`target port ${target.port} ${targetPort.status}: ${targetPort.code} ${targetPort.message}`);
+  if (targetConnect.status === "pass") {
+    failureReasons.push(
+      `target port ${target.port} already in use: ${targetConnect.code} ${targetConnect.message}`
+    );
   }
-} else if (existingTarget.status !== "pass") {
+} else if (targetConnect.status !== "pass") {
   failureReasons.push(
-    `existing target ${target.port} ${existingTarget.status}: ${existingTarget.code} ${existingTarget.message}`
+    `existing target ${target.port} ${targetConnect.status}: ${targetConnect.code} ${targetConnect.message}`
   );
 }
 
@@ -188,13 +198,13 @@ const result = {
   timeout_ms: args.timeoutMs,
   preflight_mode: preflightMode,
   require_existing_target: args.requireExistingTarget,
-  existing_target_reachable: existingTarget.status === "pass",
+  existing_target_reachable: targetConnect.status === "pass",
   gate_status: failureReasons.length === 0 ? "pass" : "blocked",
   failure_reasons: failureReasons,
   probes: {
     listen_capability: capability,
     target_port: targetPort,
-    target_connect: existingTarget
+    target_connect: targetConnect
   }
 };
 
