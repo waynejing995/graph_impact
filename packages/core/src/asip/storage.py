@@ -3413,13 +3413,29 @@ def _kind_for_graph_symbol(symbol: str) -> str:
         return "doc"
     if lowered.endswith(".pdf"):
         return "pdf"
-    if re.search(r"ENABLE|DISABLE|PENDING|MASK|SHIFT|RESET_REQUEST|INVALIDATE|FIELD", symbol):
+    if re.search(r"ENABLE|DISABLE|PENDING|SHIFT|RESET_REQUEST|INVALIDATE|FIELD", symbol):
         return "field"
     if re.match(r"^CP_HQD_", symbol):
         return "register"
+    name = symbol.rsplit(":", 1)[-1]
     if _has_register_prefix_alias(symbol) or re.search(
-        r"CNTL|CONTROL|STATUS|RESET|BASE|SIZE|VMID|DOORBELL|QUEUE|REGISTER",
-        symbol,
+        r"CNTL|CONTROL|STATUS|BASE|SIZE|VMID|DOORBELL|QUEUE|REGISTER|RESET",
+        name,
+    ):
+        if len(name) > 6 or re.search(r"[A-Z][a-z]{2,}", name):
+            return "register"
+        return "code"
+    if (
+        re.match(r"^(?:DF|DF_)_", name)
+        and len(name.split("_")) >= 3
+    ):
+        return "register"
+    mixed_parts = name.split("_")
+    if (
+        len(mixed_parts) >= 3
+        and mixed_parts[0].isupper()
+        and any(p.isupper() for p in mixed_parts)
+        and any(p[0].isupper() and not p.isupper() and len(p) > 1 for p in mixed_parts)
     ):
         return "register"
     return "code"

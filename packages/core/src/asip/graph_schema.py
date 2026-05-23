@@ -126,7 +126,18 @@ def product_endpoint_kind(endpoint: str) -> Optional[str]:
         return "doc"
     if value.startswith(("reg", "mm", "smn")) and len(value) > 3:
         return "register"
-    if re.fullmatch(r"[A-Z][A-Z0-9_]*", value) and any(part in upper for part in ("CNTL", "CTRL", "STATUS", "BASE", "RESET")):
+    if re.fullmatch(r"[A-Z][A-Z0-9_]*", value):
+        register_keywords = ("CNTL", "CTRL", "CONTROL", "STATUS", "BASE", "RESET", "SIZE", "VMID", "DOORBELL", "QUEUE", "HQD", "MQD", "WPTR", "RPTR", "MASK", "SHIFT")
+        if any(kw in upper for kw in register_keywords):
+            if "_" in value or (value.upper() not in {"RESET", "STATUS", "BASE", "SIZE", "MASK", "SHIFT"}):
+                return "register"
+    mixed_parts = value.split("_")
+    if (
+        len(mixed_parts) >= 3
+        and mixed_parts[0].isupper()
+        and any(p.isupper() for p in mixed_parts)
+        and any(len(p) > 1 and p[0].isupper() and not p.isupper() for p in mixed_parts)
+    ):
         return "register"
     if re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]*", value) and "_" in value and not value.isupper():
         return "function"
