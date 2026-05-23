@@ -568,6 +568,12 @@ const result = args.reportJson
       cwd: appRoot,
       env: {
         ...process.env,
+        http_proxy: "",
+        https_proxy: "",
+        HTTP_PROXY: "",
+        HTTPS_PROXY: "",
+        no_proxy: "*",
+        NO_PROXY: "*",
         PLAYWRIGHT_BASE_URL: args.baseUrl,
         ...(args.dbPath ? { ASIP_BROWSER_E2E_DB_PATH: args.dbPath } : {}),
         ...(args.latestIndexJobId ? { ASIP_BROWSER_E2E_LATEST_INDEX_JOB_ID: args.latestIndexJobId } : {}),
