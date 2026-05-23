@@ -154,8 +154,8 @@ const checks = [
     command: "pnpm",
     args: ["exec", "playwright", "test", "--list"],
     env: { PLAYWRIGHT_SKIP_WEB_SERVER: "1" },
-    expectOutput: ["Total: 111 tests in 3 files", "acceptance page runs no-mock AQ01 through the real workbench API"],
-    successMessage: "Playwright discovery registered 111 tests"
+expectOutput: ["Total: 112 tests in 3 files", "acceptance page runs no-mock AQ01 through the real workbench API"],
+  successMessage: "Playwright discovery registered 112 tests"
   },
   {
     label: "Browser preflight existing-target shape smoke",
