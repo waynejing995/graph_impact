@@ -32,6 +32,13 @@ retry_scope="${ASIP_BLACKBOX_RETRY_SCOPE:-retry-terminal}"
 retry_consensus_scope="${ASIP_BLACKBOX_RETRY_CONSENSUS_SCOPE:-retry-terminal-consensus}"
 retry_parse_scope="${ASIP_BLACKBOX_RETRY_PARSE_SCOPE:-retry-terminal-parse}"
 terminal_warmup_rounds="${ASIP_BLACKBOX_TERMINAL_WARMUP_ROUNDS:-2}"
+adaptive_retry_enabled="${ASIP_BLACKBOX_ADAPTIVE_RETRY:-1}"
+adaptive_failure_ratio_percent="${ASIP_BLACKBOX_ADAPTIVE_FAILURE_RATIO_PERCENT:-80}"
+adaptive_min_candidates="${ASIP_BLACKBOX_ADAPTIVE_MIN_CANDIDATES:-8}"
+adaptive_retry_scope="${ASIP_BLACKBOX_ADAPTIVE_RETRY_SCOPE:-$retry_parse_scope}"
+adaptive_retry_batch_size="${ASIP_BLACKBOX_ADAPTIVE_RETRY_BATCH_SIZE:-1}"
+adaptive_retry_sample_count="${ASIP_BLACKBOX_ADAPTIVE_RETRY_SAMPLE_COUNT:-$retry_sample_count}"
+adaptive_retry_retry_count="${ASIP_BLACKBOX_ADAPTIVE_RETRY_RETRY_COUNT:-$retry_retry_count}"
 skip_smoke="${ASIP_BLACKBOX_SKIP_SMOKE:-0}"
 run_postpush="${ASIP_BLACKBOX_RUN_POSTPUSH:-1}"
 require_clean_worktree="${ASIP_BLACKBOX_REQUIRE_CLEAN_WORKTREE:-1}"
@@ -54,6 +61,7 @@ echo "[blackbox-full] max no-progress rounds: $max_no_progress_rounds"
 echo "[blackbox-full] scopes: primary=${primary_scope}, retry=${retry_scope}"
 echo "[blackbox-full] retry sub-scopes: consensus=${retry_consensus_scope}, parse=${retry_parse_scope}"
 echo "[blackbox-full] terminal warmup rounds: $terminal_warmup_rounds"
+echo "[blackbox-full] adaptive retry: enabled=${adaptive_retry_enabled} scope=${adaptive_retry_scope} min_candidates=${adaptive_min_candidates} failure_ratio_percent=${adaptive_failure_ratio_percent} batch=${adaptive_retry_batch_size} sample/retry=${adaptive_retry_sample_count}/${adaptive_retry_retry_count}"
 echo "[blackbox-full] require clean worktree: $require_clean_worktree"
 
 coverage_json="$out_dir/blackbox-coverage-latest.json"
@@ -248,6 +256,13 @@ write_preflight_checklist() {
   ASIP_PREFLIGHT_RETRY_CONSENSUS_SCOPE="$retry_consensus_scope" \
   ASIP_PREFLIGHT_RETRY_PARSE_SCOPE="$retry_parse_scope" \
   ASIP_PREFLIGHT_TERMINAL_WARMUP_ROUNDS="$terminal_warmup_rounds" \
+  ASIP_PREFLIGHT_ADAPTIVE_RETRY_ENABLED="$adaptive_retry_enabled" \
+  ASIP_PREFLIGHT_ADAPTIVE_FAILURE_RATIO_PERCENT="$adaptive_failure_ratio_percent" \
+  ASIP_PREFLIGHT_ADAPTIVE_MIN_CANDIDATES="$adaptive_min_candidates" \
+  ASIP_PREFLIGHT_ADAPTIVE_RETRY_SCOPE="$adaptive_retry_scope" \
+  ASIP_PREFLIGHT_ADAPTIVE_RETRY_BATCH_SIZE="$adaptive_retry_batch_size" \
+  ASIP_PREFLIGHT_ADAPTIVE_RETRY_SAMPLE_COUNT="$adaptive_retry_sample_count" \
+  ASIP_PREFLIGHT_ADAPTIVE_RETRY_RETRY_COUNT="$adaptive_retry_retry_count" \
   ASIP_PREFLIGHT_SKIP_SMOKE="$skip_smoke" \
   ASIP_PREFLIGHT_RUN_POSTPUSH="$run_postpush" \
   ASIP_PREFLIGHT_REQUIRE_CLEAN_WORKTREE="$require_clean_worktree" \
@@ -339,6 +354,13 @@ payload = {
         "retry_consensus_scope": os.environ.get("ASIP_PREFLIGHT_RETRY_CONSENSUS_SCOPE", ""),
         "retry_parse_scope": os.environ.get("ASIP_PREFLIGHT_RETRY_PARSE_SCOPE", ""),
         "terminal_warmup_rounds": env_int("ASIP_PREFLIGHT_TERMINAL_WARMUP_ROUNDS"),
+        "adaptive_retry_enabled": os.environ.get("ASIP_PREFLIGHT_ADAPTIVE_RETRY_ENABLED") == "1",
+        "adaptive_failure_ratio_percent": env_int("ASIP_PREFLIGHT_ADAPTIVE_FAILURE_RATIO_PERCENT"),
+        "adaptive_min_candidates": env_int("ASIP_PREFLIGHT_ADAPTIVE_MIN_CANDIDATES"),
+        "adaptive_retry_scope": os.environ.get("ASIP_PREFLIGHT_ADAPTIVE_RETRY_SCOPE", ""),
+        "adaptive_retry_batch_size": env_int("ASIP_PREFLIGHT_ADAPTIVE_RETRY_BATCH_SIZE"),
+        "adaptive_retry_sample_count": env_int("ASIP_PREFLIGHT_ADAPTIVE_RETRY_SAMPLE_COUNT"),
+        "adaptive_retry_retry_count": env_int("ASIP_PREFLIGHT_ADAPTIVE_RETRY_RETRY_COUNT"),
         "skip_smoke": os.environ.get("ASIP_PREFLIGHT_SKIP_SMOKE") == "1",
         "run_postpush": os.environ.get("ASIP_PREFLIGHT_RUN_POSTPUSH") == "1",
         "require_clean_worktree": os.environ.get("ASIP_PREFLIGHT_REQUIRE_CLEAN_WORKTREE") == "1",
@@ -398,6 +420,7 @@ lines = [
     f"- Runner primary: {payload['runner']['primary_scope']} {payload['runner']['shard_count']}x{payload['runner']['limit_per_shard']}",
     f"- Runner batch size: {payload['runner']['batch_size']}",
     f"- Runner retry batch size: {payload['runner']['retry_batch_size']}",
+    f"- Adaptive retry: {payload['runner']['adaptive_retry_enabled']} {payload['runner']['adaptive_retry_scope']}",
     f"- Runner ramp: {payload['runner']['ramp_enabled']} -> {payload['runner']['ramp_shard_count']}x{payload['runner']['ramp_limit_per_shard']}",
     f"- Require clean worktree: {payload['runner']['require_clean_worktree']}",
     "",
@@ -575,6 +598,7 @@ while true; do
         continue
       fi
       echo "[blackbox-full] round=$round scope=$scope shard=$shard/$active_shard_count candidates=$shard_candidates limit=$scope_limit_per_shard batch=$scope_batch_size sample/retry=${scope_sample_count}/${scope_retry_count} seed=$round_seed"
+      batch_json="$out_dir/batch-round-${round}-${scope}-shard-${shard_label}.json"
       python3 -m asip.cli blackbox-profiles-batch \
         --db "$db_path" \
         --limit "$scope_limit_per_shard" \
@@ -588,8 +612,37 @@ while true; do
         --shard-index "$shard" \
         --omit-graph \
         --summary-only \
-        --output-json "$out_dir/batch-round-${round}-${scope}-shard-${shard_label}.json"
+        --output-json "$batch_json"
       scope_generated_shards=$((scope_generated_shards + 1))
+      batch_candidate_count="$(json_field "$batch_json" "candidate_count")"
+      batch_profile_count="$(json_field "$batch_json" "profile_count")"
+      batch_failed_count="$(json_field "$batch_json" "failed_count")"
+      batch_rejected_count="$(json_field "$batch_json" "rejected_count")"
+      batch_abstained_count="$(json_field "$batch_json" "abstained_count")"
+      batch_terminal_count=$(( ${batch_failed_count:-0} + ${batch_rejected_count:-0} + ${batch_abstained_count:-0} ))
+      if [[ "$adaptive_retry_enabled" == "1" \
+        && "${scope_batch_size:-1}" -gt 1 \
+        && "${batch_candidate_count:-0}" -ge "$adaptive_min_candidates" \
+        && "${batch_profile_count:-0}" == "0" \
+        && $(( batch_terminal_count * 100 )) -ge $(( ${batch_candidate_count:-0} * adaptive_failure_ratio_percent )) ]]; then
+        adaptive_json="$out_dir/adaptive-retry-round-${round}-${scope}-shard-${shard_label}.json"
+        adaptive_seed="${round_seed}-adaptive-${scope}-${shard_label}"
+        echo "[blackbox-full] round=$round scope=$scope shard=$shard/$active_shard_count triggered adaptive retry: terminal=${batch_terminal_count}/${batch_candidate_count} retry_scope=${adaptive_retry_scope} batch=${adaptive_retry_batch_size} sample/retry=${adaptive_retry_sample_count}/${adaptive_retry_retry_count}"
+        python3 -m asip.cli blackbox-profiles-batch \
+          --db "$db_path" \
+          --limit "$batch_candidate_count" \
+          --batch-size "$adaptive_retry_batch_size" \
+          --sample-count "$adaptive_retry_sample_count" \
+          --retry-count "$adaptive_retry_retry_count" \
+          --candidate-scope "$adaptive_retry_scope" \
+          --phase "${round_phase}-adaptive" \
+          --selection-seed "$adaptive_seed" \
+          --shard-count "$active_shard_count" \
+          --shard-index "$shard" \
+          --omit-graph \
+          --summary-only \
+          --output-json "$adaptive_json"
+      fi
     done
     if [[ "$scope_generated_shards" -gt 0 ]]; then
       generated_shards="$scope_generated_shards"
