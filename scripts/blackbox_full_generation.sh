@@ -14,9 +14,11 @@ phase="${ASIP_BLACKBOX_PHASE:-full-generation-${timestamp}}"
 selection_seed="${ASIP_BLACKBOX_SELECTION_SEED:-${phase}}"
 shard_count="${ASIP_BLACKBOX_SHARDS:-8}"
 limit_per_shard="${ASIP_BLACKBOX_LIMIT_PER_SHARD:-8}"
+batch_size="${ASIP_BLACKBOX_BATCH_SIZE:-1}"
 sample_count="${ASIP_BLACKBOX_SAMPLE_COUNT:-3}"
 retry_count="${ASIP_BLACKBOX_RETRY_COUNT:-3}"
 retry_limit_per_shard="${ASIP_BLACKBOX_RETRY_LIMIT_PER_SHARD:-$limit_per_shard}"
+retry_batch_size="${ASIP_BLACKBOX_RETRY_BATCH_SIZE:-$batch_size}"
 retry_sample_count="${ASIP_BLACKBOX_RETRY_SAMPLE_COUNT:-5}"
 retry_retry_count="${ASIP_BLACKBOX_RETRY_RETRY_COUNT:-$retry_count}"
 ramp_enabled="${ASIP_BLACKBOX_RAMP:-1}"
@@ -42,8 +44,10 @@ echo "[blackbox-full] phase: $phase"
 echo "[blackbox-full] seed: $selection_seed"
 echo "[blackbox-full] shards: $shard_count"
 echo "[blackbox-full] limit per shard: $limit_per_shard"
+echo "[blackbox-full] batch size: $batch_size"
 echo "[blackbox-full] sample/retry: ${sample_count}/${retry_count}"
 echo "[blackbox-full] retry limit per shard: $retry_limit_per_shard"
+echo "[blackbox-full] retry batch size: $retry_batch_size"
 echo "[blackbox-full] retry sample/retry: ${retry_sample_count}/${retry_retry_count}"
 echo "[blackbox-full] ramp: enabled=${ramp_enabled} after_progress_rounds=${ramp_after_progress_rounds} shards=${ramp_shard_count} limit=${ramp_limit_per_shard}"
 echo "[blackbox-full] max no-progress rounds: $max_no_progress_rounds"
@@ -226,9 +230,11 @@ write_preflight_checklist() {
   local selection_json="$1"
   ASIP_PREFLIGHT_SHARD_COUNT="$shard_count" \
   ASIP_PREFLIGHT_LIMIT_PER_SHARD="$limit_per_shard" \
+  ASIP_PREFLIGHT_BATCH_SIZE="$batch_size" \
   ASIP_PREFLIGHT_SAMPLE_COUNT="$sample_count" \
   ASIP_PREFLIGHT_RETRY_COUNT="$retry_count" \
   ASIP_PREFLIGHT_RETRY_LIMIT_PER_SHARD="$retry_limit_per_shard" \
+  ASIP_PREFLIGHT_RETRY_BATCH_SIZE="$retry_batch_size" \
   ASIP_PREFLIGHT_RETRY_SAMPLE_COUNT="$retry_sample_count" \
   ASIP_PREFLIGHT_RETRY_RETRY_COUNT="$retry_retry_count" \
   ASIP_PREFLIGHT_RAMP_ENABLED="$ramp_enabled" \
@@ -315,9 +321,11 @@ payload = {
     "runner": {
         "shard_count": env_int("ASIP_PREFLIGHT_SHARD_COUNT"),
         "limit_per_shard": env_int("ASIP_PREFLIGHT_LIMIT_PER_SHARD"),
+        "batch_size": env_int("ASIP_PREFLIGHT_BATCH_SIZE"),
         "sample_count": env_int("ASIP_PREFLIGHT_SAMPLE_COUNT"),
         "retry_count": env_int("ASIP_PREFLIGHT_RETRY_COUNT"),
         "retry_limit_per_shard": env_int("ASIP_PREFLIGHT_RETRY_LIMIT_PER_SHARD"),
+        "retry_batch_size": env_int("ASIP_PREFLIGHT_RETRY_BATCH_SIZE"),
         "retry_sample_count": env_int("ASIP_PREFLIGHT_RETRY_SAMPLE_COUNT"),
         "retry_retry_count": env_int("ASIP_PREFLIGHT_RETRY_RETRY_COUNT"),
         "ramp_enabled": os.environ.get("ASIP_PREFLIGHT_RAMP_ENABLED") == "1",
@@ -388,6 +396,8 @@ lines = [
     f"- Residual pending: {payload['residual_summary'].get('pending')}",
     f"- Residual terminal: {payload['residual_summary'].get('terminal')}",
     f"- Runner primary: {payload['runner']['primary_scope']} {payload['runner']['shard_count']}x{payload['runner']['limit_per_shard']}",
+    f"- Runner batch size: {payload['runner']['batch_size']}",
+    f"- Runner retry batch size: {payload['runner']['retry_batch_size']}",
     f"- Runner ramp: {payload['runner']['ramp_enabled']} -> {payload['runner']['ramp_shard_count']}x{payload['runner']['ramp_limit_per_shard']}",
     f"- Require clean worktree: {payload['runner']['require_clean_worktree']}",
     "",
@@ -536,10 +546,12 @@ while true; do
   for scope in "${round_scopes[@]}"; do
     scope_generated_shards=0
     scope_limit_per_shard="$active_limit_per_shard"
+    scope_batch_size="$batch_size"
     scope_sample_count="$sample_count"
     scope_retry_count="$retry_count"
     if [[ "$scope" == "$retry_scope" || "$scope" == "$retry_consensus_scope" || "$scope" == "$retry_parse_scope" ]]; then
       scope_limit_per_shard="$retry_limit_per_shard"
+      scope_batch_size="$retry_batch_size"
       scope_sample_count="$retry_sample_count"
       scope_retry_count="$retry_retry_count"
     fi
@@ -562,11 +574,11 @@ while true; do
         echo "[blackbox-full] round=$round scope=$scope shard=$shard/$active_shard_count has no candidates"
         continue
       fi
-      echo "[blackbox-full] round=$round scope=$scope shard=$shard/$active_shard_count candidates=$shard_candidates limit=$scope_limit_per_shard sample/retry=${scope_sample_count}/${scope_retry_count} seed=$round_seed"
+      echo "[blackbox-full] round=$round scope=$scope shard=$shard/$active_shard_count candidates=$shard_candidates limit=$scope_limit_per_shard batch=$scope_batch_size sample/retry=${scope_sample_count}/${scope_retry_count} seed=$round_seed"
       python3 -m asip.cli blackbox-profiles-batch \
         --db "$db_path" \
         --limit "$scope_limit_per_shard" \
-        --batch-size 1 \
+        --batch-size "$scope_batch_size" \
         --sample-count "$scope_sample_count" \
         --retry-count "$scope_retry_count" \
         --candidate-scope "$scope" \
