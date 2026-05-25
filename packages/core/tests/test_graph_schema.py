@@ -4,6 +4,7 @@ from asip.graph_schema import (
     ALLOWED_PRODUCT_NODE_KINDS,
     ALLOWED_PRODUCT_RELATIONS,
     is_product_node_kind,
+    is_register_symbol,
     normalize_product_relation,
     product_endpoint_kind,
 )
@@ -44,6 +45,18 @@ class GraphSchemaTests(unittest.TestCase):
             "context:tmp",
         ]:
             self.assertIsNone(product_endpoint_kind(bad_endpoint))
+
+    def test_is_register_symbol_accepts_amd_prefix_forms(self):
+        for symbol in ["regGCVM_L2_CNTL", "mmGCVM_L2_CNTL", "smnMP1_FIRMWARE_FLAGS", "regBIF_RB_CNTL"]:
+            self.assertTrue(is_register_symbol(symbol), f"{symbol} should be a register")
+
+    def test_is_register_symbol_rejects_short_or_naked_prefix(self):
+        for symbol in ["reg", "mm", "smn", "reg_", "mm_"]:
+            self.assertFalse(is_register_symbol(symbol), f"{symbol} should not be a register")
+
+    def test_is_register_symbol_rejects_local_and_wrapper_tokens(self):
+        for symbol in ["tmp", "value", "adapt", "data", "ops", "funcs", "ret", "reg", "local", "ring", "init_func"]:
+            self.assertFalse(is_register_symbol(symbol), f"{symbol} should not be a register")
 
 
 if __name__ == "__main__":

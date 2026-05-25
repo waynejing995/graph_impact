@@ -1,0 +1,184 @@
+- generic [active] [ref=e1]:
+  - generic [ref=e2]:
+    - banner [ref=e3]:
+      - generic [ref=e5]: ASIP Evidence Workbench
+      - generic [ref=e6]:
+        - img
+        - textbox "Global symbol search" [ref=e7]:
+          - /placeholder: Search indexed symbols
+      - generic "Workbench status" [ref=e8]:
+        - generic [ref=e9]: "Provider: unverified"
+        - generic [ref=e11]: "Edge: Ollama / gemma4:e4b"
+        - generic [ref=e12]: "Index: ready"
+      - button "Switch to light theme" [ref=e13] [cursor=pointer]:
+        - img
+        - text: Light
+    - main [ref=e14]:
+      - navigation "ASIP sections" [ref=e15]:
+        - link "Evidence Search" [ref=e16] [cursor=pointer]:
+          - /url: /
+        - link "Graph Explorer" [ref=e17] [cursor=pointer]:
+          - /url: /graph
+        - link "Corpus" [ref=e18] [cursor=pointer]:
+          - /url: /corpus
+        - link "Resolver Profiles" [ref=e19] [cursor=pointer]:
+          - /url: /resolver-profiles
+        - link "Acceptance Tests" [ref=e20] [cursor=pointer]:
+          - /url: /acceptance
+        - link "Settings" [ref=e21] [cursor=pointer]:
+          - /url: /settings
+      - region "Graph relationship workspace" [ref=e22]:
+        - generic [ref=e23]:
+          - generic [ref=e24]:
+            - img
+            - textbox "Evidence query" [ref=e25]:
+              - /placeholder: Query live evidence
+          - textbox "IP block filter" [ref=e27]:
+            - /placeholder: IP
+          - textbox "ASIC or generation filter" [ref=e29]:
+            - /placeholder: ASIC
+          - button "Run query" [ref=e30] [cursor=pointer]
+        - generic "Page metrics" [ref=e31]:
+          - generic [ref=e32]: "matches: 0"
+          - generic [ref=e33]: "graph edges: 3000"
+          - generic [ref=e34]: "query: live"
+        - generic "Evidence source filters" [ref=e35]:
+          - button "Source filter 1 hop" [ref=e36] [cursor=pointer]:
+            - img
+            - text: 1 hop
+          - button "Source filter 2 hops" [ref=e37] [cursor=pointer]:
+            - img
+            - text: 2 hops
+          - button "Source filter writes" [ref=e38] [cursor=pointer]:
+            - img
+            - text: writes
+          - button "Source filter has_field" [ref=e39] [cursor=pointer]:
+            - img
+            - text: has_field
+        - generic [ref=e40]:
+          - generic [ref=e41]:
+            - generic [ref=e42]: System Boundary Graph
+            - generic [ref=e43]: weighted connections
+            - generic [ref=e124]: "layers blackbox_profile: 5 blackbox_relationship: 10 concept_merge: 1099 deterministic_ast: 2977 semantic_doc_node: 4 semantic_edge: 9"
+            - generic [ref=e125]: provenance ollama/gemma4:e4b job 54 llm_blackbox_projection ollama/gemma4:e4b job 51 semantic_provider ollama/gemma4:e4b job 59 grounded_profile_boundary ollama/gemma4:e4b job 59 source clang_text_spans grounded_profile_boundary
+          - generic "Graph display controls" [ref=e44]:
+            - generic [ref=e45]:
+              - generic [ref=e46]: Function view
+              - combobox "Function view" [ref=e47]
+            - generic [ref=e49]:
+              - generic [ref=e50]: Loaded edge budget
+              - strong [ref=e51]: 3000 / 20000
+              - generic "Loaded edge budget" [ref=e52]
+            - generic [ref=e54]:
+              - generic [ref=e55]: Minimum edge weight
+              - strong [ref=e56]: "0.00"
+              - generic "Minimum edge weight" [ref=e57]
+            - generic [ref=e59]:
+              - generic [ref=e60]: Visible nodes
+              - strong [ref=e61]: 1000 visible / 2560 loaded
+              - generic "Visible nodes" [ref=e62]
+            - generic [ref=e64]:
+              - generic [ref=e65]: Visible edges
+              - strong [ref=e66]: 3000 visible / 3000 loaded
+              - generic "Visible edges" [ref=e67]
+            - generic "Graph relation filters" [ref=e126]:
+              - generic [ref=e127]: Relations
+              - generic [ref=e128]
+            - generic "Graph stage filters" [ref=e157]:
+              - generic [ref=e158]: Stages
+              - generic [ref=e159]
+            - generic "Graph source filters" [ref=e172]:
+              - generic [ref=e173]: Sources
+              - generic [ref=e174]
+          - img "Global weighted network graph" [ref=e191]:
+            - generic [ref=e195]:
+              - generic [ref=e196]: visible nodes 1000 / loaded 2560
+              - generic [ref=e197]: visible edges 1462 / loaded 3000
+              - generic [ref=e198]: shared registers 0
+              - generic [ref=e199]: function 785
+              - generic [ref=e200]: register 215
+              - button "amdgpu_ring_write" [ref=e201] [cursor=pointer]
+              - button "amdgpu_device_ip_init" [ref=e202] [cursor=pointer]
+              - button "amdgpu_ip_version" [ref=e203] [cursor=pointer]
+              - button "gfx_hw_init" [ref=e204] [cursor=pointer]
+              - button "amdgpu_device_ip_early_init" [ref=e205] [cursor=pointer]
+              - button "gmc_gart_enable" [ref=e206] [cursor=pointer]
+              - button "gfx_kiq_init_register" [ref=e207] [cursor=pointer]
+              - button "gfx_xcc_kiq_init_register" [ref=e208] [cursor=pointer]
+              - button "amdgpu_ctx_put" [ref=e209] [cursor=pointer]
+              - button "amdgpu_ctx_query2" [ref=e210] [cursor=pointer]
+              - button "amdgpu_ctx_set_entity_priority" [ref=e211] [cursor=pointer]
+              - button "amdgpu_device_cache_pci_state" [ref=e212] [cursor=pointer]
+              - button "amdgpu_device_detect_sriov_bios" [ref=e213] [cursor=pointer]
+              - button "amdgpu_device_halt" [ref=e214] [cursor=pointer]
+              - button "amdgpu_device_health_check" [ref=e215] [cursor=pointer]
+              - button "amdgpu_device_supports_baco" [ref=e216] [cursor=pointer]
+              - generic [ref=e217]: reads / 1.00
+              - generic [ref=e218]: writes / 1.00
+              - generic [ref=e219]: sets_field / 1.00
+              - generic [ref=e220]: writes / 1.00
+              - generic [ref=e221]: sets_field / 1.00
+              - generic [ref=e222]: writes / 1.00
+              - generic [ref=e223]: reads / 1.00
+              - generic [ref=e224]: sets_field / 1.00
+        - table "Evidence results" [ref=e74]:
+          - rowgroup [ref=e75]:
+            - row "Type Symbol Source Relation Score Location" [ref=e76]:
+              - columnheader "Type" [ref=e77]
+              - columnheader "Symbol" [ref=e78]
+              - columnheader "Source" [ref=e79]
+              - columnheader "Relation" [ref=e80]
+              - columnheader "Score" [ref=e81]
+              - columnheader "Location" [ref=e82]
+          - rowgroup [ref=e83]:
+            - row "No evidence matched this query. empty empty 0 live SQLite query returned no rows" [ref=e84]:
+              - cell [ref=e85]
+              - cell "No evidence matched this query." [ref=e86]
+              - cell "empty" [ref=e88]
+              - cell "empty" [ref=e90]
+              - cell "0" [ref=e92]
+              - cell "live SQLite query returned no rows" [ref=e93]
+      - complementary [ref=e94]:
+        - generic [ref=e95]:
+          - heading "Global Graph" [level=2] [ref=e96]
+          - generic [ref=e97]:
+            - img
+            - text: live / run 1
+        - heading "Evidence Trail" [level=3] [ref=e99]
+        - generic [ref=e100]:
+          - paragraph [ref=e225]:
+            - code [ref=e226]: function:linux-amdgpu:drivers/gpu/drm/amd/amdgpu/amdgpu_virt.c:amdgpu_virt_cache_chk_criti_hit calls function:linux-amdgpu:drivers/gpu/drm/amd/amdgpu/amdgpu_virt.c:amd_sriov_msg_checksum [ollama/gemma4:e4b job 59 source clang_text_spans grounded_profile_boundary]
+          - paragraph [ref=e227]:
+            - code [ref=e228]: function:linux-amdgpu:drivers/gpu/drm/amd/amdgpu/amdgpu_virt.c:amdgpu_virt_check_vf_critical_region calls function:linux-amdgpu:drivers/gpu/drm/amd/amdgpu/amdgpu_virt.c:amdgpu_virt_cache_chk_criti_hit [ollama/gemma4:e4b job 59 source clang_text_spans grounded_profile_boundary]
+          - paragraph [ref=e229]:
+            - code [ref=e230]: function:linux-amdgpu:drivers/gpu/drm/amd/amdgpu/amdgpu_aca.c:aca_error_fini calls function:linux-amdgpu:drivers/gpu/drm/amd/amdgpu/amdgpu_aca.c:aca_bank_error_remove [ollama/gemma4:e4b job 60 source clang_text_spans grounded_profile_boundary]
+          - paragraph [ref=e231]:
+            - code [ref=e232]: function:linux-amdgpu:drivers/gpu/drm/amd/amdgpu/amdgpu_aca.c:aca_fini_error_cache calls function:linux-amdgpu:drivers/gpu/drm/amd/amdgpu/amdgpu_aca.c:aca_error_fini [ollama/gemma4:e4b job 60 source clang_text_spans grounded_profile_boundary]
+          - paragraph [ref=e233]:
+            - code [ref=e234]: function:linux-amdgpu:concept:linux-amdgpu:amd-ip-versioned-functions:gfx_rlc_resume calls function:linux-amdgpu:concept:linux-amdgpu:amd-ip-versioned-functions:gfx_rlc_start [source clang_callback deterministic_extractor dynamic dispatch 9 candidates]
+          - paragraph [ref=e235]:
+            - code [ref=e236]: function:linux-amdgpu:concept:linux-amdgpu:amd-ip-versioned-functions:gfx_rlc_resume calls function:linux-amdgpu:concept:linux-amdgpu:amd-ip-versioned-functions:gfx_rlc_stop [source clang_callback deterministic_extractor dynamic dispatch 9 candidates]
+          - paragraph [ref=e237]:
+            - code [ref=e238]: function:linux-amdgpu:concept:linux-amdgpu:amd-ip-versioned-functions:gfx_sw_init calls function:linux-amdgpu:concept:linux-amdgpu:amd-ip-versioned-functions:gfx_rlc_init [source clang_callback deterministic_extractor dynamic dispatch 9 candidates]
+          - paragraph [ref=e239]:
+            - code [ref=e240]: function:linux-amdgpu:concept:linux-amdgpu:amd-ip-versioned-functions:gfx_hw_init calls function:linux-amdgpu:concept:linux-amdgpu:amd-ip-versioned-functions:gfx_rlc_resume [source clang_callback deterministic_extractor dynamic dispatch 9 candidates]
+          - paragraph [ref=e241]:
+            - code [ref=e242]: function:linux-amdgpu:concept:linux-amdgpu:amd-ip-versioned-functions:gfx_rlc_init calls function:linux-amdgpu:concept:linux-amdgpu:amd-ip-versioned-functions:gfx_update_spm_vmid [source clang_callback deterministic_extractor dynamic dispatch 8 candidates]
+          - paragraph [ref=e243]:
+            - code [ref=e244]: function:linux-amdgpu:concept:linux-amdgpu:amd-ip-versioned-functions:gmc_gart_disable calls function:linux-amdgpu:concept:linux-amdgpu:amd-ip-versioned-functions:mmhub_gart_disable [source clang_callback deterministic_extractor dynamic dispatch 12 candidates]
+          - paragraph [ref=e245]:
+            - code [ref=e246]: function:linux-amdgpu:concept:linux-amdgpu:amd-ip-versioned-functions:gmc_gart_enable calls function:linux-amdgpu:concept:linux-amdgpu:amd-ip-versioned-functions:mmhub_gart_enable [source clang_callback deterministic_extractor dynamic dispatch 12 candidates]
+          - paragraph [ref=e247]:
+            - code [ref=e248]: function:linux-amdgpu:concept:linux-amdgpu:amd-ip-versioned-functions:gmc_get_clockgating_state calls function:linux-amdgpu:concept:linux-amdgpu:amd-ip-versioned-functions:mmhub_get_clockgating [source clang_callback deterministic_extractor dynamic dispatch 12 candidates]
+        - button "Generate semantic edges" [ref=e103] [cursor=pointer]
+        - button "Generate batch semantic edges" [ref=e104] [cursor=pointer]
+        - button "Extract document nodes" [ref=e105] [cursor=pointer]
+        - button "Generate blackbox profiles" [ref=e106] [cursor=pointer]
+        - generic "Semantic generation controls" [ref=e107]:
+          - generic [ref=e108]:
+            - text: Semantic candidate limit
+            - spinbutton "Semantic candidate limit" [ref=e109]
+          - generic [ref=e110]:
+            - text: Semantic batch size
+            - spinbutton "Semantic batch size" [ref=e111]
+  - alert [ref=e123]

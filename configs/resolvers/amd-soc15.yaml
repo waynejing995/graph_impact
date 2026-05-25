@@ -19,6 +19,10 @@ graph:
     merge_across_repos_when_ip_and_symbol_match: true
     merge_across_ip_versions: true
     merge_across_ip_blocks: false
+  register_inventory:
+    prefixes: [reg, mm, smn]
+    case: mixed
+    reject_tokens: [tmp, value, adapt, data, ops, funcs, ret, reg, local, ring, init_func]
 wrappers:
   SOC15_REG_OFFSET:
     symbol_arg: 2

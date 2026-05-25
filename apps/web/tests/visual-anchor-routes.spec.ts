@@ -83,7 +83,8 @@ test("graph route renders API-backed weighted relation graph", async ({ page }) 
   expect(graphApiRequested).toBe(true);
   await expect(forceGraph).toContainText("sets_field / 0.91");
   await expect(forceGraph).toContainText("documents / 0.28");
-  await expect(page.getByTestId("global-network-graph")).toContainText("layers deterministic: 1 semantic: 1");
+  await expect(page.getByTestId("global-network-graph")).toContainText("deterministic_ast: 1");
+  await expect(page.getByTestId("global-network-graph")).toContainText("semantic_edge: 1");
   await expect(forceGraph).not.toContainText("maps_base / 0.68");
   await expect(forceGraph).toHaveAttribute("data-edge-count", "2");
   await expect(forceGraph).toHaveAttribute("data-shared-register-count", "1");

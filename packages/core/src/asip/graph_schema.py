@@ -8,7 +8,7 @@ through these node kinds and relation names.
 from __future__ import annotations
 
 import re
-from typing import Optional
+from typing import List, Optional
 
 
 ALLOWED_PRODUCT_NODE_KINDS = {"function", "register", "doc"}
@@ -62,6 +62,24 @@ _WRAPPER_TOKENS = {
     "WREG32",
     "WREG32_SOC15",
 }
+
+# Default register inventory – matches the resolver profile default.
+# These are the standard AMD register prefixes used when no resolver
+# profile provides an override.
+_DEFAULT_REGISTER_PREFIXES: List[str] = ["reg", "mm", "smn"]
+_DEFAULT_REJECT_TOKENS: List[str] = ["tmp", "value", "adapt", "data", "ops", "funcs", "ret", "reg", "local", "ring", "init_func"]
+
+
+def is_register_symbol(symbol: str) -> bool:
+    """Return True when *symbol* looks like a plausible register name
+    under the default ASIP register inventory rules."""
+    raw = symbol.strip()
+    if not raw or raw.lower() in {t.lower() for t in _DEFAULT_REJECT_TOKENS}:
+        return False
+    for prefix in _DEFAULT_REGISTER_PREFIXES:
+        if raw.startswith(prefix) and len(raw) > len(prefix) and raw[len(prefix)].isupper():
+            return True
+    return False
 
 
 def is_product_node_kind(kind: str) -> bool:
@@ -124,7 +142,7 @@ def product_endpoint_kind(endpoint: str) -> Optional[str]:
         return None
     if "#" in value and re.search(r"\.(?:md|rst|txt|pdf)#", lower):
         return "doc"
-    if value.startswith(("reg", "mm", "smn")) and len(value) > 3:
+    if is_register_symbol(value):
         return "register"
     if re.fullmatch(r"[A-Z][A-Z0-9_]*", value) and any(part in upper for part in ("CNTL", "CTRL", "STATUS", "BASE", "RESET")):
         return "register"

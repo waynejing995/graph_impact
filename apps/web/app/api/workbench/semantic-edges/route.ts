@@ -10,6 +10,13 @@ type SemanticEdgesRequest = {
   mode?: string;
   limit?: number;
   batchSize?: number;
+  sampleCount?: number;
+  retryCount?: number;
+  phase?: string;
+  selectionSeed?: string;
+  shardCount?: number;
+  shardIndex?: number;
+  dryRunSelection?: boolean;
   includeEvidenceDerived?: boolean;
   evidenceRowCap?: number;
 };
@@ -27,14 +34,20 @@ export async function POST(request: Request) {
     );
   }
   const query = (body.q ?? body.query ?? "").trim();
+  const mode = String(body.mode ?? "query").trim().toLowerCase();
   const limit = configuredInt(body.limit) ?? limits.semantic?.queryLimit;
   const batchLimit = configuredInt(body.limit) ?? limits.semantic?.batchCandidateLimit;
-  const batchSize = configuredInt(body.batchSize) ?? limits.semantic?.batchSize;
-  const mode = String(body.mode ?? "query").trim().toLowerCase();
+  const batchSize = configuredInt(body.batchSize) ?? (mode === "blackbox-profiles" ? 1 : limits.semantic?.batchSize);
+  const sampleCount = configuredInt(body.sampleCount);
+  const retryCount = configuredInt(body.retryCount);
+  const phase = String(body.phase ?? "pilot").trim() || "pilot";
+  const selectionSeed = String(body.selectionSeed ?? "").trim();
+  const shardCount = configuredInt(body.shardCount);
+  const shardIndex = configuredInt(body.shardIndex);
   const includeEvidenceDerived = body.includeEvidenceDerived === true;
   const evidenceRowCap = configuredInt(body.evidenceRowCap) ?? limits.graph?.evidenceRowCap;
 
-  if (mode !== "batch" && mode !== "doc-nodes" && !query) {
+  if (mode !== "batch" && mode !== "doc-nodes" && mode !== "blackbox-profiles" && !query) {
     return NextResponse.json({ error: "semantic edge query is required" }, { status: 400 });
   }
 
@@ -64,6 +77,25 @@ export async function POST(request: Request) {
           dbPath,
           ...(batchLimit !== undefined ? ["--limit", String(batchLimit)] : []),
           ...(batchSize !== undefined ? ["--batch-size", String(batchSize)] : [])
+        ])
+      );
+    }
+    if (mode === "blackbox-profiles") {
+      return NextResponse.json(
+        runAsipCli<Record<string, unknown>>([
+          "blackbox-profiles-batch",
+          "--db",
+          dbPath,
+          ...(batchLimit !== undefined ? ["--limit", String(batchLimit)] : []),
+          ...(batchSize !== undefined ? ["--batch-size", String(batchSize)] : []),
+          ...(sampleCount !== undefined ? ["--sample-count", String(sampleCount)] : []),
+          ...(retryCount !== undefined ? ["--retry-count", String(retryCount)] : []),
+          "--phase",
+          phase,
+          ...(selectionSeed ? ["--selection-seed", selectionSeed] : []),
+          ...(shardCount !== undefined ? ["--shard-count", String(shardCount)] : []),
+          ...(shardIndex !== undefined ? ["--shard-index", String(shardIndex)] : []),
+          ...(body.dryRunSelection === true ? ["--dry-run-selection"] : [])
         ])
       );
     }

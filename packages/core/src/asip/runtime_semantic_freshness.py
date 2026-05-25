@@ -55,6 +55,7 @@ def run_runtime_semantic_freshness_qa(
     stale_visible_count = _count_stale_visible_semantic_rows(runtime_rows, freshness_floor_job_id)
     fresh_semantic_count = _count_extractor_rows(runtime_rows, "semantic_edges")
     fresh_doc_node_count = _count_extractor_rows(runtime_rows, "doc_nodes")
+    fresh_blackbox_count = _count_extractor_rows(runtime_rows, "blackbox_profiles")
     bad_extractor_job_kind_count = _count_bad_extractor_job_kind_rows(runtime_rows, job_kinds)
     provider_mismatch_count = _count_provider_mismatch_rows(
         runtime_rows,
@@ -115,10 +116,12 @@ def run_runtime_semantic_freshness_qa(
         "latest_graph_rebuild_job_id": latest_jobs.get("latest_graph_rebuild_job_id"),
         "latest_semantic_edges_job_id": latest_jobs.get("latest_semantic_edges_job_id"),
         "latest_doc_nodes_job_id": latest_jobs.get("latest_doc_nodes_job_id"),
+        "latest_blackbox_profiles_job_id": latest_jobs.get("latest_blackbox_profiles_job_id"),
         "freshness_floor_job_id": freshness_floor_job_id,
         "db_semantic_edge_counts": {
             "doc_nodes": fresh_doc_node_count,
             "semantic_edges": fresh_semantic_count,
+            "blackbox_profiles": fresh_blackbox_count,
         },
         "global_graph_stage_counts": dict(global_stage_counts),
         "query_graph_probe": {
@@ -146,6 +149,7 @@ def _latest_job_ids(connection: sqlite3.Connection) -> Dict[str, Optional[int]]:
         "latest_graph_rebuild_job_id": None,
         "latest_semantic_edges_job_id": None,
         "latest_doc_nodes_job_id": None,
+        "latest_blackbox_profiles_job_id": None,
     }
     if not _table_exists(connection, "jobs"):
         return result
@@ -162,6 +166,8 @@ def _latest_job_ids(connection: sqlite3.Connection) -> Dict[str, Optional[int]]:
             result["latest_semantic_edges_job_id"] = job_id
         elif kind == "doc_nodes_batch":
             result["latest_doc_nodes_job_id"] = job_id
+        elif kind == "blackbox_profiles_batch":
+            result["latest_blackbox_profiles_job_id"] = job_id
     return result
 
 
@@ -194,7 +200,7 @@ def _count_stale_visible_semantic_rows(rows: Iterable[sqlite3.Row], freshness_fl
     count = 0
     for row in rows:
         provenance = _provenance(row)
-        if _extractor(provenance) not in {"semantic_edges", "doc_nodes"}:
+        if _extractor(provenance) not in {"semantic_edges", "doc_nodes", "blackbox_profiles"}:
             continue
         job_id = _int_value(provenance.get("job_id"))
         if not job_id or (floor is not None and job_id < floor):
@@ -211,7 +217,7 @@ def _count_bad_extractor_job_kind_rows(rows: Iterable[sqlite3.Row], job_kinds: M
     for row in rows:
         provenance = _provenance(row)
         extractor = _extractor(provenance)
-        if extractor not in {"semantic_edges", "doc_nodes"}:
+        if extractor not in {"semantic_edges", "doc_nodes", "blackbox_profiles"}:
             continue
         job_id = _int_value(provenance.get("job_id"))
         if not job_id or not _job_kind_matches_extractor(extractor, job_kinds.get(job_id, "")):
@@ -229,7 +235,7 @@ def _count_provider_mismatch_rows(
     for row in rows:
         provenance = _provenance(row)
         extractor = _extractor(provenance)
-        if extractor not in {"semantic_edges", "doc_nodes"}:
+        if extractor not in {"semantic_edges", "doc_nodes", "blackbox_profiles"}:
             continue
         provider = str(provenance.get("provider") or row["source"] or "").strip()
         model = str(provenance.get("model") or "").strip()
@@ -246,6 +252,8 @@ def _job_kind_matches_extractor(extractor: str, kind: str) -> bool:
         return kind in {"semantic_edges", "semantic_edges_batch"}
     if extractor == "doc_nodes":
         return kind == "doc_nodes_batch"
+    if extractor == "blackbox_profiles":
+        return kind == "blackbox_profiles_batch"
     return True
 
 

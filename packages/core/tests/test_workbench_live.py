@@ -324,6 +324,52 @@ class BatchThenSingleDocNodeProvider:
         }
 
 
+class BlackboxProfileProvider:
+    def generate(self, prompt, model):
+        self.prompts = getattr(self, "prompts", [])
+        self.prompts.append(prompt)
+        self.prompt = prompt
+        return {
+            "profiles": [
+                {
+                    "id": "function:test:driver.c:program_l2",
+                    "method": "blackbox_io",
+                    "inputs": ["GCVM_L2_CNTL enable request"],
+                    "outputs": ["writes GCVM_L2_CNTL"],
+                    "observed_behavior": (
+                        "when cache enable is requested, the function writes the L2 control register"
+                    ),
+                    "explanation_layer": "explains how driver setup changes cache state",
+                    "confidence": 0.86,
+                    "evidence": "program_l2 writes GCVM_L2_CNTL",
+                },
+                {
+                    "id": "local_tmp",
+                    "method": "blackbox_io",
+                    "inputs": ["invented"],
+                    "outputs": ["invented"],
+                    "observed_behavior": "hallucinated local node",
+                },
+            ],
+            "relationships": [
+                {
+                    "src": "function:test:driver.c:program_l2",
+                    "relation": "writes",
+                    "dst": "register:GC:GCVM_L2_CNTL",
+                    "confidence": 0.82,
+                    "evidence": "write to GCVM_L2_CNTL",
+                },
+                {
+                    "src": "function:test:driver.c:program_l2",
+                    "relation": "writes",
+                    "dst": "local_tmp",
+                    "confidence": 0.7,
+                    "evidence": "invalid endpoint",
+                },
+            ],
+        }
+
+
 def _require_real_ollama_doc_node_model(model: str = "gemma4:e4b") -> str:
     if os.environ.get("ASIP_REAL_OLLAMA") != "1":
         raise unittest.SkipTest("set ASIP_REAL_OLLAMA=1 to run the real Ollama doc-node smoke test")
@@ -5064,6 +5110,507 @@ class WorkbenchLiveTests(unittest.TestCase):
             )
             self.assertEqual(doc_edge["stage"], "semantic")
             self.assertNotIn("ENABLE_L2_CACHE", {node["id"] for node in graph["nodes"]})
+
+    def test_llm_blackbox_profiles_use_inventory_ledger_and_allowlist_validation(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            db_path = Path(tmpdir) / "asip.db"
+            store = AsipStore.connect(str(db_path))
+            store.migrate()
+            store.add_edge(
+                "program_l2",
+                "GCVM_L2_CNTL",
+                "writes",
+                0.97,
+                stage="deterministic",
+                source="clang_ast",
+                path="driver.c",
+                provenance={
+                    "corpus_id": "test",
+                    "repo": "local",
+                    "function": "program_l2",
+                    "function_name": "program_l2",
+                    "ip": "GC",
+                },
+            )
+            save_provider_settings(
+                db_path,
+                {
+                    "edge": {
+                        "provider": "ollama",
+                        "base_url": "http://edge.local",
+                        "api_path": "/api/chat",
+                        "model": "gemma4:e4b",
+                        "timeout_seconds": 2,
+                    }
+                },
+            )
+            provider = BlackboxProfileProvider()
+
+            summary = workbench.generate_blackbox_profiles_batch(
+                db_path,
+                limit=2,
+                batch_size=2,
+                sample_count=3,
+                edge_provider=provider,
+            )
+            graph = workbench.global_graph(db_path, limit=40)
+
+            nodes = {node["id"]: node for node in graph["nodes"]}
+            edges = {(edge["src"], edge["relation"], edge["dst"]): edge for edge in graph["edges"]}
+            function_id = "function:test:driver.c:program_l2"
+            register_id = "register:GC:GCVM_L2_CNTL"
+            self.assertEqual(summary["source"], "blackbox_profile_batch_job")
+            self.assertGreaterEqual(summary["inventory_total"], 2)
+            self.assertEqual(summary["candidate_count"], 2)
+            self.assertEqual(summary["profile_count"], 1)
+            self.assertGreaterEqual(summary["rejected_count"], 1)
+            joined_prompts = "\n".join(provider.prompts)
+            self.assertEqual(len(provider.prompts), 3)
+            self.assertIn("AST-derived graph candidates", joined_prompts)
+            self.assertIn("INVENTORY_TOTAL", joined_prompts)
+            self.assertIn(function_id, joined_prompts)
+            self.assertIn(register_id, joined_prompts)
+            self.assertIn("SAMPLE_COUNT: 3", joined_prompts)
+            self.assertEqual(nodes[function_id]["attr"]["blackbox"]["method"], "blackbox_io")
+            self.assertEqual(nodes[function_id]["attr"]["blackbox"]["inputs"], ["GCVM_L2_CNTL enable request"])
+            self.assertEqual(nodes[function_id]["attr"]["blackbox"]["outputs"], ["writes GCVM_L2_CNTL"])
+            self.assertIn("writes the L2 control register", nodes[function_id]["attr"]["blackbox"]["observed_behavior"])
+            self.assertEqual(nodes[function_id]["attr"]["providers"], ["ollama"])
+            self.assertEqual(nodes[function_id]["attr"]["models"], ["gemma4:e4b"])
+            self.assertIn((function_id, "writes", register_id), edges)
+            self.assertNotIn("register:GC:register:GC:GCVM_L2_CNTL", nodes)
+            self.assertFalse(any("local_tmp" in edge_key for edge_key in edges))
+            self.assertEqual(len(summary["ledger"]), 1)
+            self.assertEqual(summary["sample_count"], 3)
+            self.assertTrue(all(batch["kind"] == "blackbox_profiles" for batch in summary["ledger"]))
+            ledger_attempts = [
+                attempt
+                for batch in summary["ledger"]
+                for attempt in batch["attempts"]
+            ]
+            self.assertCountEqual(
+                [attempt["status"] for attempt in ledger_attempts],
+                ["accepted", "rejected"],
+            )
+            provenance_rows = AsipStore.connect(str(db_path)).con.execute(
+                "select provenance_json from edges where stage = 'semantic' and src = ? and dst = ?",
+                (function_id, function_id),
+            ).fetchall()
+            self.assertEqual(len(provenance_rows), 1)
+            provenance = json.loads(provenance_rows[0]["provenance_json"])
+            accepted_attempt = next(
+                attempt for attempt in ledger_attempts if attempt["status"] == "accepted"
+            )
+            self.assertEqual(provenance["extractor"], "blackbox_profiles")
+            self.assertEqual(provenance["attempt_id"], accepted_attempt["id"])
+            self.assertEqual(accepted_attempt["metadata"]["reconcile"]["accepted_sample_count"], 3)
+            self.assertEqual(accepted_attempt["metadata"]["reconcile"]["required_agreeing_samples"], 2)
+            self.assertEqual(len(provenance["prompt_sha256"]), 64)
+            self.assertEqual(len(provenance["response_sha256"]), 64)
+            self.assertEqual(provenance["validator_version"], "blackbox_content_v1")
+            self.assertEqual(provenance["validator_status"], "repaired")
+            self.assertIn("repaired_legacy_evidence_refs", provenance["reason_codes"])
+            profile_rows = AsipStore.connect(str(db_path)).blackbox_profiles_for_job(summary["job_id"])
+            self.assertEqual(len(profile_rows), 1)
+            self.assertEqual(profile_rows[0]["endpoint_id"], function_id)
+            self.assertEqual(profile_rows[0]["validator_version"], "blackbox_content_v1")
+            entity_ledger = AsipStore.connect(str(db_path)).blackbox_entity_ledger(summary["job_id"])
+            self.assertEqual(len(entity_ledger["manifests"]), 1)
+            self.assertEqual(entity_ledger["manifests"][0]["manifest_sha256"], summary["selection_manifest"]["manifest_sha256"])
+            self.assertEqual(entity_ledger["manifests"][0]["manifest_group_sha256"], summary["selection_manifest"]["manifest_group_sha256"])
+            self.assertEqual(len(entity_ledger["candidates"]), 2)
+            self.assertCountEqual(
+                [candidate["status"] for candidate in entity_ledger["candidates"]],
+                ["accepted", "rejected"],
+            )
+            self.assertEqual(len(entity_ledger["provider_responses"]), 3)
+            self.assertEqual(entity_ledger["provider_responses"][0]["parse_status"], "parsed")
+            self.assertGreaterEqual(len(entity_ledger["io_facts"]), 2)
+            self.assertTrue(
+                any(
+                    failure["reason_code"] == "rejected_reconcile_insufficient_consensus"
+                    for failure in entity_ledger["validation_failures"]
+                )
+            )
+
+    def test_llm_blackbox_profiles_fill_empty_io_from_inventory_neighbors(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            db_path = Path(tmpdir) / "asip.db"
+            store = AsipStore.connect(str(db_path))
+            store.migrate()
+            store.add_edge(
+                "program_l2",
+                "GCVM_L2_CNTL",
+                "writes",
+                0.97,
+                stage="deterministic",
+                source="clang_ast",
+                path="driver.c",
+                provenance={
+                    "corpus_id": "test",
+                    "repo": "local",
+                    "function": "program_l2",
+                    "function_name": "program_l2",
+                    "ip": "GC",
+                },
+            )
+            save_provider_settings(
+                db_path,
+                {
+                    "edge": {
+                        "provider": "ollama",
+                        "base_url": "http://edge.local",
+                        "api_path": "/api/chat",
+                        "model": "gemma4:e4b",
+                        "timeout_seconds": 2,
+                    }
+                },
+            )
+
+            class EmptyIoProvider:
+                def generate(self, prompt, model):
+                    return {
+                        "profiles": [
+                            {
+                                "id": "function:test:driver.c:program_l2",
+                                "method": "blackbox_io",
+                                "inputs": [],
+                                "outputs": [],
+                                "observed_behavior": "program_l2 writes the L2 control register",
+                                "explanation_layer": "explains cache setup behavior",
+                                "confidence": 0.86,
+                                "evidence": "program_l2 writes GCVM_L2_CNTL",
+                            }
+                        ]
+                    }
+
+            summary = workbench.generate_blackbox_profiles_batch(
+                db_path,
+                limit=2,
+                batch_size=1,
+                edge_provider=EmptyIoProvider(),
+            )
+            graph = workbench.global_graph(db_path, limit=40)
+            node = next(node for node in graph["nodes"] if node["id"] == "function:test:driver.c:program_l2")
+
+            self.assertEqual(summary["profile_count"], 1)
+            self.assertEqual(node["attr"]["blackbox"]["inputs"], ["Invocation or configuration request for program_l2"])
+            self.assertEqual(node["attr"]["blackbox"]["outputs"], ["writes register:GC:GCVM_L2_CNTL"])
+
+    def test_llm_blackbox_profiles_fill_outgoing_calls_as_outputs(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            db_path = Path(tmpdir) / "asip.db"
+            store = AsipStore.connect(str(db_path))
+            store.migrate()
+            store.add_edge(
+                "caller",
+                "callee",
+                "calls",
+                0.91,
+                stage="deterministic",
+                source="clang_ast",
+                path="driver.c",
+                provenance={
+                    "corpus_id": "test",
+                    "repo": "local",
+                    "function": "caller",
+                    "function_name": "caller",
+                },
+            )
+            save_provider_settings(
+                db_path,
+                {
+                    "edge": {
+                        "provider": "ollama",
+                        "base_url": "http://edge.local",
+                        "api_path": "/api/chat",
+                        "model": "gemma4:e4b",
+                        "timeout_seconds": 2,
+                    }
+                },
+            )
+
+            class EmptyCallIoProvider:
+                def generate(self, prompt, model):
+                    return {
+                        "profiles": [
+                            {
+                                "id": "function:test:driver.c:caller",
+                                "method": "blackbox_io",
+                                "inputs": [],
+                                "outputs": [],
+                                "observed_behavior": "caller dispatches work to callee",
+                                "explanation_layer": "explains callback flow",
+                                "confidence": 0.84,
+                                "evidence": "caller calls callee",
+                            }
+                        ]
+                    }
+
+            summary = workbench.generate_blackbox_profiles_batch(
+                db_path,
+                limit=2,
+                batch_size=1,
+                edge_provider=EmptyCallIoProvider(),
+            )
+            graph = workbench.global_graph(db_path, limit=40)
+            node = next(node for node in graph["nodes"] if node["id"] == "function:test:driver.c:caller")
+
+            self.assertEqual(summary["profile_count"], 1)
+            self.assertGreaterEqual(summary["edge_count"], 2)
+            self.assertEqual(node["attr"]["blackbox"]["inputs"], ["Invocation or configuration request for caller"])
+            self.assertEqual(node["attr"]["blackbox"]["outputs"], ["calls function:test:driver.c:callee"])
+            self.assertEqual(node["attr"]["blackbox_generation"]["sample_count"], 3)
+            self.assertEqual(node["attr"]["blackbox_generation"]["required_agreeing_samples"], 2)
+            self.assertEqual(node["attr"]["blackbox_generation"]["accepted_sample_count"], 3)
+            boundary_row = AsipStore.connect(str(db_path)).con.execute(
+                """
+                select relation, provenance_json
+                from edges
+                where stage = 'semantic'
+                  and src = 'function:test:driver.c:caller'
+                  and dst = 'function:test:driver.c:callee'
+                """
+            ).fetchone()
+            self.assertIsNotNone(boundary_row)
+            self.assertEqual(boundary_row["relation"], "calls")
+            boundary_provenance = json.loads(boundary_row["provenance_json"])
+            self.assertEqual(boundary_provenance["relationship_source"], "blackbox_profile_boundary")
+            self.assertEqual(boundary_provenance["layer"], "blackbox_relationship")
+            self.assertEqual(boundary_provenance["provenance_type"], "grounded_profile_boundary")
+            graph_edge = next(
+                edge
+                for edge in graph["edges"]
+                if edge["src"] == "function:test:driver.c:caller"
+                and edge["dst"] == "function:test:driver.c:callee"
+                and edge["relation"] == "calls"
+            )
+            self.assertEqual(graph_edge["layer"], "blackbox_relationship")
+            self.assertEqual(graph_edge["provenance_type"], "grounded_profile_boundary")
+            self.assertGreaterEqual(graph["meta"]["layers"]["blackbox_relationship"], 1)
+
+    def test_llm_blackbox_relationships_require_persisted_profile(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            db_path = Path(tmpdir) / "asip.db"
+            store = AsipStore.connect(str(db_path))
+            store.migrate()
+            store.add_edge(
+                "program_l2",
+                "GCVM_L2_CNTL",
+                "writes",
+                0.97,
+                stage="deterministic",
+                source="clang_ast",
+                path="driver.c",
+                provenance={
+                    "corpus_id": "test",
+                    "repo": "local",
+                    "function": "program_l2",
+                    "function_name": "program_l2",
+                    "ip": "GC",
+                },
+            )
+            save_provider_settings(
+                db_path,
+                {
+                    "edge": {
+                        "provider": "ollama",
+                        "base_url": "http://edge.local",
+                        "api_path": "/api/chat",
+                        "model": "gemma4:e4b",
+                        "timeout_seconds": 2,
+                    }
+                },
+            )
+
+            class RelationshipOnlyProvider:
+                def generate(self, prompt, model):
+                    return {
+                        "profiles": [
+                            {
+                                "id": "function:test:driver.c:program_l2",
+                                "method": "blackbox_io",
+                                "inputs": [],
+                                "outputs": [],
+                                "observed_behavior": "",
+                            }
+                        ],
+                        "relationships": [
+                            {
+                                "src": "function:test:driver.c:program_l2",
+                                "relation": "writes",
+                                "dst": "register:GC:GCVM_L2_CNTL",
+                                "confidence": 0.82,
+                                "evidence": "write to GCVM_L2_CNTL",
+                            }
+                        ],
+                    }
+
+            summary = workbench.generate_blackbox_profiles_batch(
+                db_path,
+                limit=1,
+                batch_size=1,
+                edge_provider=RelationshipOnlyProvider(),
+            )
+            self.assertEqual(summary["profile_count"], 0)
+            self.assertGreaterEqual(summary["rejected_count"], 1)
+            rows = AsipStore.connect(str(db_path)).con.execute(
+                "select count(*) from edges where stage = 'semantic'"
+            ).fetchone()
+            self.assertEqual(rows[0], 0)
+
+    def test_llm_blackbox_direct_relationships_are_recorded_as_rejected_candidates(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            db_path = Path(tmpdir) / "asip.db"
+            store = AsipStore.connect(str(db_path))
+            store.migrate()
+            store.add_edge(
+                "program_l2",
+                "GCVM_L2_CNTL",
+                "writes",
+                0.97,
+                stage="deterministic",
+                source="clang_ast",
+                path="driver.c",
+                provenance={
+                    "corpus_id": "test",
+                    "repo": "local",
+                    "function": "program_l2",
+                    "function_name": "program_l2",
+                    "ip": "GC",
+                },
+            )
+            save_provider_settings(
+                db_path,
+                {
+                    "edge": {
+                        "provider": "ollama",
+                        "base_url": "http://edge.local",
+                        "api_path": "/api/chat",
+                        "model": "gemma4:e4b",
+                        "timeout_seconds": 2,
+                    }
+                },
+            )
+
+            class DirectRelationshipProvider:
+                def generate(self, prompt, model):
+                    return {
+                        "profiles": [
+                            {
+                                "id": "function:test:driver.c:program_l2",
+                                "method": "blackbox_io",
+                                "inputs": [],
+                                "outputs": [],
+                                "observed_behavior": "program_l2 configures the cache register",
+                                "explanation_layer": "explains L2 cache setup",
+                                "confidence": 0.87,
+                                "evidence": "program_l2 writes GCVM_L2_CNTL",
+                            }
+                        ],
+                        "relationships": [
+                            {
+                                "src": "function:test:driver.c:program_l2",
+                                "relation": "reads",
+                                "dst": "register:GC:GCVM_L2_CNTL",
+                                "confidence": 0.82,
+                                "evidence": "relationship intent from model output",
+                            }
+                        ],
+                    }
+
+            summary = workbench.generate_blackbox_profiles_batch(
+                db_path,
+                limit=2,
+                batch_size=1,
+                sample_count=1,
+                edge_provider=DirectRelationshipProvider(),
+            )
+            self.assertEqual(summary["profile_count"], 1)
+            self.assertGreaterEqual(summary["rejected_count"], 1)
+            store = AsipStore.connect(str(db_path))
+            reads_rows = store.con.execute(
+                """
+                select count(*) from edges
+                where stage = 'semantic'
+                  and relation = 'reads'
+                  and src = 'function:test:driver.c:program_l2'
+                  and dst = 'register:GC:GCVM_L2_CNTL'
+                """
+            ).fetchone()
+            self.assertEqual(reads_rows[0], 0)
+            entity_ledger = store.blackbox_entity_ledger(summary["job_id"])
+            self.assertTrue(
+                any(
+                    failure["gate"] == "relationship_projection"
+                    and failure["reason_code"] == "deferred_direct_relationship_projection"
+                    for failure in entity_ledger["validation_failures"]
+                )
+            )
+
+    def test_llm_blackbox_profiles_reject_ast_name_parrot_profile(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            db_path = Path(tmpdir) / "asip.db"
+            store = AsipStore.connect(str(db_path))
+            store.migrate()
+            store.add_edge(
+                "program_l2",
+                "GCVM_L2_CNTL",
+                "writes",
+                0.97,
+                stage="deterministic",
+                source="clang_ast",
+                path="driver.c",
+                provenance={
+                    "corpus_id": "test",
+                    "repo": "local",
+                    "function": "program_l2",
+                    "function_name": "program_l2",
+                    "ip": "GC",
+                },
+            )
+            save_provider_settings(
+                db_path,
+                {
+                    "edge": {
+                        "provider": "ollama",
+                        "base_url": "http://edge.local",
+                        "api_path": "/api/chat",
+                        "model": "gemma4:e4b",
+                        "timeout_seconds": 2,
+                    }
+                },
+            )
+
+            class ParrotProfileProvider:
+                def generate(self, prompt, model):
+                    return {
+                        "profiles": [
+                            {
+                                "id": "function:test:driver.c:program_l2",
+                                "method": "blackbox_io",
+                                "inputs": ["program_l2"],
+                                "outputs": ["program_l2"],
+                                "observed_behavior": "program_l2",
+                                "explanation_layer": "program_l2",
+                                "confidence": 0.81,
+                                "evidence": "program_l2",
+                            }
+                        ]
+                    }
+
+            summary = workbench.generate_blackbox_profiles_batch(
+                db_path,
+                limit=1,
+                batch_size=1,
+                edge_provider=ParrotProfileProvider(),
+            )
+            self.assertEqual(summary["profile_count"], 0)
+            self.assertGreaterEqual(summary["rejected_count"], 1)
+            rows = AsipStore.connect(str(db_path)).con.execute(
+                "select count(*) from blackbox_profiles"
+            ).fetchone()
+            self.assertEqual(rows[0], 0)
 
     def test_doc_node_candidates_prioritize_evidence_backed_hardware_chunks(self):
         with tempfile.TemporaryDirectory() as tmpdir:

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import importlib.util
+import hashlib
 import json
 import math
 import re
@@ -13,7 +14,7 @@ from itertools import combinations
 from pathlib import Path
 from typing import Any, Dict, Iterable, List, Mapping, Optional
 
-from .graph_schema import normalize_product_relation
+from .graph_schema import ALLOWED_PRODUCT_RELATIONS, is_register_symbol, normalize_product_relation
 from .graph_filters import is_resolver_wrapper_name
 from .resolver_profiles import (
     GraphFunctionNormalizationRule,
@@ -78,6 +79,171 @@ class AsipStore:
               job_id integer not null references jobs(id),
               status text not null,
               message text not null default '',
+              created_at text not null default current_timestamp
+            );
+
+            create table if not exists llm_batches (
+              id integer primary key,
+              job_id integer not null references jobs(id),
+              kind text not null,
+              provider text not null default '',
+              model text not null default '',
+              status text not null default 'queued',
+              candidate_ids_json text not null default '[]',
+              candidate_count integer not null default 0,
+              metadata_json text not null default '{}',
+              created_at text not null default current_timestamp,
+              finished_at text
+            );
+
+            create table if not exists llm_attempts (
+              id integer primary key,
+              batch_id integer not null references llm_batches(id),
+              job_id integer not null references jobs(id),
+              candidate_id text not null,
+              endpoint_id text not null default '',
+              attempt_index integer not null default 1,
+              status text not null,
+              prompt_sha256 text not null default '',
+              response_sha256 text not null default '',
+              response_json text not null default '{}',
+              error text not null default '',
+              metadata_json text not null default '{}',
+              created_at text not null default current_timestamp
+            );
+
+            create table if not exists blackbox_profiles (
+              id integer primary key,
+              endpoint_id text not null,
+              view text not null default '',
+              endpoint_kind text not null default '',
+              profile_json text not null default '{}',
+              provider text not null default '',
+              model text not null default '',
+              job_id integer not null references jobs(id),
+              batch_id integer,
+              attempt_id integer,
+              candidate_id text not null default '',
+              prompt_sha256 text not null default '',
+              response_sha256 text not null default '',
+              validator_version text not null default '',
+              status text not null default 'accepted',
+              metadata_json text not null default '{}',
+              created_at text not null default current_timestamp
+            );
+
+            create table if not exists blackbox_manifests (
+              id integer primary key,
+              job_id integer not null references jobs(id),
+              db_path text not null default '',
+              db_sha256 text not null default '',
+              repo_head text not null default '',
+              manifest_sha256 text not null default '',
+              manifest_group_sha256 text not null default '',
+              phase text not null default '',
+              selection_seed text not null default '',
+              scheduler_version text not null default '',
+              inventory_sha256 text not null default '',
+              inventory_total integer not null default 0,
+              shard_count integer not null default 1,
+              shard_index integer not null default 0,
+              shard_candidate_total integer not null default 0,
+              global_candidate_total integer not null default 0,
+              provider text not null default '',
+              model text not null default '',
+              provider_settings_sha256 text not null default '',
+              limits_config_sha256 text not null default '',
+              resolver_profiles_sha256 text not null default '',
+              metadata_json text not null default '{}',
+              created_at text not null default current_timestamp,
+              unique(job_id, manifest_sha256)
+            );
+
+            create table if not exists blackbox_manifest_candidates (
+              id integer primary key,
+              manifest_id integer not null references blackbox_manifests(id),
+              job_id integer not null references jobs(id),
+              manifest_sha256 text not null default '',
+              candidate_id text not null,
+              endpoint_id text not null default '',
+              view text not null default '',
+              endpoint_kind text not null default '',
+              coverage_bucket text not null default '',
+              bucket_id text not null default '',
+              selection_rank integer not null default 0,
+              global_selection_rank integer not null default 0,
+              selection_hash text not null default '',
+              corpus_id text not null default '',
+              path_bucket text not null default '',
+              ip text not null default '',
+              degree_bucket text not null default '',
+              relation_signature_sha256 text not null default '',
+              allowlist_sha256 text not null default '',
+              prompt_refs_sha256 text not null default '',
+              candidate_json text not null default '{}',
+              status text not null default 'selected',
+              metadata_json text not null default '{}',
+              created_at text not null default current_timestamp,
+              updated_at text,
+              unique(job_id, candidate_id)
+            );
+
+            create table if not exists llm_provider_responses (
+              id integer primary key,
+              job_id integer not null references jobs(id),
+              batch_id integer references llm_batches(id),
+              attempt_index integer not null default 1,
+              kind text not null default 'generation',
+              provider text not null default '',
+              model text not null default '',
+              request_sha256 text not null default '',
+              prompt_sha256 text not null default '',
+              options_json text not null default '{}',
+              raw_response_text text not null default '',
+              response_json text not null default '{}',
+              response_sha256 text not null default '',
+              http_status integer,
+              latency_ms integer,
+              parse_status text not null default '',
+              error_class text not null default '',
+              error_message text not null default '',
+              token_counts_json text not null default '{}',
+              truncated integer not null default 0,
+              metadata_json text not null default '{}',
+              created_at text not null default current_timestamp
+            );
+
+            create table if not exists blackbox_validation_failures (
+              id integer primary key,
+              job_id integer not null references jobs(id),
+              batch_id integer,
+              attempt_id integer,
+              provider_response_id integer,
+              candidate_id text not null default '',
+              endpoint_id text not null default '',
+              gate text not null default '',
+              severity text not null default 'error',
+              reason_code text not null default '',
+              detail_json text not null default '{}',
+              evidence_ref text not null default '',
+              created_at text not null default current_timestamp
+            );
+
+            create table if not exists blackbox_io_facts (
+              id integer primary key,
+              profile_id integer not null references blackbox_profiles(id),
+              job_id integer not null references jobs(id),
+              batch_id integer,
+              attempt_id integer,
+              candidate_id text not null default '',
+              endpoint_id text not null default '',
+              direction text not null,
+              text text not null default '',
+              endpoint_ref text not null default '',
+              evidence_refs_json text not null default '[]',
+              grounding_status text not null default '',
+              confidence real,
+              metadata_json text not null default '{}',
               created_at text not null default current_timestamp
             );
 
@@ -171,6 +337,30 @@ class AsipStore:
               on edges(dst, stage);
             create index if not exists idx_edges_stage
               on edges(stage);
+            create index if not exists idx_llm_batches_job
+              on llm_batches(job_id, id);
+            create index if not exists idx_llm_attempts_batch
+              on llm_attempts(batch_id, id);
+            create index if not exists idx_blackbox_profiles_endpoint
+              on blackbox_profiles(endpoint_id, id desc);
+            create index if not exists idx_blackbox_profiles_endpoint_view
+              on blackbox_profiles(endpoint_id, view, id desc);
+            create index if not exists idx_blackbox_profiles_job
+              on blackbox_profiles(job_id, id);
+            create index if not exists idx_blackbox_manifests_group
+              on blackbox_manifests(manifest_group_sha256, shard_index);
+            create index if not exists idx_blackbox_manifest_candidates_manifest
+              on blackbox_manifest_candidates(manifest_sha256, candidate_id);
+            create index if not exists idx_blackbox_manifest_candidates_endpoint
+              on blackbox_manifest_candidates(endpoint_id, view, status);
+            create index if not exists idx_llm_provider_responses_batch
+              on llm_provider_responses(batch_id, attempt_index);
+            create index if not exists idx_blackbox_validation_failures_job
+              on blackbox_validation_failures(job_id, reason_code);
+            create index if not exists idx_blackbox_validation_failures_candidate
+              on blackbox_validation_failures(candidate_id, gate);
+            create index if not exists idx_blackbox_io_facts_profile
+              on blackbox_io_facts(profile_id, direction);
             """
         )
         self._ensure_column("chunks", "page", "integer")
@@ -181,6 +371,8 @@ class AsipStore:
         self._ensure_column("edges", "line_start", "integer")
         self._ensure_column("edges", "line_end", "integer")
         self._ensure_column("edges", "provenance_json", "text not null default '{}'")
+        self._ensure_column("llm_attempts", "response_sha256", "text not null default ''")
+        self._ensure_column("blackbox_profiles", "metadata_json", "text not null default '{}'")
         self._ensure_column("resolver_profiles", "config_json", "text not null default '{}'")
         self._ensure_column("embeddings", "metadata_json", "text not null default '{}'")
         self.con.commit()
@@ -199,6 +391,14 @@ class AsipStore:
             delete from chunks_fts;
             delete from chunks;
             delete from documents;
+            delete from blackbox_io_facts;
+            delete from blackbox_profiles;
+            delete from blackbox_validation_failures;
+            delete from llm_provider_responses;
+            delete from blackbox_manifest_candidates;
+            delete from blackbox_manifests;
+            delete from llm_attempts;
+            delete from llm_batches;
             delete from jobs;
             """
         )
@@ -338,6 +538,651 @@ class AsipStore:
         if row is None:
             raise KeyError(job_id)
         return json.loads(str(row["metadata_json"] or "{}"))
+
+    def start_llm_batch(
+        self,
+        job_id: int,
+        kind: str,
+        provider: str,
+        model: str,
+        candidate_ids: Iterable[str],
+        metadata: Optional[Dict[str, object]] = None,
+    ) -> int:
+        if self.con.execute("select 1 from jobs where id = ?", (int(job_id),)).fetchone() is None:
+            raise KeyError(job_id)
+        candidate_id_list = _dedupe_strings(str(candidate_id) for candidate_id in candidate_ids)
+        cursor = self.con.execute(
+            """
+            insert into llm_batches(
+              job_id, kind, provider, model, status, candidate_ids_json, candidate_count, metadata_json
+            )
+            values (?, ?, ?, ?, 'queued', ?, ?, ?)
+            """,
+            (
+                int(job_id),
+                str(kind or ""),
+                str(provider or ""),
+                str(model or ""),
+                json.dumps(candidate_id_list),
+                len(candidate_id_list),
+                json.dumps(metadata or {}),
+            ),
+        )
+        self.con.commit()
+        return int(cursor.lastrowid)
+
+    def record_llm_attempt(
+        self,
+        batch_id: int,
+        candidate_id: str,
+        endpoint_id: str = "",
+        attempt_index: int = 1,
+        status: str = "generated",
+        prompt: str = "",
+        response: Optional[Mapping[str, object]] = None,
+        error: str = "",
+        metadata: Optional[Dict[str, object]] = None,
+    ) -> int:
+        batch = self.con.execute("select job_id from llm_batches where id = ?", (int(batch_id),)).fetchone()
+        if batch is None:
+            raise KeyError(batch_id)
+        prompt_sha256 = hashlib.sha256(str(prompt or "").encode("utf-8")).hexdigest() if prompt else ""
+        response_json = json.dumps(response or {}, sort_keys=True)
+        response_sha256 = hashlib.sha256(response_json.encode("utf-8")).hexdigest() if response is not None else ""
+        cursor = self.con.execute(
+            """
+            insert into llm_attempts(
+              batch_id, job_id, candidate_id, endpoint_id, attempt_index, status,
+              prompt_sha256, response_sha256, response_json, error, metadata_json
+            )
+            values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                int(batch_id),
+                int(batch["job_id"]),
+                str(candidate_id or ""),
+                str(endpoint_id or ""),
+                max(1, int(attempt_index or 1)),
+                str(status or ""),
+                prompt_sha256,
+                response_sha256,
+                response_json,
+                str(error or ""),
+                json.dumps(metadata or {}),
+            ),
+        )
+        self.con.commit()
+        return int(cursor.lastrowid)
+
+    def update_llm_attempt_status(
+        self,
+        attempt_id: int,
+        status: str,
+        error: str = "",
+        metadata: Optional[Dict[str, object]] = None,
+    ) -> None:
+        current = self.con.execute(
+            "select metadata_json from llm_attempts where id = ?",
+            (int(attempt_id),),
+        ).fetchone()
+        if current is None:
+            raise KeyError(attempt_id)
+        merged_metadata = json.loads(str(current["metadata_json"] or "{}"))
+        merged_metadata.update(metadata or {})
+        self.con.execute(
+            """
+            update llm_attempts
+            set status = ?, error = ?, metadata_json = ?
+            where id = ?
+            """,
+            (str(status or ""), str(error or ""), json.dumps(merged_metadata), int(attempt_id)),
+        )
+        self.con.commit()
+
+    def finish_llm_batch(
+        self,
+        batch_id: int,
+        status: str,
+        metadata: Optional[Dict[str, object]] = None,
+    ) -> None:
+        current = self.con.execute(
+            "select metadata_json from llm_batches where id = ?",
+            (int(batch_id),),
+        ).fetchone()
+        if current is None:
+            raise KeyError(batch_id)
+        merged_metadata = json.loads(str(current["metadata_json"] or "{}"))
+        merged_metadata.update(metadata or {})
+        self.con.execute(
+            """
+            update llm_batches
+            set status = ?, metadata_json = ?, finished_at = current_timestamp
+            where id = ?
+            """,
+            (str(status or ""), json.dumps(merged_metadata), int(batch_id)),
+        )
+        self.con.commit()
+
+    def add_blackbox_profile(
+        self,
+        endpoint_id: str,
+        profile: Mapping[str, object],
+        *,
+        view: str = "",
+        endpoint_kind: str = "",
+        provider: str = "",
+        model: str = "",
+        job_id: int,
+        batch_id: Optional[int] = None,
+        attempt_id: Optional[int] = None,
+        candidate_id: str = "",
+        prompt_sha256: str = "",
+        response_sha256: str = "",
+        validator_version: str = "",
+        status: str = "accepted",
+        metadata: Optional[Dict[str, object]] = None,
+        commit: bool = True,
+    ) -> int:
+        if self.con.execute("select 1 from jobs where id = ?", (int(job_id),)).fetchone() is None:
+            raise KeyError(job_id)
+        cursor = self.con.execute(
+            """
+            insert into blackbox_profiles(
+              endpoint_id, view, endpoint_kind, profile_json, provider, model, job_id,
+              batch_id, attempt_id, candidate_id, prompt_sha256, response_sha256,
+              validator_version, status, metadata_json
+            )
+            values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                str(endpoint_id or ""),
+                str(view or ""),
+                str(endpoint_kind or ""),
+                json.dumps(dict(profile), sort_keys=True),
+                str(provider or ""),
+                str(model or ""),
+                int(job_id),
+                int(batch_id) if batch_id not in (None, "") else None,
+                int(attempt_id) if attempt_id not in (None, "") else None,
+                str(candidate_id or ""),
+                str(prompt_sha256 or ""),
+                str(response_sha256 or ""),
+                str(validator_version or ""),
+                str(status or "accepted"),
+                json.dumps(metadata or {}, sort_keys=True),
+            ),
+        )
+        if commit:
+            self.con.commit()
+        return int(cursor.lastrowid)
+
+    def add_blackbox_manifest(
+        self,
+        job_id: int,
+        manifest: Mapping[str, object],
+        *,
+        db_path: str = "",
+        db_sha256: str = "",
+        repo_head: str = "",
+        provider: str = "",
+        model: str = "",
+        provider_settings: Optional[Mapping[str, object]] = None,
+        limits_config_sha256: str = "",
+        resolver_profiles_sha256: str = "",
+        scheduler_version: str = "blackbox_selection_manifest_v1",
+        metadata: Optional[Dict[str, object]] = None,
+        commit: bool = True,
+    ) -> int:
+        if self.con.execute("select 1 from jobs where id = ?", (int(job_id),)).fetchone() is None:
+            raise KeyError(job_id)
+        cursor = self.con.execute(
+            """
+            insert into blackbox_manifests(
+              job_id, db_path, db_sha256, repo_head, manifest_sha256, manifest_group_sha256,
+              phase, selection_seed, scheduler_version, inventory_sha256, inventory_total,
+              shard_count, shard_index, shard_candidate_total, global_candidate_total,
+              provider, model, provider_settings_sha256, limits_config_sha256,
+              resolver_profiles_sha256, metadata_json
+            )
+            values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                int(job_id),
+                str(db_path or ""),
+                str(db_sha256 or ""),
+                str(repo_head or ""),
+                str(manifest.get("manifest_sha256") or ""),
+                str(manifest.get("manifest_group_sha256") or ""),
+                str(manifest.get("phase") or ""),
+                str(manifest.get("selection_seed") or ""),
+                str(scheduler_version or ""),
+                str(manifest.get("inventory_sha256") or ""),
+                int(manifest.get("inventory_total") or 0),
+                max(1, int(manifest.get("shard_count") or 1)),
+                max(0, int(manifest.get("shard_index") or 0)),
+                int(manifest.get("shard_candidate_total") or 0),
+                int(manifest.get("global_candidate_total") or 0),
+                str(provider or ""),
+                str(model or ""),
+                _stable_json_sha256(provider_settings or {}),
+                str(limits_config_sha256 or ""),
+                str(resolver_profiles_sha256 or ""),
+                json.dumps(metadata or {}, sort_keys=True),
+            ),
+        )
+        if commit:
+            self.con.commit()
+        return int(cursor.lastrowid)
+
+    def add_blackbox_manifest_candidate(
+        self,
+        manifest_id: int,
+        job_id: int,
+        manifest_sha256: str,
+        candidate: Mapping[str, object],
+        *,
+        status: str = "selected",
+        metadata: Optional[Dict[str, object]] = None,
+        commit: bool = True,
+    ) -> int:
+        if self.con.execute("select 1 from blackbox_manifests where id = ?", (int(manifest_id),)).fetchone() is None:
+            raise KeyError(manifest_id)
+        attr = candidate.get("attr") if isinstance(candidate.get("attr"), Mapping) else {}
+        source_records = attr.get("source") if isinstance(attr.get("source"), list) else []
+        first_source = source_records[0] if source_records and isinstance(source_records[0], Mapping) else {}
+        neighbors = candidate.get("neighbors") if isinstance(candidate.get("neighbors"), list) else []
+        relation_signature = [
+            f"{neighbor.get('direction')}:{neighbor.get('relation')}:{neighbor.get('kind')}"
+            for neighbor in neighbors
+            if isinstance(neighbor, Mapping)
+        ]
+        path = str(first_source.get("path") or attr.get("path") or "")
+        path_bucket = "/".join([part for part in path.split("/")[:2] if part]) or "unknown_path"
+        cursor = self.con.execute(
+            """
+            insert into blackbox_manifest_candidates(
+              manifest_id, job_id, manifest_sha256, candidate_id, endpoint_id, view,
+              endpoint_kind, coverage_bucket, bucket_id, selection_rank, global_selection_rank,
+              selection_hash, corpus_id, path_bucket, ip, degree_bucket,
+              relation_signature_sha256, allowlist_sha256, prompt_refs_sha256,
+              candidate_json, status, metadata_json
+            )
+            values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                int(manifest_id),
+                int(job_id),
+                str(manifest_sha256 or ""),
+                str(candidate.get("candidate_id") or ""),
+                str(candidate.get("endpoint_id") or ""),
+                str(candidate.get("view") or ""),
+                str(candidate.get("kind") or ""),
+                str(candidate.get("coverage_bucket") or ""),
+                str(candidate.get("bucket_id") or ""),
+                int(candidate.get("selection_rank") or 0),
+                int(candidate.get("global_selection_rank") or 0),
+                str(candidate.get("selection_hash") or ""),
+                str(first_source.get("corpus_id") or attr.get("corpus_id") or ""),
+                path_bucket,
+                str(attr.get("ip") or first_source.get("ip") or ""),
+                _degree_bucket_for_count(len(neighbors)),
+                _stable_json_sha256(relation_signature),
+                _stable_json_sha256(candidate.get("allowlist") or {}),
+                _stable_json_sha256(candidate.get("prompt_refs") or candidate.get("evidence_refs") or {}),
+                json.dumps(dict(candidate), sort_keys=True, default=str),
+                str(status or "selected"),
+                json.dumps(metadata or {}, sort_keys=True),
+            ),
+        )
+        if commit:
+            self.con.commit()
+        return int(cursor.lastrowid)
+
+    def update_blackbox_manifest_candidate_status(
+        self,
+        job_id: int,
+        candidate_id: str,
+        status: str,
+        metadata: Optional[Dict[str, object]] = None,
+    ) -> None:
+        rows = self.con.execute(
+            """
+            select id, metadata_json
+            from blackbox_manifest_candidates
+            where job_id = ? and candidate_id = ?
+            """,
+            (int(job_id), str(candidate_id or "")),
+        ).fetchall()
+        if not rows:
+            return
+        for row in rows:
+            merged_metadata = json.loads(str(row["metadata_json"] or "{}"))
+            merged_metadata.update(metadata or {})
+            self.con.execute(
+                """
+                update blackbox_manifest_candidates
+                set status = ?, metadata_json = ?, updated_at = current_timestamp
+                where id = ?
+                """,
+                (str(status or ""), json.dumps(merged_metadata, sort_keys=True), int(row["id"])),
+            )
+        self.con.commit()
+
+    def record_llm_provider_response(
+        self,
+        job_id: int,
+        *,
+        batch_id: Optional[int] = None,
+        attempt_index: int = 1,
+        kind: str = "generation",
+        provider: str = "",
+        model: str = "",
+        prompt: str = "",
+        request: Optional[Mapping[str, object]] = None,
+        options: Optional[Mapping[str, object]] = None,
+        raw_response_text: str = "",
+        response: Optional[Mapping[str, object]] = None,
+        http_status: Optional[int] = None,
+        latency_ms: Optional[int] = None,
+        parse_status: str = "",
+        error_class: str = "",
+        error_message: str = "",
+        token_counts: Optional[Mapping[str, object]] = None,
+        truncated: bool = False,
+        metadata: Optional[Dict[str, object]] = None,
+        commit: bool = True,
+    ) -> int:
+        if self.con.execute("select 1 from jobs where id = ?", (int(job_id),)).fetchone() is None:
+            raise KeyError(job_id)
+        response_json = json.dumps(response or {}, sort_keys=True)
+        response_basis = raw_response_text if raw_response_text else response_json
+        cursor = self.con.execute(
+            """
+            insert into llm_provider_responses(
+              job_id, batch_id, attempt_index, kind, provider, model, request_sha256,
+              prompt_sha256, options_json, raw_response_text, response_json, response_sha256,
+              http_status, latency_ms, parse_status, error_class, error_message,
+              token_counts_json, truncated, metadata_json
+            )
+            values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                int(job_id),
+                int(batch_id) if batch_id not in (None, "") else None,
+                max(1, int(attempt_index or 1)),
+                str(kind or "generation"),
+                str(provider or ""),
+                str(model or ""),
+                _stable_json_sha256(request or {}),
+                hashlib.sha256(str(prompt or "").encode("utf-8")).hexdigest() if prompt else "",
+                json.dumps(options or {}, sort_keys=True),
+                str(raw_response_text or ""),
+                response_json,
+                hashlib.sha256(response_basis.encode("utf-8")).hexdigest() if response_basis else "",
+                int(http_status) if http_status not in (None, "") else None,
+                int(latency_ms) if latency_ms not in (None, "") else None,
+                str(parse_status or ""),
+                str(error_class or ""),
+                str(error_message or ""),
+                json.dumps(token_counts or {}, sort_keys=True),
+                1 if truncated else 0,
+                json.dumps(metadata or {}, sort_keys=True),
+            ),
+        )
+        if commit:
+            self.con.commit()
+        return int(cursor.lastrowid)
+
+    def add_blackbox_validation_failure(
+        self,
+        job_id: int,
+        *,
+        batch_id: Optional[int] = None,
+        attempt_id: Optional[int] = None,
+        provider_response_id: Optional[int] = None,
+        candidate_id: str = "",
+        endpoint_id: str = "",
+        gate: str = "",
+        severity: str = "error",
+        reason_code: str = "",
+        detail: Optional[Mapping[str, object]] = None,
+        evidence_ref: str = "",
+        commit: bool = True,
+    ) -> int:
+        cursor = self.con.execute(
+            """
+            insert into blackbox_validation_failures(
+              job_id, batch_id, attempt_id, provider_response_id, candidate_id,
+              endpoint_id, gate, severity, reason_code, detail_json, evidence_ref
+            )
+            values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                int(job_id),
+                int(batch_id) if batch_id not in (None, "") else None,
+                int(attempt_id) if attempt_id not in (None, "") else None,
+                int(provider_response_id) if provider_response_id not in (None, "") else None,
+                str(candidate_id or ""),
+                str(endpoint_id or ""),
+                str(gate or ""),
+                str(severity or "error"),
+                str(reason_code or ""),
+                json.dumps(detail or {}, sort_keys=True),
+                str(evidence_ref or ""),
+            ),
+        )
+        if commit:
+            self.con.commit()
+        return int(cursor.lastrowid)
+
+    def add_blackbox_io_fact(
+        self,
+        profile_id: int,
+        job_id: int,
+        *,
+        batch_id: Optional[int] = None,
+        attempt_id: Optional[int] = None,
+        candidate_id: str = "",
+        endpoint_id: str = "",
+        direction: str,
+        text: str,
+        endpoint_ref: str = "",
+        evidence_refs: Optional[Iterable[str]] = None,
+        grounding_status: str = "",
+        confidence: Optional[float] = None,
+        metadata: Optional[Dict[str, object]] = None,
+        commit: bool = True,
+    ) -> int:
+        cursor = self.con.execute(
+            """
+            insert into blackbox_io_facts(
+              profile_id, job_id, batch_id, attempt_id, candidate_id, endpoint_id,
+              direction, text, endpoint_ref, evidence_refs_json, grounding_status,
+              confidence, metadata_json
+            )
+            values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                int(profile_id),
+                int(job_id),
+                int(batch_id) if batch_id not in (None, "") else None,
+                int(attempt_id) if attempt_id not in (None, "") else None,
+                str(candidate_id or ""),
+                str(endpoint_id or ""),
+                str(direction or ""),
+                str(text or ""),
+                str(endpoint_ref or ""),
+                json.dumps([str(ref) for ref in (evidence_refs or [])], sort_keys=True),
+                str(grounding_status or ""),
+                float(confidence) if confidence not in (None, "") else None,
+                json.dumps(metadata or {}, sort_keys=True),
+            ),
+        )
+        if commit:
+            self.con.commit()
+        return int(cursor.lastrowid)
+
+    def blackbox_entity_ledger(self, job_id: int) -> Dict[str, object]:
+        manifests = [
+            _row_with_json(row, ("metadata_json",))
+            for row in self.con.execute(
+                "select * from blackbox_manifests where job_id = ? order by id asc",
+                (int(job_id),),
+            ).fetchall()
+        ]
+        candidates = [
+            _row_with_json(row, ("candidate_json", "metadata_json"))
+            for row in self.con.execute(
+                "select * from blackbox_manifest_candidates where job_id = ? order by id asc",
+                (int(job_id),),
+            ).fetchall()
+        ]
+        responses = [
+            _row_with_json(row, ("options_json", "response_json", "token_counts_json", "metadata_json"))
+            for row in self.con.execute(
+                "select * from llm_provider_responses where job_id = ? order by id asc",
+                (int(job_id),),
+            ).fetchall()
+        ]
+        failures = [
+            _row_with_json(row, ("detail_json",))
+            for row in self.con.execute(
+                "select * from blackbox_validation_failures where job_id = ? order by id asc",
+                (int(job_id),),
+            ).fetchall()
+        ]
+        io_facts = [
+            _row_with_json(row, ("evidence_refs_json", "metadata_json"))
+            for row in self.con.execute(
+                "select * from blackbox_io_facts where job_id = ? order by id asc",
+                (int(job_id),),
+            ).fetchall()
+        ]
+        return {
+            "manifests": manifests,
+            "candidates": candidates,
+            "provider_responses": responses,
+            "validation_failures": failures,
+            "io_facts": io_facts,
+        }
+
+    def blackbox_profiles_for_job(self, job_id: int) -> List[Dict[str, object]]:
+        if not self._table_exists("blackbox_profiles"):
+            return []
+        rows = self.con.execute(
+            """
+            select id, endpoint_id, view, endpoint_kind, profile_json, provider, model, job_id,
+              batch_id, attempt_id, candidate_id, prompt_sha256, response_sha256,
+              validator_version, status, metadata_json, created_at
+            from blackbox_profiles
+            where job_id = ?
+            order by id asc
+            """,
+            (int(job_id),),
+        ).fetchall()
+        return [_blackbox_profile_row_payload(row) for row in rows]
+
+    def usable_blackbox_profile_keys(self) -> set[tuple[str, str]]:
+        if not self._table_exists("blackbox_profiles"):
+            return set()
+        rows = self.con.execute(
+            """
+            select id, endpoint_id, view, endpoint_kind, profile_json, provider, model, job_id,
+              batch_id, attempt_id, candidate_id, prompt_sha256, response_sha256,
+              validator_version, status, metadata_json, created_at
+            from blackbox_profiles
+            order by id desc
+            """
+        ).fetchall()
+        keys: set[tuple[str, str]] = set()
+        for row in rows:
+            if not self._blackbox_profile_row_is_usable(row):
+                continue
+            view = str(row["view"] or "")
+            endpoint_id = str(row["endpoint_id"] or "")
+            if view and endpoint_id:
+                keys.add((view, endpoint_id))
+        return keys
+
+    def blackbox_manifest_candidate_keys(
+        self,
+        statuses: Iterable[str] = ("failed", "rejected", "abstained"),
+        reason_codes: Optional[Iterable[str]] = None,
+    ) -> set[tuple[str, str]]:
+        if not self._table_exists("blackbox_manifest_candidates"):
+            return set()
+        status_values = [str(status or "").strip() for status in statuses if str(status or "").strip()]
+        if not status_values:
+            return set()
+        reason_values = [str(reason or "").strip() for reason in (reason_codes or []) if str(reason or "").strip()]
+        status_placeholders = ",".join("?" for _ in status_values)
+        params: list[object] = list(status_values)
+        reason_filter = ""
+        if reason_values:
+            if not self._table_exists("blackbox_validation_failures"):
+                return set()
+            reason_placeholders = ",".join("?" for _ in reason_values)
+            reason_filter = f"""
+              and candidate_id in (
+                select candidate_id
+                from blackbox_validation_failures
+                where reason_code in ({reason_placeholders})
+              )
+            """
+            params.extend(reason_values)
+        rows = self.con.execute(
+            f"""
+            select distinct view, endpoint_id
+            from blackbox_manifest_candidates
+            where status in ({status_placeholders})
+            {reason_filter}
+            """,
+            tuple(params),
+        ).fetchall()
+        keys: set[tuple[str, str]] = set()
+        for row in rows:
+            view = str(row["view"] or "")
+            endpoint_id = str(row["endpoint_id"] or "")
+            if view and endpoint_id:
+                keys.add((view, endpoint_id))
+        return keys
+
+    def llm_batch_ledger(self, job_id: int) -> List[Dict[str, object]]:
+        batch_rows = self.con.execute(
+            """
+            select id, job_id, kind, provider, model, status, candidate_ids_json,
+              candidate_count, metadata_json, created_at, finished_at
+            from llm_batches
+            where job_id = ?
+            order by id asc
+            """,
+            (int(job_id),),
+        ).fetchall()
+        result: List[Dict[str, object]] = []
+        for batch_row in batch_rows:
+            batch = dict(batch_row)
+            batch_id = int(batch["id"])
+            batch["candidate_ids"] = json.loads(str(batch.pop("candidate_ids_json") or "[]"))
+            batch["metadata"] = json.loads(str(batch.pop("metadata_json") or "{}"))
+            attempt_rows = self.con.execute(
+                """
+                select id, batch_id, job_id, candidate_id, endpoint_id, attempt_index, status,
+                  prompt_sha256, response_sha256, response_json, error, metadata_json, created_at
+                from llm_attempts
+                where batch_id = ?
+                order by id asc
+                """,
+                (batch_id,),
+            ).fetchall()
+            attempts: List[Dict[str, object]] = []
+            for attempt_row in attempt_rows:
+                attempt = dict(attempt_row)
+                attempt["response"] = json.loads(str(attempt.pop("response_json") or "{}"))
+                attempt["metadata"] = json.loads(str(attempt.pop("metadata_json") or "{}"))
+                attempts.append(attempt)
+            batch["attempts"] = attempts
+            result.append(batch)
+        return result
 
     def upsert_corpus(
         self,
@@ -1123,6 +1968,9 @@ class AsipStore:
             for row in rows:
                 if _is_graph_wrapper_hub(str(row["src"])) or _is_graph_wrapper_hub(str(row["dst"])):
                     continue
+                if _is_blackbox_profile_self_edge_row(row):
+                    seen.add(str(row["src"]))
+                    continue
                 edge = dict(row)
                 edges.append(edge)
                 for endpoint in (str(row["src"]), str(row["dst"])):
@@ -1169,7 +2017,7 @@ class AsipStore:
         except json.JSONDecodeError:
             provenance = {}
         extractor = str(provenance.get("extractor") or "")
-        if not policy["enforce_job_provenance"] and extractor not in {"semantic_edges", "doc_nodes"}:
+        if not policy["enforce_job_provenance"] and extractor not in {"semantic_edges", "doc_nodes", "blackbox_profiles"}:
             return True
         job_id = _int_graph_value(provenance.get("job_id"))
         if not job_id:
@@ -1202,7 +2050,7 @@ class AsipStore:
             "enforce_job_provenance": False,
             "freshness_floor_job_id": None,
             "valid_job_ids": set(),
-            "valid_job_ids_by_extractor": {"semantic_edges": set(), "doc_nodes": set()},
+            "valid_job_ids_by_extractor": {"semantic_edges": set(), "doc_nodes": set(), "blackbox_profiles": set()},
             "expected_provider": "",
             "expected_model": "",
         }
@@ -1224,7 +2072,11 @@ class AsipStore:
         latest_graph_rebuild_job_id: Optional[int] = None
         has_semantic_jobs = False
         valid_job_ids: set[int] = set()
-        valid_job_ids_by_extractor: Dict[str, set[int]] = {"semantic_edges": set(), "doc_nodes": set()}
+        valid_job_ids_by_extractor: Dict[str, set[int]] = {
+            "semantic_edges": set(),
+            "doc_nodes": set(),
+            "blackbox_profiles": set(),
+        }
         rows = self.con.execute("select id, kind, status, metadata_json from jobs order by id asc")
         for row in rows:
             job_id = _int_graph_value(row["id"])
@@ -1240,7 +2092,7 @@ class AsipStore:
             if kind == "graph_rebuild":
                 latest_graph_rebuild_job_id = max(latest_graph_rebuild_job_id or job_id, job_id)
                 continue
-            if kind not in {"semantic_edges", "semantic_edges_batch", "doc_nodes_batch"}:
+            if kind not in {"semantic_edges", "semantic_edges_batch", "doc_nodes_batch", "blackbox_profiles_batch"}:
                 continue
             has_semantic_jobs = True
             if not _semantic_graph_job_matches_provider(row, expected_provider, expected_model):
@@ -1250,6 +2102,8 @@ class AsipStore:
                 valid_job_ids_by_extractor["semantic_edges"].add(job_id)
             elif kind == "doc_nodes_batch":
                 valid_job_ids_by_extractor["doc_nodes"].add(job_id)
+            elif kind == "blackbox_profiles_batch":
+                valid_job_ids_by_extractor["blackbox_profiles"].add(job_id)
         freshness_floor_job_id = max(
             [job_id for job_id in (latest_index_job_id, latest_graph_rebuild_job_id) if job_id is not None],
             default=None,
@@ -1268,6 +2122,247 @@ class AsipStore:
     def _invalidate_runtime_graph_policy(self) -> None:
         if hasattr(self, "_runtime_semantic_graph_policy_cache"):
             delattr(self, "_runtime_semantic_graph_policy_cache")
+
+    def product_endpoint_inventory(
+        self,
+        function_view: str = "concept",
+        stages: Iterable[str] = ("deterministic",),
+        include_semantic_docs: bool = False,
+    ) -> List[Dict[str, object]]:
+        """Return the full AST-derived product endpoint universe, independent of display graph budgets."""
+
+        requested_view = str(function_view or "concept").strip() or "concept"
+        if requested_view == "both":
+            views = ("concept", "implementation")
+        elif requested_view in {"concept", "implementation"}:
+            views = (requested_view,)
+        else:
+            raise ValueError("function_view must be one of: concept, implementation, both")
+        stage_allowlist = {str(stage or "").strip() for stage in stages}
+        stage_allowlist.discard("")
+        if not stage_allowlist:
+            stage_allowlist = {"deterministic"}
+        function_rules_by_profile = self._graph_function_normalization_rules_by_profile()
+        register_normalization_by_profile = self._graph_register_normalization_by_profile()
+        candidates: Dict[tuple[str, str], Dict[str, object]] = {}
+
+        def remember_node(view: str, node: Mapping[str, object], stage: str) -> Dict[str, object]:
+            node_id = str(node.get("id") or "")
+            kind = str(node.get("kind") or "")
+            key = (view, node_id)
+            candidate = candidates.get(key)
+            if candidate is None:
+                candidate = {
+                    "candidate_id": f"{view}:{node_id}",
+                    "endpoint_id": node_id,
+                    "view": view,
+                    "kind": kind,
+                    "label": str(node.get("label") or _label_for_graph_node_id(node_id)),
+                    "attr": _boxmatrix_node_payload(node_id, kind, 1, node).get("attr", {}),
+                    "raw_ast_sources": [],
+                    "neighbors": [],
+                    "snippets": [],
+                    "_stages": set(),
+                }
+                candidates[key] = candidate
+            else:
+                merged_node = {
+                    "id": node_id,
+                    "kind": kind,
+                    "label": str(node.get("label") or ""),
+                    "attr": candidate.get("attr") if isinstance(candidate.get("attr"), Mapping) else {},
+                }
+                _merge_boxmatrix_metadata(merged_node, node)
+                candidate["attr"] = merged_node.get("attr", {})
+            stages_seen = candidate.setdefault("_stages", set())
+            if isinstance(stages_seen, set):
+                stages_seen.add(stage or "deterministic")
+            return candidate
+
+        def add_neighbor(candidate: Dict[str, object], direction: str, relation: str, neighbor: Mapping[str, object]) -> None:
+            neighbors = candidate.setdefault("neighbors", [])
+            if not isinstance(neighbors, list):
+                return
+            item = {
+                "direction": direction,
+                "relation": relation,
+                "endpoint_id": str(neighbor.get("id") or ""),
+                "kind": str(neighbor.get("kind") or ""),
+            }
+            if item["endpoint_id"] and item not in neighbors:
+                neighbors.append(item)
+
+        for row in self._runtime_graph_edge_rows(include_evidence_derived=include_semantic_docs):
+            stage = str(row["stage"] or "deterministic")
+            if stage not in stage_allowlist:
+                continue
+            src = str(row["src"])
+            dst = str(row["dst"])
+            if _is_graph_wrapper_hub(src) or _is_graph_wrapper_hub(dst):
+                continue
+            relation = _normalize_graph_relation(str(row["relation"] or ""))
+            if not relation:
+                continue
+            src_metadata = _metadata_from_edge_provenance(row, src)
+            dst_metadata = _metadata_from_edge_provenance(row, dst)
+            for view in views:
+                src_node = _product_graph_node(
+                    src,
+                    _kind_for_graph_symbol(src),
+                    src_metadata,
+                    function_view=view,
+                    function_rules_by_profile=function_rules_by_profile,
+                    register_normalization_by_profile=register_normalization_by_profile,
+                )
+                dst_node = _product_graph_node(
+                    dst,
+                    _kind_for_graph_symbol(dst),
+                    dst_metadata,
+                    function_view=view,
+                    function_rules_by_profile=function_rules_by_profile,
+                    register_normalization_by_profile=register_normalization_by_profile,
+                )
+                if src_node is None or dst_node is None:
+                    continue
+                src_candidate = remember_node(view, src_node, stage)
+                dst_candidate = remember_node(view, dst_node, stage)
+                add_neighbor(src_candidate, "out", relation, dst_node)
+                add_neighbor(dst_candidate, "in", relation, src_node)
+
+        for candidate in candidates.values():
+            attr = candidate.get("attr") if isinstance(candidate.get("attr"), Mapping) else {}
+            source_records = attr.get("source") if isinstance(attr.get("source"), list) else []
+            raw_implementations = (
+                attr.get("raw_implementations") if isinstance(attr.get("raw_implementations"), list) else []
+            )
+            candidate["raw_ast_sources"] = _dedupe_mapping_records([*source_records, *raw_implementations])
+            neighbors = candidate.get("neighbors") if isinstance(candidate.get("neighbors"), list) else []
+            relationship_endpoints = _dedupe_strings(
+                [
+                    str(candidate.get("endpoint_id") or ""),
+                    *[
+                        str(neighbor.get("endpoint_id") or "")
+                        for neighbor in neighbors
+                        if isinstance(neighbor, Mapping)
+                    ],
+                ]
+            )
+            candidate["allowlist"] = {
+                "profile_ids": [str(candidate.get("endpoint_id") or "")],
+                "relationship_endpoints": relationship_endpoints,
+                "relations": sorted(ALLOWED_PRODUCT_RELATIONS),
+            }
+            stages_seen = candidate.pop("_stages", set())
+            if isinstance(stages_seen, set) and "deterministic" in stages_seen:
+                stage_label = "deterministic"
+            elif isinstance(stages_seen, set) and stages_seen:
+                stage_label = sorted(stages_seen)[0]
+            else:
+                stage_label = "deterministic"
+            candidate["coverage_bucket"] = f"{stage_label}:{candidate.get('kind') or 'unknown'}"
+            if isinstance(neighbors, list):
+                neighbors.sort(
+                    key=lambda neighbor: (
+                        str(neighbor.get("direction") or "") if isinstance(neighbor, Mapping) else "",
+                        str(neighbor.get("relation") or "") if isinstance(neighbor, Mapping) else "",
+                        str(neighbor.get("endpoint_id") or "") if isinstance(neighbor, Mapping) else "",
+                    )
+                )
+
+        return sorted(
+            candidates.values(),
+            key=lambda candidate: (
+                str(candidate.get("view") or ""),
+                str(candidate.get("kind") or ""),
+                str(candidate.get("endpoint_id") or ""),
+            ),
+        )
+
+    def project_to_product_graph(
+        self,
+        function_view: str = "concept",
+        include_semantic: bool = True,
+    ) -> Dict[str, object]:
+        function_rules_by_profile = self._graph_function_normalization_rules_by_profile()
+        register_normalization_by_profile = self._graph_register_normalization_by_profile()
+        known_function_metadata = self._known_graph_function_metadata() if include_semantic else {}
+        known_function_symbols = set(known_function_metadata)
+
+        node_map: Dict[str, Dict[str, object]] = {}
+        edges: List[Dict[str, object]] = []
+
+        for row in self._runtime_graph_edge_rows(include_evidence_derived=include_semantic):
+            src = str(row["src"])
+            dst = str(row["dst"])
+            stage = str(row["stage"] or "deterministic")
+            relation = str(row["relation"] or "")
+
+            if _is_graph_wrapper_hub(src) or _is_graph_wrapper_hub(dst):
+                continue
+            if _is_blackbox_profile_self_edge_row(row):
+                continue
+
+            src_metadata = _metadata_from_edge_provenance(row, src)
+            dst_metadata = _metadata_from_edge_provenance(row, dst)
+
+            if stage == "semantic" and known_function_symbols:
+                src_metadata = _merge_graph_metadata(known_function_metadata.get(src, {}), src_metadata)
+                dst_metadata = _merge_graph_metadata(known_function_metadata.get(dst, {}), dst_metadata)
+
+            known_for_semantic = known_function_symbols if stage == "semantic" else None
+            src_node = _product_graph_node(
+                src,
+                _kind_for_graph_symbol(src),
+                src_metadata,
+                known_function_symbols=known_for_semantic,
+                function_view=function_view,
+                function_rules_by_profile=function_rules_by_profile,
+                register_normalization_by_profile=register_normalization_by_profile,
+            )
+            dst_node = _product_graph_node(
+                dst,
+                _kind_for_graph_symbol(dst),
+                dst_metadata,
+                known_function_symbols=known_for_semantic,
+                function_view=function_view,
+                function_rules_by_profile=function_rules_by_profile,
+                register_normalization_by_profile=register_normalization_by_profile,
+            )
+            if src_node is None or dst_node is None:
+                continue
+
+            normalized_relation = (
+                _normalize_graph_relation(relation)
+                if stage != "semantic"
+                else relation
+            )
+            if not normalized_relation and stage != "semantic":
+                continue
+
+            node_map[str(src_node["id"])] = src_node
+            node_map[str(dst_node["id"])] = dst_node
+
+            edges.append({
+                "src": str(src_node["id"]),
+                "dst": str(dst_node["id"]),
+                "relation": normalized_relation,
+                "confidence": float(row["confidence"]),
+                "stage": stage,
+                "source": str(row["source"] or ""),
+            })
+
+        seen: set[tuple[str, str, str]] = set()
+        deduped = []
+        for edge in edges:
+            key = (edge["src"], edge["relation"], edge["dst"])
+            if key not in seen:
+                seen.add(key)
+                deduped.append(edge)
+
+        return {
+            "nodes": [node_map[nid] for nid in sorted(node_map)],
+            "edges": sorted(deduped, key=lambda e: (-e["confidence"], e["src"], e["dst"], e["relation"])),
+        }
 
     def expand_graph_networkx(
         self,
@@ -1354,6 +2449,9 @@ class AsipStore:
                 dst = str(row["dst"])
                 if _is_graph_wrapper_hub(src) or _is_graph_wrapper_hub(dst):
                     continue
+                if _is_blackbox_profile_self_edge_row(row):
+                    seen.add(src)
+                    continue
                 selected_rows[int(row["id"])] = row
                 for endpoint in (src, dst):
                     if endpoint not in seen:
@@ -1408,6 +2506,18 @@ class AsipStore:
             src_metadata = _metadata_from_networkx_edge_data(data, str(src))
             dst_metadata = _metadata_from_networkx_edge_data(data, str(dst))
             stage = str(data.get("stage") or "deterministic")
+            if _is_blackbox_profile_self_edge_data(str(src), str(dst), data):
+                profile_node = _product_graph_node(
+                    str(src),
+                    _kind_for_graph_symbol(str(src)),
+                    _merge_graph_metadata(src_metadata, dst_metadata),
+                    function_view=function_view,
+                    function_rules_by_profile=function_rules_by_profile,
+                    register_normalization_by_profile=register_normalization_by_profile,
+                )
+                if profile_node is not None:
+                    remember_payload(str(profile_node["id"]), str(profile_node["kind"]), profile_node)
+                continue
             if stage == "semantic":
                 src_metadata = _merge_graph_metadata(known_function_metadata.get(str(src), {}), src_metadata)
                 dst_metadata = _merge_graph_metadata(known_function_metadata.get(str(dst), {}), dst_metadata)
@@ -1583,10 +2693,28 @@ class AsipStore:
             relation = _normalize_graph_relation(original_relation)
             if relation == "":
                 return
-            if not src or not dst or src == dst:
+            if not src or not dst:
                 return
             if _is_graph_wrapper_hub(src) or _is_graph_wrapper_hub(dst):
                 return
+            if src == dst:
+                profile_metadata = _merge_graph_metadata(src_metadata or {}, dst_metadata or {})
+                if isinstance(profile_metadata.get("blackbox"), Mapping):
+                    profile_node = _product_graph_node(
+                        src,
+                        src_kind,
+                        profile_metadata,
+                        function_view=function_view,
+                        function_rules_by_profile=function_rules_by_profile,
+                        register_normalization_by_profile=register_normalization_by_profile,
+                    )
+                    if profile_node is not None:
+                        if compact:
+                            node_kinds.setdefault(str(profile_node["id"]), str(profile_node.get("kind") or src_kind))
+                            _remember_compact_graph_node(node_metadata, profile_node)
+                        else:
+                            remember_node(profile_node)
+                    return
             if stage == "semantic" and not compact:
                 semantic_metadata, semantic_symbols = semantic_function_metadata()
                 src_metadata = _merge_graph_metadata(semantic_metadata.get(src, {}), src_metadata)
@@ -1646,6 +2774,8 @@ class AsipStore:
                     "job_ids": set(),
                     "resolver_profile_ids": set(),
                     "resolver_wrappers": set(),
+                    "extractors": set(),
+                    "relationship_sources": set(),
                     "original_relations": set(),
                     "dispatch_scopes": set(),
                     "call_kinds": set(),
@@ -1672,6 +2802,7 @@ class AsipStore:
             _merge_edge_attr_stats(stats, src_node)
             _merge_edge_attr_stats(stats, dst_node)
             _merge_callback_dispatch_stats(stats, src_metadata or {}, dst_metadata or {})
+            _merge_graph_layer_stats(stats, src_metadata or {}, dst_metadata or {})
             if compact:
                 node_kinds.setdefault(src, str(src_node.get("kind") or src_kind))
                 node_kinds.setdefault(dst, str(dst_node.get("kind") or dst_kind))
@@ -1838,6 +2969,7 @@ class AsipStore:
                     if isinstance(node, Mapping):
                         remember_node(node)
                 _append_boxmatrix_io(node_metadata, edge)
+        self._merge_blackbox_profile_table_metadata(node_metadata)
         _mark_function_concept_divergence(node_metadata, selected_edges, function_rules_by_profile)
         if not selected_edges:
             for node in node_metadata:
@@ -1856,6 +2988,85 @@ class AsipStore:
             "edges": selected_edges,
             "graph_runtime": "networkx",
         }
+
+    def _merge_blackbox_profile_table_metadata(self, node_metadata: Dict[str, Dict[str, object]]) -> None:
+        if not node_metadata or not self._table_exists("blackbox_profiles"):
+            return
+        profile_by_endpoint = self._latest_usable_blackbox_profiles(set(node_metadata))
+        for endpoint_id, profile in profile_by_endpoint.items():
+            metadata = node_metadata.setdefault(
+                endpoint_id,
+                _empty_boxmatrix_metadata(endpoint_id, str(profile.get("endpoint_kind") or _kind_for_graph_symbol(endpoint_id))),
+            )
+            _merge_boxmatrix_metadata(
+                metadata,
+                {
+                    "id": endpoint_id,
+                    "kind": str(profile.get("endpoint_kind") or _kind_for_graph_symbol(endpoint_id)),
+                    "attr": {
+                        "blackbox": profile.get("profile") if isinstance(profile.get("profile"), Mapping) else {},
+                        "blackbox_generation": _blackbox_generation_metadata_for_graph(
+                            profile.get("metadata") if isinstance(profile.get("metadata"), Mapping) else {}
+                        ),
+                        "provider": profile.get("provider"),
+                        "model": profile.get("model"),
+                        "job_id": profile.get("job_id"),
+                        "validator_version": profile.get("validator_version"),
+                        "candidate_id": profile.get("candidate_id"),
+                        "blackbox_profile_id": profile.get("id"),
+                    },
+                },
+            )
+
+    def _latest_usable_blackbox_profiles(self, endpoint_ids: set[str]) -> Dict[str, Dict[str, object]]:
+        if not endpoint_ids or not self._table_exists("blackbox_profiles"):
+            return {}
+        placeholders = ",".join("?" for _ in endpoint_ids)
+        rows = self.con.execute(
+            f"""
+            select id, endpoint_id, view, endpoint_kind, profile_json, provider, model, job_id,
+              batch_id, attempt_id, candidate_id, prompt_sha256, response_sha256,
+              validator_version, status, metadata_json, created_at
+            from blackbox_profiles
+            where endpoint_id in ({placeholders})
+            order by id desc
+            """,
+            tuple(endpoint_ids),
+        ).fetchall()
+        latest: Dict[str, Dict[str, object]] = {}
+        for row in rows:
+            endpoint_id = str(row["endpoint_id"] or "")
+            if endpoint_id in latest:
+                continue
+            if not self._blackbox_profile_row_is_usable(row):
+                continue
+            latest[endpoint_id] = _blackbox_profile_row_payload(row)
+        return latest
+
+    def _blackbox_profile_row_is_usable(self, row: sqlite3.Row) -> bool:
+        if str(row["status"] or "") not in {"accepted", "persisted", "repaired", "generated"}:
+            return False
+        policy = self._runtime_semantic_graph_policy()
+        job_id = _int_graph_value(row["job_id"])
+        if not job_id:
+            return False
+        valid_job_ids_by_extractor = policy.get("valid_job_ids_by_extractor")
+        if isinstance(valid_job_ids_by_extractor, Mapping):
+            valid_blackbox_job_ids = valid_job_ids_by_extractor.get("blackbox_profiles")
+            if not isinstance(valid_blackbox_job_ids, set) or job_id not in valid_blackbox_job_ids:
+                return False
+        elif job_id not in policy["valid_job_ids"]:
+            return False
+        expected_provider = str(policy.get("expected_provider") or "")
+        expected_model = str(policy.get("expected_model") or "")
+        if expected_provider and str(row["provider"] or "") != expected_provider:
+            return False
+        if expected_model and str(row["model"] or "") != expected_model:
+            return False
+        freshness_floor = policy["freshness_floor_job_id"]
+        if freshness_floor is not None and job_id < int(freshness_floor):
+            return False
+        return True
 
     def _evidence_row_count_within_cap(self, cap: int) -> bool:
         if cap <= 0:
@@ -2168,6 +3379,11 @@ def _register_graph_node(
         "resolver_wrappers": _string_values(metadata.get("resolver_wrappers"), metadata.get("wrapper")),
     }
     attr.update(_provider_metadata_for_graph(metadata))
+    if isinstance(metadata.get("blackbox"), Mapping):
+        attr["blackbox"] = metadata["blackbox"]
+        generation = _blackbox_generation_metadata_for_graph(metadata)
+        if generation:
+            attr["blackbox_generation"] = generation
     return {"id": node_id, "kind": "register", "label": register_symbol, "attr": attr, "in": [], "out": []}
 
 
@@ -2207,6 +3423,11 @@ def _function_graph_node(
         "resolver_wrappers": _string_values(metadata.get("resolver_wrappers"), metadata.get("wrapper")),
     }
     attr.update(_provider_metadata_for_graph(metadata))
+    if isinstance(metadata.get("blackbox"), Mapping):
+        attr["blackbox"] = metadata["blackbox"]
+        generation = _blackbox_generation_metadata_for_graph(metadata)
+        if generation:
+            attr["blackbox_generation"] = generation
     for key in ("ip_block", "ip_version"):
         if concept.get(key) not in ("", None, 0):
             attr[key] = concept[key]
@@ -2237,6 +3458,11 @@ def _document_graph_node(symbol: str, kind: str, metadata: Mapping[str, object])
         "resolver_wrappers": _string_values(metadata.get("resolver_wrappers"), metadata.get("wrapper")),
     }
     attr.update(_provider_metadata_for_graph(metadata))
+    if isinstance(metadata.get("blackbox"), Mapping):
+        attr["blackbox"] = metadata["blackbox"]
+        generation = _blackbox_generation_metadata_for_graph(metadata)
+        if generation:
+            attr["blackbox_generation"] = generation
     page = _doc_page_for_graph(metadata, str(attr["anchor"]))
     if page:
         attr["page"] = page
@@ -2259,6 +3485,23 @@ def _provider_metadata_for_graph(metadata: Mapping[str, object]) -> Dict[str, ob
         "job_ids": _string_values(metadata.get("job_id"), metadata.get("job_ids")),
     }
     return {key: _dedupe_strings(value) for key, value in values.items() if value}
+
+
+def _blackbox_generation_metadata_for_graph(metadata: Mapping[str, object]) -> Dict[str, object]:
+    reconcile = metadata.get("reconcile") if isinstance(metadata.get("reconcile"), Mapping) else {}
+    payload: Dict[str, object] = {}
+    for key in ("sample_count", "required_agreeing_samples", "accepted_sample_count", "winner_sample_index"):
+        value = metadata.get(key, reconcile.get(key))
+        if value not in ("", None, 0, [], {}):
+            payload[key] = value
+    for key in ("validator_status", "reason_codes", "evidence_refs", "provider_response_id", "provider_response_ids"):
+        value = metadata.get(key)
+        if value not in ("", None, 0, [], {}):
+            payload[key] = value
+    validator_statuses = reconcile.get("validator_statuses")
+    if validator_statuses not in ("", None, 0, [], {}):
+        payload["validator_statuses"] = validator_statuses
+    return payload
 
 
 def _function_concept_for_graph(
@@ -2627,6 +3870,8 @@ def _remember_compact_graph_node(node_metadata: Dict[str, Dict[str, object]], no
         "normalization_rule",
         "normalization_profile_id",
         "merge_status",
+        "blackbox",
+        "blackbox_generation",
     ):
         value = attr.get(key)
         if value not in (None, "", [], {}):
@@ -2773,6 +4018,10 @@ def _merge_edge_attr_stats(stats: Dict[str, object], node: Mapping[str, object])
         stats.setdefault("models", set()).add(model)
     for job_id in _string_values(attr.get("job_id"), attr.get("job_ids")):
         stats.setdefault("job_ids", set()).add(job_id)
+    for extractor in _string_values(attr.get("extractor"), attr.get("extractors")):
+        stats.setdefault("extractors", set()).add(extractor)
+    for relationship_source in _string_values(attr.get("relationship_source"), attr.get("relationship_sources")):
+        stats.setdefault("relationship_sources", set()).add(relationship_source)
     for profile_id in _resolver_profile_ids_for_graph(attr):
         stats.setdefault("resolver_profile_ids", set()).add(profile_id)
     for wrapper in _string_values(attr.get("resolver_wrappers")):
@@ -2811,6 +4060,18 @@ def _merge_callback_dispatch_stats(
             stats["callback_ambiguous"] = True
 
 
+def _merge_graph_layer_stats(
+    stats: Dict[str, object],
+    src_metadata: Mapping[str, object],
+    dst_metadata: Mapping[str, object],
+) -> None:
+    for metadata in (src_metadata, dst_metadata):
+        for extractor in _string_values(metadata.get("extractor"), metadata.get("extractors")):
+            stats.setdefault("extractors", set()).add(extractor)
+        for relationship_source in _string_values(metadata.get("relationship_source"), metadata.get("relationship_sources")):
+            stats.setdefault("relationship_sources", set()).add(relationship_source)
+
+
 def _merge_callback_provenance_stats(stats: Dict[str, object], metadata: Mapping[str, object]) -> None:
     for key in _CALLBACK_PROVENANCE_GRAPH_KEYS:
         for value in _string_values(metadata.get(key)):
@@ -2824,6 +4085,8 @@ def _edge_attr_payload(stats: Mapping[str, object]) -> Dict[str, object]:
         "providers": sorted(str(value) for value in stats.get("providers", set()) if value),
         "models": sorted(str(value) for value in stats.get("models", set()) if value),
         "job_ids": sorted(str(value) for value in stats.get("job_ids", set()) if value),
+        "extractors": sorted(str(value) for value in stats.get("extractors", set()) if value),
+        "relationship_sources": sorted(str(value) for value in stats.get("relationship_sources", set()) if value),
         "resolver_profile_ids": sorted(str(value) for value in stats.get("resolver_profile_ids", set()) if value),
         "resolver_wrappers": sorted(str(value) for value in stats.get("resolver_wrappers", set()) if value),
     }
@@ -3426,10 +4689,7 @@ def _kind_for_graph_symbol(symbol: str) -> str:
 
 
 def _has_register_prefix_alias(symbol: str) -> bool:
-    return any(
-        symbol.startswith(prefix) and len(symbol) > len(prefix) and symbol[len(prefix)].isupper()
-        for prefix in ("reg", "mm", "smn")
-    )
+    return is_register_symbol(symbol)
 
 
 def _is_graph_wrapper_hub(symbol: str) -> bool:
@@ -3619,8 +4879,17 @@ def _metadata_from_networkx_edge_data(data: Mapping[str, object], endpoint: str)
         "resolver_wrappers",
         "wrapper",
         "job_id",
+        "extractor",
+        "relationship_source",
         "original_relation",
         "original_relations",
+        "sample_count",
+        "reconcile",
+        "validator_status",
+        "reason_codes",
+        "evidence_refs",
+        "provider_response_id",
+        "provider_response_ids",
         "call_kind",
         "dispatch_scope",
         "callback_ambiguous",
@@ -3630,9 +4899,81 @@ def _metadata_from_networkx_edge_data(data: Mapping[str, object], endpoint: str)
         value = provenance.get(key)
         if value not in ("", None, 0):
             metadata[key] = value
+    _apply_blackbox_profile_metadata(metadata, provenance, endpoint)
     _apply_endpoint_function_metadata(metadata, provenance, endpoint)
     metadata.setdefault("symbol", endpoint)
     return metadata
+
+
+def _is_blackbox_profile_self_edge_row(row: Mapping[str, object]) -> bool:
+    return _is_blackbox_profile_self_edge_data(str(row["src"]), str(row["dst"]), row)
+
+
+def _is_blackbox_profile_self_edge_data(src: str, dst: str, data: Mapping[str, object]) -> bool:
+    if src != dst:
+        return False
+    provenance_json = data.get("provenance_json") if hasattr(data, "get") else data["provenance_json"]
+    try:
+        provenance = json.loads(str(provenance_json or "{}"))
+    except json.JSONDecodeError:
+        return False
+    return str(provenance.get("extractor") or "") == "blackbox_profiles"
+
+
+def _stable_json_sha256(value: object) -> str:
+    return hashlib.sha256(json.dumps(value, sort_keys=True, default=str).encode("utf-8")).hexdigest()
+
+
+def _degree_bucket_for_count(degree: int) -> str:
+    if degree <= 0:
+        return "degree_0"
+    if degree <= 2:
+        return "degree_1_2"
+    if degree <= 8:
+        return "degree_3_8"
+    return "degree_9_plus"
+
+
+def _row_with_json(row: sqlite3.Row, json_fields: Iterable[str]) -> Dict[str, object]:
+    payload: Dict[str, object] = dict(row)
+    for field in json_fields:
+        raw = payload.get(field)
+        try:
+            payload[field.replace("_json", "")] = json.loads(str(raw or "{}"))
+        except json.JSONDecodeError:
+            payload[field.replace("_json", "")] = {} if str(field).endswith("_json") else raw
+        payload.pop(field, None)
+    return payload
+
+
+def _blackbox_profile_row_payload(row: sqlite3.Row) -> Dict[str, object]:
+    try:
+        profile = json.loads(str(row["profile_json"] or "{}"))
+    except json.JSONDecodeError:
+        profile = {}
+    try:
+        metadata = json.loads(str(row["metadata_json"] or "{}"))
+    except json.JSONDecodeError:
+        metadata = {}
+    return {
+        "id": int(row["id"]),
+        "endpoint_id": str(row["endpoint_id"] or ""),
+        "view": str(row["view"] or ""),
+        "endpoint_kind": str(row["endpoint_kind"] or ""),
+        "profile": profile if isinstance(profile, dict) else {},
+        "provider": str(row["provider"] or ""),
+        "model": str(row["model"] or ""),
+        "job_id": int(row["job_id"]),
+        "batch_id": _int_graph_value(row["batch_id"]),
+        "attempt_id": _int_graph_value(row["attempt_id"]),
+        "candidate_id": str(row["candidate_id"] or ""),
+        "prompt_sha256": str(row["prompt_sha256"] or ""),
+        "response_sha256": str(row["response_sha256"] or ""),
+        "validator_version": str(row["validator_version"] or ""),
+        "status": str(row["status"] or ""),
+        "metadata": metadata if isinstance(metadata, dict) else {},
+        "created_at": str(row["created_at"] or ""),
+    }
 
 
 def _metadata_from_edge_provenance(row: sqlite3.Row, endpoint: str) -> Dict[str, object]:
@@ -3664,6 +5005,8 @@ def _metadata_from_edge_provenance(row: sqlite3.Row, endpoint: str) -> Dict[str,
         "resolver_wrappers",
         "wrapper",
         "job_id",
+        "extractor",
+        "relationship_source",
         "original_relation",
         "original_relations",
         "call_kind",
@@ -3675,6 +5018,7 @@ def _metadata_from_edge_provenance(row: sqlite3.Row, endpoint: str) -> Dict[str,
         value = provenance.get(key)
         if value not in ("", None, 0):
             metadata[key] = value
+    _apply_blackbox_profile_metadata(metadata, provenance, endpoint)
     _apply_endpoint_function_metadata(metadata, provenance, endpoint)
     metadata.setdefault("symbol", endpoint)
     if str(provenance.get("extractor") or "") == "doc_nodes" and str(provenance.get("box_node_id") or "") == endpoint:
@@ -3695,17 +5039,92 @@ def _metadata_from_edge_provenance(row: sqlite3.Row, endpoint: str) -> Dict[str,
     return metadata
 
 
+def _apply_blackbox_profile_metadata(
+    metadata: Dict[str, object],
+    provenance: Mapping[str, object],
+    endpoint: str,
+) -> None:
+    if str(provenance.get("extractor") or "") != "blackbox_profiles":
+        return
+    profile_endpoint_id = str(provenance.get("endpoint_id") or "").strip()
+    relation_endpoints = {
+        str(provenance.get("src_endpoint_id") or "").strip(),
+        str(provenance.get("dst_endpoint_id") or "").strip(),
+    }
+    is_profile_endpoint = bool(profile_endpoint_id and endpoint == profile_endpoint_id)
+    is_relation_endpoint = endpoint in relation_endpoints
+    endpoint_id = endpoint if is_relation_endpoint else profile_endpoint_id
+    if profile_endpoint_id and not is_profile_endpoint and not is_relation_endpoint:
+        return
+    if not endpoint_id and relation_endpoints != {""} and endpoint not in relation_endpoints:
+        return
+    for key, value in _metadata_from_product_endpoint_id(endpoint).items():
+        if is_relation_endpoint and not is_profile_endpoint:
+            metadata[key] = value
+        else:
+            metadata.setdefault(key, value)
+    blackbox = provenance.get("blackbox")
+    if is_profile_endpoint and isinstance(blackbox, Mapping):
+        metadata["blackbox"] = {
+            str(key): value
+            for key, value in blackbox.items()
+            if value not in ("", None, [], {})
+        }
+    for key in ("endpoint_kind", "label", "symbol", "function", "function_name", "doc_kind", "anchor"):
+        value = provenance.get(key)
+        if value not in ("", None, 0) and (is_profile_endpoint or key not in {"symbol", "function", "function_name"}):
+            metadata[key] = value
+
+
+def _metadata_from_product_endpoint_id(endpoint: str) -> Dict[str, object]:
+    if endpoint.startswith("function:"):
+        function_name = endpoint.rsplit(":", 1)[-1]
+        parts = endpoint.split(":")
+        path = parts[-2] if len(parts) >= 4 else ""
+        scope = parts[1] if len(parts) >= 2 else "unknown"
+        return {
+            "endpoint_kind": "function",
+            "symbol": function_name,
+            "function": function_name,
+            "function_name": function_name,
+            "corpus_id": scope,
+            "path": path,
+        }
+    if endpoint.startswith("register:"):
+        parts = endpoint.split(":")
+        symbol = parts[-1]
+        return {
+            "endpoint_kind": "register",
+            "symbol": symbol,
+            "ip": parts[1] if len(parts) >= 3 else "",
+        }
+    if endpoint.startswith(("doc:", "doc_box:", "doc_section:", "pdf_section:")) or "#" in endpoint:
+        return {"endpoint_kind": "doc", "symbol": endpoint}
+    return {}
+
+
 def _apply_endpoint_function_metadata(
     metadata: Dict[str, object],
     provenance: Mapping[str, object],
     endpoint: str,
 ) -> None:
-    if endpoint == str(provenance.get("function") or ""):
-        metadata["function_name"] = endpoint
+    existing_function_name = str(metadata.get("function_name") or "").strip()
+    if existing_function_name and (endpoint == existing_function_name or endpoint.endswith(f":{existing_function_name}")):
+        metadata["function"] = existing_function_name
+        metadata["function_name"] = existing_function_name
         return
-    if endpoint != str(provenance.get("callee") or ""):
+    function_name = str(provenance.get("function") or provenance.get("function_name") or "").strip()
+    if function_name and (endpoint == function_name or endpoint.endswith(f":{function_name}")):
+        metadata["function"] = function_name
+        metadata["function_name"] = function_name
         return
-    metadata["function_name"] = endpoint
+    callee = str(provenance.get("callee") or "").strip()
+    if not callee or (endpoint != callee and not endpoint.endswith(f":{callee}")):
+        metadata.pop("function", None)
+        metadata.pop("function_name", None)
+        return
+    metadata["function"] = callee
+    metadata["function_name"] = callee
     callback_path = str(provenance.get("callee_path") or provenance.get("callback_path") or "").strip()
     if callback_path:
         metadata["path"] = callback_path
@@ -4049,6 +5468,11 @@ def _semantic_graph_job_matches_provider(row: sqlite3.Row, expected_provider: st
 
 
 def _is_protected_global_edge(edge: Mapping[str, object]) -> bool:
+    attr = edge.get("attr") if isinstance(edge.get("attr"), Mapping) else {}
+    if "blackbox_profiles" in _string_values(attr.get("extractor"), attr.get("extractors")):
+        return True
+    if "blackbox_profile_boundary" in _string_values(attr.get("relationship_source"), attr.get("relationship_sources")):
+        return True
     if str(edge.get("stage") or "") == "semantic":
         return True
     if str(edge.get("relation") or "") in {"contains_box", "section_mentions"}:

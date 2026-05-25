@@ -14,6 +14,11 @@ const currentArtifactOptions = new Set([
   "--callback-audit-json",
   "--acceptance-json",
   "--web-acceptance-json",
+  "--blackbox-provider-json",
+  "--blackbox-ledger-json",
+  "--blackbox-coverage-json",
+  "--blackbox-residual-json",
+  "--blackbox-full-generation-json",
   "--completion-json",
   "--web-package-json"
 ]);

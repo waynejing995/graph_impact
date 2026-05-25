@@ -1256,6 +1256,79 @@ test("semantic edges API supports LLM document node extraction", async ({ reques
   }
 });
 
+test("semantic edges API supports blackbox profile generation", async ({ request }) => {
+  const edgeServer = await startFakeOllamaEdgeServer();
+  const root = mkdtempSync(path.join(tmpdir(), "asip-blackbox-api-"));
+  const dbPath = path.join(root, "blackbox.db");
+  seedBlackboxGraphDb(dbPath, edgeServer.baseUrl);
+
+  try {
+    const response = await request.post("/api/workbench/semantic-edges", {
+      data: {
+        dbPath,
+        mode: "blackbox-profiles",
+        limit: 2,
+        batchSize: 2,
+        sampleCount: 3,
+        retryCount: 2,
+        phase: "calibration",
+        selectionSeed: "api-blackbox-seed",
+        shardCount: 1,
+        shardIndex: 0
+      }
+    });
+
+    expect(response.ok()).toBe(true);
+    const body = (await response.json()) as {
+      source: string;
+      inventory_total: number;
+      candidate_count: number;
+      sample_count: number;
+      retry_count: number;
+      profile_count: number;
+      edge_count: number;
+      selection_manifest?: { phase?: string; selection_seed?: string; shard_count?: number; shard_index?: number };
+      ledger: Array<{ kind: string; attempts: Array<{ status: string }> }>;
+      graph: { nodes: Array<{ id: string; kind: string; attr?: Record<string, unknown> }> };
+    };
+    expect(body).toMatchObject({
+      source: "blackbox_profile_batch_job",
+      candidate_count: 2,
+      sample_count: 3,
+      retry_count: 2,
+      profile_count: 1
+    });
+    expect(body.inventory_total).toBeGreaterThanOrEqual(2);
+    expect(body.edge_count).toBeGreaterThanOrEqual(1);
+    expect(body.selection_manifest).toMatchObject({
+      phase: "calibration",
+      selection_seed: "api-blackbox-seed",
+      shard_count: 1,
+      shard_index: 0
+    });
+    expect(body.ledger[0].kind).toBe("blackbox_profiles");
+    expect(body.ledger[0].attempts.map((attempt) => attempt.status)).toContain("accepted");
+    expect(body.graph.nodes).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          id: "function:test:driver.c:program_l2",
+          kind: "function",
+          attr: expect.objectContaining({
+            blackbox: expect.objectContaining({
+              method: "blackbox_io",
+              observed_behavior: expect.stringContaining("L2 control register")
+            })
+          })
+        })
+      ])
+    );
+  } finally {
+    await new Promise<void>((resolve, reject) => {
+      edgeServer.server.close((error) => (error ? reject(error) : resolve()));
+    });
+  }
+});
+
 function createEmptySqliteDb(dbPath: string) {
   const result = spawnSync(
     "python3",
@@ -1633,7 +1706,31 @@ async function startFakeOllamaEdgeServer(): Promise<{ server: Server; baseUrl: s
     request.on("end", () => {
       const body = JSON.parse(Buffer.concat(chunks).toString("utf8")) as { messages?: Array<{ content?: string }> };
       const prompt = body.messages?.map((message) => message.content ?? "").join("\n") ?? "";
-      const content = prompt.includes("BoxMatrix")
+      const content = prompt.includes("black box node profiles")
+        ? {
+            profiles: [
+              {
+                id: "function:test:driver.c:program_l2",
+                method: "blackbox_io",
+                inputs: ["GCVM_L2_CNTL enable request"],
+                outputs: ["writes GCVM_L2_CNTL"],
+                observed_behavior: "program_l2 writes the L2 control register",
+                explanation_layer: "explains cache setup behavior",
+                confidence: 0.86,
+                evidence: "program_l2 writes GCVM_L2_CNTL"
+              }
+            ],
+            relationships: [
+              {
+                src: "function:test:driver.c:program_l2",
+                relation: "writes",
+                dst: "register:GC:GCVM_L2_CNTL",
+                confidence: 0.82,
+                evidence: "write to GCVM_L2_CNTL"
+              }
+            ]
+          }
+        : prompt.includes("BoxMatrix")
         ? {
             documents: [
               {
@@ -1688,6 +1785,61 @@ async function startFakeOllamaEdgeServer(): Promise<{ server: Server; baseUrl: s
   });
   const address = server.address() as AddressInfo;
   return { server, baseUrl: `http://127.0.0.1:${address.port}` };
+}
+
+function seedBlackboxGraphDb(dbPath: string, edgeBaseUrl: string) {
+  const repoRoot = path.resolve(process.cwd(), "../..");
+  const script = String.raw`
+import sys
+from pathlib import Path
+from asip.storage import AsipStore
+from asip.workbench import save_provider_settings
+
+db_path = Path(sys.argv[1])
+edge_base_url = sys.argv[2]
+store = AsipStore.connect(str(db_path))
+store.migrate()
+store.add_edge(
+    "program_l2",
+    "GCVM_L2_CNTL",
+    "writes",
+    0.97,
+    stage="deterministic",
+    source="clang_ast",
+    path="driver.c",
+    provenance={
+        "extractor": "code_graph",
+        "corpus_id": "test",
+        "repo": "local",
+        "function": "program_l2",
+        "function_name": "program_l2",
+        "ip": "GC",
+    },
+)
+store.con.close()
+save_provider_settings(
+    db_path,
+    {
+        "edge": {
+            "provider": "ollama",
+            "base_url": edge_base_url,
+            "api_path": "/api/chat",
+            "model": "gemma4:e4b",
+            "timeout_seconds": 2,
+        }
+    },
+)
+`;
+  const result = spawnSync("python3", ["-c", script, dbPath, edgeBaseUrl], {
+    cwd: repoRoot,
+    env: {
+      ...process.env,
+      PYTHONDONTWRITEBYTECODE: "1",
+      PYTHONPATH: [path.join(repoRoot, "packages/core/src"), path.join(repoRoot, "packages/core/tests"), repoRoot].join(":")
+    },
+    encoding: "utf8"
+  });
+  expect(result.status, result.stderr || result.stdout).toBe(0);
 }
 
 test("resolver profiles API reads committed configurable profiles", async ({ request }) => {

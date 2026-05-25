@@ -2214,6 +2214,12 @@ test("graph page loads current data/asip.db through browser and API", async ({ p
   const currentGraphKinds = new Set(graphPayload.nodes.map((node) => node.kind));
   expect(currentGraphKinds.has("function")).toBe(true);
   expect(currentGraphKinds.has("register")).toBe(true);
+  expect([...currentGraphKinds].every((kind) => ["function", "register", "doc"].includes(String(kind)))).toBe(true);
+  const wrapperHubIds = graphPayload.nodes.filter((node) => {
+    const nid = String(node.id ?? "");
+    return /^(?:WREG32|RREG32|WREG32_SOC15|RREG32_SOC15|WREG32_FIELD|AMDGV_WRITE_REG)\b/.test(nid);
+  });
+  expect(wrapperHubIds.length).toBe(0);
   expect(
     graphPayload.nodes.some((node) =>
       (node.attr?.source ?? []).some(
@@ -2409,7 +2415,9 @@ test("graph page filters no-mock graph layers and shows edge provenance", async 
   const graphPanel = page.getByTestId("global-network-graph");
   const forceGraph = page.getByTestId("force-graph");
   await expect(forceGraph).toHaveAttribute("data-ready", "true", { timeout: 20_000 });
-  await expect(graphPanel).toContainText("layers deterministic: 3 semantic: 1");
+  await expect(graphPanel).toContainText("deterministic_ast: 3");
+  await expect(graphPanel).toContainText("concept_merge: 1");
+  await expect(graphPanel).toContainText("semantic_doc_node: 1");
   await expect(graphPanel).toContainText("ollama/gemma4:e4b");
   await expect(graphPanel).toContainText("job 1");
   await expect(graphPanel.getByRole("checkbox", { name: "Graph relation documents" })).toBeChecked();
@@ -2419,7 +2427,7 @@ test("graph page filters no-mock graph layers and shows edge provenance", async 
 
   await graphPanel.getByRole("checkbox", { name: "Graph relation documents" }).click();
   await expect(forceGraph).toHaveAttribute("data-edge-count", "3");
-  await expect(graphPanel).not.toContainText("semantic: 1");
+  await expect(graphPanel).not.toContainText("semantic_doc_node: 1");
 
   await graphPanel.getByRole("checkbox", { name: "Graph relation documents" }).click();
   await expect(forceGraph).toHaveAttribute("data-edge-count", "4");
@@ -2708,6 +2716,92 @@ test("graph page runs LLM document node extraction through the workbench API", a
   }
   await expect(page.getByTestId("action-feedback")).toContainText("Document nodes extracted: 1 boxes, 2 edges from 1 candidates");
   await expect(page.getByTestId("global-network-graph")).toContainText("L2 cache control");
+});
+
+test("graph page runs blackbox profile generation and shows inspector profile", async ({ page }) => {
+  const dbPath = "/tmp/asip-blackbox-action.db";
+  let requestBody: { dbPath?: string; mode?: string; batchSize?: number } = {};
+  await page.route("**/api/workbench/semantic-edges", async (route) => {
+    requestBody = route.request().postDataJSON() as typeof requestBody;
+    await route.fulfill({
+      contentType: "application/json",
+      body: JSON.stringify({
+        source: "blackbox_profile_batch_job",
+        inventory_total: 4,
+        candidate_count: 2,
+        profile_count: 1,
+        edge_count: 2,
+        provider: "ollama",
+        model: "gemma4:e4b",
+        graph: {
+          nodes: [
+            {
+              id: "function:test:driver.c:program_l2",
+              kind: "function",
+              label: "program_l2",
+              weight: 1,
+              attr: {
+                blackbox: {
+                  method: "blackbox_io",
+                  inputs: ["GCVM_L2_CNTL enable request"],
+                  outputs: ["writes GCVM_L2_CNTL"],
+                  observed_behavior: "program_l2 writes the L2 control register",
+                  explanation_layer: "explains cache setup behavior",
+                  evidence: "program_l2 writes GCVM_L2_CNTL"
+                },
+                providers: ["ollama"],
+                models: ["gemma4:e4b"],
+                job_ids: ["12"],
+                source: [{ corpus_id: "test", repo: "local", path: "driver.c" }]
+              }
+            },
+            { id: "register:GC:GCVM_L2_CNTL", kind: "register", label: "GCVM_L2_CNTL", weight: 1 }
+          ],
+          edges: [
+            {
+              src: "function:test:driver.c:program_l2",
+              relation: "writes",
+              dst: "register:GC:GCVM_L2_CNTL",
+              confidence: 0.82,
+              weight: 0.82,
+              stage: "semantic",
+              source: "ollama",
+              attr: {
+                extractor: "blackbox_profiles",
+                provider: "ollama",
+                model: "gemma4:e4b",
+                job_id: 12
+              }
+            }
+          ],
+          source: "networkx",
+          graph_runtime: "networkx"
+        }
+      })
+    });
+  });
+
+  await page.goto(`/graph?dbPath=${encodeURIComponent(dbPath)}`);
+  await page.getByRole("button", { name: "Generate blackbox profiles" }).click();
+
+  expect(requestBody.dbPath).toBe(dbPath);
+  expect(requestBody.mode).toBe("blackbox-profiles");
+  if (requestBody.batchSize !== undefined) {
+    expect(requestBody.batchSize).toBe(1);
+  }
+  await expect(page.getByTestId("action-feedback")).toContainText(
+    "Blackbox profiles generated: 1 profiles, 2 edges from 2/4 candidates"
+  );
+  await expect(page.getByTestId("global-network-graph")).toContainText("blackbox_profile: 1");
+  await expect(page.getByTestId("global-network-graph")).toContainText("blackbox_relationship: 1");
+  await page.getByTestId("force-graph").getByRole("button", { name: "program_l2" }).click();
+  await expect(page.getByRole("heading", { name: "Opened Blackbox", exact: true })).toBeVisible();
+  await expect(page.locator(".details-pane")).toContainText("Inputs: GCVM_L2_CNTL enable request");
+  await expect(page.locator(".details-pane")).toContainText("Behavior: program_l2 writes the L2 control register");
+  await expect(page.locator(".details-pane")).toContainText("Outputs: writes GCVM_L2_CNTL");
+  await expect(page.locator(".details-pane")).toContainText("Explains: explains cache setup behavior");
+  await expect(page.locator(".details-pane")).toContainText("Evidence: program_l2 writes GCVM_L2_CNTL");
+  await expect(page.locator(".details-pane")).toContainText("Generated By: ollama gemma4:e4b job 12");
 });
 
 test("shadcn Radix controls keep styled dimensions instead of bare browser defaults", async ({ page }) => {

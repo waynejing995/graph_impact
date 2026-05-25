@@ -5,10 +5,11 @@ import subprocess
 import tempfile
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 from asip.acceptance import PROVIDER_CHECK_IDS
 from asip.cli import main as cli_main
-from asip.completion_gate import run_completion_gate
+from asip.completion_gate import _product_graph_requirement, run_completion_gate
 
 
 class CompletionGateTests(unittest.TestCase):
@@ -59,6 +60,45 @@ class CompletionGateTests(unittest.TestCase):
             self.assertEqual(by_id["semantic_quality"]["status"], "pass")
             self.assertEqual(by_id["callback_edge_audit"]["status"], "pass")
             self.assertEqual(by_id["hosted_openai_compatible"]["status"], "pass")
+
+    def test_product_graph_requirement_uses_implementation_view_for_full_node_count(self):
+        class FakeStore:
+            def project_to_product_graph(self, function_view="concept"):
+                if function_view == "implementation":
+                    nodes = [{"id": f"function:test:file.c:impl_{index}", "kind": "function"} for index in range(12)]
+                    edges = [
+                        {
+                            "src": nodes[index % len(nodes)]["id"],
+                            "dst": nodes[(index + 1) % len(nodes)]["id"],
+                            "relation": "calls",
+                            "stage": "deterministic",
+                        }
+                        for index in range(11)
+                    ]
+                    return {"nodes": nodes, "edges": edges}
+                nodes = [{"id": f"function:test:concept:fn_{index}", "kind": "function"} for index in range(5)]
+                edges = [
+                    {
+                        "src": nodes[index % len(nodes)]["id"],
+                        "dst": nodes[(index + 1) % len(nodes)]["id"],
+                        "relation": "calls",
+                        "stage": "deterministic",
+                    }
+                    for index in range(11)
+                ]
+                return {"nodes": nodes, "edges": edges}
+
+        with patch("asip.storage.AsipStore.connect", return_value=FakeStore()):
+            result = _product_graph_requirement(
+                Path("asip.db"),
+                minimum_concept_nodes=1,
+                minimum_implementation_nodes=10,
+                minimum_edges=10,
+            )
+
+        self.assertEqual(result["status"], "pass")
+        self.assertIn("concept_nodes=5", result["evidence"])
+        self.assertIn("implementation_nodes=12", result["evidence"])
 
     def test_completion_gate_blocks_callback_audit_without_real_oracles(self):
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -1203,6 +1243,51 @@ class CompletionGateTests(unittest.TestCase):
             self.assertEqual(by_id["real_index_db"]["status"], "fail")
             self.assertIn("job 99 index is failed: newer failure", by_id["real_index_db"]["failure_reasons"])
 
+    def test_completion_gate_keeps_blackbox_batch_failures_out_of_real_index_health(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            db_path = self._write_gate_db(root / "asip.db")
+            with sqlite3.connect(db_path) as connection:
+                connection.execute(
+                    "insert into jobs (id, kind, status, message) values "
+                    "(99, 'blackbox_profiles_batch', 'failed', 'terminal profile attempt')"
+                )
+            acceptance_json = self._write_json(root / "acceptance.json", self._acceptance_payload(["CLI", "API", "MCP"], db_path=db_path))
+            web_json = self._write_json(root / "web-acceptance.json", self._acceptance_payload(["CLI", "API", "Web", "MCP"], db_path=db_path))
+            provider_json = self._write_json(root / "provider.json", self._provider_payload("pass", db_path=db_path))
+            runtime_json = self._write_json(root / "runtime-semantic.json", self._runtime_semantic_payload("pass", db_path=db_path))
+            semantic_quality_json = self._write_json(root / "semantic-quality.json", self._semantic_quality_payload("pass", db_path=db_path))
+            callback_audit_json = self._write_json(root / "callback-audit.json", self._callback_audit_payload("pass", db_path=db_path))
+            browser_json = self._write_json(root / "browser.json", self._browser_e2e_payload("pass", db_path=db_path))
+            no_server_json = self._write_json(root / "no-server.json", self._no_server_payload("pass"))
+            performance_json = self._write_json(root / "performance.json", self._performance_payload("pass"))
+            hosted_openai_json = self._write_json(root / "hosted-openai.json", self._hosted_openai_payload("pass"))
+            residual_json = self._write_json(root / "residual.json", self._residual_payload("pass"))
+            git_json = self._write_json(root / "git.json", self._git_payload("pass"))
+
+            result = run_completion_gate(
+                db_path,
+                acceptance_json=acceptance_json,
+                web_acceptance_json=web_json,
+                provider_json=provider_json,
+                runtime_semantic_json=runtime_json,
+                semantic_quality_json=semantic_quality_json,
+                callback_audit_json=callback_audit_json,
+                browser_json=browser_json,
+                no_server_json=no_server_json,
+                performance_json=performance_json,
+                hosted_openai_json=hosted_openai_json,
+                residual_acceptance_json=residual_json,
+                git_gate_json=git_json,
+                minimum_counts=self._fixture_minimum_counts(),
+            )
+
+            by_id = {item["id"]: item for item in result["requirements"]}
+            self.assertEqual(by_id["real_index_db"]["status"], "pass")
+            self.assertFalse(
+                any("blackbox_profiles_batch" in reason for reason in by_id["real_index_db"]["failure_reasons"])
+            )
+
     def test_completion_gate_blocks_mismatched_artifact_db_path(self):
         with tempfile.TemporaryDirectory() as tmpdir:
             root = Path(tmpdir)
@@ -1229,6 +1314,436 @@ class CompletionGateTests(unittest.TestCase):
             self.assertEqual(result["gate_status"], "blocked")
             self.assertEqual(by_id["artifact_binding"]["status"], "blocked")
             self.assertTrue(any("does not match current db_path" in reason for reason in by_id["artifact_binding"]["failure_reasons"]))
+
+    def test_completion_gate_requires_blackbox_ledger_when_requested(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            db_path = self._write_gate_db(root / "asip.db")
+
+            result = run_completion_gate(
+                db_path,
+                require_blackbox_ledger=True,
+                minimum_counts=self._fixture_minimum_counts(),
+            )
+
+            by_id = {item["id"]: item for item in result["requirements"]}
+            self.assertEqual(result["gate_status"], "blocked")
+            self.assertEqual(by_id["artifact_binding"]["status"], "blocked")
+            self.assertIn(
+                "blackbox_ledger_qa artifact is required but not loaded",
+                by_id["artifact_binding"]["failure_reasons"],
+            )
+
+    def test_completion_gate_blocks_stale_blackbox_ledger_binding_when_required(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            db_path = self._write_gate_db(root / "asip.db")
+            with sqlite3.connect(db_path) as connection:
+                connection.execute("insert into jobs (id, kind, status) values (5, 'blackbox_profiles_batch', 'succeeded')")
+            blackbox_json = self._write_json(
+                root / "blackbox.json",
+                {
+                    "source": "asip.blackbox_ledger_qa",
+                    "gate_status": "pass",
+                    "db_path": str(db_path),
+                    "db_sha256": "stale",
+                    "repo_head": "abc123",
+                    "latest_jobs": {"latest_blackbox_profiles_job_id": 5},
+                    "entity_ledger": {
+                        "manifest_count": 1,
+                        "provider_response_count": 1,
+                        "io_fact_count": 1,
+                    },
+                },
+            )
+            git_json = self._write_json(root / "git.json", self._git_payload("pass", head="abc123"))
+
+            result = run_completion_gate(
+                db_path,
+                git_gate_json=git_json,
+                blackbox_ledger_json=blackbox_json,
+                require_blackbox_ledger=True,
+                minimum_counts=self._fixture_minimum_counts(),
+            )
+
+            by_id = {item["id"]: item for item in result["requirements"]}
+            self.assertEqual(result["gate_status"], "blocked")
+            self.assertEqual(by_id["artifact_binding"]["status"], "blocked")
+            self.assertIn(
+                "blackbox_ledger_qa db_sha256 does not match current database",
+                by_id["artifact_binding"]["failure_reasons"],
+            )
+
+    def test_completion_gate_requires_blackbox_coverage_when_requested(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            db_path = self._write_gate_db(root / "asip.db")
+
+            result = run_completion_gate(
+                db_path,
+                require_blackbox_coverage=True,
+                minimum_counts=self._fixture_minimum_counts(),
+            )
+
+            by_id = {item["id"]: item for item in result["requirements"]}
+            self.assertEqual(result["gate_status"], "blocked")
+            self.assertEqual(by_id["artifact_binding"]["status"], "blocked")
+            self.assertIn(
+                "blackbox_coverage_qa artifact is required but not loaded",
+                by_id["artifact_binding"]["failure_reasons"],
+            )
+
+    def test_completion_gate_blocks_blackbox_coverage_with_missing_full_inventory(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            db_path = self._write_gate_db(root / "asip.db")
+            coverage_json = self._write_json(
+                root / "blackbox-coverage.json",
+                {
+                    "source": "asip.blackbox_coverage_qa",
+                    "gate_status": "blocked",
+                    "db_path": str(db_path),
+                    "coverage": {
+                        "inventory_total": 19429,
+                        "covered_count": 5,
+                        "missing_count": 19424,
+                        "coverage_ratio": 0.000257,
+                    },
+                },
+            )
+
+            result = run_completion_gate(
+                db_path,
+                blackbox_coverage_json=coverage_json,
+                require_blackbox_coverage=True,
+                minimum_counts=self._fixture_minimum_counts(),
+            )
+
+            by_id = {item["id"]: item for item in result["requirements"]}
+            self.assertEqual(result["gate_status"], "blocked")
+            self.assertEqual(by_id["artifact_binding"]["status"], "blocked")
+            self.assertIn("blackbox_coverage_qa gate_status=blocked", by_id["artifact_binding"]["failure_reasons"])
+            self.assertIn(
+                "blackbox_coverage_qa coverage_ratio=0.000257 < min_blackbox_coverage=1.0 (covered=5/19429)",
+                by_id["artifact_binding"]["failure_reasons"],
+            )
+
+    def test_completion_gate_requires_blackbox_residual_when_requested(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            db_path = self._write_gate_db(root / "asip.db")
+
+            result = run_completion_gate(
+                db_path,
+                require_blackbox_residual=True,
+                minimum_counts=self._fixture_minimum_counts(),
+            )
+
+            by_id = {item["id"]: item for item in result["requirements"]}
+            self.assertEqual(result["gate_status"], "blocked")
+            self.assertEqual(by_id["artifact_binding"]["status"], "blocked")
+            self.assertIn(
+                "blackbox_residual_qa artifact is required but not loaded",
+                by_id["artifact_binding"]["failure_reasons"],
+            )
+
+    def test_completion_gate_blocks_blackbox_residual_with_pending_or_terminal_remaining(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            db_path = self._write_gate_db(root / "asip.db")
+            residual_json = self._write_json(
+                root / "blackbox-residual.json",
+                {
+                    "source": "asip.blackbox_residual_qa",
+                    "gate_status": "blocked",
+                    "db_path": str(db_path),
+                    "db_sha256": hashlib.sha256(db_path.read_bytes()).hexdigest(),
+                    "repo_head": "abc123",
+                    "coverage": {"inventory_total": 19429, "covered_count": 7, "missing_count": 19422},
+                    "residuals": {"pending_count": 19413, "terminal_count": 9},
+                    "summary": {"pending": 19413, "terminal": 9},
+                },
+            )
+            git_json = self._write_json(root / "git.json", self._git_payload("pass", head="abc123"))
+
+            result = run_completion_gate(
+                db_path,
+                git_gate_json=git_json,
+                blackbox_residual_json=residual_json,
+                require_blackbox_residual=True,
+                minimum_counts=self._fixture_minimum_counts(),
+            )
+
+            by_id = {item["id"]: item for item in result["requirements"]}
+            self.assertEqual(result["gate_status"], "blocked")
+            self.assertEqual(by_id["artifact_binding"]["status"], "blocked")
+            self.assertIn("blackbox_residual_qa gate_status=blocked", by_id["artifact_binding"]["failure_reasons"])
+            self.assertIn(
+                "blackbox_residual_qa residuals.pending_count=19413 must be 0",
+                by_id["artifact_binding"]["failure_reasons"],
+            )
+            self.assertIn(
+                "blackbox_residual_qa residuals.terminal_count=9 must be 0",
+                by_id["artifact_binding"]["failure_reasons"],
+            )
+
+    def test_completion_gate_requires_blackbox_provider_gate_when_requested(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            db_path = self._write_gate_db(root / "asip.db")
+
+            result = run_completion_gate(
+                db_path,
+                require_blackbox_provider=True,
+                minimum_counts=self._fixture_minimum_counts(),
+            )
+
+            by_id = {item["id"]: item for item in result["requirements"]}
+            self.assertEqual(result["gate_status"], "blocked")
+            self.assertEqual(by_id["artifact_binding"]["status"], "blocked")
+            self.assertIn(
+                "blackbox_provider_gate artifact is required but not loaded",
+                by_id["artifact_binding"]["failure_reasons"],
+            )
+
+    def test_completion_gate_blocks_failed_blackbox_provider_gate_when_required(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            db_path = self._write_gate_db(root / "asip.db")
+            provider_json = self._write_json(
+                root / "blackbox-provider.json",
+                {
+                    "source": "asip.blackbox_provider_gate",
+                    "gate_status": "blocked",
+                    "db_path": str(db_path),
+                    "db_sha256": hashlib.sha256(db_path.read_bytes()).hexdigest(),
+                    "repo_head": "abc123",
+                    "provider_check": {
+                        "status": "fail",
+                        "provider": "ollama",
+                        "model": "gemma4:e4b",
+                        "message": "blackbox provider unreachable",
+                        "failure_class": "local_network_permission",
+                    },
+                },
+            )
+            git_json = self._write_json(root / "git.json", self._git_payload("pass", head="abc123"))
+
+            result = run_completion_gate(
+                db_path,
+                git_gate_json=git_json,
+                blackbox_provider_json=provider_json,
+                require_blackbox_provider=True,
+                minimum_counts=self._fixture_minimum_counts(),
+            )
+
+            by_id = {item["id"]: item for item in result["requirements"]}
+            self.assertEqual(result["gate_status"], "blocked")
+            self.assertEqual(by_id["artifact_binding"]["status"], "blocked")
+            self.assertIn("blackbox_provider_gate gate_status=blocked", by_id["artifact_binding"]["failure_reasons"])
+            self.assertIn(
+                "blackbox_provider_gate provider_check.status=fail",
+                by_id["artifact_binding"]["failure_reasons"],
+            )
+            self.assertIn(
+                "blackbox_provider_gate provider_check.failure_class=local_network_permission",
+                by_id["artifact_binding"]["failure_reasons"],
+            )
+
+    def test_completion_gate_requires_blackbox_full_generation_when_requested(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            db_path = self._write_gate_db(root / "asip.db")
+
+            result = run_completion_gate(
+                db_path,
+                require_blackbox_full_generation=True,
+                minimum_counts=self._fixture_minimum_counts(),
+            )
+
+            by_id = {item["id"]: item for item in result["requirements"]}
+            self.assertEqual(result["gate_status"], "blocked")
+            self.assertEqual(by_id["artifact_binding"]["status"], "blocked")
+            self.assertIn(
+                "blackbox_full_generation_run artifact is required but not loaded",
+                by_id["artifact_binding"]["failure_reasons"],
+            )
+
+    def test_completion_gate_blocks_blackbox_full_generation_run_when_blocked(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            db_path = self._write_gate_db(root / "asip.db")
+            run_json = self._write_json(
+                root / "blackbox-full-generation-run.json",
+                {
+                    "source": "asip.blackbox_full_generation_run",
+                    "gate_status": "blocked",
+                    "failure_stage": "provider_gate",
+                    "db_path": str(db_path),
+                    "db_sha256": hashlib.sha256(db_path.read_bytes()).hexdigest(),
+                    "repo_head": "abc123",
+                    "artifacts": {
+                        "blackbox_provider_gate": {
+                            "path": str(root / "blackbox-provider.json"),
+                            "source": "asip.blackbox_provider_gate",
+                            "gate_status": "blocked",
+                            "sha256": "sha-provider",
+                        },
+                        "blackbox_coverage_qa": {
+                            "path": str(root / "blackbox-coverage.json"),
+                            "source": "asip.blackbox_coverage_qa",
+                            "gate_status": "blocked",
+                            "sha256": "sha-coverage",
+                        },
+                        "blackbox_residual_qa": {
+                            "path": str(root / "blackbox-residual.json"),
+                            "source": "asip.blackbox_residual_qa",
+                            "gate_status": "blocked",
+                            "sha256": "sha-residual",
+                        },
+                    },
+                },
+            )
+            git_json = self._write_json(root / "git.json", self._git_payload("pass", head="abc123"))
+
+            result = run_completion_gate(
+                db_path,
+                git_gate_json=git_json,
+                blackbox_full_generation_json=run_json,
+                require_blackbox_full_generation=True,
+                minimum_counts=self._fixture_minimum_counts(),
+            )
+
+            by_id = {item["id"]: item for item in result["requirements"]}
+            self.assertEqual(result["gate_status"], "blocked")
+            self.assertEqual(by_id["artifact_binding"]["status"], "blocked")
+            self.assertIn(
+                "blackbox_full_generation_run gate_status=blocked",
+                by_id["artifact_binding"]["failure_reasons"],
+            )
+            self.assertIn(
+                "blackbox_full_generation_run failure_stage=provider_gate",
+                by_id["artifact_binding"]["failure_reasons"],
+            )
+
+    def test_completion_gate_blocks_blackbox_full_generation_child_sha_mismatch(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            db_path = self._write_gate_db(root / "asip.db")
+            with sqlite3.connect(db_path) as connection:
+                connection.execute("insert into jobs (id, kind, status) values (5, 'blackbox_profiles_batch', 'succeeded')")
+            db_sha = hashlib.sha256(db_path.read_bytes()).hexdigest()
+            provider_json = self._write_json(
+                root / "blackbox-provider.json",
+                {
+                    "source": "asip.blackbox_provider_gate",
+                    "gate_status": "pass",
+                    "db_path": str(db_path),
+                    "db_sha256": db_sha,
+                    "repo_head": "abc123",
+                    "provider_check": {"status": "pass", "provider": "ollama", "model": "gemma4:e4b"},
+                },
+            )
+            ledger_json = self._write_json(
+                root / "blackbox-ledger.json",
+                {
+                    "source": "asip.blackbox_ledger_qa",
+                    "gate_status": "pass",
+                    "db_path": str(db_path),
+                    "db_sha256": db_sha,
+                    "repo_head": "abc123",
+                    "latest_jobs": {"latest_blackbox_profiles_job_id": 5},
+                    "entity_ledger": {
+                        "manifest_count": 1,
+                        "provider_response_count": 1,
+                        "io_fact_count": 1,
+                    },
+                },
+            )
+            coverage_json = self._write_json(
+                root / "blackbox-coverage.json",
+                {
+                    "source": "asip.blackbox_coverage_qa",
+                    "gate_status": "pass",
+                    "db_path": str(db_path),
+                    "db_sha256": db_sha,
+                    "repo_head": "abc123",
+                    "coverage": {
+                        "inventory_total": 10,
+                        "covered_count": 10,
+                        "missing_count": 0,
+                    },
+                },
+            )
+            residual_json = self._write_json(
+                root / "blackbox-residual.json",
+                {
+                    "source": "asip.blackbox_residual_qa",
+                    "gate_status": "pass",
+                    "db_path": str(db_path),
+                    "db_sha256": db_sha,
+                    "repo_head": "abc123",
+                    "residuals": {"pending_count": 0, "terminal_count": 0},
+                },
+            )
+            run_json = self._write_json(
+                root / "blackbox-full-generation-run.json",
+                {
+                    "source": "asip.blackbox_full_generation_run",
+                    "gate_status": "pass",
+                    "failure_stage": "",
+                    "db_path": str(db_path),
+                    "db_sha256": db_sha,
+                    "repo_head": "abc123",
+                    "artifacts": {
+                        "blackbox_provider_gate": {
+                            "path": str(provider_json),
+                            "source": "asip.blackbox_provider_gate",
+                            "gate_status": "pass",
+                            "sha256": hashlib.sha256(provider_json.read_bytes()).hexdigest(),
+                        },
+                        "blackbox_ledger_qa": {
+                            "path": str(ledger_json),
+                            "source": "asip.blackbox_ledger_qa",
+                            "gate_status": "pass",
+                            "sha256": hashlib.sha256(ledger_json.read_bytes()).hexdigest(),
+                        },
+                        "blackbox_coverage_qa": {
+                            "path": str(coverage_json),
+                            "source": "asip.blackbox_coverage_qa",
+                            "gate_status": "pass",
+                            "sha256": "not-the-real-coverage-sha",
+                        },
+                        "blackbox_residual_qa": {
+                            "path": str(residual_json),
+                            "source": "asip.blackbox_residual_qa",
+                            "gate_status": "pass",
+                            "sha256": hashlib.sha256(residual_json.read_bytes()).hexdigest(),
+                        },
+                    },
+                },
+            )
+            git_json = self._write_json(root / "git.json", self._git_payload("pass", head="abc123"))
+
+            result = run_completion_gate(
+                db_path,
+                git_gate_json=git_json,
+                blackbox_provider_json=provider_json,
+                blackbox_ledger_json=ledger_json,
+                blackbox_coverage_json=coverage_json,
+                blackbox_residual_json=residual_json,
+                blackbox_full_generation_json=run_json,
+                require_blackbox_full_generation=True,
+                minimum_counts=self._fixture_minimum_counts(),
+            )
+
+            by_id = {item["id"]: item for item in result["requirements"]}
+            self.assertEqual(result["gate_status"], "blocked")
+            self.assertEqual(by_id["artifact_binding"]["status"], "blocked")
+            self.assertIn(
+                "blackbox_full_generation_run artifacts.blackbox_coverage_qa.sha256 does not match loaded blackbox_coverage_qa artifact",
+                by_id["artifact_binding"]["failure_reasons"],
+            )
 
     def test_completion_gate_blocks_stale_provider_graph_job_binding(self):
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -1661,6 +2176,62 @@ class CompletionGateTests(unittest.TestCase):
             self.assertEqual(by_id["web_no_server_smoke"]["status"], "blocked")
             self.assertIn(
                 "no-server --provider-json sha256 does not match current artifact",
+                by_id["web_no_server_smoke"]["failure_reasons"],
+            )
+
+    def test_completion_gate_requires_no_server_input_for_blackbox_provider_artifact(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            db_path = self._write_gate_db(root / "asip.db")
+            acceptance_json = self._write_json(root / "acceptance.json", self._acceptance_payload(["CLI", "API", "MCP"], db_path=db_path))
+            web_json = self._write_json(root / "web-acceptance.json", self._acceptance_payload(["CLI", "API", "Web", "MCP"], db_path=db_path))
+            provider_json = self._write_json(root / "provider.json", self._provider_payload("pass", db_path=db_path))
+            runtime_json = self._write_json(root / "runtime-semantic.json", self._runtime_semantic_payload("pass", db_path=db_path))
+            browser_json = self._write_json(root / "browser.json", self._browser_e2e_payload("pass", db_path=db_path))
+            blackbox_provider_json = self._write_json(
+                root / "blackbox-provider.json",
+                {
+                    "source": "asip.blackbox_provider_gate",
+                    "gate_status": "pass",
+                    "db_path": str(db_path),
+                    "db_sha256": hashlib.sha256(db_path.read_bytes()).hexdigest(),
+                    "repo_head": "abc123",
+                    "provider_check": {"status": "pass", "provider": "ollama", "model": "gemma4:e4b"},
+                },
+            )
+            no_server_payload = self._no_server_payload("pass")
+            no_server_payload["current_artifact_inputs"] = [
+                self._artifact_input("--browser-json", browser_json),
+                self._artifact_input("--provider-json", provider_json),
+                self._artifact_input("--runtime-semantic-json", runtime_json),
+                self._artifact_input("--acceptance-json", acceptance_json),
+                self._artifact_input("--web-acceptance-json", web_json),
+            ]
+            no_server_json = self._write_json(root / "no-server.json", no_server_payload)
+            performance_json = self._write_json(root / "performance.json", self._performance_payload("pass"))
+            residual_json = self._write_json(root / "residual.json", self._residual_payload("pass"))
+            git_json = self._write_json(root / "git.json", self._git_payload("pass", head="abc123"))
+
+            result = run_completion_gate(
+                db_path,
+                acceptance_json=acceptance_json,
+                web_acceptance_json=web_json,
+                provider_json=provider_json,
+                runtime_semantic_json=runtime_json,
+                browser_json=browser_json,
+                no_server_json=no_server_json,
+                performance_json=performance_json,
+                residual_acceptance_json=residual_json,
+                git_gate_json=git_json,
+                blackbox_provider_json=blackbox_provider_json,
+                require_blackbox_provider=True,
+                minimum_counts=self._fixture_minimum_counts(),
+            )
+
+            by_id = {item["id"]: item for item in result["requirements"]}
+            self.assertEqual(by_id["web_no_server_smoke"]["status"], "blocked")
+            self.assertIn(
+                "no-server current_artifact_inputs missing --blackbox-provider-json",
                 by_id["web_no_server_smoke"]["failure_reasons"],
             )
 
@@ -2668,8 +3239,39 @@ class CompletionGateTests(unittest.TestCase):
                     line_end integer,
                     page integer
                 );
-                create table evidence (id integer primary key);
-                create table edges (id integer primary key);
+                create table evidence (
+                    id integer primary key,
+                    chunk_id integer not null references chunks(id),
+                    corpus_id text not null,
+                    source_type text not null,
+                    repo text not null,
+                    path text not null,
+                    line_start integer,
+                    line_end integer,
+                    page integer,
+                    symbol text not null,
+                    entity_type text not null,
+                    ip_block text not null default '',
+                    asic_or_generation text not null default '',
+                    access_type text not null,
+                    confidence real not null,
+                    snippet text not null,
+                    resolved_chain text not null,
+                    query_id text not null default ''
+                );
+                create table edges (
+                    id integer primary key,
+                    src text not null,
+                    dst text not null,
+                    relation text not null,
+                    confidence real not null,
+                    stage text not null default 'deterministic',
+                    source text not null default '',
+                    path text not null default '',
+                    line_start integer,
+                    line_end integer,
+                    provenance_json text not null default '{}'
+                );
                 create table embeddings (id integer primary key);
                 create table jobs (
                     id integer primary key,
@@ -2683,8 +3285,16 @@ class CompletionGateTests(unittest.TestCase):
                 insert into corpora (id, status) values ('linux-amdgpu', 'indexed');
                 insert into documents values (1, 'linux-amdgpu', 'register', 'drivers/gpu/drm/amd/include/asic_reg/reg.h');
                 insert into chunks values (1, 1, 'text', 1, 1, null);
-                insert into evidence values (1);
-                insert into edges values (1);
+                insert into evidence values (
+                    1, 1, 'linux-amdgpu', 'code', 'local', 'drivers/gpu/drm/amd/test.c',
+                    10, 20, null, 'program_l2', 'function', 'GC', '', 'defines',
+                    0.99, 'void program_l2(void) { WRITE_REG(GCVM_L2_CNTL); }', '', ''
+                );
+                insert into edges values (
+                    1, 'program_l2', 'GCVM_L2_CNTL', 'writes', 0.99,
+                    'deterministic', 'clang_ast', 'drivers/gpu/drm/amd/test.c',
+                    10, 20, '{"extractor":"code_graph","corpus_id":"linux-amdgpu","repo":"local","function":"program_l2","function_name":"program_l2","ip":"GC"}'
+                );
                 insert into embeddings values (1);
                 insert into jobs (id, kind, status) values (1, 'index', 'succeeded');
                 insert into jobs (id, kind, status) values (2, 'graph_rebuild', 'succeeded');

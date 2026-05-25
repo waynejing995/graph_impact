@@ -54,6 +54,20 @@ class ResolverProfileTests(unittest.TestCase):
                     self.assertIn("mm", profile.symbol_prefixes)
                     self.assertIn("smn", profile.symbol_prefixes)
 
+    def test_committed_resolver_profiles_have_register_inventory(self):
+        profiles = load_resolver_profiles(REPO_ROOT / "configs/resolvers")
+        amd_profiles = {pid: p for pid, p in profiles.items() if p.language in {"c", "cpp", "c++"}}
+        self.assertGreaterEqual(len(amd_profiles), 5)
+        for pid, profile in amd_profiles.items():
+            with self.subTest(profile_id=pid):
+                inv = profile.graph.register_inventory
+                self.assertIn("reg", inv.prefixes)
+                self.assertIn("mm", inv.prefixes)
+                self.assertIn("smn", inv.prefixes)
+                self.assertIn(inv.case, {"mixed", "upper", "lower"})
+                self.assertIn("tmp", inv.reject_tokens)
+                self.assertIn("value", inv.reject_tokens)
+
     def test_committed_resolver_operators_are_not_graph_entities(self):
         profiles = load_resolver_profiles(REPO_ROOT / "configs/resolvers")
 
@@ -263,6 +277,59 @@ class ResolverProfileTests(unittest.TestCase):
         self.assertIsNotNone(resolved)
         self.assertEqual(resolved.profile_id, "python-hw-symbols")
         self.assertEqual(resolved.symbol, "ENABLE_L2_CACHE")
+
+    def test_register_inventory_from_config_uses_defaults_when_empty(self):
+        profile = resolver_profile_from_config({"id": "test", "language": "cpp", "graph": {"register_inventory": {}}})
+        inv = profile.graph.register_inventory
+        self.assertEqual(inv.prefixes, ["reg", "mm", "smn"])
+        self.assertEqual(inv.case, "mixed")
+        self.assertIn("tmp", inv.reject_tokens)
+        self.assertIn("value", inv.reject_tokens)
+
+    def test_register_inventory_from_config_parses_custom_values(self):
+        profile = resolver_profile_from_config({
+            "id": "test",
+            "language": "cpp",
+            "graph": {
+                "register_inventory": {
+                    "prefixes": ["reg", "mm"],
+                    "case": "upper",
+                    "reject_tokens": ["tmp", "value"],
+                }
+            },
+        })
+        inv = profile.graph.register_inventory
+        self.assertEqual(inv.prefixes, ["reg", "mm"])
+        self.assertEqual(inv.case, "upper")
+        self.assertEqual(inv.reject_tokens, ["tmp", "value"])
+
+    def test_register_inventory_round_trips_through_to_config(self):
+        from asip.resolver_profiles import resolver_profile_to_config
+
+        profile = resolver_profile_from_config({
+            "id": "test", "language": "cpp",
+            "graph": {
+                "register_inventory": {
+                    "prefixes": ["reg", "mm", "smn"],
+                    "case": "mixed",
+                    "reject_tokens": ["tmp", "value", "adapt"],
+                }
+            },
+        })
+        config = resolver_profile_to_config(profile)
+        graph = config.get("graph", {})
+        inv = graph.get("register_inventory", {})
+        self.assertEqual(inv.get("prefixes"), ["reg", "mm", "smn"])
+        self.assertEqual(inv.get("case"), "mixed")
+        self.assertEqual(inv.get("reject_tokens"), ["tmp", "value", "adapt"])
+
+    def test_register_inventory_not_serialized_when_default(self):
+        from asip.resolver_profiles import resolver_profile_to_config
+
+        profile = resolver_profile_from_config({"id": "test", "language": "cpp"})
+        config = resolver_profile_to_config(profile)
+        graph = config.get("graph", {})
+        self.assertNotIn("register_inventory", graph)
 
 
 if __name__ == "__main__":

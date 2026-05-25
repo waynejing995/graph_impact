@@ -8,6 +8,10 @@ import json
 import os
 import re
 import sqlite3
+import subprocess
+import urllib.error
+import urllib.request
+from collections import Counter
 from dataclasses import dataclass
 from pathlib import Path, PurePosixPath
 from typing import Any, Dict, Iterable, List, Mapping, Optional, Tuple
@@ -40,6 +44,7 @@ from .semantic_edges import (
     EdgeModelConfig,
     EdgeProvider,
     FullCorpus,
+    create_blackbox_profile_provider,
     create_doc_node_provider,
     create_edge_provider,
     full_corpus_scan_folders,
@@ -841,13 +846,16 @@ def global_graph(
         function_view=function_view,
         compact=compact,
     )
+    nodes = [_graph_node_payload(node, compact=compact) for node in graph["nodes"]]
+    edges = [_graph_edge_payload(edge, compact=compact) for edge in graph["edges"]]
     return {
         "queryId": "global",
-        "nodes": [_graph_node_payload(node, compact=compact) for node in graph["nodes"]],
-        "edges": [_graph_edge_payload(edge, compact=compact) for edge in graph["edges"]],
+        "nodes": nodes,
+        "edges": edges,
         "source": "networkx",
         "graph_runtime": graph["graph_runtime"],
         "metadata_mode": "compact" if compact else "full",
+        "meta": _graph_payload_meta(nodes, edges, function_view=function_view),
     }
 
 
@@ -1997,7 +2005,7 @@ def generate_doc_nodes_batch(
     if config is None:
         raise ValueError("edge provider settings are missing")
     candidate_limit = max(1, int(limit if limit is not None else configured_candidate_limit))
-    requested_batch_size = max(1, int(batch_size if batch_size is not None else configured_batch_size))
+    requested_batch_size = max(1, int(batch_size if batch_size is not None else 1))
     batch_size = _doc_node_effective_batch_size(requested_batch_size, config)
     candidates = _doc_node_candidates(store, limit=candidate_limit)
     if not candidates:
@@ -2088,6 +2096,1725 @@ def _doc_node_effective_batch_size(requested_batch_size: int, config: EdgeModelC
     if config.num_ctx < DOC_NODE_MULTI_BATCH_MIN_CTX or config.num_predict < DOC_NODE_MULTI_BATCH_MIN_PREDICT:
         return 1
     return min(DOC_NODE_MAX_BATCH_SIZE, max(1, requested_batch_size))
+
+
+def generate_blackbox_profiles_batch(
+    db_path: Path,
+    limit: Optional[int] = None,
+    batch_size: Optional[int] = None,
+    sample_count: Optional[int] = None,
+    edge_provider: Optional[EdgeProvider] = None,
+    phase: str = "pilot",
+    selection_seed: str = "",
+    retry_count: Optional[int] = None,
+    shard_count: int = 1,
+    shard_index: int = 0,
+    dry_run_selection: bool = False,
+    include_profiled: bool = False,
+    include_graph: bool = True,
+    candidate_scope: str = "missing",
+) -> Dict[str, Any]:
+    """Generate blackbox input-output node profiles from the full AST-derived endpoint inventory."""
+
+    limits = load_workbench_limits()
+    configured_candidate_limit = limits.int_value("semantic", "batch_candidate_limit", minimum=1)
+    configured_batch_size = limits.int_value("semantic", "batch_size", minimum=1)
+    configured_sample_count = limits.int_value("semantic", "blackbox_sample_count", minimum=1) or 3
+    configured_retry_count = limits.int_value("semantic", "blackbox_retry_count", minimum=1) or 3
+    post_batch_graph_limit = limits.int_value("semantic", "post_batch_graph_edge_budget", minimum=1)
+    if configured_candidate_limit is None or configured_batch_size is None:
+        raise ValueError(f"semantic batch limits are missing from {limits.path}")
+    db_path.parent.mkdir(parents=True, exist_ok=True)
+    store = AsipStore.connect(str(db_path))
+    store.migrate()
+    provider_settings = load_provider_settings(db_path)
+    config = _edge_provider_config(provider_settings)
+    if config is None:
+        raise ValueError("edge provider settings are missing")
+    candidate_limit = max(1, int(limit if limit is not None else configured_candidate_limit))
+    requested_batch_size = max(1, int(batch_size if batch_size is not None else 1))
+    batch_size = requested_batch_size
+    sample_count = max(1, int(sample_count if sample_count is not None else configured_sample_count))
+    retry_count = max(1, int(retry_count if retry_count is not None else configured_retry_count))
+    inventory = store.product_endpoint_inventory(function_view="both", stages=("deterministic",))
+    usable_profile_keys = store.usable_blackbox_profile_keys()
+    normalized_candidate_scope = _normalize_blackbox_candidate_scope(candidate_scope)
+    terminal_reason_codes = _blackbox_candidate_scope_terminal_reason_codes(normalized_candidate_scope)
+    terminal_profile_keys = (
+        store.blackbox_manifest_candidate_keys(reason_codes=terminal_reason_codes) - usable_profile_keys
+    )
+    selection_inventory = inventory
+    excluded_profile_keys = set() if include_profiled else usable_profile_keys
+    if normalized_candidate_scope == "pending":
+        excluded_profile_keys = set(excluded_profile_keys) | terminal_profile_keys
+    elif normalized_candidate_scope.startswith("retry-terminal"):
+        selection_inventory = [
+            candidate
+            for candidate in inventory
+            if (str(candidate.get("view") or ""), str(candidate.get("endpoint_id") or "")) in terminal_profile_keys
+        ]
+        excluded_profile_keys = set()
+    selection_manifest = _blackbox_selection_manifest(
+        selection_inventory,
+        provider=config.provider,
+        model=config.preferred,
+        phase=phase,
+        selection_seed=selection_seed,
+        limit=candidate_limit,
+        shard_count=shard_count,
+        shard_index=shard_index,
+        excluded_profile_keys=excluded_profile_keys,
+        candidate_scope=normalized_candidate_scope,
+    )
+    selection_manifest["candidate_scope"] = normalized_candidate_scope
+    candidates = selection_manifest["candidates"]
+    if dry_run_selection:
+        return {
+            "source": "blackbox_profile_selection_manifest",
+            "db_path": str(db_path),
+            "provider": config.provider,
+            "model": config.preferred,
+            "inventory_total": len(inventory),
+            "selection_inventory_total": selection_manifest["missing_candidate_total"],
+            "profiled_inventory_total": len(usable_profile_keys),
+            "terminal_inventory_total": len(terminal_profile_keys),
+            "candidate_scope": normalized_candidate_scope,
+            "candidate_count": len(candidates),
+            "batch_size": batch_size,
+            "requested_batch_size": requested_batch_size,
+            "sample_count": sample_count,
+            "retry_count": retry_count,
+            "selection_manifest": {
+                **selection_manifest,
+                "candidate_scope": normalized_candidate_scope,
+            },
+        }
+    if not candidates:
+        raise ValueError(f"no AST-derived blackbox profile candidates found for scope={normalized_candidate_scope}")
+    provider = edge_provider or create_blackbox_profile_provider(config)
+    if edge_provider is None:
+        try:
+            _preflight_blackbox_provider_reachability(config)
+        except Exception:
+            store.con.close()
+            raise
+    allowed_relationship_endpoints = _blackbox_allowed_relationship_endpoints(candidates)
+    job_id = store.start_job(
+        "blackbox_profiles_batch",
+        f"Extracting blackbox profiles from {len(candidates)} of {len(inventory)} inventory candidates",
+        metadata={
+            "mode": "blackbox_profiles_batch",
+            "inventory_total": len(inventory),
+            "selection_inventory_total": selection_manifest["missing_candidate_total"],
+            "profiled_inventory_total": len(usable_profile_keys),
+            "terminal_inventory_total": len(terminal_profile_keys),
+            "candidate_scope": normalized_candidate_scope,
+            "candidate_count": len(candidates),
+            "batch_size": batch_size,
+            "requested_batch_size": requested_batch_size,
+            "sample_count": sample_count,
+            "retry_count": retry_count,
+            "phase": selection_manifest["phase"],
+            "selection_seed": selection_manifest["selection_seed"],
+            "manifest_sha256": selection_manifest["manifest_sha256"],
+            "manifest_group_sha256": selection_manifest["manifest_group_sha256"],
+            "inventory_sha256": selection_manifest["inventory_sha256"],
+            "bucket_counts": selection_manifest["bucket_counts"],
+            "shard_count": selection_manifest["shard_count"],
+            "shard_index": selection_manifest["shard_index"],
+            "shard_candidate_total": selection_manifest["shard_candidate_total"],
+            "global_candidate_total": selection_manifest["global_candidate_total"],
+            "scheduler_version": "blackbox_selection_manifest_v1",
+            "provider_settings": provider_settings,
+        },
+    )
+    manifest_id = store.add_blackbox_manifest(
+        job_id,
+        {
+            **selection_manifest,
+            "candidate_scope": normalized_candidate_scope,
+            "inventory_total": len(inventory),
+        },
+        db_path=str(db_path),
+        db_sha256=_sha256_file(db_path),
+        repo_head=_repo_head(Path.cwd()),
+        provider=config.provider,
+        model=config.preferred,
+        provider_settings=provider_settings,
+        limits_config_sha256=_sha256_file(limits.path),
+        metadata={"bucket_counts": selection_manifest["bucket_counts"]},
+        commit=False,
+    )
+    for candidate in candidates:
+        store.add_blackbox_manifest_candidate(
+            manifest_id,
+            job_id,
+            str(selection_manifest["manifest_sha256"]),
+            candidate,
+            commit=False,
+        )
+    profile_count = 0
+    edge_count = 0
+    rejected_count = 0
+    failed_count = 0
+    abstained_count = 0
+    try:
+        for start in range(0, len(candidates), batch_size):
+            batch = candidates[start : start + batch_size]
+            batch_candidate_by_endpoint = {str(candidate["endpoint_id"]): candidate for candidate in batch}
+            prompt = _blackbox_profile_batch_prompt(batch, inventory_total=len(inventory))
+            batch_id = store.start_llm_batch(
+                job_id=job_id,
+                kind="blackbox_profiles",
+                provider=config.provider,
+                model=config.preferred,
+                candidate_ids=[str(candidate["candidate_id"]) for candidate in batch],
+                metadata={
+                    "inventory_total": len(inventory),
+                    "offset": start,
+                    "sample_count": sample_count,
+                    "phase": selection_manifest["phase"],
+                    "manifest_sha256": selection_manifest["manifest_sha256"],
+                    "manifest_group_sha256": selection_manifest["manifest_group_sha256"],
+                    "selection_seed": selection_manifest["selection_seed"],
+                    "shard_index": selection_manifest["shard_index"],
+                    "shard_count": selection_manifest["shard_count"],
+                    "shard_candidate_total": selection_manifest["shard_candidate_total"],
+                    "global_candidate_total": selection_manifest["global_candidate_total"],
+                    "bucket_ids": _dedupe_prompt_terms(str(candidate.get("bucket_id") or "") for candidate in batch),
+                    "scheduler_version": "blackbox_selection_manifest_v1",
+                },
+            )
+            sample_payloads: List[Mapping[str, Any]] = []
+            provider_response_ids: List[int] = []
+            sample_failures: List[Dict[str, Any]] = []
+            _retry_fn_registry: List[tuple[str, Any, bool]] = [
+                ("standard", None, False),
+                ("compact_json", _blackbox_compact_retry_prompt, True),
+                ("pure_json_list", _blackbox_pure_json_retry_prompt, True),
+            ]
+            _active_retry_formats = _retry_fn_registry[:max(1, retry_count)]
+            for sample_index in range(1, sample_count + 1):
+                evidence_view = _blackbox_evidence_view_for_sample(sample_index)
+                sample_prompt = _blackbox_profile_sample_prompt(prompt, sample_index, sample_count, evidence_view)
+                parsed = False
+                last_response_id: Optional[int] = None
+                for fmt_name, fmt_fn, is_retry in _active_retry_formats:
+                    current_prompt = fmt_fn(sample_prompt) if fmt_fn else sample_prompt
+                    try:
+                        sample_generated = provider.generate(current_prompt, config)
+                    except (RuntimeError, TypeError, ValueError, json.JSONDecodeError) as exc:
+                        meta: Dict[str, Any] = {
+                            "evidence_view": evidence_view,
+                            "sample_index": sample_index,
+                        }
+                        if is_retry:
+                            meta["retry"] = fmt_name
+                            if last_response_id is not None:
+                                meta["retry_of_provider_response_id"] = last_response_id
+                        response_id = store.record_llm_provider_response(
+                            job_id, batch_id=batch_id, attempt_index=sample_index,
+                            provider=config.provider, model=config.preferred,
+                            prompt=current_prompt, parse_status="failed",
+                            error_class=exc.__class__.__name__, error_message=str(exc),
+                            truncated="no parseable JSON" in str(exc) or "truncat" in str(exc).lower(),
+                            metadata=meta, commit=False,
+                        )
+                        provider_response_ids.append(response_id)
+                        last_response_id = response_id
+                        continue
+                    meta = {
+                        "evidence_view": evidence_view,
+                        "sample_index": sample_index,
+                    }
+                    if is_retry:
+                        meta["retry"] = fmt_name
+                        if last_response_id is not None:
+                            meta["retry_of_provider_response_id"] = last_response_id
+                    normalized_generated = _normalize_blackbox_sample_payload(sample_generated)
+                    schema_error = _blackbox_sample_payload_schema_error(normalized_generated, batch)
+                    response_id = store.record_llm_provider_response(
+                        job_id, batch_id=batch_id, attempt_index=sample_index,
+                        provider=config.provider, model=config.preferred,
+                        prompt=current_prompt,
+                        response=normalized_generated,
+                        parse_status="parsed",
+                        metadata=meta, commit=False,
+                    )
+                    provider_response_ids.append(response_id)
+                    last_response_id = response_id
+                    if schema_error:
+                        sample_failures.append({
+                            "sample_index": str(sample_index),
+                            "format": fmt_name,
+                            "provider_response_id": response_id,
+                            "error_class": "BlackboxProfileSchemaError",
+                            "error": schema_error,
+                        })
+                        continue
+                    sample_payloads.append(normalized_generated)
+                    parsed = True
+                    break
+                if not parsed:
+                    sample_failures.append({
+                        "sample_index": str(sample_index),
+                        "formats_attempted": [f[0] for f in _active_retry_formats],
+                    })
+            # Reconcile and persist each candidate individually (supports batch_size > 1)
+            batch_accepted = 0
+            batch_rejected = 0
+            batch_abstained = 0
+            batch_failed = 0
+            for candidate in batch:
+                endpoint_id = str(candidate["endpoint_id"])
+                reconcile = _reconcile_blackbox_profile_samples(sample_payloads, candidate, sample_count)
+                if reconcile["status"] == "failed":
+                    attempt_id = store.record_llm_attempt(
+                        batch_id=batch_id,
+                        candidate_id=str(candidate["candidate_id"]),
+                        endpoint_id=endpoint_id,
+                        status="failed",
+                        prompt=prompt,
+                        error="all blackbox profile samples failed to parse",
+                        metadata={
+                            "provider_response_ids": provider_response_ids,
+                            "sample_count": sample_count,
+                            "sample_failures": sample_failures,
+                            "reconcile_status": reconcile["status"],
+                        },
+                    )
+                    store.add_blackbox_validation_failure(
+                        job_id,
+                        batch_id=batch_id,
+                        attempt_id=attempt_id,
+                        provider_response_id=provider_response_ids[-1] if provider_response_ids else None,
+                        candidate_id=str(candidate["candidate_id"]),
+                        endpoint_id=endpoint_id,
+                        gate="provider_parse",
+                        reason_code="failed_parse_exhausted",
+                        detail={"sample_failures": sample_failures},
+                        commit=False,
+                    )
+                    store.update_blackbox_manifest_candidate_status(
+                        job_id,
+                        str(candidate["candidate_id"]),
+                        "failed",
+                        metadata={"provider_response_ids": provider_response_ids, "reconcile_status": reconcile["status"]},
+                    )
+                    failed_count += 1
+                    batch_failed += 1
+                    continue
+                if reconcile["status"] == "rejected":
+                    attempt_id = store.record_llm_attempt(
+                        batch_id=batch_id,
+                        candidate_id=str(candidate["candidate_id"]),
+                        endpoint_id=endpoint_id,
+                        status="rejected",
+                        prompt=prompt,
+                        error="blackbox profile samples did not reach consensus",
+                        metadata={
+                            "provider_response_ids": provider_response_ids,
+                            "sample_count": sample_count,
+                            "sample_failures": sample_failures,
+                            "reconcile": reconcile["metadata"],
+                        },
+                    )
+                    store.add_blackbox_validation_failure(
+                        job_id,
+                        batch_id=batch_id,
+                        attempt_id=attempt_id,
+                        provider_response_id=provider_response_ids[-1] if provider_response_ids else None,
+                        candidate_id=str(candidate["candidate_id"]),
+                        endpoint_id=endpoint_id,
+                        gate="sample_reconcile",
+                        reason_code="rejected_reconcile_insufficient_consensus",
+                        detail=reconcile["metadata"],
+                        commit=False,
+                    )
+                    store.update_blackbox_manifest_candidate_status(
+                        job_id,
+                        str(candidate["candidate_id"]),
+                        "rejected",
+                        metadata={"provider_response_ids": provider_response_ids, "reconcile": reconcile["metadata"]},
+                    )
+                    rejected_count += 1
+                    batch_rejected += 1
+                    continue
+                if reconcile["status"] == "abstained":
+                    reason_counts = reconcile.get("metadata", {}).get("rejected_reason_counts")
+                    reason_code = "abstained_insufficient_agreement"
+                    if isinstance(reason_counts, Mapping) and reason_counts:
+                        first_reason = next(iter(reason_counts))
+                        if str(first_reason).startswith("insufficient_"):
+                            reason_code = f"abstained_{first_reason}"
+                    attempt_id = store.record_llm_attempt(
+                        batch_id=batch_id,
+                        candidate_id=str(candidate["candidate_id"]),
+                        endpoint_id=endpoint_id,
+                        status="abstained",
+                        prompt=prompt,
+                        error="blackbox profile samples abstained before persistence",
+                        metadata={
+                            "provider_response_ids": provider_response_ids,
+                            "sample_count": sample_count,
+                            "sample_failures": sample_failures,
+                            "reconcile": reconcile["metadata"],
+                        },
+                    )
+                    store.add_blackbox_validation_failure(
+                        job_id,
+                        batch_id=batch_id,
+                        attempt_id=attempt_id,
+                        provider_response_id=provider_response_ids[-1] if provider_response_ids else None,
+                        candidate_id=str(candidate["candidate_id"]),
+                        endpoint_id=endpoint_id,
+                        gate="sample_reconcile",
+                        reason_code=reason_code,
+                        detail=reconcile["metadata"],
+                        commit=False,
+                    )
+                    store.update_blackbox_manifest_candidate_status(
+                        job_id,
+                        str(candidate["candidate_id"]),
+                        "abstained",
+                        metadata={"provider_response_ids": provider_response_ids, "reconcile": reconcile["metadata"]},
+                    )
+                    abstained_count += 1
+                    batch_abstained += 1
+                    continue
+                # Accepted — reconcile found a valid profile for this candidate
+                generated = reconcile["generated"]
+                attempt_id = store.record_llm_attempt(
+                    batch_id=batch_id,
+                    candidate_id=str(candidate["candidate_id"]),
+                    endpoint_id=endpoint_id,
+                    status="generated",
+                    prompt=prompt,
+                    response=generated if isinstance(generated, Mapping) else {},
+                    metadata={
+                        "validator": "schema+endpoint_allowlist+relation_enum",
+                        "provider_response_ids": provider_response_ids,
+                        "sample_count": sample_count,
+                        "sample_failures": sample_failures,
+                        "reconcile": reconcile["metadata"],
+                    },
+                )
+                ledger = store.llm_batch_ledger(job_id)
+                attempt_record = _find_llm_attempt_record(ledger, attempt_id)
+                attempt_metadata = {
+                    "batch_id": batch_id,
+                    "attempt_id": attempt_id,
+                    "candidate_id": str(candidate["candidate_id"]),
+                    "prompt_sha256": str(attempt_record.get("prompt_sha256") or ""),
+                    "response_sha256": str(attempt_record.get("response_sha256") or ""),
+                    "validator_version": "blackbox_content_v1",
+                    "manifest_sha256": selection_manifest["manifest_sha256"],
+                    "manifest_group_sha256": selection_manifest["manifest_group_sha256"],
+                    "selection_seed": selection_manifest["selection_seed"],
+                    "phase": selection_manifest["phase"],
+                    "bucket_id": str(candidate.get("bucket_id") or ""),
+                    "selection_rank": int(candidate.get("selection_rank") or 0),
+                    "global_selection_rank": int(candidate.get("global_selection_rank") or 0),
+                    "shard_index": selection_manifest["shard_index"],
+                    "shard_count": selection_manifest["shard_count"],
+                    "provider_response_id": provider_response_ids[-1] if provider_response_ids else None,
+                    "provider_response_ids": provider_response_ids,
+                    "sample_count": sample_count,
+                    "sample_failures": sample_failures,
+                    "reconcile": reconcile["metadata"],
+                }
+                store.update_blackbox_manifest_candidate_status(
+                    job_id,
+                    str(candidate["candidate_id"]),
+                    "attempted",
+                    metadata={
+                        "batch_id": batch_id,
+                        "attempt_id": attempt_id,
+                        "provider_response_ids": provider_response_ids,
+                        "sample_count": sample_count,
+                    },
+                )
+                validation = _persist_blackbox_profiles(
+                    store,
+                    generated if isinstance(generated, Mapping) else {},
+                    {endpoint_id: candidate},
+                    allowed_relationship_endpoints,
+                    {endpoint_id: attempt_metadata},
+                    provenance={
+                        "provider": config.provider,
+                        "model": config.preferred,
+                        "job_id": job_id,
+                        "mode": "blackbox_profiles_batch",
+                        "manifest_sha256": selection_manifest["manifest_sha256"],
+                        "manifest_group_sha256": selection_manifest["manifest_group_sha256"],
+                        "selection_seed": selection_manifest["selection_seed"],
+                        "phase": selection_manifest["phase"],
+                    },
+                    commit=False,
+                )
+                profile_count += validation["profiles"]
+                edge_count += validation["edges"]
+                rejected_count += validation["rejected"]
+                accepted_endpoints_batch = set(validation["accepted_endpoints"])
+                accepted = endpoint_id in accepted_endpoints_batch
+                endpoint_validation = validation.get("validation_by_endpoint", {}).get(endpoint_id, {})
+                if not isinstance(endpoint_validation, Mapping):
+                    endpoint_validation = {}
+                store.update_llm_attempt_status(
+                    int(attempt_metadata.get("attempt_id") or 0),
+                    "accepted" if accepted else "rejected",
+                    error="" if accepted else "provider returned no valid profile for candidate",
+                    metadata={
+                        "validator_status": endpoint_validation.get(
+                            "validator_status",
+                            "accepted" if accepted else "rejected",
+                        ),
+                        "reason_codes": endpoint_validation.get("reason_codes", []),
+                        "evidence_refs": endpoint_validation.get("evidence_refs", []),
+                    },
+                )
+                store.update_blackbox_manifest_candidate_status(
+                    job_id,
+                    str(candidate["candidate_id"]),
+                    "accepted" if accepted else "rejected",
+                    metadata={
+                        "validator_status": endpoint_validation.get(
+                            "validator_status",
+                            "accepted" if accepted else "rejected",
+                        ),
+                        "reason_codes": endpoint_validation.get("reason_codes", []),
+                        "batch_id": attempt_metadata.get("batch_id"),
+                        "attempt_id": attempt_metadata.get("attempt_id"),
+                    },
+                )
+                if not accepted:
+                    store.add_blackbox_validation_failure(
+                        job_id,
+                        batch_id=_optional_int(attempt_metadata.get("batch_id")),
+                        attempt_id=_optional_int(attempt_metadata.get("attempt_id")),
+                        provider_response_id=_optional_int(attempt_metadata.get("provider_response_id")),
+                        candidate_id=str(candidate["candidate_id"]),
+                        endpoint_id=endpoint_id,
+                        gate="profile_validator",
+                        reason_code=str(
+                            (endpoint_validation.get("reason_codes") or ["provider_returned_no_valid_profile"])[0]
+                            if isinstance(endpoint_validation.get("reason_codes"), list)
+                            else "provider_returned_no_valid_profile"
+                        ),
+                        detail={"validator_status": endpoint_validation.get("validator_status", "rejected")},
+                        commit=False,
+                    )
+                    batch_rejected += 1
+                else:
+                    batch_accepted += 1
+            batch_total_terminal = batch_accepted + batch_rejected + batch_abstained + batch_failed
+            batch_status = "completed" if batch_total_terminal == len(batch) else "partial"
+            store.finish_llm_batch(
+                batch_id,
+                batch_status,
+                metadata={
+                    "accepted": batch_accepted,
+                    "rejected": batch_rejected,
+                    "abstained": batch_abstained,
+                    "failed": batch_failed,
+                    "sample_count": sample_count,
+                },
+            )
+        store.con.commit()
+        store.finish_job(
+            job_id,
+            "generated",
+            f"Generated {profile_count} blackbox profiles from {len(candidates)} candidates",
+        )
+    except Exception as exc:
+        store.con.rollback()
+        store.finish_job(job_id, "failed", str(exc))
+        raise
+    result = {
+        "source": "blackbox_profile_batch_job",
+        "db_path": str(db_path),
+        "provider": config.provider,
+        "model": config.preferred,
+        "inventory_total": len(inventory),
+        "selection_inventory_total": selection_manifest["missing_candidate_total"],
+        "profiled_inventory_total": len(usable_profile_keys),
+        "terminal_inventory_total": len(terminal_profile_keys),
+        "candidate_scope": normalized_candidate_scope,
+        "candidate_count": len(candidates),
+        "batch_size": batch_size,
+        "requested_batch_size": requested_batch_size,
+        "sample_count": sample_count,
+        "retry_count": retry_count,
+        "selection_manifest": {
+            key: value
+            for key, value in selection_manifest.items()
+            if key != "candidates"
+        },
+        "profile_count": profile_count,
+        "edge_count": edge_count,
+        "rejected_count": rejected_count,
+        "failed_count": failed_count,
+        "abstained_count": abstained_count,
+        "job_id": job_id,
+        "ledger": store.llm_batch_ledger(job_id),
+    }
+    if include_graph:
+        result["graph"] = global_graph(db_path, limit=post_batch_graph_limit)
+    return result
+
+
+def _find_llm_attempt_record(ledger: Iterable[Mapping[str, Any]], attempt_id: int) -> Mapping[str, Any]:
+    for batch in ledger:
+        attempts = batch.get("attempts") if isinstance(batch.get("attempts"), list) else []
+        for attempt in attempts:
+            if isinstance(attempt, Mapping) and int(attempt.get("id") or 0) == int(attempt_id):
+                return attempt
+    return {}
+
+
+def _normalize_blackbox_candidate_scope(candidate_scope: str) -> str:
+    normalized = str(candidate_scope or "missing").strip().lower().replace("_", "-")
+    if normalized not in {
+        "missing",
+        "pending",
+        "retry-terminal",
+        "retry-terminal-parse",
+        "retry-terminal-consensus",
+    }:
+        raise ValueError(
+            "blackbox candidate_scope must be one of: missing, pending, retry-terminal, "
+            "retry-terminal-parse, retry-terminal-consensus"
+        )
+    return normalized
+
+
+def _blackbox_candidate_scope_terminal_reason_codes(candidate_scope: str) -> Optional[tuple[str, ...]]:
+    normalized = _normalize_blackbox_candidate_scope(candidate_scope)
+    if normalized == "retry-terminal-parse":
+        return ("failed_parse_exhausted",)
+    if normalized == "retry-terminal-consensus":
+        return ("rejected_reconcile_insufficient_consensus",)
+    return None
+
+
+def _blackbox_selection_manifest(
+    inventory: Iterable[Mapping[str, Any]],
+    *,
+    provider: str,
+    model: str,
+    phase: str = "pilot",
+    selection_seed: str = "",
+    limit: int,
+    shard_count: int = 1,
+    shard_index: int = 0,
+    excluded_profile_keys: Optional[set[tuple[str, str]]] = None,
+    candidate_scope: str = "missing",
+) -> Dict[str, Any]:
+    inventory_list = [dict(candidate) for candidate in inventory]
+    inventory_ids = sorted(str(candidate.get("candidate_id") or "") for candidate in inventory_list)
+    inventory_sha256 = hashlib.sha256("\n".join(inventory_ids).encode("utf-8")).hexdigest()
+    normalized_phase = str(phase or "pilot").strip() or "pilot"
+    normalized_scope = _normalize_blackbox_candidate_scope(candidate_scope)
+    seed = str(selection_seed or "").strip() or f"blackbox_profiles_v1:{inventory_sha256}:{provider}:{model}:{normalized_phase}"
+    normalized_shard_count = max(1, int(shard_count or 1))
+    normalized_shard_index = min(max(0, int(shard_index or 0)), normalized_shard_count - 1)
+    buckets: Dict[str, List[Dict[str, Any]]] = {}
+    for candidate in inventory_list:
+        entry = dict(candidate)
+        bucket_id = _blackbox_candidate_bucket_id(entry)
+        entry["bucket_id"] = bucket_id
+        entry["selection_hash"] = hashlib.sha256(f"{seed}:{entry.get('candidate_id')}".encode("utf-8")).hexdigest()
+        entry["shard_count"] = normalized_shard_count
+        buckets.setdefault(bucket_id, []).append(entry)
+    for bucket in buckets.values():
+        bucket.sort(key=lambda item: (str(item.get("selection_hash") or ""), str(item.get("candidate_id") or "")))
+    ordered: List[Dict[str, Any]] = []
+    bucket_queues: Dict[int, List[str]] = {}
+    for bucket_id, bucket in buckets.items():
+        if not bucket:
+            continue
+        priority = _blackbox_bucket_priority(bucket[0])
+        bucket_queues.setdefault(priority, []).append(bucket_id)
+    for queue in bucket_queues.values():
+        queue.sort(key=lambda bucket_id: _blackbox_bucket_sort_key(buckets[bucket_id][0]))
+    while any(bucket_queues.values()):
+        for priority in sorted(bucket_queues):
+            queue = bucket_queues[priority]
+            while queue and not buckets[queue[0]]:
+                queue.pop(0)
+            if not queue:
+                continue
+            bucket_id = queue.pop(0)
+            ordered.append(buckets[bucket_id].pop(0))
+            if buckets[bucket_id]:
+                queue.append(bucket_id)
+    for global_rank, entry in enumerate(ordered, start=1):
+        entry["global_selection_rank"] = global_rank
+    sharded = [
+        entry
+        for entry in ordered
+        if (int(entry.get("global_selection_rank") or 1) - 1) % normalized_shard_count == normalized_shard_index
+    ]
+    excluded_keys = excluded_profile_keys or set()
+    missing_ordered = [
+        entry
+        for entry in ordered
+        if (str(entry.get("view") or ""), str(entry.get("endpoint_id") or "")) not in excluded_keys
+    ]
+    missing_sharded = [
+        entry
+        for entry in sharded
+        if (str(entry.get("view") or ""), str(entry.get("endpoint_id") or "")) not in excluded_keys
+    ]
+    selected = missing_sharded[: max(1, int(limit or 1))]
+    for rank, entry in enumerate(selected, start=1):
+        entry["selection_rank"] = rank
+        entry["shard_selection_rank"] = rank
+        entry["shard_index"] = normalized_shard_index
+    bucket_counts: Dict[str, int] = {}
+    for entry in selected:
+        bucket_id = str(entry.get("bucket_id") or "unknown")
+        bucket_counts[bucket_id] = bucket_counts.get(bucket_id, 0) + 1
+    manifest_basis = json.dumps(
+        {
+            "phase": normalized_phase,
+            "candidate_scope": normalized_scope,
+            "selection_seed": seed,
+            "inventory_sha256": inventory_sha256,
+            "shard_count": normalized_shard_count,
+            "shard_index": normalized_shard_index,
+            "candidates": [
+                {
+                    "candidate_id": entry.get("candidate_id"),
+                    "endpoint_id": entry.get("endpoint_id"),
+                    "bucket_id": entry.get("bucket_id"),
+                    "selection_rank": entry.get("selection_rank"),
+                    "global_selection_rank": entry.get("global_selection_rank"),
+                    "selection_hash": entry.get("selection_hash"),
+                }
+                for entry in selected
+            ],
+        },
+        sort_keys=True,
+    )
+    manifest_group_basis = json.dumps(
+        {
+            "phase": normalized_phase,
+            "candidate_scope": normalized_scope,
+            "selection_seed": seed,
+            "inventory_sha256": inventory_sha256,
+            "shard_count": normalized_shard_count,
+            "global_candidate_ids_sha256": hashlib.sha256(
+                "\n".join(str(entry.get("candidate_id") or "") for entry in ordered).encode("utf-8")
+            ).hexdigest(),
+        },
+        sort_keys=True,
+    )
+    return {
+        "phase": normalized_phase,
+        "candidate_scope": normalized_scope,
+        "selection_seed": seed,
+        "inventory_sha256": inventory_sha256,
+        "manifest_sha256": hashlib.sha256(manifest_basis.encode("utf-8")).hexdigest(),
+        "manifest_group_sha256": hashlib.sha256(manifest_group_basis.encode("utf-8")).hexdigest(),
+        "shard_count": normalized_shard_count,
+        "shard_index": normalized_shard_index,
+        "shard_candidate_total": len(sharded),
+        "missing_candidate_total": len(missing_ordered),
+        "missing_shard_candidate_total": len(missing_sharded),
+        "global_candidate_total": len(ordered),
+        "bucket_counts": bucket_counts,
+        "selected_count": len(selected),
+        "candidates": selected,
+    }
+
+
+def _blackbox_candidate_bucket_id(candidate: Mapping[str, Any]) -> str:
+    attr = candidate.get("attr") if isinstance(candidate.get("attr"), Mapping) else {}
+    source_records = attr.get("source") if isinstance(attr.get("source"), list) else []
+    first_source = source_records[0] if source_records and isinstance(source_records[0], Mapping) else {}
+    neighbors = candidate.get("neighbors") if isinstance(candidate.get("neighbors"), list) else []
+    relation_signature = _dedupe_prompt_terms(
+        f"{neighbor.get('direction')}:{neighbor.get('relation')}:{neighbor.get('kind')}"
+        for neighbor in neighbors
+        if isinstance(neighbor, Mapping)
+    )
+    has_register_io = any(
+        isinstance(neighbor, Mapping)
+        and str(neighbor.get("kind") or "") == "register"
+        and str(neighbor.get("relation") or "") in {"reads", "writes", "configures", "sets_field", "resets", "maps_base"}
+        for neighbor in neighbors
+    )
+    degree_bucket = _blackbox_degree_bucket(len(neighbors))
+    path = str(first_source.get("path") or attr.get("path") or "")
+    path_bucket = "/".join([part for part in path.split("/")[:2] if part]) or "unknown_path"
+    return ":".join(
+        [
+            str(candidate.get("view") or "unknown_view"),
+            str(candidate.get("kind") or "unknown_kind"),
+            str(first_source.get("corpus_id") or attr.get("corpus_id") or "unknown_corpus"),
+            path_bucket,
+            str(attr.get("ip") or first_source.get("ip") or "unknown_ip"),
+            degree_bucket,
+            "register_io" if has_register_io else "no_register_io",
+            ",".join(relation_signature[:4]) or "no_relations",
+            str(candidate.get("coverage_bucket") or "unknown_bucket"),
+        ]
+    )
+
+
+def _blackbox_bucket_sort_key(candidate: Mapping[str, Any]) -> tuple[int, str]:
+    return (_blackbox_bucket_priority(candidate), str(candidate.get("bucket_id") or ""))
+
+
+def _blackbox_bucket_priority(candidate: Mapping[str, Any]) -> int:
+    kind = str(candidate.get("kind") or "")
+    view = str(candidate.get("view") or "")
+    bucket_id = str(candidate.get("bucket_id") or "")
+    if kind == "register":
+        return 0
+    if "register_io" in bucket_id:
+        return 1
+    if view == "implementation":
+        return 2
+    if view == "concept":
+        return 3
+    return 4
+
+
+def _blackbox_degree_bucket(degree: int) -> str:
+    if degree <= 0:
+        return "degree_0"
+    if degree <= 2:
+        return "degree_1_2"
+    if degree <= 8:
+        return "degree_3_8"
+    return "degree_9_plus"
+
+
+def _blackbox_allowed_relationship_endpoints(candidates: Iterable[Mapping[str, Any]]) -> set[str]:
+    allowed: set[str] = set()
+    for candidate in candidates:
+        endpoint_id = str(candidate.get("endpoint_id") or "")
+        if endpoint_id:
+            allowed.add(endpoint_id)
+        allowlist = candidate.get("allowlist") if isinstance(candidate.get("allowlist"), Mapping) else {}
+        relationship_endpoints = allowlist.get("relationship_endpoints") if isinstance(allowlist, Mapping) else []
+        for relationship_endpoint in relationship_endpoints if isinstance(relationship_endpoints, list) else []:
+            text = str(relationship_endpoint or "").strip()
+            if text:
+                allowed.add(text)
+    return allowed
+
+
+def _blackbox_evidence_view_for_sample(sample_index: int) -> str:
+    views = ("neighbor-heavy", "source-span-heavy", "snippet-minimal-allowlist")
+    return views[(max(1, int(sample_index or 1)) - 1) % len(views)]
+
+
+def _blackbox_profile_sample_prompt(base_prompt: str, sample_index: int, sample_count: int, evidence_view: str) -> str:
+    view = str(evidence_view or _blackbox_evidence_view_for_sample(sample_index)).strip()
+    guidance_by_view = {
+        "neighbor-heavy": (
+            "Prioritize GRAPH NEIGHBORS. Treat neighbor refs as the primary observed I/O boundary; "
+            "use AST SOURCES only to disambiguate labels."
+        ),
+        "source-span-heavy": (
+            "Prioritize AST SOURCES. Infer behavior from source/span provenance first; "
+            "use GRAPH NEIGHBORS only when a source ref supports the same boundary."
+        ),
+        "snippet-minimal-allowlist": (
+            "Prioritize EVIDENCE_REFS and ALLOWLIST. Prefer snippet/source refs when present, "
+            "and abstain by returning no profile rather than inventing unsupported I/O."
+        ),
+    }
+    guidance = guidance_by_view.get(view, guidance_by_view["neighbor-heavy"])
+    return "\n".join(
+        [
+            str(base_prompt),
+            f"SAMPLE_INDEX: {int(sample_index or 1)}",
+            f"SAMPLE_COUNT: {int(sample_count or 1)}",
+            f"PRIMARY_EVIDENCE_VIEW: {view}",
+            guidance,
+            "If the primary evidence view cannot support inputs, outputs, and behavior, return an empty profiles list.",
+        ]
+    )
+
+
+def _blackbox_compact_retry_prompt(sample_prompt: str) -> str:
+    return "\n".join(
+        [
+            str(sample_prompt),
+            "COMPACT_JSON_RETRY: 1",
+            "Retry with shorter JSON. Return one compact profile only.",
+            "Use no relationships key. Use refs arrays. Keep every text under 8 words.",
+        ]
+    )
+
+
+def _blackbox_pure_json_retry_prompt(sample_prompt: str) -> str:
+    return "\n".join(
+        [
+            str(sample_prompt),
+            "PURE_JSON_RETRY: 1",
+            "Return ONLY a raw JSON array. No markdown, no backticks, no explanation, no preamble.",
+            'Format: [{"id":"...","inputs":[{"text":"...","refs":["neighbor:1"]}],"outputs":[{"text":"...","refs":["neighbor:1"]}],"observed_behavior":{"text":"writes boundary output","refs":["neighbor:1"]},"evidence":{"text":"neighbor:1 supports output","refs":["neighbor:1"]}}].',
+            "If uncertain, return [] (empty array). Do not write anything outside the JSON array.",
+            "No trailing text, no summary, no notes.",
+        ]
+    )
+
+
+def _normalize_blackbox_sample_payload(payload: Any) -> Dict[str, Any]:
+    if isinstance(payload, Mapping):
+        return dict(payload)
+    if isinstance(payload, list):
+        return {"profiles": [dict(item) for item in payload if isinstance(item, Mapping)]}
+    return {}
+
+
+def _blackbox_sample_payload_schema_error(
+    payload: Mapping[str, Any],
+    candidates: Iterable[Mapping[str, Any]],
+) -> str:
+    profiles = payload.get("profiles")
+    if not isinstance(profiles, list):
+        return "missing profiles array"
+    endpoint_ids = {
+        str(candidate.get("endpoint_id") or "").strip()
+        for candidate in candidates
+        if str(candidate.get("endpoint_id") or "").strip()
+    }
+    profile_ids = {
+        str(profile.get("id") or "").strip()
+        for profile in profiles
+        if isinstance(profile, Mapping) and str(profile.get("id") or "").strip()
+    }
+    if endpoint_ids and not endpoint_ids.intersection(profile_ids):
+        return "missing endpoint profile"
+    return ""
+
+
+def _blackbox_profile_batch_prompt(candidates: Iterable[Mapping[str, Any]], inventory_total: int) -> str:
+    lines = [
+        "Generate ASIP black box node profiles from grounded AST-derived graph candidates.",
+        "Black box method: observe INPUTS and OUTPUTS at the entity boundary, summarize behavior, then explain what this layer clarifies about its parent system.",
+        f"INVENTORY_TOTAL: {inventory_total}",
+        "Return JSON only with profiles.",
+        "Schema: {\"profiles\":[{\"id\":string,\"method\":\"blackbox_io\",\"inputs\":[{\"text\":string,\"refs\":[string]}],\"outputs\":[{\"text\":string,\"refs\":[string]}],\"observed_behavior\":{\"text\":string,\"refs\":[string]},\"explanation_layer\":string,\"confidence\":number,\"evidence\":{\"text\":string,\"refs\":[string]}}]}",
+        "Return at most one profile per ENDPOINT.",
+        "Keep each text under 12 words. method must be blackbox_io. Do not explain outside JSON.",
+        "Use only exact ENDPOINT ids shown below for profile ids.",
+        "Every input, output, observed_behavior, and evidence item should cite EVIDENCE_REFS as refs.",
+        "Use refs exactly like neighbor:1, source:1, or snippet:1; do not invent refs.",
+        "Do not create local-variable, wrapper, field, provider, model, or file-path endpoints.",
+        "Keep evidence under 140 characters.",
+    ]
+    for candidate in candidates:
+        endpoint_id = str(candidate.get("endpoint_id") or "")
+        lines.extend(
+            [
+                f"ENDPOINT {endpoint_id}",
+                f"CANDIDATE_ID: {candidate.get('candidate_id')}",
+                f"VIEW: {candidate.get('view')}",
+                f"KIND: {candidate.get('kind')}",
+                f"LABEL: {candidate.get('label')}",
+                f"ALLOWLIST: {json.dumps(candidate.get('allowlist') or {}, sort_keys=True)}",
+                "GRAPH NEIGHBORS:",
+            ]
+        )
+        neighbors = candidate.get("neighbors") if isinstance(candidate.get("neighbors"), list) else []
+        if neighbors:
+            for index, neighbor in enumerate(neighbors[:12], start=1):
+                if not isinstance(neighbor, Mapping):
+                    continue
+                lines.append(
+                    f"{index}: {neighbor.get('direction')} {neighbor.get('relation')} {neighbor.get('endpoint_id')}"
+                )
+        else:
+            lines.append("none")
+        raw_sources = candidate.get("raw_ast_sources") if isinstance(candidate.get("raw_ast_sources"), list) else []
+        lines.append("AST SOURCES:")
+        if raw_sources:
+            for index, source in enumerate(raw_sources[:4], start=1):
+                if not isinstance(source, Mapping):
+                    continue
+                lines.append(
+                    f"{index}: {source.get('path') or ''} {source.get('raw_function_name') or source.get('symbol') or ''}"
+                )
+        else:
+            lines.append("none")
+        lines.append("EVIDENCE_REFS:")
+        lines.extend(_blackbox_candidate_evidence_ref_lines(candidate))
+    return "\n".join(lines)
+
+
+def _reconcile_blackbox_profile_samples(
+    samples: Iterable[Mapping[str, Any]],
+    candidate: Mapping[str, Any],
+    sample_count: int,
+) -> Dict[str, Any]:
+    endpoint = str(candidate.get("endpoint_id") or "")
+    sample_list = list(samples)
+    accepted: List[Dict[str, Any]] = []
+    rejected_reasons: Counter[str] = Counter()
+    for sample_index, generated in enumerate(sample_list, start=1):
+        profiles = generated.get("profiles") if isinstance(generated.get("profiles"), list) else []
+        profile = next(
+            (
+                item
+                for item in profiles
+                if isinstance(item, Mapping) and str(item.get("id") or "").strip() == endpoint
+            ),
+            None,
+        )
+        if profile is None:
+            rejected_reasons["missing_endpoint_profile"] += 1
+            continue
+        validation = _validate_blackbox_profile(profile, candidate)
+        if validation["status"] == "rejected":
+            for reason in validation.get("reason_codes", []) or ["rejected"]:
+                rejected_reasons[str(reason or "rejected")] += 1
+            continue
+        accepted.append(
+            {
+                "sample_index": sample_index,
+                "profile": dict(profile),
+                "relationships": [
+                    dict(item)
+                    for item in generated.get("relationships", [])
+                    if isinstance(item, Mapping)
+                ]
+                if isinstance(generated.get("relationships"), list)
+                else [],
+                "validator_status": validation["status"],
+                "reason_codes": validation["reason_codes"],
+                "evidence_refs": validation["evidence_refs"],
+            }
+        )
+    required = 1 if int(sample_count or 1) <= 1 else min(2, int(sample_count or 1))
+    if len(accepted) < required:
+        status = "failed" if not sample_list else "rejected"
+        return {
+            "status": status,
+            "generated": {"profiles": [], "relationships": []},
+            "metadata": {
+                "sample_count": int(sample_count or 1),
+                "required_agreeing_samples": required,
+                "accepted_sample_count": len(accepted),
+                "rejected_reason_counts": dict(rejected_reasons),
+            },
+        }
+    agreement = _blackbox_independent_sample_agreement(accepted, required)
+    if not agreement["passes"]:
+        rejected_reasons[str(agreement["reason_code"])] += 1
+        return {
+            "status": "abstained",
+            "generated": {"profiles": [], "relationships": []},
+            "metadata": {
+                "sample_count": int(sample_count or 1),
+                "required_agreeing_samples": required,
+                "accepted_sample_count": len(accepted),
+                "agreement": agreement,
+                "rejected_reason_counts": dict(rejected_reasons),
+            },
+        }
+    winner = accepted[0]
+    return {
+        "status": "accepted",
+        "generated": {"profiles": [winner["profile"]], "relationships": winner.get("relationships", [])},
+        "metadata": {
+            "sample_count": int(sample_count or 1),
+            "required_agreeing_samples": required,
+            "accepted_sample_count": len(accepted),
+            "winner_sample_index": winner["sample_index"],
+            "validator_statuses": [str(item.get("validator_status") or "") for item in accepted],
+            "reason_codes": _dedupe_prompt_terms(
+                reason
+                for item in accepted
+                for reason in item.get("reason_codes", [])
+            ),
+            "evidence_refs": _dedupe_prompt_terms(
+                ref
+                for item in accepted
+                for ref in item.get("evidence_refs", [])
+            ),
+            "agreement": agreement,
+            "rejected_reason_counts": dict(rejected_reasons),
+        },
+    }
+
+
+def _blackbox_independent_sample_agreement(samples: Iterable[Mapping[str, Any]], required: int) -> Dict[str, Any]:
+    sample_list = list(samples)
+    if int(required or 1) <= 1:
+        return {"passes": True, "reason_code": "", "grounding_ref_counts": {}, "agreed_refs": []}
+    grounding_ref_counts: Counter[str] = Counter()
+    behavior_counts: Counter[str] = Counter()
+    for sample in sample_list:
+        refs = {
+            str(ref or "").strip()
+            for ref in sample.get("evidence_refs", [])
+            if str(ref or "").strip() and str(ref or "").strip() != "candidate:invocation"
+        }
+        grounding_ref_counts.update(refs)
+        profile = sample.get("profile") if isinstance(sample.get("profile"), Mapping) else {}
+        behavior_family = _blackbox_behavior_family(str(profile.get("observed_behavior") or ""))
+        if behavior_family:
+            behavior_counts[behavior_family] += 1
+    agreed_refs = sorted(ref for ref, count in grounding_ref_counts.items() if int(count) >= int(required or 1))
+    agreed_behavior_families = sorted(family for family, count in behavior_counts.items() if int(count) >= int(required or 1))
+    if not agreed_refs:
+        return {
+            "passes": False,
+            "reason_code": "insufficient_independent_ref_agreement",
+            "grounding_ref_counts": dict(grounding_ref_counts),
+            "behavior_family_counts": dict(behavior_counts),
+            "agreed_refs": [],
+            "agreed_behavior_families": agreed_behavior_families,
+        }
+    if not agreed_behavior_families:
+        return {
+            "passes": False,
+            "reason_code": "insufficient_behavior_family_agreement",
+            "grounding_ref_counts": dict(grounding_ref_counts),
+            "behavior_family_counts": dict(behavior_counts),
+            "agreed_refs": agreed_refs,
+            "agreed_behavior_families": [],
+        }
+    return {
+        "passes": True,
+        "reason_code": "",
+        "grounding_ref_counts": dict(grounding_ref_counts),
+        "behavior_family_counts": dict(behavior_counts),
+        "agreed_refs": agreed_refs,
+        "agreed_behavior_families": agreed_behavior_families,
+    }
+
+
+def _blackbox_behavior_family(text: str) -> str:
+    tokens = _blackbox_token_set(text)
+    relation_families = (
+        ("write", {"write", "writes", "program", "programs", "set", "sets"}),
+        ("read", {"read", "reads", "fetch", "fetches"}),
+        ("configure", {"configure", "configures", "initialize", "initializes", "setup", "sets"}),
+        ("reset", {"reset", "resets", "clear", "clears"}),
+        ("call", {"call", "calls", "invoke", "invokes", "route", "routes"}),
+        ("map", {"map", "maps"}),
+    )
+    for family, terms in relation_families:
+        if tokens & terms:
+            return family
+    return "behavior" if tokens else ""
+
+
+def _persist_blackbox_profiles(
+    store: AsipStore,
+    generated: Mapping[str, Any],
+    candidates_by_endpoint: Mapping[str, Mapping[str, Any]],
+    allowed_relationship_endpoints: set[str],
+    attempt_metadata_by_endpoint: Mapping[str, Mapping[str, Any]],
+    provenance: Mapping[str, object],
+    commit: bool = True,
+) -> Dict[str, Any]:
+    profile_count = 0
+    edge_count = 0
+    rejected_count = 0
+    accepted_endpoints: List[str] = []
+    accepted_profile_endpoints: set[str] = set()
+    validation_by_endpoint: Dict[str, Dict[str, Any]] = {}
+    for profile in generated.get("profiles", []):
+        if not isinstance(profile, Mapping):
+            rejected_count += 1
+            continue
+        endpoint = str(profile.get("id") or "").strip()
+        candidate = candidates_by_endpoint.get(endpoint)
+        if candidate is None:
+            rejected_count += 1
+            continue
+        if endpoint in accepted_profile_endpoints:
+            rejected_count += 1
+            validation_by_endpoint.setdefault(
+                endpoint,
+                {
+                    "validator_status": "rejected",
+                    "reason_codes": ["rejected_duplicate_profile"],
+                    "evidence_refs": [],
+                },
+            )
+            continue
+        validation = _validate_blackbox_profile(profile, candidate)
+        validation_by_endpoint[endpoint] = {
+            "validator_status": validation["status"],
+            "reason_codes": validation["reason_codes"],
+            "evidence_refs": validation["evidence_refs"],
+        }
+        if validation["status"] == "rejected":
+            rejected_count += 1
+            continue
+        blackbox = validation["profile"]
+        metadata = _blackbox_candidate_endpoint_metadata(candidate)
+        attempt_metadata = attempt_metadata_by_endpoint.get(endpoint, {})
+        validation_metadata = {
+            "validator_status": validation["status"],
+            "reason_codes": validation["reason_codes"],
+            "evidence_refs": validation["evidence_refs"],
+        }
+        blackbox = {
+            **blackbox,
+            "validator_status": validation["status"],
+            "reason_codes": validation["reason_codes"],
+            "evidence_refs": validation["evidence_refs"],
+        }
+        profile_id = store.add_blackbox_profile(
+            endpoint,
+            blackbox,
+            view=str(candidate.get("view") or ""),
+            endpoint_kind=str(candidate.get("kind") or ""),
+            provider=str(provenance.get("provider") or "llm"),
+            model=str(provenance.get("model") or ""),
+            job_id=int(provenance.get("job_id") or 0),
+            batch_id=_optional_int(attempt_metadata.get("batch_id")),
+            attempt_id=_optional_int(attempt_metadata.get("attempt_id")),
+            candidate_id=str(candidate.get("candidate_id") or attempt_metadata.get("candidate_id") or ""),
+            prompt_sha256=str(attempt_metadata.get("prompt_sha256") or ""),
+            response_sha256=str(attempt_metadata.get("response_sha256") or ""),
+            validator_version=str(attempt_metadata.get("validator_version") or "blackbox_content_v1"),
+            status=str(validation["status"] or "accepted"),
+            metadata={
+                "endpoint_metadata": metadata,
+                "validation": validation_metadata,
+                "sample_count": attempt_metadata.get("sample_count"),
+                "reconcile": attempt_metadata.get("reconcile"),
+                "validator_status": validation["status"],
+                "reason_codes": validation["reason_codes"],
+                "evidence_refs": validation["evidence_refs"],
+                "provider_response_id": attempt_metadata.get("provider_response_id"),
+                "provider_response_ids": attempt_metadata.get("provider_response_ids"),
+            },
+            commit=False,
+        )
+        for direction, values in (("input", blackbox.get("inputs")), ("output", blackbox.get("outputs"))):
+            for value in _profile_string_list(values):
+                store.add_blackbox_io_fact(
+                    profile_id,
+                    int(provenance.get("job_id") or 0),
+                    batch_id=_optional_int(attempt_metadata.get("batch_id")),
+                    attempt_id=_optional_int(attempt_metadata.get("attempt_id")),
+                    candidate_id=str(candidate.get("candidate_id") or attempt_metadata.get("candidate_id") or ""),
+                    endpoint_id=endpoint,
+                    direction=direction,
+                    text=value,
+                    evidence_refs=validation["evidence_refs"],
+                    grounding_status=str(validation["status"] or ""),
+                    confidence=float(profile.get("confidence") or 0.78),
+                    metadata={"validator_version": str(attempt_metadata.get("validator_version") or "blackbox_content_v1")},
+                    commit=False,
+                )
+        edge_id = store.add_edge(
+            endpoint,
+            endpoint,
+            "relates_to",
+            float(profile.get("confidence") or 0.78),
+            stage="semantic",
+            source=str(provenance.get("provider") or "llm"),
+            path=str(metadata.get("path") or ""),
+            line_start=_optional_int(metadata.get("line_start")),
+            line_end=_optional_int(metadata.get("line_end")),
+            provenance={
+                **dict(provenance),
+                **metadata,
+                **dict(attempt_metadata),
+                "extractor": "blackbox_profiles",
+                "layer": "blackbox_profile",
+                "provenance_type": "llm_blackbox_profile",
+                "endpoint_id": endpoint,
+                "candidate_id": str(candidate.get("candidate_id") or ""),
+                "view": str(candidate.get("view") or ""),
+                "validator_version": str(attempt_metadata.get("validator_version") or "blackbox_content_v1"),
+                "validator_status": validation["status"],
+                "reason_codes": validation["reason_codes"],
+                "evidence_refs": validation["evidence_refs"],
+                "blackbox": blackbox,
+            },
+            commit=False,
+        )
+        if edge_id:
+            profile_count += 1
+            edge_count += 1
+            accepted_endpoints.append(endpoint)
+            accepted_profile_endpoints.add(endpoint)
+        boundary_edges = _blackbox_profile_boundary_relationships(endpoint, blackbox, candidate)
+        for boundary_edge in boundary_edges:
+            edge_id = store.add_edge(
+                str(boundary_edge["src"]),
+                str(boundary_edge["dst"]),
+                str(boundary_edge["relation"]),
+                float(profile.get("confidence") or 0.76),
+                stage="semantic",
+                source=str(provenance.get("provider") or "llm"),
+                path=str(metadata.get("path") or ""),
+                line_start=_optional_int(metadata.get("line_start")),
+                line_end=_optional_int(metadata.get("line_end")),
+                provenance={
+                    **dict(provenance),
+                    **metadata,
+                    **dict(attempt_metadata),
+                    "extractor": "blackbox_profiles",
+                    "relationship_source": "blackbox_profile_boundary",
+                    "layer": "blackbox_relationship",
+                    "provenance_type": "grounded_profile_boundary",
+                    "endpoint_id": endpoint,
+                    "src_endpoint_id": str(boundary_edge["src"]),
+                    "dst_endpoint_id": str(boundary_edge["dst"]),
+                    "neighbor_direction": str(boundary_edge.get("direction") or ""),
+                    "validator_version": str(attempt_metadata.get("validator_version") or "blackbox_content_v1"),
+                    "validator_status": validation["status"],
+                    "reason_codes": validation["reason_codes"],
+                    "evidence_refs": validation["evidence_refs"],
+                    "blackbox": blackbox,
+                },
+                commit=False,
+            )
+            if edge_id:
+                edge_count += 1
+    for relationship in generated.get("relationships", []):
+        if not isinstance(relationship, Mapping):
+            _record_blackbox_relationship_rejection(
+                store,
+                provenance,
+                {},
+                relationship,
+                reason_code="invalid_relationship_object",
+                detail={"value_type": type(relationship).__name__},
+                commit=False,
+            )
+            rejected_count += 1
+            continue
+        src = str(relationship.get("src") or "").strip()
+        dst = str(relationship.get("dst") or "").strip()
+        src_candidate = candidates_by_endpoint.get(src)
+        attempt_metadata = attempt_metadata_by_endpoint.get(src, {})
+        if src not in allowed_relationship_endpoints or dst not in allowed_relationship_endpoints or src == dst:
+            _record_blackbox_relationship_rejection(
+                store,
+                provenance,
+                attempt_metadata,
+                relationship,
+                src_candidate=src_candidate,
+                reason_code="relationship_endpoint_not_allowed",
+                detail={"src": src, "dst": dst, "allowed": src in allowed_relationship_endpoints and dst in allowed_relationship_endpoints},
+                commit=False,
+            )
+            rejected_count += 1
+            continue
+        if src not in accepted_profile_endpoints:
+            _record_blackbox_relationship_rejection(
+                store,
+                provenance,
+                attempt_metadata,
+                relationship,
+                src_candidate=src_candidate,
+                reason_code="relationship_requires_accepted_profile",
+                detail={"src": src, "dst": dst},
+                commit=False,
+            )
+            rejected_count += 1
+            continue
+        relation = normalize_product_relation(str(relationship.get("relation") or "relates_to"))
+        if not relation:
+            _record_blackbox_relationship_rejection(
+                store,
+                provenance,
+                attempt_metadata,
+                relationship,
+                src_candidate=src_candidate,
+                reason_code="relationship_relation_invalid",
+                detail={"relation": str(relationship.get("relation") or "")},
+                commit=False,
+            )
+            rejected_count += 1
+            continue
+        _record_blackbox_relationship_rejection(
+            store,
+            provenance,
+            attempt_metadata,
+            relationship,
+            src_candidate=src_candidate,
+            reason_code="deferred_direct_relationship_projection",
+            detail={
+                "src": src,
+                "dst": dst,
+                "relation": relation,
+                "policy": "P0 derives visible blackbox relationships from accepted profile refs and deterministic neighbors",
+            },
+            commit=False,
+        )
+        rejected_count += 1
+    if commit and (profile_count or edge_count):
+        store.con.commit()
+    return {
+        "profiles": profile_count,
+        "edges": edge_count,
+        "rejected": rejected_count,
+        "accepted_endpoints": accepted_endpoints,
+        "validation_by_endpoint": validation_by_endpoint,
+    }
+
+
+def _record_blackbox_relationship_rejection(
+    store: AsipStore,
+    provenance: Mapping[str, object],
+    attempt_metadata: Mapping[str, Any],
+    relationship: object,
+    *,
+    src_candidate: Optional[Mapping[str, Any]] = None,
+    reason_code: str,
+    detail: Mapping[str, Any],
+    commit: bool = True,
+) -> None:
+    job_id = _optional_int(provenance.get("job_id"))
+    if job_id is None:
+        return
+    relationship_payload = dict(relationship) if isinstance(relationship, Mapping) else {"raw": repr(relationship)}
+    src = str(relationship_payload.get("src") or "").strip()
+    candidate_id = str(attempt_metadata.get("candidate_id") or "")
+    if not candidate_id and isinstance(src_candidate, Mapping):
+        candidate_id = str(src_candidate.get("candidate_id") or "")
+    store.add_blackbox_validation_failure(
+        job_id,
+        batch_id=_optional_int(attempt_metadata.get("batch_id")),
+        attempt_id=_optional_int(attempt_metadata.get("attempt_id")),
+        provider_response_id=_optional_int(attempt_metadata.get("provider_response_id")),
+        candidate_id=candidate_id,
+        endpoint_id=src or str(relationship_payload.get("dst") or ""),
+        gate="relationship_projection",
+        reason_code=reason_code,
+        detail={**dict(detail), "relationship": relationship_payload},
+        commit=commit,
+    )
+
+
+def _blackbox_candidate_endpoint_metadata(candidate: Mapping[str, Any]) -> Dict[str, Any]:
+    attr = candidate.get("attr") if isinstance(candidate.get("attr"), Mapping) else {}
+    source_records = attr.get("source") if isinstance(attr.get("source"), list) else []
+    source = source_records[0] if source_records and isinstance(source_records[0], Mapping) else {}
+    endpoint_id = str(candidate.get("endpoint_id") or "")
+    kind = str(candidate.get("kind") or "")
+    label = str(candidate.get("label") or endpoint_id)
+    metadata: Dict[str, Any] = {
+        "endpoint_id": endpoint_id,
+        "endpoint_kind": kind,
+        "symbol": label,
+        "label": label,
+        "corpus_id": source.get("corpus_id") or "unknown",
+        "repo": source.get("repo") or "unknown",
+        "path": source.get("path") or "",
+        "line_start": source.get("line_start"),
+        "line_end": source.get("line_end"),
+        "page": source.get("page"),
+    }
+    if kind == "function":
+        metadata["function"] = label
+        metadata["function_name"] = str(attr.get("function_name") or label)
+    if kind == "register":
+        metadata["symbol"] = str(attr.get("symbol") or label)
+        metadata["ip"] = str(attr.get("ip") or "")
+        metadata["ip_version"] = attr.get("ip_version")
+    if kind == "doc":
+        metadata["source_type"] = "pdf" if str(metadata.get("path") or endpoint_id).lower().endswith(".pdf") else "doc"
+        metadata["doc_kind"] = attr.get("doc_kind")
+        metadata["anchor"] = attr.get("anchor")
+    return {key: value for key, value in metadata.items() if value not in ("", None, 0)}
+
+
+def _blackbox_profile_boundary_relationships(
+    endpoint: str,
+    profile: Mapping[str, Any],
+    candidate: Mapping[str, Any],
+) -> List[Dict[str, str]]:
+    neighbors = candidate.get("neighbors") if isinstance(candidate.get("neighbors"), list) else []
+    evidence_refs = set(_profile_string_list(profile.get("evidence_refs")))
+    output_text = _blackbox_token_set(" ".join(str(item) for item in profile.get("outputs", []) if str(item)))
+    input_text = _blackbox_token_set(" ".join(str(item) for item in profile.get("inputs", []) if str(item)))
+    edges: List[Dict[str, str]] = []
+    seen: set[tuple[str, str, str]] = set()
+    for index, neighbor in enumerate(neighbors[:24], start=1):
+        if not isinstance(neighbor, Mapping):
+            continue
+        neighbor_endpoint = str(neighbor.get("endpoint_id") or "").strip()
+        relation = normalize_product_relation(str(neighbor.get("relation") or ""))
+        direction = str(neighbor.get("direction") or "")
+        if not neighbor_endpoint or not relation or neighbor_endpoint == endpoint:
+            continue
+        ref = f"neighbor:{index}"
+        neighbor_tokens = _blackbox_token_set(neighbor_endpoint)
+        is_grounded = ref in evidence_refs or bool(neighbor_tokens & output_text) or bool(neighbor_tokens & input_text)
+        if not is_grounded:
+            continue
+        if direction == "in":
+            src, dst = neighbor_endpoint, endpoint
+        else:
+            src, dst = endpoint, neighbor_endpoint
+        key = (src, relation, dst)
+        if key in seen:
+            continue
+        seen.add(key)
+        edges.append({"src": src, "relation": relation, "dst": dst, "direction": direction})
+    return edges
+
+
+def _validate_blackbox_profile(profile: Mapping[str, Any], candidate: Mapping[str, Any]) -> Dict[str, Any]:
+    payload = _blackbox_profile_payload(profile, candidate)
+    if not payload:
+        return {"status": "rejected", "profile": {}, "reason_codes": ["rejected_schema_invalid"], "evidence_refs": []}
+    explicit_refs = _blackbox_profile_explicit_refs(profile)
+    evidence_refs_by_id = _blackbox_candidate_evidence_refs(candidate)
+    unknown_refs = sorted(ref for ref in explicit_refs if ref not in evidence_refs_by_id and ref != "candidate:invocation")
+    if unknown_refs:
+        return {
+            "status": "rejected",
+            "profile": {},
+            "reason_codes": ["rejected_evidence_ref_unknown"],
+            "evidence_refs": unknown_refs,
+        }
+    if _blackbox_profile_is_ast_name_parrot(payload, candidate):
+        return {
+            "status": "rejected",
+            "profile": {},
+            "reason_codes": ["rejected_ast_name_parrot"],
+            "evidence_refs": explicit_refs,
+        }
+    reason_codes: List[str] = []
+    evidence_refs = explicit_refs
+    if not evidence_refs:
+        evidence_refs = _blackbox_repaired_evidence_refs(payload, candidate, evidence_refs_by_id)
+        if evidence_refs:
+            reason_codes.append("repaired_legacy_evidence_refs")
+    raw_inputs = _profile_string_list(profile.get("inputs"))
+    raw_outputs = _profile_string_list(profile.get("outputs"))
+    if (not raw_inputs or not raw_outputs) and payload.get("inputs") and payload.get("outputs"):
+        reason_codes.append("repaired_empty_io_from_neighbors")
+    if not evidence_refs:
+        return {
+            "status": "rejected",
+            "profile": {},
+            "reason_codes": ["rejected_missing_behavior_grounding"],
+            "evidence_refs": [],
+        }
+    if not reason_codes:
+        reason_codes.append("accepted_grounded")
+    status = "repaired" if any(code.startswith("repaired_") for code in reason_codes) else "accepted"
+    return {"status": status, "profile": payload, "reason_codes": reason_codes, "evidence_refs": evidence_refs}
+
+
+def _blackbox_candidate_evidence_ref_lines(candidate: Mapping[str, Any]) -> List[str]:
+    refs = _blackbox_candidate_evidence_refs(candidate)
+    return [f"{key} {value}" for key, value in refs.items()] or ["none"]
+
+
+def _blackbox_candidate_evidence_refs(candidate: Mapping[str, Any]) -> Dict[str, str]:
+    refs: Dict[str, str] = {}
+    neighbors = candidate.get("neighbors") if isinstance(candidate.get("neighbors"), list) else []
+    for index, neighbor in enumerate(neighbors[:24], start=1):
+        if not isinstance(neighbor, Mapping):
+            continue
+        text = " ".join(
+            part
+            for part in (
+                str(neighbor.get("direction") or ""),
+                str(neighbor.get("relation") or ""),
+                str(neighbor.get("endpoint_id") or ""),
+            )
+            if part
+        ).strip()
+        if text:
+            refs[f"neighbor:{index}"] = text
+    raw_sources = candidate.get("raw_ast_sources") if isinstance(candidate.get("raw_ast_sources"), list) else []
+    for index, source in enumerate(raw_sources[:8], start=1):
+        if not isinstance(source, Mapping):
+            continue
+        location = [
+            str(source.get("path") or ""),
+            str(source.get("raw_function_name") or source.get("function_name") or source.get("symbol") or ""),
+        ]
+        if source.get("line_start") not in ("", None, 0):
+            location.append(f"line_start={source.get('line_start')}")
+        if source.get("line_end") not in ("", None, 0):
+            location.append(f"line_end={source.get('line_end')}")
+        text = " ".join(part for part in location if part).strip()
+        if text:
+            refs[f"source:{index}"] = text
+    snippets = candidate.get("snippets") if isinstance(candidate.get("snippets"), list) else []
+    for index, snippet in enumerate(snippets[:8], start=1):
+        text = str(snippet.get("text") if isinstance(snippet, Mapping) else snippet or "").strip()
+        if text:
+            refs[f"snippet:{index}"] = text[:240]
+    return refs
+
+
+def _blackbox_profile_explicit_refs(profile: Mapping[str, Any]) -> List[str]:
+    refs: List[str] = []
+    for key in ("inputs", "outputs", "evidence"):
+        value = profile.get(key)
+        if isinstance(value, list):
+            for item in value:
+                refs.extend(_blackbox_refs_from_value(item))
+        else:
+            refs.extend(_blackbox_refs_from_value(value))
+    refs.extend(_blackbox_refs_from_value(profile.get("observed_behavior")))
+    return _dedupe_prompt_terms(refs)
+
+
+def _blackbox_refs_from_value(value: Any) -> List[str]:
+    if not isinstance(value, Mapping):
+        return []
+    refs = value.get("refs")
+    if isinstance(refs, list):
+        return [str(ref).strip() for ref in refs if str(ref).strip()]
+    ref = str(value.get("ref") or "").strip()
+    return [ref] if ref else []
+
+
+def _blackbox_repaired_evidence_refs(
+    payload: Mapping[str, Any],
+    candidate: Mapping[str, Any],
+    evidence_refs_by_id: Mapping[str, str],
+) -> List[str]:
+    text = " ".join(
+        [
+            *[str(item) for item in payload.get("inputs", []) if str(item)],
+            *[str(item) for item in payload.get("outputs", []) if str(item)],
+            str(payload.get("observed_behavior") or ""),
+            str(payload.get("evidence") or ""),
+        ]
+    )
+    normalized = _blackbox_token_set(text)
+    repaired: List[str] = []
+    for ref, ref_text in evidence_refs_by_id.items():
+        ref_tokens = _blackbox_token_set(ref_text)
+        if ref_tokens and (ref_tokens & normalized):
+            repaired.append(ref)
+    if repaired:
+        return repaired[:8]
+    label = str(candidate.get("label") or candidate.get("endpoint_id") or "")
+    if _blackbox_token_set(label) & normalized:
+        return ["candidate:invocation"]
+    return []
+
+
+def _blackbox_profile_is_ast_name_parrot(payload: Mapping[str, Any], candidate: Mapping[str, Any]) -> bool:
+    behavior_tokens = _blackbox_token_set(str(payload.get("observed_behavior") or ""))
+    if not behavior_tokens:
+        return True
+    raw_sources = candidate.get("raw_ast_sources") if isinstance(candidate.get("raw_ast_sources"), list) else []
+    label_tokens = _blackbox_token_set(
+        " ".join(
+            [
+                str(candidate.get("label") or ""),
+                str(candidate.get("endpoint_id") or ""),
+                *[
+                    str(source.get("raw_function_name") or source.get("function_name") or source.get("symbol") or "")
+                    for source in raw_sources
+                    if isinstance(source, Mapping)
+                ],
+            ]
+        )
+    )
+    io_tokens = _blackbox_token_set(
+        " ".join(
+            [
+                *[str(item) for item in payload.get("inputs", []) if str(item)],
+                *[str(item) for item in payload.get("outputs", []) if str(item)],
+            ]
+        )
+    )
+    action_terms = {"read", "reads", "write", "writes", "configure", "configures", "reset", "resets", "call", "calls"}
+    io_adds_non_label_terms = bool((io_tokens - label_tokens) & behavior_tokens)
+    behavior_has_io_terms = io_adds_non_label_terms or bool(behavior_tokens & action_terms)
+    return bool(behavior_tokens) and behavior_tokens <= label_tokens and not behavior_has_io_terms
+
+
+def _blackbox_token_set(value: str) -> set[str]:
+    return {token for token in re.split(r"[^A-Za-z0-9]+", value.lower()) if token and len(token) > 1}
+
+
+def _blackbox_profile_payload(profile: Mapping[str, Any], candidate: Optional[Mapping[str, Any]] = None) -> Dict[str, Any]:
+    inputs = _profile_string_list(profile.get("inputs"))
+    outputs = _profile_string_list(profile.get("outputs"))
+    if candidate is not None:
+        if not inputs:
+            inputs = _blackbox_boundary_terms_from_candidate(candidate, direction="input")
+        if not outputs:
+            outputs = _blackbox_boundary_terms_from_candidate(candidate, direction="output")
+    payload = {
+        "method": str(profile.get("method") or "blackbox_io").strip() or "blackbox_io",
+        "inputs": inputs,
+        "outputs": outputs,
+        "observed_behavior": _profile_text(profile.get("observed_behavior")),
+        "explanation_layer": str(profile.get("explanation_layer") or "").strip(),
+        "evidence": _profile_evidence_text(profile.get("evidence")),
+    }
+    if not payload["inputs"] or not payload["outputs"] or not payload["observed_behavior"]:
+        return {}
+    return {key: value for key, value in payload.items() if value not in ("", None, [], {})}
+
+
+def _blackbox_boundary_terms_from_candidate(candidate: Mapping[str, Any], direction: str) -> List[str]:
+    neighbors = candidate.get("neighbors") if isinstance(candidate.get("neighbors"), list) else []
+    terms: List[str] = []
+    for neighbor in neighbors:
+        if not isinstance(neighbor, Mapping):
+            continue
+        relation = str(neighbor.get("relation") or "")
+        neighbor_direction = str(neighbor.get("direction") or "")
+        endpoint_id = str(neighbor.get("endpoint_id") or "")
+        if not endpoint_id:
+            continue
+        if direction == "input" and relation in {"reads", "depends_on"}:
+            terms.append(f"{relation} {endpoint_id}")
+        if direction == "input" and relation == "calls" and neighbor_direction != "out":
+            terms.append(f"{relation} {endpoint_id}")
+        if direction == "output" and relation in {"writes", "sets_field", "configures", "resets", "maps_base"}:
+            terms.append(f"{relation} {endpoint_id}")
+        if direction == "output" and relation == "calls" and neighbor_direction != "in":
+            terms.append(f"{relation} {endpoint_id}")
+    if not terms and direction == "input":
+        label = str(candidate.get("label") or candidate.get("endpoint_id") or "endpoint").strip()
+        terms.append(f"Invocation or configuration request for {label}")
+    return _dedupe_prompt_terms(terms)[:8]
+
+
+def _dedupe_prompt_terms(values: Iterable[str]) -> List[str]:
+    result: List[str] = []
+    seen: set[str] = set()
+    for value in values:
+        text = str(value or "").strip()
+        if not text or text in seen:
+            continue
+        seen.add(text)
+        result.append(text)
+    return result
+
+
+def _profile_string_list(value: Any) -> List[str]:
+    if isinstance(value, list):
+        return [_profile_text(item) for item in value if _profile_text(item)][:8]
+    if value in ("", None, 0):
+        return []
+    return [_profile_text(value)]
+
+
+def _profile_text(value: Any) -> str:
+    if isinstance(value, Mapping):
+        return str(value.get("text") or value.get("quote") or "").strip()
+    return str(value or "").strip()
+
+
+def _profile_evidence_text(value: Any) -> str:
+    if isinstance(value, list):
+        return "; ".join(_profile_text(item) for item in value if _profile_text(item))[:480]
+    return _profile_text(value)
 
 
 def add_resolver_profile(
@@ -2369,6 +4096,24 @@ def _edge_provider_config(provider_settings: Mapping[str, Any]) -> Optional[Edge
         think=bool(edge.get("think", False)),
         timeout_seconds=int(edge.get("timeout_seconds") or 60),
     )
+
+
+def _preflight_blackbox_provider_reachability(config: EdgeModelConfig) -> None:
+    provider = str(config.provider or "ollama").strip().lower().replace("_", "-")
+    base_url = str(config.api_base_url or "http://localhost:11434").rstrip("/")
+    url = f"{base_url}/api/tags" if provider == "ollama" else base_url
+    headers = {str(key): str(value) for key, value in dict(config.extra_headers or {}).items()}
+    request = urllib.request.Request(url, headers=headers, method="GET")
+    timeout = max(1, min(int(config.timeout_seconds or 60), 10))
+    try:
+        with urllib.request.urlopen(request, timeout=timeout):
+            return
+    except urllib.error.HTTPError as exc:
+        if exc.code in {400, 401, 403, 404, 405}:
+            return
+        raise RuntimeError(f"blackbox provider unreachable: HTTP {exc.code} at {url}") from exc
+    except Exception as exc:
+        raise RuntimeError(f"blackbox provider unreachable: {exc}") from exc
 
 
 def _chunks_missing_provider_embedding(
@@ -2819,6 +4564,27 @@ def _box_name_from_node_id(node_id: str) -> str:
 
 def _optional_int(value: Any) -> Optional[int]:
     return int(value) if value not in (None, "") else None
+
+
+def _sha256_file(path: Path) -> str:
+    if not path.exists() or not path.is_file():
+        return ""
+    digest = hashlib.sha256()
+    with path.open("rb") as handle:
+        for chunk in iter(lambda: handle.read(1024 * 1024), b""):
+            digest.update(chunk)
+    return digest.hexdigest()
+
+
+def _repo_head(cwd: Path) -> str:
+    result = subprocess.run(
+        ["git", "rev-parse", "HEAD"],
+        cwd=str(cwd),
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+    return result.stdout.strip() if result.returncode == 0 else ""
 
 
 def _persist_generated_edges(
@@ -4063,18 +5829,31 @@ def _edge_with_weight(edge: Dict[str, object]) -> Dict[str, Any]:
 
 def _graph_edge_payload(edge: Mapping[str, object], compact: bool = False) -> Dict[str, Any]:
     result = _edge_with_weight(dict(edge))
+    layer = _graph_payload_edge_layer(result)
+    provenance_type = _graph_payload_edge_provenance_type(result, layer)
+    result["layer"] = layer
+    result["provenance_type"] = provenance_type
+    attr = result.get("attr")
+    if isinstance(attr, dict):
+        attr.setdefault("layer", layer)
+        attr.setdefault("provenance_type", provenance_type)
     if not compact:
         return result
-    attr = result.get("attr")
     if isinstance(attr, Mapping):
         compact_attr: Dict[str, Any] = {}
         for key in (
+            "layer",
+            "provenance_type",
             "provider",
             "providers",
             "model",
             "models",
             "job_id",
             "job_ids",
+            "extractor",
+            "extractors",
+            "relationship_source",
+            "relationship_sources",
             "dispatch",
             "callback_candidate_count",
             "callback_ambiguous",
@@ -4096,6 +5875,98 @@ def _graph_edge_payload(edge: Mapping[str, object], compact: bool = False) -> Di
             compact_attr["source"] = sources
         result["attr"] = compact_attr
     return result
+
+
+def _graph_payload_meta(
+    nodes: Iterable[Mapping[str, Any]],
+    edges: Iterable[Mapping[str, Any]],
+    *,
+    function_view: str,
+) -> Dict[str, Any]:
+    layers: Counter[str] = Counter()
+    provenance_types: Counter[str] = Counter()
+    for edge in edges:
+        layer = str(edge.get("layer") or _graph_payload_edge_layer(edge))
+        if layer:
+            layers[layer] += 1
+        provenance_type = str(edge.get("provenance_type") or _graph_payload_edge_provenance_type(edge, layer))
+        if provenance_type:
+            provenance_types[provenance_type] += 1
+    for node in nodes:
+        attr = node.get("attr") if isinstance(node.get("attr"), Mapping) else {}
+        if isinstance(attr.get("blackbox"), Mapping):
+            layers["blackbox_profile"] += 1
+        if attr.get("is_concept") is True:
+            layers["concept_merge"] += 1
+    return {
+        "function_view": function_view,
+        "layers": dict(sorted(layers.items())),
+        "provenance_types": dict(sorted(provenance_types.items())),
+    }
+
+
+def _graph_payload_edge_layer(edge: Mapping[str, Any]) -> str:
+    attr = edge.get("attr") if isinstance(edge.get("attr"), Mapping) else {}
+    explicit = str(edge.get("layer") or attr.get("layer") or "").strip()
+    if explicit:
+        return explicit
+    extractors = set(
+        _dedupe_graph_string_values(
+            [
+                *_list_graph_values(attr.get("extractor")),
+                *_list_graph_values(attr.get("extractors")),
+                *[
+                    nested
+                    for source in _list_graph_values(attr.get("source") or attr.get("sources"))
+                    if isinstance(source, Mapping)
+                    for nested in [*_list_graph_values(source.get("extractor")), *_list_graph_values(source.get("extractors"))]
+                ],
+            ]
+        )
+    )
+    relationship_sources = set(
+        _dedupe_graph_string_values(
+            [*_list_graph_values(attr.get("relationship_source")), *_list_graph_values(attr.get("relationship_sources"))]
+        )
+    )
+    sources = set(_dedupe_graph_string_values([*_list_graph_values(edge.get("source")), *_list_graph_values(edge.get("sources"))]))
+    if (
+        "blackbox_profiles" in extractors
+        or "blackbox_profiles" in sources
+        or "blackbox_profile_boundary" in relationship_sources
+    ):
+        return "blackbox_relationship"
+    if "doc_nodes" in extractors:
+        return "semantic_doc_node"
+    stage = str(edge.get("stage") or "").strip()
+    if stage == "deterministic":
+        return "deterministic_ast"
+    if stage == "semantic":
+        return "semantic_edge"
+    return stage or "unknown"
+
+
+def _graph_payload_edge_provenance_type(edge: Mapping[str, Any], layer: str) -> str:
+    attr = edge.get("attr") if isinstance(edge.get("attr"), Mapping) else {}
+    explicit = str(edge.get("provenance_type") or attr.get("provenance_type") or "").strip()
+    if explicit:
+        return explicit
+    relationship_sources = set(
+        _dedupe_graph_string_values(
+            [*_list_graph_values(attr.get("relationship_source")), *_list_graph_values(attr.get("relationship_sources"))]
+        )
+    )
+    if "blackbox_profile_boundary" in relationship_sources:
+        return "grounded_profile_boundary"
+    if layer == "blackbox_relationship":
+        return "llm_blackbox_projection"
+    if layer == "semantic_doc_node":
+        return "doc_node_projection"
+    if layer == "deterministic_ast":
+        return "deterministic_extractor"
+    if layer == "semantic_edge":
+        return "semantic_provider"
+    return layer or "unknown"
 
 
 def _compact_graph_source_records(value: object, limit: int = 4) -> List[Dict[str, Any]]:

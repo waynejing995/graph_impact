@@ -44,6 +44,11 @@ _REQUIRED_ARTIFACT_SOURCES = {
 }
 _OPTIONAL_ARTIFACT_SOURCES = {
     "in_app_browser": ("asip.web.in_app_browser_probe", "asip.web.browser_e2e"),
+    "blackbox_provider_gate": ("asip.blackbox_provider_gate",),
+    "blackbox_ledger_qa": ("asip.blackbox_ledger_qa",),
+    "blackbox_coverage_qa": ("asip.blackbox_coverage_qa",),
+    "blackbox_residual_qa": ("asip.blackbox_residual_qa",),
+    "blackbox_full_generation_run": ("asip.blackbox_full_generation_run",),
 }
 _REQUIRED_BROWSER_E2E_TESTS = (
     "acceptance page runs no-mock AQ01 through the real workbench API",
@@ -71,6 +76,11 @@ _NO_SERVER_ARTIFACT_INPUT_OPTIONS = {
     "--callback-audit-json": "callback_audit",
     "--acceptance-json": "acceptance",
     "--web-acceptance-json": "web_acceptance",
+    "--blackbox-provider-json": "blackbox_provider_gate",
+    "--blackbox-ledger-json": "blackbox_ledger_qa",
+    "--blackbox-coverage-json": "blackbox_coverage_qa",
+    "--blackbox-residual-json": "blackbox_residual_qa",
+    "--blackbox-full-generation-json": "blackbox_full_generation_run",
 }
 _PROVIDER_CHECK_JOB_KINDS = {
     "semantic_edge_provenance": ("semantic_edges", "semantic_edges_batch"),
@@ -94,9 +104,20 @@ def run_completion_gate(
     hosted_openai_json: Optional[Path] = None,
     residual_acceptance_json: Optional[Path] = None,
     git_gate_json: Optional[Path] = None,
+    blackbox_provider_json: Optional[Path] = None,
+    blackbox_ledger_json: Optional[Path] = None,
+    blackbox_coverage_json: Optional[Path] = None,
+    blackbox_residual_json: Optional[Path] = None,
+    blackbox_full_generation_json: Optional[Path] = None,
     output_json: Optional[Path] = None,
     output_md: Optional[Path] = None,
     full_integrity_check: bool = False,
+    require_blackbox_provider: bool = False,
+    require_blackbox_ledger: bool = False,
+    require_blackbox_coverage: bool = False,
+    require_blackbox_residual: bool = False,
+    require_blackbox_full_generation: bool = False,
+    min_blackbox_coverage: float = 1.0,
     minimum_counts: Optional[Mapping[str, int]] = None,
 ) -> Dict[str, Any]:
     """Build a machine-readable completion audit from current local evidence."""
@@ -117,6 +138,11 @@ def run_completion_gate(
         "hosted_openai_compatible": _load_json_artifact(hosted_openai_json),
         "residual_acceptance": _load_json_artifact(residual_acceptance_json),
         "git_gate": _load_json_artifact(git_gate_json),
+        "blackbox_provider_gate": _load_json_artifact(blackbox_provider_json),
+        "blackbox_ledger_qa": _load_json_artifact(blackbox_ledger_json),
+        "blackbox_coverage_qa": _load_json_artifact(blackbox_coverage_json),
+        "blackbox_residual_qa": _load_json_artifact(blackbox_residual_json),
+        "blackbox_full_generation_run": _load_json_artifact(blackbox_full_generation_json),
     }
     acceptance_payload = artifacts["acceptance"].get("payload")
     web_payload = artifacts["web_acceptance"].get("payload")
@@ -134,7 +160,17 @@ def run_completion_gate(
 
     requirements = [
         _real_index_requirement(db_health, required_counts),
-        _artifact_binding_requirement(db_path, db_health, artifacts),
+        _artifact_binding_requirement(
+            db_path,
+            db_health,
+            artifacts,
+            require_blackbox_provider=require_blackbox_provider,
+            require_blackbox_ledger=require_blackbox_ledger,
+            require_blackbox_coverage=require_blackbox_coverage,
+            require_blackbox_residual=require_blackbox_residual,
+            require_blackbox_full_generation=require_blackbox_full_generation,
+            min_blackbox_coverage=min_blackbox_coverage,
+        ),
         _stage1_requirement(db_health),
         _schema_requirement([acceptance_payload, web_payload]),
         _surface_requirement(acceptance_payload, ("CLI", "API", "MCP")),
@@ -169,6 +205,28 @@ def run_completion_gate(
         _performance_requirement(performance_payload),
         _residual_acceptance_requirement(residual_payload),
         _git_gate_requirement(git_payload),
+        _product_graph_requirement(
+            db_path,
+            minimum_concept_nodes=max(
+                1,
+                int(
+                    required_counts.get(
+                        "product_graph_concept_nodes",
+                        1000 if minimum_counts is None else 1,
+                    )
+                ),
+            ),
+            minimum_implementation_nodes=max(
+                1,
+                int(
+                    required_counts.get(
+                        "product_graph_implementation_nodes",
+                        required_counts.get("edges", 1000),
+                    )
+                ),
+            ),
+            minimum_edges=max(1, int(required_counts.get("product_graph_edges", required_counts.get("edges", 1000)))),
+        ),
     ]
     summary = _status_summary(requirements)
     gate_status = "pass" if summary["passed"] == summary["total"] else "blocked"
@@ -241,6 +299,7 @@ def _database_health(db_path: Path, *, full_integrity_check: bool) -> Dict[str, 
                     "semantic_edges_batch",
                 ),
                 "latest_doc_nodes_job_id": _latest_job_id(connection, "doc_nodes_batch"),
+                "latest_blackbox_profiles_job_id": _latest_job_id(connection, "blackbox_profiles_batch"),
             }
             corpora_statuses, corpus_status_failures = _corpus_status_failures(connection)
             blocking_job_failures = _blocking_job_failures(connection)
@@ -339,12 +398,15 @@ def _blocking_job_failures(connection: sqlite3.Connection) -> List[str]:
     failures: List[str] = []
     rows = connection.execute("select id, kind, status, message from jobs order by id").fetchall()
     for row in rows:
+        kind = str(row[1] or "")
+        if kind == "blackbox_profiles_batch":
+            continue
         normalized_status = normalize_job_status(str(row[2] or ""))
         if normalized_status not in {"failed", "indexing", "queued"}:
             continue
         message = str(row[3] or "")
         suffix = f": {message}" if message else ""
-        failures.append(f"job {row[0]} {row[1]} is {row[2]}{suffix}")
+        failures.append(f"job {row[0]} {kind} is {row[2]}{suffix}")
     return failures
 
 
@@ -434,9 +496,36 @@ def _artifact_binding_requirement(
     db_path: Path,
     db_health: Mapping[str, Any],
     artifacts: Mapping[str, Mapping[str, Any]],
+    *,
+    require_blackbox_provider: bool = False,
+    require_blackbox_ledger: bool = False,
+    require_blackbox_coverage: bool = False,
+    require_blackbox_residual: bool = False,
+    require_blackbox_full_generation: bool = False,
+    min_blackbox_coverage: float = 1.0,
 ) -> Dict[str, Any]:
     binding_artifact_names = tuple(_REQUIRED_ARTIFACT_SOURCES)
+    if require_blackbox_provider:
+        binding_artifact_names = (*binding_artifact_names, "blackbox_provider_gate")
+    if require_blackbox_ledger:
+        binding_artifact_names = (*binding_artifact_names, "blackbox_ledger_qa")
+    if require_blackbox_coverage:
+        binding_artifact_names = (*binding_artifact_names, "blackbox_coverage_qa")
+    if require_blackbox_residual:
+        binding_artifact_names = (*binding_artifact_names, "blackbox_residual_qa")
+    if require_blackbox_full_generation:
+        binding_artifact_names = (*binding_artifact_names, "blackbox_full_generation_run")
     db_bound_artifacts = ("acceptance", "web_acceptance", "provider_gate", "runtime_semantic_freshness")
+    if require_blackbox_provider:
+        db_bound_artifacts = (*db_bound_artifacts, "blackbox_provider_gate")
+    if require_blackbox_ledger:
+        db_bound_artifacts = (*db_bound_artifacts, "blackbox_ledger_qa")
+    if require_blackbox_coverage:
+        db_bound_artifacts = (*db_bound_artifacts, "blackbox_coverage_qa")
+    if require_blackbox_residual:
+        db_bound_artifacts = (*db_bound_artifacts, "blackbox_residual_qa")
+    if require_blackbox_full_generation:
+        db_bound_artifacts = (*db_bound_artifacts, "blackbox_full_generation_run")
     failures: List[str] = []
     loaded = 0
     db_bound_loaded = 0
@@ -447,7 +536,7 @@ def _artifact_binding_requirement(
             failures.append(f"{name} artifact is not loaded")
             continue
         loaded += 1
-        expected_source = _REQUIRED_ARTIFACT_SOURCES.get(name, ())
+        expected_source = _REQUIRED_ARTIFACT_SOURCES.get(name, _OPTIONAL_ARTIFACT_SOURCES.get(name, ()))
         source = str(payload.get("source", ""))
         if expected_source and source not in expected_source:
             failures.append(
@@ -506,9 +595,17 @@ def _artifact_binding_requirement(
             ("latest_graph_rebuild_job_id", "latest_graph_rebuild_job_id"),
             ("latest_semantic_edges_job_id", "latest_semantic_edges_job_id"),
             ("latest_doc_nodes_job_id", "latest_doc_nodes_job_id"),
+            ("latest_blackbox_profiles_job_id", "latest_blackbox_profiles_job_id"),
         ):
             current_job = current_jobs.get(current_key)
             artifact_job = runtime_payload.get(artifact_key)
+            if (
+                artifact_key == "latest_blackbox_profiles_job_id"
+                and not require_blackbox_ledger
+                and current_job is None
+                and artifact_job is None
+            ):
+                continue
             if artifact_job is None:
                 failures.append(f"runtime_semantic_freshness {artifact_key} is missing")
                 continue
@@ -519,6 +616,257 @@ def _artifact_binding_requirement(
                 failures.append(
                     f"runtime_semantic_freshness {artifact_key}={artifact_job} does not match current {current_key}={current_job}"
                 )
+
+    blackbox_payload = artifacts.get("blackbox_ledger_qa", {}).get("payload")
+    if require_blackbox_ledger and not isinstance(blackbox_payload, Mapping):
+        failures.append("blackbox_ledger_qa artifact is required but not loaded")
+    if isinstance(blackbox_payload, Mapping):
+        source = str(blackbox_payload.get("source") or "")
+        if source not in _OPTIONAL_ARTIFACT_SOURCES["blackbox_ledger_qa"]:
+            failures.append(f"blackbox_ledger_qa source={source or 'missing'} is invalid")
+        if str(blackbox_payload.get("gate_status") or "") != "pass":
+            failures.append(f"blackbox_ledger_qa gate_status={blackbox_payload.get('gate_status')}")
+        artifact_db_path = blackbox_payload.get("db_path")
+        if not artifact_db_path:
+            failures.append("blackbox_ledger_qa db_path is missing")
+        elif not _same_path(db_path, Path(str(artifact_db_path))):
+            failures.append(f"blackbox_ledger_qa db_path={artifact_db_path} does not match current db_path={db_path}")
+        recorded_db_sha = str(blackbox_payload.get("db_sha256") or "").strip()
+        if not recorded_db_sha:
+            failures.append("blackbox_ledger_qa db_sha256 is missing")
+        else:
+            actual_db_sha = _file_sha256(db_path)
+            if recorded_db_sha != actual_db_sha:
+                failures.append("blackbox_ledger_qa db_sha256 does not match current database")
+        git_payload = artifacts.get("git_gate", {}).get("payload")
+        git_head = str(git_payload.get("head") or "").strip() if isinstance(git_payload, Mapping) else ""
+        repo_head = str(blackbox_payload.get("repo_head") or "").strip()
+        if not repo_head:
+            failures.append("blackbox_ledger_qa repo_head is missing")
+        elif git_head and repo_head != git_head:
+            failures.append(f"blackbox_ledger_qa repo_head={repo_head} does not match git_gate head={git_head}")
+        current_blackbox_job = db_health.get("jobs", {}).get("latest_blackbox_profiles_job_id")
+        latest_jobs = blackbox_payload.get("latest_jobs") if isinstance(blackbox_payload.get("latest_jobs"), Mapping) else {}
+        artifact_blackbox_job = latest_jobs.get("latest_blackbox_profiles_job_id")
+        artifact_blackbox_int = _coerce_int(artifact_blackbox_job)
+        if artifact_blackbox_int is None:
+            failures.append(f"blackbox_ledger_qa latest_blackbox_profiles_job_id is missing or invalid: {artifact_blackbox_job}")
+        elif current_blackbox_job is None:
+            failures.append("current database has no latest blackbox_profiles_batch job")
+        elif artifact_blackbox_int != int(current_blackbox_job):
+                failures.append(
+                    f"blackbox_ledger_qa latest_blackbox_profiles_job_id={artifact_blackbox_job} does not match current latest_blackbox_profiles_job_id={current_blackbox_job}"
+                )
+        entity_ledger = blackbox_payload.get("entity_ledger") if isinstance(blackbox_payload.get("entity_ledger"), Mapping) else {}
+        if require_blackbox_ledger:
+            if int(entity_ledger.get("manifest_count") or 0) <= 0:
+                failures.append("blackbox_ledger_qa entity_ledger.manifest_count is missing or zero")
+            if int(entity_ledger.get("provider_response_count") or 0) <= 0:
+                failures.append("blackbox_ledger_qa entity_ledger.provider_response_count is missing or zero")
+            if int(entity_ledger.get("io_fact_count") or 0) <= 0:
+                failures.append("blackbox_ledger_qa entity_ledger.io_fact_count is missing or zero")
+
+    blackbox_provider_payload = artifacts.get("blackbox_provider_gate", {}).get("payload")
+    if require_blackbox_provider and not isinstance(blackbox_provider_payload, Mapping):
+        failures.append("blackbox_provider_gate artifact is required but not loaded")
+    if isinstance(blackbox_provider_payload, Mapping):
+        source = str(blackbox_provider_payload.get("source") or "")
+        if source not in _OPTIONAL_ARTIFACT_SOURCES["blackbox_provider_gate"]:
+            failures.append(f"blackbox_provider_gate source={source or 'missing'} is invalid")
+        if str(blackbox_provider_payload.get("gate_status") or "") != "pass":
+            failures.append(f"blackbox_provider_gate gate_status={blackbox_provider_payload.get('gate_status')}")
+        artifact_db_path = blackbox_provider_payload.get("db_path")
+        if not artifact_db_path:
+            failures.append("blackbox_provider_gate db_path is missing")
+        elif not _same_path(db_path, Path(str(artifact_db_path))):
+            failures.append(f"blackbox_provider_gate db_path={artifact_db_path} does not match current db_path={db_path}")
+        recorded_db_sha = str(blackbox_provider_payload.get("db_sha256") or "").strip()
+        if require_blackbox_provider:
+            if not recorded_db_sha:
+                failures.append("blackbox_provider_gate db_sha256 is missing")
+            else:
+                actual_db_sha = _file_sha256(db_path)
+                if recorded_db_sha != actual_db_sha:
+                    failures.append("blackbox_provider_gate db_sha256 does not match current database")
+            git_payload = artifacts.get("git_gate", {}).get("payload")
+            git_head = str(git_payload.get("head") or "").strip() if isinstance(git_payload, Mapping) else ""
+            repo_head = str(blackbox_provider_payload.get("repo_head") or "").strip()
+            if not repo_head:
+                failures.append("blackbox_provider_gate repo_head is missing")
+            elif git_head and repo_head != git_head:
+                failures.append(f"blackbox_provider_gate repo_head={repo_head} does not match git_gate head={git_head}")
+        provider_check = (
+            blackbox_provider_payload.get("provider_check")
+            if isinstance(blackbox_provider_payload.get("provider_check"), Mapping)
+            else {}
+        )
+        if str(provider_check.get("status") or "") != "pass":
+            failures.append(f"blackbox_provider_gate provider_check.status={provider_check.get('status')}")
+            failure_class = str(provider_check.get("failure_class") or "").strip()
+            if failure_class:
+                failures.append(f"blackbox_provider_gate provider_check.failure_class={failure_class}")
+
+    residual_payload = artifacts.get("blackbox_residual_qa", {}).get("payload")
+    if require_blackbox_residual and not isinstance(residual_payload, Mapping):
+        failures.append("blackbox_residual_qa artifact is required but not loaded")
+    if isinstance(residual_payload, Mapping):
+        source = str(residual_payload.get("source") or "")
+        if source not in _OPTIONAL_ARTIFACT_SOURCES["blackbox_residual_qa"]:
+            failures.append(f"blackbox_residual_qa source={source or 'missing'} is invalid")
+        if str(residual_payload.get("gate_status") or "") != "pass":
+            failures.append(f"blackbox_residual_qa gate_status={residual_payload.get('gate_status')}")
+        artifact_db_path = residual_payload.get("db_path")
+        if not artifact_db_path:
+            failures.append("blackbox_residual_qa db_path is missing")
+        elif not _same_path(db_path, Path(str(artifact_db_path))):
+            failures.append(f"blackbox_residual_qa db_path={artifact_db_path} does not match current db_path={db_path}")
+        recorded_db_sha = str(residual_payload.get("db_sha256") or "").strip()
+        if require_blackbox_residual:
+            if not recorded_db_sha:
+                failures.append("blackbox_residual_qa db_sha256 is missing")
+            else:
+                actual_db_sha = _file_sha256(db_path)
+                if recorded_db_sha != actual_db_sha:
+                    failures.append("blackbox_residual_qa db_sha256 does not match current database")
+            git_payload = artifacts.get("git_gate", {}).get("payload")
+            git_head = str(git_payload.get("head") or "").strip() if isinstance(git_payload, Mapping) else ""
+            repo_head = str(residual_payload.get("repo_head") or "").strip()
+            if not repo_head:
+                failures.append("blackbox_residual_qa repo_head is missing")
+            elif git_head and repo_head != git_head:
+                failures.append(f"blackbox_residual_qa repo_head={repo_head} does not match git_gate head={git_head}")
+        residuals = residual_payload.get("residuals") if isinstance(residual_payload.get("residuals"), Mapping) else {}
+        pending_count = _coerce_int(residuals.get("pending_count"))
+        terminal_count = _coerce_int(residuals.get("terminal_count"))
+        if pending_count is None:
+            failures.append("blackbox_residual_qa residuals.pending_count is missing or invalid")
+        elif pending_count != 0:
+            failures.append(f"blackbox_residual_qa residuals.pending_count={pending_count} must be 0")
+        if terminal_count is None:
+            failures.append("blackbox_residual_qa residuals.terminal_count is missing or invalid")
+        elif terminal_count != 0:
+            failures.append(f"blackbox_residual_qa residuals.terminal_count={terminal_count} must be 0")
+
+    coverage_payload = artifacts.get("blackbox_coverage_qa", {}).get("payload")
+    if require_blackbox_coverage and not isinstance(coverage_payload, Mapping):
+        failures.append("blackbox_coverage_qa artifact is required but not loaded")
+    if isinstance(coverage_payload, Mapping):
+        source = str(coverage_payload.get("source") or "")
+        if source not in _OPTIONAL_ARTIFACT_SOURCES["blackbox_coverage_qa"]:
+            failures.append(f"blackbox_coverage_qa source={source or 'missing'} is invalid")
+        if str(coverage_payload.get("gate_status") or "") != "pass":
+            failures.append(f"blackbox_coverage_qa gate_status={coverage_payload.get('gate_status')}")
+        artifact_db_path = coverage_payload.get("db_path")
+        if not artifact_db_path:
+            failures.append("blackbox_coverage_qa db_path is missing")
+        elif not _same_path(db_path, Path(str(artifact_db_path))):
+            failures.append(f"blackbox_coverage_qa db_path={artifact_db_path} does not match current db_path={db_path}")
+        recorded_db_sha = str(coverage_payload.get("db_sha256") or "").strip()
+        if require_blackbox_coverage:
+            if not recorded_db_sha:
+                failures.append("blackbox_coverage_qa db_sha256 is missing")
+            else:
+                actual_db_sha = _file_sha256(db_path)
+                if recorded_db_sha != actual_db_sha:
+                    failures.append("blackbox_coverage_qa db_sha256 does not match current database")
+            git_payload = artifacts.get("git_gate", {}).get("payload")
+            git_head = str(git_payload.get("head") or "").strip() if isinstance(git_payload, Mapping) else ""
+            repo_head = str(coverage_payload.get("repo_head") or "").strip()
+            if not repo_head:
+                failures.append("blackbox_coverage_qa repo_head is missing")
+            elif git_head and repo_head != git_head:
+                failures.append(f"blackbox_coverage_qa repo_head={repo_head} does not match git_gate head={git_head}")
+        coverage = coverage_payload.get("coverage") if isinstance(coverage_payload.get("coverage"), Mapping) else {}
+        inventory_total = _coerce_int(coverage.get("inventory_total"))
+        covered_count = _coerce_int(coverage.get("covered_count"))
+        missing_count = _coerce_int(coverage.get("missing_count"))
+        if inventory_total is None:
+            failures.append("blackbox_coverage_qa coverage.inventory_total is missing or invalid")
+        if covered_count is None:
+            failures.append("blackbox_coverage_qa coverage.covered_count is missing or invalid")
+        if missing_count is None:
+            failures.append("blackbox_coverage_qa coverage.missing_count is missing or invalid")
+        elif require_blackbox_coverage:
+            _coverage_ratio = covered_count / inventory_total if (covered_count is not None and inventory_total and inventory_total > 0) else 0.0
+            if _coverage_ratio < max(0.0, min(1.0, min_blackbox_coverage)):
+                failures.append(
+                    f"blackbox_coverage_qa coverage_ratio={_coverage_ratio:.6f} < "
+                    f"min_blackbox_coverage={min_blackbox_coverage} "
+                    f"(covered={covered_count}/{inventory_total})"
+                )
+
+    full_generation_payload = artifacts.get("blackbox_full_generation_run", {}).get("payload")
+    if require_blackbox_full_generation and not isinstance(full_generation_payload, Mapping):
+        failures.append("blackbox_full_generation_run artifact is required but not loaded")
+    if isinstance(full_generation_payload, Mapping):
+        source = str(full_generation_payload.get("source") or "")
+        if source not in _OPTIONAL_ARTIFACT_SOURCES["blackbox_full_generation_run"]:
+            failures.append(f"blackbox_full_generation_run source={source or 'missing'} is invalid")
+        if str(full_generation_payload.get("gate_status") or "") != "pass":
+            failures.append(f"blackbox_full_generation_run gate_status={full_generation_payload.get('gate_status')}")
+            failure_stage = str(full_generation_payload.get("failure_stage") or "").strip()
+            if failure_stage:
+                failures.append(f"blackbox_full_generation_run failure_stage={failure_stage}")
+        artifact_db_path = full_generation_payload.get("db_path")
+        if not artifact_db_path:
+            failures.append("blackbox_full_generation_run db_path is missing")
+        elif not _same_path(db_path, Path(str(artifact_db_path))):
+            failures.append(f"blackbox_full_generation_run db_path={artifact_db_path} does not match current db_path={db_path}")
+        recorded_db_sha = str(full_generation_payload.get("db_sha256") or "").strip()
+        if require_blackbox_full_generation:
+            if not recorded_db_sha:
+                failures.append("blackbox_full_generation_run db_sha256 is missing")
+            else:
+                actual_db_sha = _file_sha256(db_path)
+                if recorded_db_sha != actual_db_sha:
+                    failures.append("blackbox_full_generation_run db_sha256 does not match current database")
+            git_payload = artifacts.get("git_gate", {}).get("payload")
+            git_head = str(git_payload.get("head") or "").strip() if isinstance(git_payload, Mapping) else ""
+            repo_head = str(full_generation_payload.get("repo_head") or "").strip()
+            if not repo_head:
+                failures.append("blackbox_full_generation_run repo_head is missing")
+            elif git_head and repo_head != git_head:
+                failures.append(f"blackbox_full_generation_run repo_head={repo_head} does not match git_gate head={git_head}")
+        child_artifacts = (
+            full_generation_payload.get("artifacts")
+            if isinstance(full_generation_payload.get("artifacts"), Mapping)
+            else {}
+        )
+        required_children = (
+            "blackbox_provider_gate",
+            "blackbox_ledger_qa",
+            "blackbox_coverage_qa",
+            "blackbox_residual_qa",
+        )
+        for child_name in required_children:
+            child = child_artifacts.get(child_name) if isinstance(child_artifacts.get(child_name), Mapping) else {}
+            if not child:
+                failures.append(f"blackbox_full_generation_run artifacts.{child_name} is missing")
+                continue
+            child_source = str(child.get("source") or "")
+            expected_child_source = _OPTIONAL_ARTIFACT_SOURCES.get(child_name, ())
+            if expected_child_source and child_source not in expected_child_source:
+                failures.append(f"blackbox_full_generation_run artifacts.{child_name}.source={child_source or 'missing'} is invalid")
+            if str(child.get("gate_status") or "") != "pass":
+                failures.append(f"blackbox_full_generation_run artifacts.{child_name}.gate_status={child.get('gate_status')}")
+            child_sha = str(child.get("sha256") or "").strip()
+            if not child_sha:
+                failures.append(f"blackbox_full_generation_run artifacts.{child_name}.sha256 is missing")
+            child_path = str(child.get("path") or "").strip()
+            if not child_path:
+                failures.append(f"blackbox_full_generation_run artifacts.{child_name}.path is missing")
+            loaded_child_path = str(artifacts.get(child_name, {}).get("path") or "").strip()
+            if child_path and loaded_child_path and not _same_path(Path(child_path), Path(loaded_child_path)):
+                failures.append(
+                    f"blackbox_full_generation_run artifacts.{child_name}.path={child_path} "
+                    f"does not match loaded {child_name} path={loaded_child_path}"
+                )
+            if child_sha and loaded_child_path:
+                actual_child_sha = _file_sha256(Path(loaded_child_path))
+                if actual_child_sha and child_sha != actual_child_sha:
+                    failures.append(
+                        f"blackbox_full_generation_run artifacts.{child_name}.sha256 does not match loaded {child_name} artifact"
+                    )
 
     status = "pass" if loaded == len(binding_artifact_names) and not failures else "blocked"
     evidence = (
@@ -2024,6 +2372,77 @@ def _performance_requirement(payload: Optional[Mapping[str, Any]]) -> Dict[str, 
         f"all_queries_under_threshold={payload.get('all_queries_under_threshold')}; queries={len(queries)}"
     )
     return _requirement("performance_smoke", "Deterministic rebuild and query performance smoke", status, evidence, failures)
+
+
+def _product_graph_requirement(
+    db_path: Path,
+    *,
+    minimum_concept_nodes: int = 1000,
+    minimum_implementation_nodes: int = 1000,
+    minimum_edges: int = 1000,
+) -> Dict[str, Any]:
+    from .graph_schema import ALLOWED_PRODUCT_NODE_KINDS, ALLOWED_PRODUCT_RELATIONS
+    from .storage import AsipStore
+
+    try:
+        store = AsipStore.connect(str(db_path))
+    except Exception as exc:
+        return _requirement(
+            "product_graph",
+            "Product graph projection schema and edge hygiene",
+            "blocked",
+            f"cannot connect to DB: {exc}",
+            [f"cannot connect to DB: {exc}"],
+        )
+    try:
+        concept_graph = store.project_to_product_graph(function_view="concept")
+        implementation_graph = store.project_to_product_graph(function_view="implementation")
+    except Exception as exc:
+        return _requirement(
+            "product_graph",
+            "Product graph projection schema and edge hygiene",
+            "blocked",
+            f"product graph projection failed: {exc}",
+            [f"product graph projection failed: {exc}"],
+        )
+    failures: List[str] = []
+    concept_node_count = len(concept_graph["nodes"])
+    concept_edge_count = len(concept_graph["edges"])
+    implementation_node_count = len(implementation_graph["nodes"])
+    implementation_edge_count = len(implementation_graph["edges"])
+    if concept_node_count < minimum_concept_nodes:
+        failures.append(f"concept node count {concept_node_count} is below {minimum_concept_nodes}")
+    if implementation_node_count < minimum_implementation_nodes:
+        failures.append(f"implementation node count {implementation_node_count} is below {minimum_implementation_nodes}")
+    if concept_edge_count < minimum_edges:
+        failures.append(f"concept edge count {concept_edge_count} is below {minimum_edges}")
+    if implementation_edge_count < minimum_edges:
+        failures.append(f"implementation edge count {implementation_edge_count} is below {minimum_edges}")
+    node_kinds = {
+        node["kind"]
+        for graph in (concept_graph, implementation_graph)
+        for node in graph["nodes"]
+        if isinstance(node.get("kind"), str)
+    }
+    bad_kinds = node_kinds - ALLOWED_PRODUCT_NODE_KINDS
+    if bad_kinds:
+        failures.append(f"nodes with non-product kinds: {sorted(bad_kinds)}")
+    for view, graph in (("concept", concept_graph), ("implementation", implementation_graph)):
+        for edge in graph["edges"]:
+            rel = str(edge.get("relation") or "")
+            stage = str(edge.get("stage") or "deterministic")
+            if stage == "semantic":
+                continue
+            if rel not in ALLOWED_PRODUCT_RELATIONS:
+                failures.append(f"{view} non-ALLOWED relation '{rel}' in stage '{stage}'")
+                break
+    status = "pass" if not failures else "blocked"
+    evidence = (
+        f"concept_nodes={concept_node_count} concept_edges={concept_edge_count}; "
+        f"implementation_nodes={implementation_node_count} implementation_edges={implementation_edge_count}; "
+        f"kinds={sorted(node_kinds)}"
+    )
+    return _requirement("product_graph", "Product graph projection schema and edge hygiene", status, evidence, failures)
 
 
 def _residual_acceptance_requirement(payload: Optional[Mapping[str, Any]]) -> Dict[str, Any]:

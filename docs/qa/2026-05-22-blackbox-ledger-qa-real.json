@@ -1,0 +1,537 @@
+{
+  "source": "asip.blackbox_ledger_qa",
+  "generated_at": "2026-05-21T18:14:15.285403+00:00",
+  "repo_head": "b37d2dfe77d89f1a75634aa08c75a716791c1ca0",
+  "db_path": "/Volumes/data/User/wayne/Code/graph_impact/data/asip.db",
+  "db_sha256": "9c6b34c5f05f25e5f4f0cff3334e8437d0f2db6eb8938779b8bf902f87e47255",
+  "limits_config_path": "/Users/chenjingwen/.codex/worktrees/039b/graph_impact/configs/workbench-limits.json",
+  "limits_config_sha256": "e8134baea819d2924dcd4add7c4a40bbf204f3f3e23a8896f62a88667cc976f7",
+  "provider_settings": {
+    "edge": {
+      "provider": "ollama",
+      "base_url": "http://localhost:11434",
+      "api_path": "/api/chat",
+      "model": "gemma4:e4b",
+      "fallback_model": "",
+      "extra_headers": {},
+      "think": false,
+      "timeout_seconds": 900,
+      "num_ctx": 2048,
+      "num_predict": 1024,
+      "temperature": 0
+    },
+    "embedding": {
+      "provider": "ollama",
+      "base_url": "http://localhost:11434",
+      "api_path": "/api/embeddings",
+      "model": "nomic-embed-text:latest",
+      "extra_headers": {},
+      "timeout_seconds": 900
+    }
+  },
+  "latest_jobs": {
+    "latest_index_job_id": 10,
+    "latest_graph_rebuild_job_id": 50,
+    "latest_blackbox_profiles_job_id": 68
+  },
+  "inventory": {
+    "total": 19429,
+    "sha256": "ed788763a676e0693f501ffb4a5af9e6fdf6ab07224f5d63afe5843eb87b4f45",
+    "counts": {
+      "by_kind": {
+        "function": 17779,
+        "register": 1650
+      },
+      "by_view": {
+        "concept": 8398,
+        "implementation": 11031
+      },
+      "by_bucket": {
+        "deterministic:function": 17779,
+        "deterministic:register": 1650
+      }
+    }
+  },
+  "ledger": {
+    "batch_count": 1,
+    "attempt_count": 1,
+    "attempted_count": 1,
+    "attempt_status_counts": {
+      "accepted": 1
+    },
+    "validator_status_counts": {
+      "accepted": 1
+    },
+    "reason_code_counts": {
+      "accepted_grounded": 1
+    },
+    "manifest_sha256_values": [
+      "4921b0d86ac13d26082ff041e58dfd327df57bc3c6922301adb769737a9c3314"
+    ]
+  },
+  "entity_ledger": {
+    "manifest_count": 1,
+    "candidate_count": 1,
+    "candidate_status_counts": {
+      "accepted": 1
+    },
+    "provider_response_count": 3,
+    "validation_failure_count": 0,
+    "io_fact_count": 4
+  },
+  "manifest_groups": [
+    {
+      "manifest_group_sha256": "fe419a12c6d343a1b0f601416899e6c0e6a8b596afa6e92ad600b5ee1522da34",
+      "job_ids": [
+        56
+      ],
+      "expected_shard_count": 1,
+      "batch_count": 1,
+      "attempt_count": 1,
+      "attempted_count": 1,
+      "terminal_attempt_count": 1,
+      "profile_table_count": 2,
+      "stored_edge_count": 2,
+      "profile_edge_count": 2,
+      "relationship_edge_count": 0,
+      "runtime_visible_count": 2,
+      "manifest_sha256_values": [
+        "fe419a12c6d343a1b0f601416899e6c0e6a8b596afa6e92ad600b5ee1522da34"
+      ],
+      "shard_indexes": [
+        0
+      ],
+      "observed_shard_count": 1,
+      "complete": true,
+      "attempt_status_counts": {
+        "accepted": 1
+      }
+    },
+    {
+      "manifest_group_sha256": "bcef6c8a9bf90719f1282cb88f95ff93849466f9db39dbe92af87e0bedd138e1",
+      "job_ids": [
+        57
+      ],
+      "expected_shard_count": 1,
+      "batch_count": 1,
+      "attempt_count": 1,
+      "attempted_count": 1,
+      "terminal_attempt_count": 1,
+      "profile_table_count": 1,
+      "stored_edge_count": 1,
+      "profile_edge_count": 1,
+      "relationship_edge_count": 0,
+      "runtime_visible_count": 1,
+      "manifest_sha256_values": [
+        "bcef6c8a9bf90719f1282cb88f95ff93849466f9db39dbe92af87e0bedd138e1"
+      ],
+      "shard_indexes": [
+        0
+      ],
+      "observed_shard_count": 1,
+      "complete": true,
+      "attempt_status_counts": {
+        "accepted": 1
+      }
+    },
+    {
+      "manifest_group_sha256": "c0f66c198d681d39e8a52f434063b4d936d57a4c49c6219b96b6d8cc480570c3",
+      "job_ids": [
+        58
+      ],
+      "expected_shard_count": 1,
+      "batch_count": 1,
+      "attempt_count": 2,
+      "attempted_count": 2,
+      "terminal_attempt_count": 2,
+      "profile_table_count": 1,
+      "stored_edge_count": 1,
+      "profile_edge_count": 1,
+      "relationship_edge_count": 0,
+      "runtime_visible_count": 1,
+      "manifest_sha256_values": [
+        "c0f66c198d681d39e8a52f434063b4d936d57a4c49c6219b96b6d8cc480570c3"
+      ],
+      "shard_indexes": [
+        0
+      ],
+      "observed_shard_count": 1,
+      "complete": true,
+      "attempt_status_counts": {
+        "accepted": 1,
+        "rejected": 1
+      }
+    },
+    {
+      "manifest_group_sha256": "8b077ceff0d71f99008a67b57c1023dea75162356a683c33656f9ccc8c901344",
+      "job_ids": [
+        59
+      ],
+      "expected_shard_count": 1,
+      "batch_count": 1,
+      "attempt_count": 2,
+      "attempted_count": 2,
+      "terminal_attempt_count": 2,
+      "profile_table_count": 2,
+      "stored_edge_count": 5,
+      "profile_edge_count": 2,
+      "relationship_edge_count": 3,
+      "runtime_visible_count": 5,
+      "manifest_sha256_values": [
+        "8b077ceff0d71f99008a67b57c1023dea75162356a683c33656f9ccc8c901344"
+      ],
+      "shard_indexes": [
+        0
+      ],
+      "observed_shard_count": 1,
+      "complete": true,
+      "attempt_status_counts": {
+        "accepted": 2
+      }
+    },
+    {
+      "manifest_group_sha256": "9e2cae1acadc927ee85806a9275ab0e625caadc8e3543e76325616afe8f4c34e",
+      "job_ids": [
+        60
+      ],
+      "expected_shard_count": 1,
+      "batch_count": 1,
+      "attempt_count": 2,
+      "attempted_count": 2,
+      "terminal_attempt_count": 2,
+      "profile_table_count": 2,
+      "stored_edge_count": 5,
+      "profile_edge_count": 2,
+      "relationship_edge_count": 3,
+      "runtime_visible_count": 5,
+      "manifest_sha256_values": [
+        "9e2cae1acadc927ee85806a9275ab0e625caadc8e3543e76325616afe8f4c34e"
+      ],
+      "shard_indexes": [
+        0
+      ],
+      "observed_shard_count": 1,
+      "complete": true,
+      "attempt_status_counts": {
+        "accepted": 2
+      }
+    },
+    {
+      "manifest_group_sha256": "8b8bc9cbe6f0d8114e255f6c0a6222e9f08b9f8bf6be943a90c5b1e62afa48bc",
+      "job_ids": [
+        61
+      ],
+      "expected_shard_count": 2,
+      "batch_count": 1,
+      "attempt_count": 1,
+      "attempted_count": 1,
+      "terminal_attempt_count": 1,
+      "profile_table_count": 1,
+      "stored_edge_count": 3,
+      "profile_edge_count": 1,
+      "relationship_edge_count": 2,
+      "runtime_visible_count": 3,
+      "manifest_sha256_values": [
+        "26239641f85496ed0f3016e061b509404b297e77dc253a19ca619001073adb65"
+      ],
+      "shard_indexes": [
+        0
+      ],
+      "observed_shard_count": 1,
+      "complete": false,
+      "attempt_status_counts": {
+        "accepted": 1
+      }
+    },
+    {
+      "manifest_group_sha256": "0637dcbbea25df605c36374d91213a1566895d6104583588e7765d91b1c868d3",
+      "job_ids": [
+        64
+      ],
+      "expected_shard_count": 1,
+      "batch_count": 1,
+      "attempt_count": 1,
+      "attempted_count": 1,
+      "terminal_attempt_count": 1,
+      "profile_table_count": 1,
+      "stored_edge_count": 2,
+      "profile_edge_count": 1,
+      "relationship_edge_count": 1,
+      "runtime_visible_count": 2,
+      "manifest_sha256_values": [
+        "69e2bcae937fab36be08fdf2a55559dd588804631d3711beb828d454cf25b6d7"
+      ],
+      "shard_indexes": [
+        0
+      ],
+      "observed_shard_count": 1,
+      "complete": true,
+      "attempt_status_counts": {
+        "accepted": 1
+      }
+    },
+    {
+      "manifest_group_sha256": "67e223f034571754d812080d0b2d4316ca6cb89f334ea14ed19687af69e48d0a",
+      "job_ids": [
+        65
+      ],
+      "expected_shard_count": 1,
+      "batch_count": 1,
+      "attempt_count": 1,
+      "attempted_count": 1,
+      "terminal_attempt_count": 1,
+      "profile_table_count": 1,
+      "stored_edge_count": 2,
+      "profile_edge_count": 1,
+      "relationship_edge_count": 1,
+      "runtime_visible_count": 2,
+      "manifest_sha256_values": [
+        "8b7a4ad0cb4e5e46390c78e284002a898edb30dcabc625bc0096424fa119e2d8"
+      ],
+      "shard_indexes": [
+        0
+      ],
+      "observed_shard_count": 1,
+      "complete": true,
+      "attempt_status_counts": {
+        "accepted": 1
+      }
+    },
+    {
+      "manifest_group_sha256": "69161116244c132fcca21aac9835edd9350dc1c25c52a6a669338175880bde3d",
+      "job_ids": [
+        66
+      ],
+      "expected_shard_count": 1,
+      "batch_count": 1,
+      "attempt_count": 1,
+      "attempted_count": 1,
+      "terminal_attempt_count": 1,
+      "profile_table_count": 1,
+      "stored_edge_count": 3,
+      "profile_edge_count": 1,
+      "relationship_edge_count": 2,
+      "runtime_visible_count": 3,
+      "manifest_sha256_values": [
+        "9f4a474198c7164bcde70b1fa24d9177db1d43e8d4dda5f58925ee54732e6e4c"
+      ],
+      "shard_indexes": [
+        0
+      ],
+      "observed_shard_count": 1,
+      "complete": true,
+      "attempt_status_counts": {
+        "accepted": 1
+      }
+    },
+    {
+      "manifest_group_sha256": "dc6a3f39d82d3687dae79499eb2e63462e6a86b69142d23079f91be974ab54f7",
+      "job_ids": [
+        67
+      ],
+      "expected_shard_count": 1,
+      "batch_count": 2,
+      "attempt_count": 2,
+      "attempted_count": 2,
+      "terminal_attempt_count": 2,
+      "profile_table_count": 0,
+      "stored_edge_count": 0,
+      "profile_edge_count": 0,
+      "relationship_edge_count": 0,
+      "runtime_visible_count": 0,
+      "manifest_sha256_values": [
+        "60a913dfc8b22215bc060749e9ffdabc809db9b384f32c06757fcf57d939e2da"
+      ],
+      "shard_indexes": [
+        0
+      ],
+      "observed_shard_count": 1,
+      "complete": true,
+      "attempt_status_counts": {
+        "failed": 1,
+        "rejected": 1
+      }
+    },
+    {
+      "manifest_group_sha256": "0ac696a5cf83714327f5fe54a8de066d5d27c67069e17ee97509ddec1601af8b",
+      "job_ids": [
+        68
+      ],
+      "expected_shard_count": 1,
+      "batch_count": 1,
+      "attempt_count": 1,
+      "attempted_count": 1,
+      "terminal_attempt_count": 1,
+      "profile_table_count": 1,
+      "stored_edge_count": 3,
+      "profile_edge_count": 1,
+      "relationship_edge_count": 2,
+      "runtime_visible_count": 3,
+      "manifest_sha256_values": [
+        "4921b0d86ac13d26082ff041e58dfd327df57bc3c6922301adb769737a9c3314"
+      ],
+      "shard_indexes": [
+        0
+      ],
+      "observed_shard_count": 1,
+      "complete": true,
+      "attempt_status_counts": {
+        "accepted": 1
+      }
+    }
+  ],
+  "latest_manifest_group": {
+    "manifest_group_sha256": "0ac696a5cf83714327f5fe54a8de066d5d27c67069e17ee97509ddec1601af8b",
+    "job_ids": [
+      68
+    ],
+    "expected_shard_count": 1,
+    "batch_count": 1,
+    "attempt_count": 1,
+    "attempted_count": 1,
+    "terminal_attempt_count": 1,
+    "profile_table_count": 1,
+    "stored_edge_count": 3,
+    "profile_edge_count": 1,
+    "relationship_edge_count": 2,
+    "runtime_visible_count": 3,
+    "manifest_sha256_values": [
+      "4921b0d86ac13d26082ff041e58dfd327df57bc3c6922301adb769737a9c3314"
+    ],
+    "shard_indexes": [
+      0
+    ],
+    "observed_shard_count": 1,
+    "complete": true,
+    "attempt_status_counts": {
+      "accepted": 1
+    }
+  },
+  "profiles": {
+    "storage_mode": "canonical_table_with_self_edge_projection",
+    "profile_table_count": 1,
+    "stored_edge_count": 3,
+    "all_stored_edge_count": 35,
+    "profile_edge_count": 1,
+    "relationship_edge_count": 2,
+    "runtime_visible_count": 3,
+    "stale_filtered_count": 3,
+    "provenance_failure_count": 0,
+    "provenance_failures": [],
+    "content_grounded_count": 1,
+    "profile_table_failures": []
+  },
+  "surface_results": [
+    {
+      "surface": "storage",
+      "transport": "sqlite",
+      "dbPath": "/Volumes/data/User/wayne/Code/graph_impact/data/asip.db",
+      "status": "pass",
+      "schema_checks": [
+        "llm_batches",
+        "llm_attempts",
+        "blackbox_profiles",
+        "blackbox_manifests",
+        "blackbox_manifest_candidates",
+        "llm_provider_responses",
+        "blackbox_validation_failures",
+        "blackbox_io_facts",
+        "edges.provenance_json"
+      ]
+    },
+    {
+      "surface": "cli",
+      "transport": "python -m asip.cli blackbox-ledger-qa",
+      "dbPath": "/Volumes/data/User/wayne/Code/graph_impact/data/asip.db",
+      "status": "pass"
+    }
+  ],
+  "gate_status": "pass",
+  "summary": {
+    "checks": 16,
+    "passed": 16,
+    "failed": 0
+  },
+  "checks": [
+    {
+      "id": "blackbox_job_present",
+      "status": "pass",
+      "evidence": "latest job id=68"
+    },
+    {
+      "id": "inventory_non_empty",
+      "status": "pass",
+      "evidence": "inventory_total=19429"
+    },
+    {
+      "id": "ledger_present",
+      "status": "pass",
+      "evidence": "batch_count=1"
+    },
+    {
+      "id": "entity_manifest_present",
+      "status": "pass",
+      "evidence": "manifest_rows=1"
+    },
+    {
+      "id": "entity_candidate_terminal_status",
+      "status": "pass",
+      "evidence": "candidates=1; terminal=1; statuses={'accepted': 1}"
+    },
+    {
+      "id": "entity_provider_response_present",
+      "status": "pass",
+      "evidence": "provider_responses=3"
+    },
+    {
+      "id": "entity_io_facts_present",
+      "status": "pass",
+      "evidence": "io_facts=4; profile_table_rows=1"
+    },
+    {
+      "id": "manifest_group_present",
+      "status": "pass",
+      "evidence": "group=0ac696a5cf83714327f5fe54a8de066d5d27c67069e17ee97509ddec1601af8b; latest_job=68"
+    },
+    {
+      "id": "manifest_group_shard_coverage",
+      "status": "pass",
+      "evidence": "observed_shards=1; expected_shards=1"
+    },
+    {
+      "id": "manifest_group_ledger_completeness",
+      "status": "pass",
+      "evidence": "attempted=1; terminal=1"
+    },
+    {
+      "id": "ledger_completeness",
+      "status": "pass",
+      "evidence": "attempted=1; terminal=1; statuses={'accepted': 1}"
+    },
+    {
+      "id": "profile_edges_persisted",
+      "status": "pass",
+      "evidence": "profile_edges=1"
+    },
+    {
+      "id": "profile_table_persisted",
+      "status": "pass",
+      "evidence": "profile_table_rows=1"
+    },
+    {
+      "id": "content_validator_present",
+      "status": "pass",
+      "evidence": "grounded=1; profile_table_rows=1; reasons={'accepted_grounded': 1}"
+    },
+    {
+      "id": "blackbox_provenance_backrefs",
+      "status": "pass",
+      "evidence": "checked_edges=3; failures=0"
+    },
+    {
+      "id": "runtime_freshness_visible",
+      "status": "pass",
+      "evidence": "visible=3; latest_stored=3; stale_filtered=3"
+    }
+  ]
+}

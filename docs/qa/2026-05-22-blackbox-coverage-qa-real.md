@@ -1,0 +1,43 @@
+# Blackbox Coverage QA
+
+- Status: blocked
+- DB: `/Volumes/data/User/wayne/Code/graph_impact/data/asip.db`
+- Coverage: 7/19429 (0.00036)
+- Missing: 19422
+- Required ratio: 1.0
+- Terminal statuses: `{"accepted": 4, "failed": 1, "rejected": 1}`
+- Profile statuses: `{"accepted": 1, "repaired": 13}`
+- Latest scope: 1/1 (1.0)
+- Latest scope full-goal substitute: `False`
+
+## Missing Samples
+- concept function `function:linux-amdgpu:concept:amd-mxgpu:amd-ip-versioned-functions:gmc_enable_bif_mgls` bucket=deterministic:function
+- concept function `function:linux-amdgpu:concept:amd-mxgpu:amd-ip-versioned-functions:nbio_apply_l1_link_width_reconfig_wa` bucket=deterministic:function
+- concept function `function:linux-amdgpu:concept:amd-mxgpu:amd-ip-versioned-functions:nbio_apply_lc_spc_mode_wa` bucket=deterministic:function
+- concept function `function:linux-amdgpu:concept:amd-mxgpu:amd-ip-versioned-functions:nbio_enable_aspm` bucket=deterministic:function
+- concept function `function:linux-amdgpu:concept:amd-mxgpu:amd-ip-versioned-functions:nbio_get_clockgating_state` bucket=deterministic:function
+- concept function `function:linux-amdgpu:concept:amd-mxgpu:amd-ip-versioned-functions:nbio_init_registers` bucket=deterministic:function
+- concept function `function:linux-amdgpu:concept:amd-mxgpu:amd-ip-versioned-functions:nbio_query_ras_error_count` bucket=deterministic:function
+- concept function `function:linux-amdgpu:concept:amd-mxgpu:amd-ip-versioned-functions:nbio_update_medium_grain_clock_gating` bucket=deterministic:function
+- concept function `function:linux-amdgpu:concept:amd-mxgpu:amd-ip-versioned-functions:nbio_update_medium_grain_light_sleep` bucket=deterministic:function
+- concept function `function:linux-amdgpu:concept:linux-amdgpu:amd-ip-versioned-functions:df_enable_broadcast_mode` bucket=deterministic:function
+- concept function `function:linux-amdgpu:concept:linux-amdgpu:amd-ip-versioned-functions:df_get_clockgating_state` bucket=deterministic:function
+- concept function `function:linux-amdgpu:concept:linux-amdgpu:amd-ip-versioned-functions:df_get_fb_channel_number` bucket=deterministic:function
+- concept function `function:linux-amdgpu:concept:linux-amdgpu:amd-ip-versioned-functions:df_get_fica` bucket=deterministic:function
+- concept function `function:linux-amdgpu:concept:linux-amdgpu:amd-ip-versioned-functions:df_get_hbm_channel_number` bucket=deterministic:function
+- concept function `function:linux-amdgpu:concept:linux-amdgpu:amd-ip-versioned-functions:df_perfmon_arm_with_retry` bucket=deterministic:function
+- concept function `function:linux-amdgpu:concept:linux-amdgpu:amd-ip-versioned-functions:df_perfmon_arm_with_status` bucket=deterministic:function
+- concept function `function:linux-amdgpu:concept:linux-amdgpu:amd-ip-versioned-functions:df_perfmon_rreg` bucket=deterministic:function
+- concept function `function:linux-amdgpu:concept:linux-amdgpu:amd-ip-versioned-functions:df_perfmon_wreg` bucket=deterministic:function
+- concept function `function:linux-amdgpu:concept:linux-amdgpu:amd-ip-versioned-functions:df_pmc_add_cntr` bucket=deterministic:function
+- concept function `function:linux-amdgpu:concept:linux-amdgpu:amd-ip-versioned-functions:df_pmc_get_addr` bucket=deterministic:function
+- concept function `function:linux-amdgpu:concept:linux-amdgpu:amd-ip-versioned-functions:df_pmc_get_count` bucket=deterministic:function
+- concept function `function:linux-amdgpu:concept:linux-amdgpu:amd-ip-versioned-functions:df_pmc_get_ctrl_settings` bucket=deterministic:function
+- concept function `function:linux-amdgpu:concept:linux-amdgpu:amd-ip-versioned-functions:df_pmc_get_read_settings` bucket=deterministic:function
+- concept function `function:linux-amdgpu:concept:linux-amdgpu:amd-ip-versioned-functions:df_pmc_has_counter` bucket=deterministic:function
+- concept function `function:linux-amdgpu:concept:linux-amdgpu:amd-ip-versioned-functions:df_pmc_is_deferred` bucket=deterministic:function
+- concept function `function:linux-amdgpu:concept:linux-amdgpu:amd-ip-versioned-functions:df_pmc_release_cntr` bucket=deterministic:function
+- concept function `function:linux-amdgpu:concept:linux-amdgpu:amd-ip-versioned-functions:df_pmc_set_deferred` bucket=deterministic:function
+- concept function `function:linux-amdgpu:concept:linux-amdgpu:amd-ip-versioned-functions:df_pmc_start` bucket=deterministic:function
+- concept function `function:linux-amdgpu:concept:linux-amdgpu:amd-ip-versioned-functions:df_pmc_stop` bucket=deterministic:function
+- concept function `function:linux-amdgpu:concept:linux-amdgpu:amd-ip-versioned-functions:df_query_hashes` bucket=deterministic:function

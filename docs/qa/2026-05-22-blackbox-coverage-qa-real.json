@@ -1,0 +1,371 @@
+{
+  "by_bucket": {
+    "deterministic:function": {
+      "coverage_ratio": 0.000225,
+      "covered": 4,
+      "missing": 17775,
+      "total": 17779
+    },
+    "deterministic:register": {
+      "coverage_ratio": 0.001818,
+      "covered": 3,
+      "missing": 1647,
+      "total": 1650
+    }
+  },
+  "by_kind": {
+    "function": {
+      "coverage_ratio": 0.000225,
+      "covered": 4,
+      "missing": 17775,
+      "total": 17779
+    },
+    "register": {
+      "coverage_ratio": 0.001818,
+      "covered": 3,
+      "missing": 1647,
+      "total": 1650
+    }
+  },
+  "by_view": {
+    "concept": {
+      "coverage_ratio": 0.000834,
+      "covered": 7,
+      "missing": 8391,
+      "total": 8398
+    },
+    "implementation": {
+      "coverage_ratio": 0.0,
+      "covered": 0,
+      "missing": 11031,
+      "total": 11031
+    }
+  },
+  "coverage": {
+    "abstained_count": 0,
+    "accepted_count": 1,
+    "coverage_ratio": 0.00036,
+    "covered_count": 7,
+    "failed_count": 1,
+    "inventory_total": 19429,
+    "missing_count": 19422,
+    "rejected_count": 1,
+    "repaired_count": 13
+  },
+  "db_path": "/Volumes/data/User/wayne/Code/graph_impact/data/asip.db",
+  "gate_status": "blocked",
+  "latest_manifest_scope": {
+    "by_bucket": {
+      "deterministic:function": {
+        "coverage_ratio": 1.0,
+        "covered": 1,
+        "missing": 0,
+        "total": 1
+      }
+    },
+    "by_kind": {
+      "function": {
+        "coverage_ratio": 1.0,
+        "covered": 1,
+        "missing": 0,
+        "total": 1
+      }
+    },
+    "complete": true,
+    "expected_shard_count": 1,
+    "explicit_not_full_goal": true,
+    "job_ids": [
+      68
+    ],
+    "manifest_group_sha256": "0ac696a5cf83714327f5fe54a8de066d5d27c67069e17ee97509ddec1601af8b",
+    "manifest_sha256_values": [
+      "4921b0d86ac13d26082ff041e58dfd327df57bc3c6922301adb769737a9c3314"
+    ],
+    "observed_shard_count": 1,
+    "scope_type": "latest_manifest_group",
+    "selected_candidate_count": 1,
+    "selected_candidate_ids_sha256": "87b8dede5a17a897fa9b603646cb69b843cca55a892c189dc1a6c17ef3834adc",
+    "selected_coverage_ratio": 1.0,
+    "selected_covered_count": 1,
+    "selected_missing_count": 0,
+    "shard_indexes": [
+      0
+    ],
+    "status_counts": {
+      "accepted": 1
+    },
+    "terminal_candidate_count": 1
+  },
+  "min_coverage": 1.0,
+  "missing_samples": [
+    {
+      "candidate_id": "concept:function:linux-amdgpu:concept:amd-mxgpu:amd-ip-versioned-functions:gmc_enable_bif_mgls",
+      "coverage_bucket": "deterministic:function",
+      "endpoint_id": "function:linux-amdgpu:concept:amd-mxgpu:amd-ip-versioned-functions:gmc_enable_bif_mgls",
+      "kind": "function",
+      "neighbor_count": 2,
+      "view": "concept"
+    },
+    {
+      "candidate_id": "concept:function:linux-amdgpu:concept:amd-mxgpu:amd-ip-versioned-functions:nbio_apply_l1_link_width_reconfig_wa",
+      "coverage_bucket": "deterministic:function",
+      "endpoint_id": "function:linux-amdgpu:concept:amd-mxgpu:amd-ip-versioned-functions:nbio_apply_l1_link_width_reconfig_wa",
+      "kind": "function",
+      "neighbor_count": 2,
+      "view": "concept"
+    },
+    {
+      "candidate_id": "concept:function:linux-amdgpu:concept:amd-mxgpu:amd-ip-versioned-functions:nbio_apply_lc_spc_mode_wa",
+      "coverage_bucket": "deterministic:function",
+      "endpoint_id": "function:linux-amdgpu:concept:amd-mxgpu:amd-ip-versioned-functions:nbio_apply_lc_spc_mode_wa",
+      "kind": "function",
+      "neighbor_count": 3,
+      "view": "concept"
+    },
+    {
+      "candidate_id": "concept:function:linux-amdgpu:concept:amd-mxgpu:amd-ip-versioned-functions:nbio_enable_aspm",
+      "coverage_bucket": "deterministic:function",
+      "endpoint_id": "function:linux-amdgpu:concept:amd-mxgpu:amd-ip-versioned-functions:nbio_enable_aspm",
+      "kind": "function",
+      "neighbor_count": 2,
+      "view": "concept"
+    },
+    {
+      "candidate_id": "concept:function:linux-amdgpu:concept:amd-mxgpu:amd-ip-versioned-functions:nbio_get_clockgating_state",
+      "coverage_bucket": "deterministic:function",
+      "endpoint_id": "function:linux-amdgpu:concept:amd-mxgpu:amd-ip-versioned-functions:nbio_get_clockgating_state",
+      "kind": "function",
+      "neighbor_count": 2,
+      "view": "concept"
+    },
+    {
+      "candidate_id": "concept:function:linux-amdgpu:concept:amd-mxgpu:amd-ip-versioned-functions:nbio_init_registers",
+      "coverage_bucket": "deterministic:function",
+      "endpoint_id": "function:linux-amdgpu:concept:amd-mxgpu:amd-ip-versioned-functions:nbio_init_registers",
+      "kind": "function",
+      "neighbor_count": 2,
+      "view": "concept"
+    },
+    {
+      "candidate_id": "concept:function:linux-amdgpu:concept:amd-mxgpu:amd-ip-versioned-functions:nbio_query_ras_error_count",
+      "coverage_bucket": "deterministic:function",
+      "endpoint_id": "function:linux-amdgpu:concept:amd-mxgpu:amd-ip-versioned-functions:nbio_query_ras_error_count",
+      "kind": "function",
+      "neighbor_count": 8,
+      "view": "concept"
+    },
+    {
+      "candidate_id": "concept:function:linux-amdgpu:concept:amd-mxgpu:amd-ip-versioned-functions:nbio_update_medium_grain_clock_gating",
+      "coverage_bucket": "deterministic:function",
+      "endpoint_id": "function:linux-amdgpu:concept:amd-mxgpu:amd-ip-versioned-functions:nbio_update_medium_grain_clock_gating",
+      "kind": "function",
+      "neighbor_count": 2,
+      "view": "concept"
+    },
+    {
+      "candidate_id": "concept:function:linux-amdgpu:concept:amd-mxgpu:amd-ip-versioned-functions:nbio_update_medium_grain_light_sleep",
+      "coverage_bucket": "deterministic:function",
+      "endpoint_id": "function:linux-amdgpu:concept:amd-mxgpu:amd-ip-versioned-functions:nbio_update_medium_grain_light_sleep",
+      "kind": "function",
+      "neighbor_count": 2,
+      "view": "concept"
+    },
+    {
+      "candidate_id": "concept:function:linux-amdgpu:concept:linux-amdgpu:amd-ip-versioned-functions:df_enable_broadcast_mode",
+      "coverage_bucket": "deterministic:function",
+      "endpoint_id": "function:linux-amdgpu:concept:linux-amdgpu:amd-ip-versioned-functions:df_enable_broadcast_mode",
+      "kind": "function",
+      "neighbor_count": 3,
+      "view": "concept"
+    },
+    {
+      "candidate_id": "concept:function:linux-amdgpu:concept:linux-amdgpu:amd-ip-versioned-functions:df_get_clockgating_state",
+      "coverage_bucket": "deterministic:function",
+      "endpoint_id": "function:linux-amdgpu:concept:linux-amdgpu:amd-ip-versioned-functions:df_get_clockgating_state",
+      "kind": "function",
+      "neighbor_count": 2,
+      "view": "concept"
+    },
+    {
+      "candidate_id": "concept:function:linux-amdgpu:concept:linux-amdgpu:amd-ip-versioned-functions:df_get_fb_channel_number",
+      "coverage_bucket": "deterministic:function",
+      "endpoint_id": "function:linux-amdgpu:concept:linux-amdgpu:amd-ip-versioned-functions:df_get_fb_channel_number",
+      "kind": "function",
+      "neighbor_count": 4,
+      "view": "concept"
+    },
+    {
+      "candidate_id": "concept:function:linux-amdgpu:concept:linux-amdgpu:amd-ip-versioned-functions:df_get_fica",
+      "coverage_bucket": "deterministic:function",
+      "endpoint_id": "function:linux-amdgpu:concept:linux-amdgpu:amd-ip-versioned-functions:df_get_fica",
+      "kind": "function",
+      "neighbor_count": 5,
+      "view": "concept"
+    },
+    {
+      "candidate_id": "concept:function:linux-amdgpu:concept:linux-amdgpu:amd-ip-versioned-functions:df_get_hbm_channel_number",
+      "coverage_bucket": "deterministic:function",
+      "endpoint_id": "function:linux-amdgpu:concept:linux-amdgpu:amd-ip-versioned-functions:df_get_hbm_channel_number",
+      "kind": "function",
+      "neighbor_count": 2,
+      "view": "concept"
+    },
+    {
+      "candidate_id": "concept:function:linux-amdgpu:concept:linux-amdgpu:amd-ip-versioned-functions:df_perfmon_arm_with_retry",
+      "coverage_bucket": "deterministic:function",
+      "endpoint_id": "function:linux-amdgpu:concept:linux-amdgpu:amd-ip-versioned-functions:df_perfmon_arm_with_retry",
+      "kind": "function",
+      "neighbor_count": 2,
+      "view": "concept"
+    },
+    {
+      "candidate_id": "concept:function:linux-amdgpu:concept:linux-amdgpu:amd-ip-versioned-functions:df_perfmon_arm_with_status",
+      "coverage_bucket": "deterministic:function",
+      "endpoint_id": "function:linux-amdgpu:concept:linux-amdgpu:amd-ip-versioned-functions:df_perfmon_arm_with_status",
+      "kind": "function",
+      "neighbor_count": 6,
+      "view": "concept"
+    },
+    {
+      "candidate_id": "concept:function:linux-amdgpu:concept:linux-amdgpu:amd-ip-versioned-functions:df_perfmon_rreg",
+      "coverage_bucket": "deterministic:function",
+      "endpoint_id": "function:linux-amdgpu:concept:linux-amdgpu:amd-ip-versioned-functions:df_perfmon_rreg",
+      "kind": "function",
+      "neighbor_count": 5,
+      "view": "concept"
+    },
+    {
+      "candidate_id": "concept:function:linux-amdgpu:concept:linux-amdgpu:amd-ip-versioned-functions:df_perfmon_wreg",
+      "coverage_bucket": "deterministic:function",
+      "endpoint_id": "function:linux-amdgpu:concept:linux-amdgpu:amd-ip-versioned-functions:df_perfmon_wreg",
+      "kind": "function",
+      "neighbor_count": 6,
+      "view": "concept"
+    },
+    {
+      "candidate_id": "concept:function:linux-amdgpu:concept:linux-amdgpu:amd-ip-versioned-functions:df_pmc_add_cntr",
+      "coverage_bucket": "deterministic:function",
+      "endpoint_id": "function:linux-amdgpu:concept:linux-amdgpu:amd-ip-versioned-functions:df_pmc_add_cntr",
+      "kind": "function",
+      "neighbor_count": 1,
+      "view": "concept"
+    },
+    {
+      "candidate_id": "concept:function:linux-amdgpu:concept:linux-amdgpu:amd-ip-versioned-functions:df_pmc_get_addr",
+      "coverage_bucket": "deterministic:function",
+      "endpoint_id": "function:linux-amdgpu:concept:linux-amdgpu:amd-ip-versioned-functions:df_pmc_get_addr",
+      "kind": "function",
+      "neighbor_count": 3,
+      "view": "concept"
+    },
+    {
+      "candidate_id": "concept:function:linux-amdgpu:concept:linux-amdgpu:amd-ip-versioned-functions:df_pmc_get_count",
+      "coverage_bucket": "deterministic:function",
+      "endpoint_id": "function:linux-amdgpu:concept:linux-amdgpu:amd-ip-versioned-functions:df_pmc_get_count",
+      "kind": "function",
+      "neighbor_count": 6,
+      "view": "concept"
+    },
+    {
+      "candidate_id": "concept:function:linux-amdgpu:concept:linux-amdgpu:amd-ip-versioned-functions:df_pmc_get_ctrl_settings",
+      "coverage_bucket": "deterministic:function",
+      "endpoint_id": "function:linux-amdgpu:concept:linux-amdgpu:amd-ip-versioned-functions:df_pmc_get_ctrl_settings",
+      "kind": "function",
+      "neighbor_count": 3,
+      "view": "concept"
+    },
+    {
+      "candidate_id": "concept:function:linux-amdgpu:concept:linux-amdgpu:amd-ip-versioned-functions:df_pmc_get_read_settings",
+      "coverage_bucket": "deterministic:function",
+      "endpoint_id": "function:linux-amdgpu:concept:linux-amdgpu:amd-ip-versioned-functions:df_pmc_get_read_settings",
+      "kind": "function",
+      "neighbor_count": 3,
+      "view": "concept"
+    },
+    {
+      "candidate_id": "concept:function:linux-amdgpu:concept:linux-amdgpu:amd-ip-versioned-functions:df_pmc_has_counter",
+      "coverage_bucket": "deterministic:function",
+      "endpoint_id": "function:linux-amdgpu:concept:linux-amdgpu:amd-ip-versioned-functions:df_pmc_has_counter",
+      "kind": "function",
+      "neighbor_count": 4,
+      "view": "concept"
+    },
+    {
+      "candidate_id": "concept:function:linux-amdgpu:concept:linux-amdgpu:amd-ip-versioned-functions:df_pmc_is_deferred",
+      "coverage_bucket": "deterministic:function",
+      "endpoint_id": "function:linux-amdgpu:concept:linux-amdgpu:amd-ip-versioned-functions:df_pmc_is_deferred",
+      "kind": "function",
+      "neighbor_count": 2,
+      "view": "concept"
+    },
+    {
+      "candidate_id": "concept:function:linux-amdgpu:concept:linux-amdgpu:amd-ip-versioned-functions:df_pmc_release_cntr",
+      "coverage_bucket": "deterministic:function",
+      "endpoint_id": "function:linux-amdgpu:concept:linux-amdgpu:amd-ip-versioned-functions:df_pmc_release_cntr",
+      "kind": "function",
+      "neighbor_count": 2,
+      "view": "concept"
+    },
+    {
+      "candidate_id": "concept:function:linux-amdgpu:concept:linux-amdgpu:amd-ip-versioned-functions:df_pmc_set_deferred",
+      "coverage_bucket": "deterministic:function",
+      "endpoint_id": "function:linux-amdgpu:concept:linux-amdgpu:amd-ip-versioned-functions:df_pmc_set_deferred",
+      "kind": "function",
+      "neighbor_count": 3,
+      "view": "concept"
+    },
+    {
+      "candidate_id": "concept:function:linux-amdgpu:concept:linux-amdgpu:amd-ip-versioned-functions:df_pmc_start",
+      "coverage_bucket": "deterministic:function",
+      "endpoint_id": "function:linux-amdgpu:concept:linux-amdgpu:amd-ip-versioned-functions:df_pmc_start",
+      "kind": "function",
+      "neighbor_count": 6,
+      "view": "concept"
+    },
+    {
+      "candidate_id": "concept:function:linux-amdgpu:concept:linux-amdgpu:amd-ip-versioned-functions:df_pmc_stop",
+      "coverage_bucket": "deterministic:function",
+      "endpoint_id": "function:linux-amdgpu:concept:linux-amdgpu:amd-ip-versioned-functions:df_pmc_stop",
+      "kind": "function",
+      "neighbor_count": 6,
+      "view": "concept"
+    },
+    {
+      "candidate_id": "concept:function:linux-amdgpu:concept:linux-amdgpu:amd-ip-versioned-functions:df_query_hashes",
+      "coverage_bucket": "deterministic:function",
+      "endpoint_id": "function:linux-amdgpu:concept:linux-amdgpu:amd-ip-versioned-functions:df_query_hashes",
+      "kind": "function",
+      "neighbor_count": 3,
+      "view": "concept"
+    }
+  ],
+  "profile_status_counts": {
+    "accepted": 1,
+    "repaired": 13
+  },
+  "source": "asip.blackbox_coverage_qa",
+  "summary": {
+    "coverage_ratio": 0.00036,
+    "covered": 7,
+    "latest_manifest_scope": {
+      "complete": true,
+      "coverage_ratio": 1.0,
+      "covered": 1,
+      "explicit_not_full_goal": true,
+      "manifest_group_sha256": "0ac696a5cf83714327f5fe54a8de066d5d27c67069e17ee97509ddec1601af8b",
+      "missing": 0,
+      "scope_type": "latest_manifest_group",
+      "selected": 1,
+      "terminal": 1
+    },
+    "min_coverage": 1.0,
+    "missing": 19422,
+    "status": "blocked",
+    "total": 19429
+  },
+  "terminal_status_counts": {
+    "accepted": 4,
+    "failed": 1,
+    "rejected": 1
+  }
+}

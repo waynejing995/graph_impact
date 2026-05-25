@@ -1,0 +1,183 @@
+{
+  "abstained_count": 0,
+  "batch_size": 1,
+  "candidate_count": 1,
+  "db_path": "/Volumes/data/User/wayne/Code/graph_impact/data/asip.db",
+  "edge_count": 3,
+  "failed_count": 0,
+  "inventory_total": 19429,
+  "job_id": 68,
+  "ledger": [
+    {
+      "attempts": [
+        {
+          "attempt_index": 1,
+          "batch_id": 21,
+          "candidate_id": "concept:function:linux-amdgpu:concept:linux-amdgpu:amd-ip-versioned-functions:uvd_enc_ring_emit_reg_wait",
+          "created_at": "2026-05-21 18:13:51",
+          "endpoint_id": "function:linux-amdgpu:concept:linux-amdgpu:amd-ip-versioned-functions:uvd_enc_ring_emit_reg_wait",
+          "error": "",
+          "id": 23,
+          "job_id": 68,
+          "metadata": {
+            "evidence_refs": [
+              "neighbor:2"
+            ],
+            "provider_response_ids": [
+              16,
+              17,
+              18
+            ],
+            "reason_codes": [
+              "accepted_grounded"
+            ],
+            "reconcile": {
+              "accepted_sample_count": 3,
+              "agreement": {
+                "agreed_behavior_families": [
+                  "write"
+                ],
+                "agreed_refs": [
+                  "source:3"
+                ],
+                "behavior_family_counts": {
+                  "write": 3
+                },
+                "grounding_ref_counts": {
+                  "neighbor:2": 1,
+                  "source:3": 2
+                },
+                "passes": true,
+                "reason_code": ""
+              },
+              "evidence_refs": [
+                "neighbor:2",
+                "source:3"
+              ],
+              "reason_codes": [
+                "accepted_grounded"
+              ],
+              "rejected_reason_counts": {},
+              "required_agreeing_samples": 2,
+              "sample_count": 3,
+              "validator_statuses": [
+                "accepted",
+                "accepted",
+                "accepted"
+              ],
+              "winner_sample_index": 1
+            },
+            "sample_count": 3,
+            "validator": "schema+endpoint_allowlist+relation_enum",
+            "validator_status": "accepted"
+          },
+          "prompt_sha256": "177c584e0b6d4c5421918632a8c9beaf07778f3a152069dabb4558368167ada4",
+          "response": {
+            "profiles": [
+              {
+                "confidence": 0.9,
+                "evidence": {
+                  "refs": [
+                    "neighbor:2"
+                  ],
+                  "text": "out calls function:linux-amdgpu:drivers/gpu/drm/amd/amdgpu/amdgpu_ring.h:amdgpu_ring_write"
+                },
+                "explanation_layer": "This function writes to the ring using amdgpu_ring_write.",
+                "id": "function:linux-amdgpu:concept:linux-amdgpu:amd-ip-versioned-functions:uvd_enc_ring_emit_reg_wait",
+                "inputs": [
+                  {
+                    "refs": [],
+                    "text": "None"
+                  },
+                  {
+                    "refs": [],
+                    "text": "None"
+                  }
+                ],
+                "method": "blackbox_io",
+                "observed_behavior": {
+                  "refs": [
+                    "neighbor:2"
+                  ],
+                  "text": "Calls amdgpu_ring_write function."
+                },
+                "outputs": [
+                  {
+                    "refs": [
+                      "neighbor:2"
+                    ],
+                    "text": "Calls function:linux-amdgpu:drivers/gpu/drm/amd/amdgpu/amdgpu_ring.h:amdgpu_ring_write"
+                  },
+                  {
+                    "refs": [],
+                    "text": "None"
+                  }
+                ]
+              }
+            ],
+            "relationships": []
+          },
+          "response_sha256": "637c8a873eb87f49e486cb774145b911592e8308954c6a9234ad20598e5b8784",
+          "status": "accepted"
+        }
+      ],
+      "candidate_count": 1,
+      "candidate_ids": [
+        "concept:function:linux-amdgpu:concept:linux-amdgpu:amd-ip-versioned-functions:uvd_enc_ring_emit_reg_wait"
+      ],
+      "created_at": "2026-05-21 18:12:53",
+      "finished_at": "2026-05-21 18:13:51",
+      "id": 21,
+      "job_id": 68,
+      "kind": "blackbox_profiles",
+      "metadata": {
+        "accepted": 1,
+        "bucket_ids": [
+          "concept:function:linux-amdgpu:drivers/gpu:unknown_ip:degree_1_2:no_register_io:in:calls:function,out:calls:function:deterministic:function"
+        ],
+        "global_candidate_total": 19429,
+        "inventory_total": 19429,
+        "manifest_group_sha256": "0ac696a5cf83714327f5fe54a8de066d5d27c67069e17ee97509ddec1601af8b",
+        "manifest_sha256": "4921b0d86ac13d26082ff041e58dfd327df57bc3c6922301adb769737a9c3314",
+        "offset": 0,
+        "phase": "pilot",
+        "rejected": 0,
+        "sample_count": 3,
+        "scheduler_version": "blackbox_selection_manifest_v1",
+        "selection_seed": "blackbox-2026-05-22-profile-only-sanity-v1",
+        "shard_candidate_total": 19429,
+        "shard_count": 1,
+        "shard_index": 0
+      },
+      "model": "gemma4:e4b",
+      "provider": "ollama",
+      "status": "completed"
+    }
+  ],
+  "model": "gemma4:e4b",
+  "profile_count": 1,
+  "profiled_inventory_total": 6,
+  "provider": "ollama",
+  "rejected_count": 0,
+  "requested_batch_size": 6,
+  "sample_count": 3,
+  "selection_inventory_total": 19423,
+  "selection_manifest": {
+    "bucket_counts": {
+      "concept:function:linux-amdgpu:drivers/gpu:unknown_ip:degree_1_2:no_register_io:in:calls:function,out:calls:function:deterministic:function": 1
+    },
+    "global_candidate_total": 19429,
+    "inventory_sha256": "ed788763a676e0693f501ffb4a5af9e6fdf6ab07224f5d63afe5843eb87b4f45",
+    "manifest_group_sha256": "0ac696a5cf83714327f5fe54a8de066d5d27c67069e17ee97509ddec1601af8b",
+    "manifest_sha256": "4921b0d86ac13d26082ff041e58dfd327df57bc3c6922301adb769737a9c3314",
+    "missing_candidate_total": 19423,
+    "missing_shard_candidate_total": 19423,
+    "phase": "pilot",
+    "selected_count": 1,
+    "selection_seed": "blackbox-2026-05-22-profile-only-sanity-v1",
+    "shard_candidate_total": 19429,
+    "shard_count": 1,
+    "shard_index": 0
+  },
+  "source": "blackbox_profile_batch_job"
+}

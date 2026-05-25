@@ -224,6 +224,34 @@ class OllamaDocNodeProvider(OllamaEdgeProvider):
         return parse_ollama_json_message(data)
 
 
+class OllamaBlackboxProfileProvider(OllamaEdgeProvider):
+    """Ollama HTTP provider for blackbox input-output node profiles."""
+
+    def _generate_with_model(self, prompt: str, model: EdgeModelConfig, model_name: str) -> Dict[str, Any]:
+        body = {
+            "model": model_name,
+            "stream": False,
+            "format": model.format,
+            "think": model.think,
+            "keep_alive": model.keep_alive,
+            "options": {
+                "num_ctx": model.num_ctx,
+                "num_predict": model.num_predict,
+                "temperature": model.temperature,
+            },
+            "messages": _blackbox_profile_messages(prompt),
+        }
+        request = urllib.request.Request(
+            _request_url(model, self.base_url, "/api/chat"),
+            data=json.dumps(body).encode("utf-8"),
+            headers=_request_headers(model),
+            method="POST",
+        )
+        with urllib.request.urlopen(request, timeout=model.timeout_seconds) as response:
+            data = json.loads(response.read().decode("utf-8"))
+        return parse_ollama_json_message(data)
+
+
 class OpenAICompatibleEdgeProvider:
     """OpenAI-compatible chat completions provider for semantic edge generation."""
 
@@ -289,6 +317,30 @@ class OpenAICompatibleDocNodeProvider(OpenAICompatibleEdgeProvider):
         return parse_openai_compatible_json_message(data)
 
 
+class OpenAICompatibleBlackboxProfileProvider(OpenAICompatibleEdgeProvider):
+    """OpenAI-compatible provider for blackbox input-output node profiles."""
+
+    def _generate_with_model(self, prompt: str, model: EdgeModelConfig, model_name: str) -> Dict[str, Any]:
+        body: Dict[str, Any] = {
+            "model": model_name,
+            "stream": False,
+            "temperature": model.temperature,
+            "max_tokens": model.num_predict,
+            "messages": _blackbox_profile_messages(prompt),
+        }
+        if model.format == "json":
+            body["response_format"] = {"type": "json_object"}
+        request = urllib.request.Request(
+            _request_url(model, self.base_url, "/v1/chat/completions"),
+            data=json.dumps(body).encode("utf-8"),
+            headers=_request_headers(model),
+            method="POST",
+        )
+        with urllib.request.urlopen(request, timeout=model.timeout_seconds) as response:
+            data = json.loads(response.read().decode("utf-8"))
+        return parse_openai_compatible_json_message(data)
+
+
 def create_edge_provider(model: EdgeModelConfig) -> EdgeProvider:
     provider = _normalize_provider_id(model.provider)
     if provider == "ollama":
@@ -304,6 +356,15 @@ def create_doc_node_provider(model: EdgeModelConfig) -> EdgeProvider:
         return OllamaDocNodeProvider()
     if provider in {"openai", "openai-compatible"}:
         return OpenAICompatibleDocNodeProvider()
+    raise ValueError(f"Unsupported edge provider: {model.provider}")
+
+
+def create_blackbox_profile_provider(model: EdgeModelConfig) -> EdgeProvider:
+    provider = _normalize_provider_id(model.provider)
+    if provider == "ollama":
+        return OllamaBlackboxProfileProvider()
+    if provider in {"openai", "openai-compatible"}:
+        return OpenAICompatibleBlackboxProfileProvider()
     raise ValueError(f"Unsupported edge provider: {model.provider}")
 
 
@@ -351,6 +412,28 @@ def _doc_node_messages(prompt: str) -> List[Dict[str, str]]:
                 "\"constraints\":[string],\"confidence\":number,\"evidence\":string}],"
                 "\"relationships\":[{\"src\":string,\"relation\":string,\"dst\":string,"
                 "\"confidence\":number,\"evidence\":string}]}]}"
+            ),
+        },
+        {"role": "user", "content": f"/no_think\n{prompt}"},
+    ]
+
+
+def _blackbox_profile_messages(prompt: str) -> List[Dict[str, str]]:
+    return [
+        {
+            "role": "system",
+            "content": (
+                "/no_think "
+                "Return only valid JSON for ASIP blackbox graph profiles. "
+                "Treat each endpoint as a black box: infer behavior only from observable inputs, "
+                "outputs, source snippets, and graph facts supplied by the user. "
+                "Use exact endpoint ids from the prompt for profiles[].id and relationship src/dst. "
+                "Do not invent endpoints, local variables, wrapper names, field names, providers, or file paths as nodes. "
+                "Keep evidence under 12 words. Do not emit markdown fences or prose. "
+                "Schema: {\"profiles\":[{\"id\":string,\"method\":string,\"inputs\":[string],"
+                "\"outputs\":[string],\"observed_behavior\":string,\"explanation_layer\":string,"
+                "\"confidence\":number,\"evidence\":string}],\"relationships\":[{\"src\":string,"
+                "\"relation\":string,\"dst\":string,\"confidence\":number,\"evidence\":string}]}"
             ),
         },
         {"role": "user", "content": f"/no_think\n{prompt}"},

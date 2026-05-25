@@ -1,0 +1,120 @@
+{
+  "source": "asip.blackbox_ledger_qa",
+  "generated_at": "2026-05-21T15:10:01.151007+00:00",
+  "repo_head": "b37d2dfe77d89f1a75634aa08c75a716791c1ca0",
+  "db_path": "/tmp/asip-blackbox-ledger-fixture/fixture.db",
+  "db_sha256": "3310f99d794444aa783f911873bb21d4703dfbec384b8025db7a493e29323740",
+  "limits_config_path": "configs/workbench-limits.json",
+  "limits_config_sha256": "e8134baea819d2924dcd4add7c4a40bbf204f3f3e23a8896f62a88667cc976f7",
+  "provider_settings": {
+    "edge": {
+      "provider": "ollama",
+      "base_url": "http://edge.local",
+      "api_path": "/api/chat",
+      "model": "gemma4:e4b",
+      "timeout_seconds": 2
+    }
+  },
+  "latest_jobs": {
+    "latest_index_job_id": null,
+    "latest_graph_rebuild_job_id": null,
+    "latest_blackbox_profiles_job_id": 1
+  },
+  "inventory": {
+    "total": 4,
+    "sha256": "9ac1e3621aecfa78fd04687d3261c4714b02e6b0eb4d1815dd174cc6e9c773e1",
+    "counts": {
+      "by_kind": {
+        "function": 2,
+        "register": 2
+      },
+      "by_view": {
+        "concept": 2,
+        "implementation": 2
+      },
+      "by_bucket": {
+        "deterministic:function": 2,
+        "deterministic:register": 2
+      }
+    }
+  },
+  "ledger": {
+    "batch_count": 1,
+    "attempt_count": 2,
+    "attempted_count": 2,
+    "attempt_status_counts": {
+      "accepted": 1,
+      "rejected": 1
+    }
+  },
+  "profiles": {
+    "stored_edge_count": 2,
+    "profile_edge_count": 1,
+    "relationship_edge_count": 1,
+    "runtime_visible_count": 2,
+    "provenance_failure_count": 0,
+    "provenance_failures": []
+  },
+  "surface_results": [
+    {
+      "surface": "storage",
+      "transport": "sqlite",
+      "dbPath": "/tmp/asip-blackbox-ledger-fixture/fixture.db",
+      "status": "pass",
+      "schema_checks": [
+        "llm_batches",
+        "llm_attempts",
+        "edges.provenance_json"
+      ]
+    },
+    {
+      "surface": "cli",
+      "transport": "python -m asip.cli blackbox-ledger-qa",
+      "dbPath": "/tmp/asip-blackbox-ledger-fixture/fixture.db",
+      "status": "pass"
+    }
+  ],
+  "gate_status": "pass",
+  "summary": {
+    "checks": 7,
+    "passed": 7,
+    "failed": 0
+  },
+  "checks": [
+    {
+      "id": "blackbox_job_present",
+      "status": "pass",
+      "evidence": "latest job id=1"
+    },
+    {
+      "id": "inventory_non_empty",
+      "status": "pass",
+      "evidence": "inventory_total=4"
+    },
+    {
+      "id": "ledger_present",
+      "status": "pass",
+      "evidence": "batch_count=1"
+    },
+    {
+      "id": "ledger_completeness",
+      "status": "pass",
+      "evidence": "attempted=2; terminal=2; statuses={'accepted': 1, 'rejected': 1}"
+    },
+    {
+      "id": "profile_edges_persisted",
+      "status": "pass",
+      "evidence": "profile_edges=1"
+    },
+    {
+      "id": "blackbox_provenance_backrefs",
+      "status": "pass",
+      "evidence": "checked_edges=2; failures=0"
+    },
+    {
+      "id": "runtime_freshness_visible",
+      "status": "pass",
+      "evidence": "visible=2; stored=2"
+    }
+  ]
+}

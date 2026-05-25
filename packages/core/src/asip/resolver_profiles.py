@@ -54,9 +54,25 @@ class GraphRegisterNormalization:
 
 
 @dataclass(frozen=True)
+class GraphRegisterInventory:
+    """Resolver-configured register symbol inventory rules.
+
+    Controls which raw symbols from source code are accepted as
+    register endpoints during deterministic extraction and product
+    projection.  Low-signal tokens, wrapper names, and local variables
+    that happen to look like register prefixes are rejected.
+    """
+
+    prefixes: List[str] = field(default_factory=lambda: ["reg", "mm", "smn"])
+    case: str = "mixed"  # "mixed" | "upper" | "lower"
+    reject_tokens: List[str] = field(default_factory=lambda: ["tmp", "value", "adapt", "data", "ops", "funcs", "ret", "reg", "local", "ring", "init_func"])
+
+
+@dataclass(frozen=True)
 class GraphNormalizationConfig:
     function_normalization: GraphFunctionNormalization = field(default_factory=GraphFunctionNormalization)
     register_normalization: GraphRegisterNormalization = field(default_factory=GraphRegisterNormalization)
+    register_inventory: GraphRegisterInventory = field(default_factory=GraphRegisterInventory)
     access_relation_map: Dict[str, str] = field(default_factory=dict)
     graph_profiles: Dict[str, object] = field(default_factory=dict)
 
@@ -240,6 +256,7 @@ def _graph_normalization_from_config(value: object) -> GraphNormalizationConfig:
     data = value if isinstance(value, Mapping) else {}
     function_data = data.get("function_normalization", {}) if isinstance(data, Mapping) else {}
     register_data = data.get("register_normalization", {}) if isinstance(data, Mapping) else {}
+    inventory_data = data.get("register_inventory", {}) if isinstance(data, Mapping) else {}
     access_data = data.get("access_relation_map", {}) if isinstance(data, Mapping) else {}
     profiles_data = data.get("graph_profiles", {}) if isinstance(data, Mapping) else {}
     function_normalization = _function_normalization_from_config(
@@ -248,9 +265,13 @@ def _graph_normalization_from_config(value: object) -> GraphNormalizationConfig:
     register_normalization = _register_normalization_from_config(
         register_data if isinstance(register_data, Mapping) else {}
     )
+    register_inventory = _register_inventory_from_config(
+        inventory_data if isinstance(inventory_data, Mapping) else {}
+    )
     return GraphNormalizationConfig(
         function_normalization=function_normalization,
         register_normalization=register_normalization,
+        register_inventory=register_inventory,
         access_relation_map=_access_relation_map_from_config(access_data),
         graph_profiles=dict(profiles_data) if isinstance(profiles_data, Mapping) else {},
     )
@@ -311,6 +332,17 @@ def _register_normalization_from_config(data: Mapping[str, object]) -> GraphRegi
     )
 
 
+def _register_inventory_from_config(data: Mapping[str, object]) -> GraphRegisterInventory:
+    default = GraphRegisterInventory()
+    raw_prefixes = data.get("prefixes")
+    prefixes = list(raw_prefixes) if isinstance(raw_prefixes, (list, tuple)) else list(default.prefixes)
+    raw_case = str(data.get("case", default.case) or default.case).strip().lower()
+    case = raw_case if raw_case in {"mixed", "upper", "lower"} else default.case
+    raw_reject = data.get("reject_tokens")
+    reject_tokens = list(raw_reject) if isinstance(raw_reject, (list, tuple)) else list(default.reject_tokens)
+    return GraphRegisterInventory(prefixes=prefixes, case=case, reject_tokens=reject_tokens)
+
+
 def _access_relation_map_from_config(value: object) -> Dict[str, str]:
     if not isinstance(value, Mapping):
         return {}
@@ -356,6 +388,13 @@ def _graph_normalization_to_config(graph: GraphNormalizationConfig) -> Dict[str,
         result["access_relation_map"] = dict(graph.access_relation_map)
     if graph.graph_profiles:
         result["graph_profiles"] = dict(graph.graph_profiles)
+    inventory_default = GraphRegisterInventory()
+    if graph.register_inventory != inventory_default:
+        result["register_inventory"] = {
+            "prefixes": list(graph.register_inventory.prefixes),
+            "case": graph.register_inventory.case,
+            "reject_tokens": list(graph.register_inventory.reject_tokens),
+        }
     return result
 
 
@@ -489,6 +528,21 @@ def _prefixed_symbols_in_expression(raw: str, profile: ResolverProfile) -> List[
         if symbol and symbol not in symbols:
             symbols.append(symbol)
     return symbols
+
+
+def is_valid_register_symbol(symbol: str, inventory: GraphRegisterInventory) -> bool:
+    """Return True when *symbol* is a plausible register name under *inventory* rules."""
+    raw = symbol.strip()
+    if not raw or raw in set(inventory.reject_tokens):
+        return False
+    if inventory.case == "upper" and raw != raw.upper():
+        return False
+    if inventory.case == "lower" and raw != raw.lower():
+        return False
+    for prefix in inventory.prefixes:
+        if raw.startswith(prefix) and len(raw) > len(prefix) and raw[len(prefix)].isupper():
+            return True
+    return False
 
 
 def _fallback_symbol_for_argument(raw: str, profile: ResolverProfile) -> str:

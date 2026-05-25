@@ -1,0 +1,183 @@
+{
+  "abstained_count": 0,
+  "batch_size": 1,
+  "candidate_count": 2,
+  "db_path": "/Volumes/data/User/wayne/Code/graph_impact/data/asip.db",
+  "edge_count": 0,
+  "failed_count": 1,
+  "inventory_total": 19429,
+  "job_id": 67,
+  "ledger": [
+    {
+      "attempts": [
+        {
+          "attempt_index": 1,
+          "batch_id": 19,
+          "candidate_id": "concept:function:linux-amdgpu:drivers/gpu/drm/amd/amdgpu/amdgpu_virt.c:amdgpu_virt_post_reset",
+          "created_at": "2026-05-21 18:09:13",
+          "endpoint_id": "function:linux-amdgpu:drivers/gpu/drm/amd/amdgpu/amdgpu_virt.c:amdgpu_virt_post_reset",
+          "error": "all blackbox profile samples failed to parse",
+          "id": 21,
+          "job_id": 67,
+          "metadata": {
+            "provider_response_ids": [
+              10,
+              11,
+              12
+            ],
+            "reconcile_status": "failed",
+            "sample_count": 3,
+            "sample_failures": [
+              {
+                "error": "Ollama edge generation failed: gemma4:e4b: Ollama returned no parseable JSON content: {\"profiles\":[{\"id\":\"function:linux-amdgpu:drivers/gpu/drm/amd/amdgpu/amdgpu_virt.c:amdgpu_virt_post_reset\",\"method\":\"blackbox_io\",\"inputs\":[],\"outputs\":[],\"observed_behavior\":\"Calls amdgpu_device_reset_sriov and amdgpu_ip_version.\",\"explana",
+                "sample_index": "1"
+              },
+              {
+                "error": "Ollama edge generation failed: gemma4:e4b: Ollama returned no parseable JSON content: {\"profiles\":[{\"id\":\"function:linux-amdgpu:drivers/gpu/drm/amd/amdgpu/amdgpu_virt.c:amdgpu_virt_post_reset\",\"method\":\"blackbox_io\",\"inputs\":[],\"outputs\":[],\"observed_behavior\":\"Performs post-reset operations for virt device.\",\"explanation_la",
+                "sample_index": "2"
+              },
+              {
+                "error": "Ollama edge generation failed: gemma4:e4b: Ollama returned no parseable JSON content: {\"profiles\":[{\"id\":\"function:linux-amdgpu:drivers/gpu/drm/amd/amdgpu/amdgpu_virt.c:amdgpu_virt_post_reset\",\"method\":\"blackbox_io\",\"inputs\":[],\"outputs\":[],\"observed_behavior\":\"Performs post-reset actions for virt device.\",\"explanation_layer",
+                "sample_index": "3"
+              }
+            ]
+          },
+          "prompt_sha256": "fe9b36aa28d5ea86a149c406ccaf64276d1da17f6ff4e3837ffa4f1af3a60430",
+          "response": {},
+          "response_sha256": "",
+          "status": "failed"
+        }
+      ],
+      "candidate_count": 1,
+      "candidate_ids": [
+        "concept:function:linux-amdgpu:drivers/gpu/drm/amd/amdgpu/amdgpu_virt.c:amdgpu_virt_post_reset"
+      ],
+      "created_at": "2026-05-21 18:07:17",
+      "finished_at": "2026-05-21 18:09:13",
+      "id": 19,
+      "job_id": 67,
+      "kind": "blackbox_profiles",
+      "metadata": {
+        "bucket_ids": [
+          "concept:function:linux-amdgpu:drivers/gpu:unknown_ip:degree_1_2:no_register_io:in:calls:function,out:calls:function:deterministic:function"
+        ],
+        "failed": 1,
+        "global_candidate_total": 19429,
+        "inventory_total": 19429,
+        "manifest_group_sha256": "dc6a3f39d82d3687dae79499eb2e63462e6a86b69142d23079f91be974ab54f7",
+        "manifest_sha256": "60a913dfc8b22215bc060749e9ffdabc809db9b384f32c06757fcf57d939e2da",
+        "offset": 0,
+        "phase": "pilot",
+        "sample_count": 3,
+        "scheduler_version": "blackbox_selection_manifest_v1",
+        "selection_seed": "blackbox-2026-05-22-scale-2-sanity-v1",
+        "shard_candidate_total": 19429,
+        "shard_count": 1,
+        "shard_index": 0
+      },
+      "model": "gemma4:e4b",
+      "provider": "ollama",
+      "status": "failed"
+    },
+    {
+      "attempts": [
+        {
+          "attempt_index": 1,
+          "batch_id": 20,
+          "candidate_id": "concept:register:BIF:GDC_S2A0_S2A_DOORBELL_ENTRY_5_CTRL",
+          "created_at": "2026-05-21 18:10:54",
+          "endpoint_id": "register:BIF:GDC_S2A0_S2A_DOORBELL_ENTRY_5_CTRL",
+          "error": "blackbox profile samples did not reach consensus",
+          "id": 22,
+          "job_id": 67,
+          "metadata": {
+            "provider_response_ids": [
+              13,
+              14,
+              15
+            ],
+            "reconcile": {
+              "accepted_sample_count": 1,
+              "rejected_reason_counts": {},
+              "required_agreeing_samples": 2,
+              "sample_count": 3
+            },
+            "sample_count": 3,
+            "sample_failures": [
+              {
+                "error": "Ollama edge generation failed: gemma4:e4b: Ollama returned no parseable JSON content: {\"profiles\":[{\"id\":\"register:BIF:GDC_S2A0_S2A_DOORBELL_ENTRY_5_CTRL\",\"method\":\"blackbox_io\",\"inputs\":[],\"outputs\":[],\"observed_behavior\":\"Controls doorbell entry register state.\",\"explanation_layer\":\"Manages doorbell register access.\",\"conf",
+                "sample_index": "1"
+              },
+              {
+                "error": "Ollama edge generation failed: gemma4:e4b: Ollama returned no parseable JSON content: {\"profiles\":[{\"id\":\"register:BIF:GDC_S2A0_S2A_DOORBELL_ENTRY_5_CTRL\",\"method\":\"blackbox_io\",\"inputs\":[],\"outputs\":[],\"observed_behavior\":\"Controls doorbell entry 5 for GDC_S2A0_S2A.\",\"explanation_layer\":\"Registers doorbell control for speci",
+                "sample_index": "2"
+              }
+            ]
+          },
+          "prompt_sha256": "9813a7bd035899a3b55e60a7e6d00b390f3ab35cbd3eb8036fff9ceda3bce2d4",
+          "response": {},
+          "response_sha256": "",
+          "status": "rejected"
+        }
+      ],
+      "candidate_count": 1,
+      "candidate_ids": [
+        "concept:register:BIF:GDC_S2A0_S2A_DOORBELL_ENTRY_5_CTRL"
+      ],
+      "created_at": "2026-05-21 18:09:13",
+      "finished_at": "2026-05-21 18:10:54",
+      "id": 20,
+      "job_id": 67,
+      "kind": "blackbox_profiles",
+      "metadata": {
+        "accepted": 0,
+        "bucket_ids": [
+          "concept:register:linux-amdgpu:drivers/gpu:BIF:degree_1_2:no_register_io:in:reads:function,in:writes:function:deterministic:register"
+        ],
+        "global_candidate_total": 19429,
+        "inventory_total": 19429,
+        "manifest_group_sha256": "dc6a3f39d82d3687dae79499eb2e63462e6a86b69142d23079f91be974ab54f7",
+        "manifest_sha256": "60a913dfc8b22215bc060749e9ffdabc809db9b384f32c06757fcf57d939e2da",
+        "offset": 1,
+        "phase": "pilot",
+        "rejected": 1,
+        "sample_count": 3,
+        "scheduler_version": "blackbox_selection_manifest_v1",
+        "selection_seed": "blackbox-2026-05-22-scale-2-sanity-v1",
+        "shard_candidate_total": 19429,
+        "shard_count": 1,
+        "shard_index": 0
+      },
+      "model": "gemma4:e4b",
+      "provider": "ollama",
+      "status": "completed"
+    }
+  ],
+  "model": "gemma4:e4b",
+  "profile_count": 0,
+  "profiled_inventory_total": 6,
+  "provider": "ollama",
+  "rejected_count": 1,
+  "requested_batch_size": 6,
+  "sample_count": 3,
+  "selection_inventory_total": 19423,
+  "selection_manifest": {
+    "bucket_counts": {
+      "concept:function:linux-amdgpu:drivers/gpu:unknown_ip:degree_1_2:no_register_io:in:calls:function,out:calls:function:deterministic:function": 1,
+      "concept:register:linux-amdgpu:drivers/gpu:BIF:degree_1_2:no_register_io:in:reads:function,in:writes:function:deterministic:register": 1
+    },
+    "global_candidate_total": 19429,
+    "inventory_sha256": "ed788763a676e0693f501ffb4a5af9e6fdf6ab07224f5d63afe5843eb87b4f45",
+    "manifest_group_sha256": "dc6a3f39d82d3687dae79499eb2e63462e6a86b69142d23079f91be974ab54f7",
+    "manifest_sha256": "60a913dfc8b22215bc060749e9ffdabc809db9b384f32c06757fcf57d939e2da",
+    "missing_candidate_total": 19423,
+    "missing_shard_candidate_total": 19423,
+    "phase": "pilot",
+    "selected_count": 2,
+    "selection_seed": "blackbox-2026-05-22-scale-2-sanity-v1",
+    "shard_candidate_total": 19429,
+    "shard_count": 1,
+    "shard_index": 0
+  },
+  "source": "blackbox_profile_batch_job"
+}

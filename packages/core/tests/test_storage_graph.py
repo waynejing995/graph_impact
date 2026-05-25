@@ -144,6 +144,289 @@ class StorageGraphTests(unittest.TestCase):
         self.assertIn("idx_evidence_chunk_confidence", plan)
         self.assertNotIn("SCAN evidence", plan)
 
+    def test_llm_batch_attempt_ledger_records_blackbox_candidate_attempts(self):
+        store = AsipStore.connect(":memory:")
+        store.migrate()
+        job_id = store.start_job("blackbox_profiles_batch", "generate blackbox profiles")
+        batch_id = store.start_llm_batch(
+            job_id=job_id,
+            kind="blackbox_profiles",
+            provider="ollama",
+            model="gemma4:e4b",
+            candidate_ids=["concept:function:a", "concept:register:b"],
+            metadata={"inventory_total": 2},
+        )
+
+        first_attempt_id = store.record_llm_attempt(
+            batch_id=batch_id,
+            candidate_id="concept:function:a",
+            endpoint_id="function:a",
+            attempt_index=1,
+            status="accepted",
+            prompt="ENDPOINT function:a",
+            response={"profiles": [{"id": "function:a"}]},
+            metadata={"validator": "schema+allowlist"},
+        )
+        store.record_llm_attempt(
+            batch_id=batch_id,
+            candidate_id="concept:register:b",
+            endpoint_id="register:b",
+            attempt_index=1,
+            status="rejected",
+            prompt="ENDPOINT register:b",
+            error="relationship endpoint not in allowlist",
+        )
+        store.finish_llm_batch(batch_id, "completed", metadata={"accepted": 1, "rejected": 1})
+
+        ledger = store.llm_batch_ledger(job_id)
+
+        self.assertEqual(len(ledger), 1)
+        self.assertEqual(ledger[0]["id"], batch_id)
+        self.assertEqual(ledger[0]["status"], "completed")
+        self.assertEqual(ledger[0]["provider"], "ollama")
+        self.assertEqual(ledger[0]["model"], "gemma4:e4b")
+        self.assertEqual(ledger[0]["candidate_ids"], ["concept:function:a", "concept:register:b"])
+        self.assertEqual(ledger[0]["metadata"]["accepted"], 1)
+        self.assertEqual([attempt["status"] for attempt in ledger[0]["attempts"]], ["accepted", "rejected"])
+        self.assertEqual(ledger[0]["attempts"][0]["id"], first_attempt_id)
+        self.assertEqual(len(ledger[0]["attempts"][0]["prompt_sha256"]), 64)
+        self.assertEqual(len(ledger[0]["attempts"][0]["response_sha256"]), 64)
+        self.assertEqual(ledger[0]["attempts"][0]["response"]["profiles"][0]["id"], "function:a")
+        self.assertEqual(ledger[0]["attempts"][0]["metadata"]["validator"], "schema+allowlist")
+        self.assertIn("allowlist", ledger[0]["attempts"][1]["error"])
+
+        store.update_llm_attempt_status(
+            first_attempt_id,
+            "persisted",
+            metadata={"persisted_edges": 2},
+        )
+        updated = store.llm_batch_ledger(job_id)
+        self.assertEqual(updated[0]["attempts"][0]["status"], "persisted")
+        self.assertEqual(updated[0]["attempts"][0]["metadata"]["persisted_edges"], 2)
+
+    def test_blackbox_entity_ledger_records_manifest_response_failures_and_io_facts(self):
+        store = AsipStore.connect(":memory:")
+        store.migrate()
+        job_id = store.start_job("blackbox_profiles_batch", "generate blackbox profiles")
+        manifest = {
+            "manifest_sha256": "m" * 64,
+            "manifest_group_sha256": "g" * 64,
+            "phase": "pilot",
+            "selection_seed": "seed-v1",
+            "inventory_sha256": "i" * 64,
+            "inventory_total": 2,
+            "shard_count": 2,
+            "shard_index": 1,
+            "shard_candidate_total": 1,
+            "global_candidate_total": 2,
+        }
+        manifest_id = store.add_blackbox_manifest(
+            job_id,
+            manifest,
+            db_path="/tmp/asip.db",
+            db_sha256="d" * 64,
+            repo_head="r" * 40,
+            provider="ollama",
+            model="gemma4:e4b",
+            provider_settings={"edge": {"provider": "ollama", "model": "gemma4:e4b"}},
+            limits_config_sha256="l" * 64,
+        )
+        candidate = {
+            "candidate_id": "concept:function:a",
+            "endpoint_id": "function:a",
+            "view": "concept",
+            "kind": "function",
+            "coverage_bucket": "deterministic:function",
+            "bucket_id": "concept:function:test",
+            "selection_rank": 1,
+            "global_selection_rank": 2,
+            "selection_hash": "s" * 64,
+            "attr": {
+                "source": [
+                    {
+                        "corpus_id": "linux-amdgpu",
+                        "path": "drivers/gpu/drm/amd/amdgpu/a.c",
+                        "ip": "GC",
+                    }
+                ]
+            },
+            "neighbors": [
+                {
+                    "direction": "out",
+                    "relation": "writes",
+                    "endpoint_id": "register:GC:REG_A",
+                    "kind": "register",
+                }
+            ],
+            "allowlist": {
+                "profile_ids": ["function:a"],
+                "relationship_endpoints": ["function:a", "register:GC:REG_A"],
+                "relations": ["writes"],
+            },
+        }
+        candidate_row_id = store.add_blackbox_manifest_candidate(
+            manifest_id,
+            job_id,
+            manifest["manifest_sha256"],
+            candidate,
+        )
+        batch_id = store.start_llm_batch(
+            job_id,
+            kind="blackbox_profiles",
+            provider="ollama",
+            model="gemma4:e4b",
+            candidate_ids=[candidate["candidate_id"]],
+        )
+        provider_response_id = store.record_llm_provider_response(
+            job_id,
+            batch_id=batch_id,
+            provider="ollama",
+            model="gemma4:e4b",
+            prompt="ENDPOINT function:a",
+            response={"profiles": [{"id": "function:a"}]},
+            parse_status="parsed",
+        )
+        attempt_id = store.record_llm_attempt(
+            batch_id,
+            candidate_id=candidate["candidate_id"],
+            endpoint_id=candidate["endpoint_id"],
+            prompt="ENDPOINT function:a",
+            response={"profiles": [{"id": "function:a"}]},
+            metadata={"provider_response_id": provider_response_id},
+        )
+        profile_id = store.add_blackbox_profile(
+            "function:a",
+            {
+                "method": "blackbox_io",
+                "inputs": ["neighbor:1 invocation"],
+                "outputs": ["neighbor:1 writes register:GC:REG_A"],
+                "observed_behavior": "writes register output from invocation",
+            },
+            view="concept",
+            endpoint_kind="function",
+            provider="ollama",
+            model="gemma4:e4b",
+            job_id=job_id,
+            batch_id=batch_id,
+            attempt_id=attempt_id,
+            candidate_id=candidate["candidate_id"],
+            prompt_sha256="p" * 64,
+            response_sha256="q" * 64,
+            validator_version="blackbox_content_v1",
+        )
+        store.add_blackbox_io_fact(
+            profile_id,
+            job_id,
+            batch_id=batch_id,
+            attempt_id=attempt_id,
+            candidate_id=candidate["candidate_id"],
+            endpoint_id=candidate["endpoint_id"],
+            direction="output",
+            text="writes register:GC:REG_A",
+            endpoint_ref="register:GC:REG_A",
+            evidence_refs=["neighbor:1"],
+            grounding_status="accepted_grounded",
+            confidence=0.83,
+        )
+        store.add_blackbox_validation_failure(
+            job_id,
+            batch_id=batch_id,
+            attempt_id=attempt_id,
+            provider_response_id=provider_response_id,
+            candidate_id=candidate["candidate_id"],
+            endpoint_id=candidate["endpoint_id"],
+            gate="anti_parrot",
+            reason_code="rejected_ast_name_parrot",
+            detail={"field": "observed_behavior"},
+        )
+        store.update_blackbox_manifest_candidate_status(
+            job_id,
+            candidate["candidate_id"],
+            "accepted",
+            metadata={"profile_id": profile_id},
+        )
+
+        ledger = store.blackbox_entity_ledger(job_id)
+
+        self.assertEqual(ledger["manifests"][0]["id"], manifest_id)
+        self.assertEqual(ledger["manifests"][0]["db_sha256"], "d" * 64)
+        self.assertEqual(ledger["candidates"][0]["id"], candidate_row_id)
+        self.assertEqual(ledger["candidates"][0]["status"], "accepted")
+        self.assertEqual(ledger["candidates"][0]["candidate"]["endpoint_id"], "function:a")
+        self.assertEqual(ledger["provider_responses"][0]["id"], provider_response_id)
+        self.assertEqual(ledger["provider_responses"][0]["parse_status"], "parsed")
+        self.assertEqual(ledger["validation_failures"][0]["reason_code"], "rejected_ast_name_parrot")
+        self.assertEqual(ledger["validation_failures"][0]["detail"]["field"], "observed_behavior")
+        self.assertEqual(ledger["io_facts"][0]["profile_id"], profile_id)
+        self.assertEqual(ledger["io_facts"][0]["direction"], "output")
+        self.assertEqual(ledger["io_facts"][0]["evidence_refs"], ["neighbor:1"])
+
+    def test_blackbox_profile_table_projects_node_metadata_without_visible_self_edge(self):
+        store = AsipStore.connect(":memory:")
+        store.migrate()
+        settings = {"edge": {"provider": "ollama", "model": "gemma4:e4b"}}
+        store.save_provider_settings(settings)
+        index_job = store.start_job("index", "indexed corpus")
+        store.finish_job(index_job, "indexed", "indexed corpus")
+        graph_job = store.start_job("graph_rebuild", "rebuilt deterministic graph")
+        store.finish_job(graph_job, "rebuilt", "rebuilt deterministic graph")
+        blackbox_job = store.start_job(
+            "blackbox_profiles_batch",
+            "generated blackbox profiles",
+            metadata={"provider_settings": settings},
+        )
+        store.finish_job(blackbox_job, "generated", "generated blackbox profiles")
+        function_id = "function:test:driver.c:program_l2"
+        store.add_edge(
+            "program_l2",
+            "GCVM_L2_CNTL",
+            "writes",
+            0.97,
+            stage="deterministic",
+            source="clang_ast",
+            path="driver.c",
+            provenance={
+                "corpus_id": "test",
+                "repo": "local",
+                "function": "program_l2",
+                "function_name": "program_l2",
+                "ip": "GC",
+            },
+        )
+
+        profile_id = store.add_blackbox_profile(
+            function_id,
+            {
+                "method": "blackbox_io",
+                "inputs": ["Invocation or configuration request for program_l2"],
+                "outputs": ["writes register:GC:GCVM_L2_CNTL"],
+                "observed_behavior": "program_l2 writes the L2 control register",
+            },
+            view="concept",
+            endpoint_kind="function",
+            provider="ollama",
+            model="gemma4:e4b",
+            job_id=blackbox_job,
+            batch_id=11,
+            attempt_id=12,
+            candidate_id=f"concept:{function_id}",
+            prompt_sha256="p" * 64,
+            response_sha256="r" * 64,
+            validator_version="blackbox_content_v1",
+        )
+
+        graph = store.global_graph_networkx(limit=20)
+        node = next(node for node in graph["nodes"] if node["id"] == function_id)
+
+        self.assertEqual(node["attr"]["blackbox"]["method"], "blackbox_io")
+        self.assertEqual(node["attr"]["blackbox_profile_id"], profile_id)
+        self.assertEqual(node["attr"]["providers"], ["ollama"])
+        self.assertEqual(node["attr"]["models"], ["gemma4:e4b"])
+        self.assertFalse(any(edge["src"] == function_id and edge["dst"] == function_id for edge in graph["edges"]))
+        profiles = store.blackbox_profiles_for_job(blackbox_job)
+        self.assertEqual(profiles[0]["endpoint_id"], function_id)
+        self.assertEqual(profiles[0]["validator_version"], "blackbox_content_v1")
+
     def test_find_evidence_candidates_prefers_fts_chunk_lookup(self):
         store = AsipStore.connect(":memory:")
         store.migrate()
@@ -336,6 +619,163 @@ class StorageGraphTests(unittest.TestCase):
         )
         self.assertEqual(function_node["label"], "gmc_enable_bif_mgls")
         self.assertEqual(function_node["attr"]["normalization_profile_id"], "amd-mxgpu")
+
+    def test_product_endpoint_inventory_uses_all_deterministic_edges_without_graph_budget(self):
+        store = AsipStore.connect(":memory:")
+        store.migrate()
+        for index in range(6):
+            self._add_function_register_edge(
+                store,
+                f"program_l2_{index}",
+                f"GCVM_L2_CNTL_{index}",
+                path=f"drivers/gpu/drm/amd/amdgpu/driver_{index}.c",
+                resolver_profile="",
+            )
+
+        budgeted_graph = store.global_graph_networkx(limit=2, function_view="concept")
+
+        self.assertLess(len(budgeted_graph["edges"]), 6)
+        inventory = store.product_endpoint_inventory(function_view="concept", stages=("deterministic",))
+        inventory_by_id = {str(candidate["endpoint_id"]): candidate for candidate in inventory}
+
+        expected_function_ids = {
+            f"function:linux-amdgpu:drivers/gpu/drm/amd/amdgpu/driver_{index}.c:program_l2_{index}"
+            for index in range(6)
+        }
+        expected_register_ids = {f"register:GC:GCVM_L2_CNTL_{index}" for index in range(6)}
+        self.assertLess(
+            len({edge["src"] for edge in budgeted_graph["edges"]} | {edge["dst"] for edge in budgeted_graph["edges"]}),
+            len(expected_function_ids | expected_register_ids),
+        )
+        self.assertTrue(expected_function_ids.issubset(inventory_by_id))
+        self.assertTrue(expected_register_ids.issubset(inventory_by_id))
+        candidate = inventory_by_id[
+            "function:linux-amdgpu:drivers/gpu/drm/amd/amdgpu/driver_5.c:program_l2_5"
+        ]
+        self.assertEqual(candidate["view"], "concept")
+        self.assertEqual(candidate["kind"], "function")
+        self.assertEqual(candidate["coverage_bucket"], "deterministic:function")
+        self.assertIn(
+            {
+                "direction": "out",
+                "relation": "writes",
+                "endpoint_id": "register:GC:GCVM_L2_CNTL_5",
+                "kind": "register",
+            },
+            candidate["neighbors"],
+        )
+        self.assertIn(
+            "register:GC:GCVM_L2_CNTL_5",
+            candidate["allowlist"]["relationship_endpoints"],
+        )
+
+    def test_project_to_product_graph_returns_only_function_register_doc_nodes(self):
+        store = AsipStore.connect(":memory:")
+        store.migrate()
+        self._add_linux_amdgpu_resolver_profile(store)
+        self._add_function_register_edge(
+            store, "gfxhub_v11_5_0_gart_enable", "GCVM_L2_CNTL",
+            path="drivers/gpu/drm/amd/amdgpu/gfxhub_v11_5_0.c",
+            ip_version="11_5_0",
+        )
+        self._add_function_register_edge(
+            store, "gfxhub_v12_0_gart_enable", "GCVM_L2_CNTL",
+            path="drivers/gpu/drm/amd/amdgpu/gfxhub_v12_0.c",
+            ip_version="12_0",
+        )
+        # Add a call edge between two functions (should also survive projection)
+        store.add_edge(
+            "gfxhub_v12_0_gart_enable",
+            "some_other_func",
+            "calls",
+            0.8,
+            stage="deterministic",
+            source="clang_text_spans",
+            path="drivers/gpu/drm/amd/amdgpu/gfxhub_v12_0.c",
+            line_start=10,
+            line_end=10,
+            provenance={"extractor": "code_graph", "function": "gfxhub_v12_0_gart_enable",
+                        "corpus_id": "linux-amdgpu"},
+        )
+
+        result = store.project_to_product_graph(function_view="concept")
+
+        node_ids = {node["id"] for node in result["nodes"]}
+        node_kinds = {node["kind"] for node in result["nodes"]}
+
+        # Only product node kinds
+        self.assertTrue(node_kinds.issubset({"function", "register", "doc"}))
+        # Function concept node present
+        self.assertIn(
+            "function:linux-amdgpu:concept:linux-amdgpu:amd-ip-versioned-functions:gfxhub_gart_enable",
+            node_ids,
+        )
+        # Register node present
+        self.assertIn("register:GC:GCVM_L2_CNTL", node_ids)
+        # No raw function IDs (projected to concept)
+        self.assertNotIn("gfxhub_v11_5_0_gart_enable", node_ids)
+        self.assertNotIn("gfxhub_v12_0_gart_enable", node_ids)
+        # Edges use normalized relations
+        for edge in result["edges"]:
+            self.assertIn(edge["relation"], {"writes", "calls"})
+        # Nodes have proper structure
+        for node in result["nodes"]:
+            self.assertIn("id", node)
+            self.assertIn("kind", node)
+            self.assertIn("label", node)
+
+    def test_project_to_product_graph_excludes_non_product_nodes(self):
+        store = AsipStore.connect(":memory:")
+        store.migrate()
+        store.add_edge(
+            "my_function",
+            "RREG32",
+            "writes",
+            0.95,
+            stage="deterministic",
+            source="clang_text_spans",
+            path="test.c",
+            line_start=10,
+            line_end=10,
+            provenance={"extractor": "code_graph", "function": "my_function",
+                        "corpus_id": "linux-amdgpu", "resolver_profile": "linux-amdgpu"},
+        )
+
+        result = store.project_to_product_graph()
+
+        self.assertEqual(len(result["nodes"]), 0)
+        self.assertEqual(len(result["edges"]), 0)
+
+    def test_project_to_product_graph_filters_non_allowed_relations(self):
+        store = AsipStore.connect(":memory:")
+        store.migrate()
+        store.add_edge(
+            "gart_enable", "GCVM_L2_CNTL", "writes", 0.95,
+            stage="deterministic", source="clang_text_spans",
+            path="test.c", line_start=10, line_end=10,
+            provenance={"extractor": "code_graph", "function": "gart_enable",
+                        "corpus_id": "linux-amdgpu", "resolver_profile": "linux-amdgpu"},
+        )
+        store.add_edge(
+            "other_func", "GCVM_L2_CNTL", "some_exotic_edge", 0.5,
+            stage="deterministic", source="clang_text_spans",
+            path="test.c", line_start=10, line_end=10,
+            provenance={"extractor": "code_graph", "function": "other_func",
+                        "corpus_id": "linux-amdgpu", "resolver_profile": "linux-amdgpu"},
+        )
+
+        result = store.project_to_product_graph(function_view="implementation")
+
+        edge_relations = {edge["relation"] for edge in result["edges"]}
+        self.assertIn("writes", edge_relations)
+        self.assertNotIn("some_exotic_edge", edge_relations)
+
+    def test_project_to_product_graph_empty_store(self):
+        store = AsipStore.connect(":memory:")
+        store.migrate()
+        result = store.project_to_product_graph()
+        self.assertEqual(result["nodes"], [])
+        self.assertEqual(result["edges"], [])
 
     def test_function_concept_normalization_is_scoped_to_edge_resolver_profile(self):
         store = AsipStore.connect(":memory:")
@@ -1781,6 +2221,56 @@ class StorageGraphTests(unittest.TestCase):
             ("docs/guide.md#box-cache-policy", "documents", "register:GC:GCVM_L2_CNTL"),
             {(edge["src"], edge["relation"], edge["dst"]) for edge in graph["edges"]},
         )
+
+    def test_runtime_graph_keeps_fresh_blackbox_profile_edges_after_graph_rebuild(self):
+        store = AsipStore.connect(":memory:")
+        store.migrate()
+        settings = {"edge": {"provider": "ollama", "model": "gemma4:e4b"}}
+        store.save_provider_settings(settings)
+        index_job = store.start_job("index", "indexed corpus")
+        store.finish_job(index_job, "indexed", "indexed corpus")
+        graph_job = store.start_job("graph_rebuild", "rebuilt deterministic graph")
+        store.finish_job(graph_job, "rebuilt", "rebuilt deterministic graph")
+        blackbox_job = store.start_job(
+            "blackbox_profiles_batch",
+            "generated fresh blackbox profiles",
+            metadata={"provider_settings": settings},
+        )
+        store.finish_job(blackbox_job, "generated", "generated fresh blackbox profiles")
+        function_id = "function:test:driver.c:program_l2"
+        store.add_edge(
+            function_id,
+            function_id,
+            "relates_to",
+            0.86,
+            stage="semantic",
+            source="ollama",
+            path="driver.c",
+            provenance={
+                "extractor": "blackbox_profiles",
+                "provider": "ollama",
+                "model": "gemma4:e4b",
+                "job_id": blackbox_job,
+                "endpoint_id": function_id,
+                "endpoint_kind": "function",
+                "function": "program_l2",
+                "function_name": "program_l2",
+                "corpus_id": "test",
+                "repo": "local",
+                "path": "driver.c",
+                "blackbox": {
+                    "method": "blackbox_io",
+                    "inputs": ["GCVM_L2_CNTL"],
+                    "outputs": ["writes GCVM_L2_CNTL"],
+                    "observed_behavior": "writes the L2 control register",
+                },
+            },
+        )
+
+        graph = store.global_graph_networkx(limit=20)
+
+        node = next(node for node in graph["nodes"] if node["id"] == function_id)
+        self.assertEqual(node["attr"]["blackbox"]["method"], "blackbox_io")
 
     def test_runtime_graph_filters_doc_node_edges_from_semantic_edge_jobs(self):
         store = AsipStore.connect(":memory:")

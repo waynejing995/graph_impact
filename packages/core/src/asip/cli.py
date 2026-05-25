@@ -3,11 +3,17 @@
 from __future__ import annotations
 
 import argparse
+import collections
 import json
+import sys
 from pathlib import Path
-from typing import Dict, List, Optional
+from typing import Dict, List, Mapping, Optional
 
 from .acceptance import DEFAULT_ACCEPTANCE_QUERIES, run_acceptance_queries, run_provider_gate
+from .blackbox_ledger_qa import run_blackbox_ledger_qa
+from .blackbox_coverage_qa import run_blackbox_coverage_qa
+from .blackbox_provider_gate import run_blackbox_provider_gate
+from .blackbox_residual_qa import run_blackbox_residual_delta, run_blackbox_residual_qa
 from .closure_gates import run_git_gate, run_residual_acceptance_gate
 from .completion_gate import run_completion_gate
 from .goal_status import run_goal_status
@@ -23,6 +29,7 @@ from .workbench import (
     backfill_provider_embeddings,
     expand_query_graph,
     explain_entity,
+    generate_blackbox_profiles_batch,
     generate_doc_nodes_batch,
     generate_semantic_edges_batch,
     generate_semantic_edges_for_query,
@@ -140,6 +147,36 @@ def main(argv: Optional[List[str]] = None) -> int:
     doc_nodes_batch.add_argument("--batch-size", type=int)
     doc_nodes_batch.add_argument("--limits-config", default=str(DEFAULT_WORKBENCH_LIMITS_PATH))
 
+    blackbox_profiles_batch = subcommands.add_parser(
+        "blackbox-profiles-batch",
+        help="Generate blackbox input-output profiles from AST-derived product endpoint inventory",
+    )
+    blackbox_profiles_batch.add_argument("--db", required=True)
+    blackbox_profiles_batch.add_argument("--limit", type=int)
+    blackbox_profiles_batch.add_argument("--batch-size", type=int)
+    blackbox_profiles_batch.add_argument("--sample-count", type=int)
+    blackbox_profiles_batch.add_argument("--retry-count", type=int, help="Number of escalating retry formats (default: 3)")
+    blackbox_profiles_batch.add_argument("--phase", default="pilot")
+    blackbox_profiles_batch.add_argument("--selection-seed", default="")
+    blackbox_profiles_batch.add_argument("--shard-count", type=int, default=1)
+    blackbox_profiles_batch.add_argument("--shard-index", type=int, default=0)
+    blackbox_profiles_batch.add_argument(
+        "--candidate-scope",
+        choices=("missing", "pending", "retry-terminal", "retry-terminal-parse", "retry-terminal-consensus"),
+        default="missing",
+        help="Select missing profiles, never-terminal pending profiles, or terminal retry candidates by reason",
+    )
+    blackbox_profiles_batch.add_argument("--dry-run-selection", action="store_true")
+    blackbox_profiles_batch.add_argument("--omit-graph", action="store_true", help="Do not include the post-batch graph payload")
+    blackbox_profiles_batch.add_argument("--summary-only", action="store_true", help="Print a compact summary to stdout")
+    blackbox_profiles_batch.add_argument("--output-json", help="Write the full blackbox batch result JSON to this path")
+    blackbox_profiles_batch.add_argument(
+        "--include-profiled",
+        action="store_true",
+        help="Allow candidates that already have usable blackbox profiles; default selects missing profiles only",
+    )
+    blackbox_profiles_batch.add_argument("--limits-config", default=str(DEFAULT_WORKBENCH_LIMITS_PATH))
+
     graph_rebuild = subcommands.add_parser(
         "graph-rebuild",
         help="Rebuild Stage 1 deterministic graph edges from registered corpora",
@@ -179,6 +216,16 @@ def main(argv: Optional[List[str]] = None) -> int:
     graph.add_argument("--function-view", choices=["concept", "implementation"], default="concept")
     graph.add_argument("--compact", action="store_true", help="Return compact global graph metadata for UI rendering")
     graph.add_argument("--limits-config", "--budget-config", dest="limits_config", default=str(DEFAULT_WORKBENCH_LIMITS_PATH))
+
+    product_graph = subcommands.add_parser(
+        "product-graph",
+        help="Project the full edge store through the product graph schema and print stats",
+    )
+    product_graph.add_argument("--db", required=True)
+    product_graph.add_argument("--output-json")
+    product_graph.add_argument(
+        "--function-view", choices=["concept", "implementation"], default="concept"
+    )
 
     acceptance = subcommands.add_parser("acceptance", help="Run ASIP MVP acceptance queries against a SQLite store")
     acceptance.add_argument("--db", required=True)
@@ -271,6 +318,61 @@ def main(argv: Optional[List[str]] = None) -> int:
     runtime_semantic.add_argument("--output-json")
     runtime_semantic.add_argument("--full", action="store_true", help="Print the full runtime semantic payload")
 
+    blackbox_ledger_qa = subcommands.add_parser(
+        "blackbox-ledger-qa",
+        help="Generate current blackbox profile ledger QA artifact",
+    )
+    blackbox_ledger_qa.add_argument("--db", required=True)
+    blackbox_ledger_qa.add_argument("--limits-config", default=str(DEFAULT_WORKBENCH_LIMITS_PATH))
+    blackbox_ledger_qa.add_argument("--output-json")
+    blackbox_ledger_qa.add_argument("--output-md")
+    blackbox_ledger_qa.add_argument("--full", action="store_true", help="Print the full blackbox ledger payload")
+
+    blackbox_coverage_qa = subcommands.add_parser(
+        "blackbox-coverage-qa",
+        help="Measure usable blackbox profile coverage over the AST-derived endpoint inventory",
+    )
+    blackbox_coverage_qa.add_argument("--db", required=True)
+    blackbox_coverage_qa.add_argument("--output-json")
+    blackbox_coverage_qa.add_argument("--output-md")
+    blackbox_coverage_qa.add_argument("--min-coverage", type=float, default=1.0)
+    blackbox_coverage_qa.add_argument("--missing-sample-limit", type=int, default=25)
+    blackbox_coverage_qa.add_argument("--require-pass", action="store_true")
+    blackbox_coverage_qa.add_argument("--full", action="store_true", help="Print the full blackbox coverage payload")
+
+    blackbox_provider_gate = subcommands.add_parser(
+        "blackbox-provider-gate",
+        help="Check blackbox edge provider reachability before full profile generation",
+    )
+    blackbox_provider_gate.add_argument("--db", required=True)
+    blackbox_provider_gate.add_argument("--output-json")
+    blackbox_provider_gate.add_argument("--output-md")
+    blackbox_provider_gate.add_argument("--require-pass", action="store_true")
+    blackbox_provider_gate.add_argument("--full", action="store_true", help="Print the full blackbox provider payload")
+
+    blackbox_residual_qa = subcommands.add_parser(
+        "blackbox-residual-qa",
+        help="Write a blocked audit artifact for remaining blackbox pending and terminal retry candidates",
+    )
+    blackbox_residual_qa.add_argument("--db", required=True)
+    blackbox_residual_qa.add_argument("--residual-limit", type=int, default=50)
+    blackbox_residual_qa.add_argument("--output-json")
+    blackbox_residual_qa.add_argument("--output-md")
+    blackbox_residual_qa.add_argument("--require-pass", action="store_true")
+    blackbox_residual_qa.add_argument("--full", action="store_true", help="Print the full blackbox residual payload")
+
+    blackbox_residual_delta = subcommands.add_parser(
+        "blackbox-residual-delta",
+        help="Compare before/after blackbox residual artifacts for terminal warmup runs",
+    )
+    blackbox_residual_delta.add_argument("--before-json", required=True)
+    blackbox_residual_delta.add_argument("--after-json", required=True)
+    blackbox_residual_delta.add_argument("--round", type=int)
+    blackbox_residual_delta.add_argument("--scope", default="")
+    blackbox_residual_delta.add_argument("--output-json")
+    blackbox_residual_delta.add_argument("--output-md")
+    blackbox_residual_delta.add_argument("--full", action="store_true", help="Print the full blackbox residual delta payload")
+
     completion_gate = subcommands.add_parser(
         "completion-gate",
         help="Aggregate current ASIP final-goal artifacts into one pass/blocked gate",
@@ -289,6 +391,42 @@ def main(argv: Optional[List[str]] = None) -> int:
     completion_gate.add_argument("--hosted-openai-json")
     completion_gate.add_argument("--residual-acceptance-json")
     completion_gate.add_argument("--git-gate-json")
+    completion_gate.add_argument("--blackbox-provider-json")
+    completion_gate.add_argument("--blackbox-ledger-json")
+    completion_gate.add_argument("--blackbox-coverage-json")
+    completion_gate.add_argument("--blackbox-residual-json")
+    completion_gate.add_argument("--blackbox-full-generation-json")
+    completion_gate.add_argument(
+        "--require-blackbox-provider",
+        action="store_true",
+        help="Require a current blackbox provider reachability artifact for Stage 2.5 blackbox goals",
+    )
+    completion_gate.add_argument(
+        "--require-blackbox-ledger",
+        action="store_true",
+        help="Require a current blackbox ledger QA artifact for Stage 2.5 blackbox goals",
+    )
+    completion_gate.add_argument(
+        "--require-blackbox-coverage",
+        action="store_true",
+        help="Require current full blackbox coverage QA for Stage 2.5 blackbox goals",
+    )
+    completion_gate.add_argument(
+        "--require-blackbox-residual",
+        action="store_true",
+        help="Require current blackbox residual QA to prove pending and terminal residuals are zero",
+    )
+    completion_gate.add_argument(
+        "--require-blackbox-full-generation",
+        action="store_true",
+        help="Require a current blackbox full-generation runner artifact that binds provider, ledger, coverage, and residual QA",
+    )
+    completion_gate.add_argument(
+        "--min-blackbox-coverage",
+        type=float,
+        default=1.0,
+        help="Minimum blackbox coverage ratio to pass when --require-blackbox-coverage is set (default: 1.0)",
+    )
     completion_gate.add_argument("--output-json")
     completion_gate.add_argument("--output-md")
     completion_gate.add_argument(
@@ -434,6 +572,7 @@ def main(argv: Optional[List[str]] = None) -> int:
         limits = load_workbench_limits(Path(args.limits_config))
         batch_limit = args.limit if args.limit is not None else limits.int_value("semantic", "batch_candidate_limit", minimum=1)
         batch_size = args.batch_size if args.batch_size is not None else limits.int_value("semantic", "batch_size", minimum=1)
+        sample_count = args.sample_count if args.sample_count is not None else limits.int_value("semantic", "blackbox_sample_count", minimum=1)
         evidence_row_cap = args.evidence_row_cap if args.evidence_row_cap is not None else limits.int_value("graph", "evidence_row_cap", minimum=0)
         print(
             json.dumps(
@@ -459,6 +598,45 @@ def main(argv: Optional[List[str]] = None) -> int:
                     limit=batch_limit,
                     batch_size=batch_size,
                 ),
+                indent=2,
+            )
+        )
+        return 0
+    if args.command == "blackbox-profiles-batch":
+        limits = load_workbench_limits(Path(args.limits_config))
+        batch_limit = args.limit if args.limit is not None else limits.int_value("semantic", "batch_candidate_limit", minimum=1)
+        batch_size = args.batch_size if args.batch_size is not None else 1
+        sample_count = args.sample_count if args.sample_count is not None else limits.int_value("semantic", "blackbox_sample_count", minimum=1)
+        retry_count = args.retry_count if args.retry_count is not None else limits.int_value("semantic", "blackbox_retry_count", minimum=1)
+        try:
+            result = generate_blackbox_profiles_batch(
+                Path(args.db),
+                limit=batch_limit,
+                batch_size=batch_size,
+                sample_count=sample_count,
+                retry_count=retry_count,
+                phase=args.phase,
+                selection_seed=args.selection_seed,
+                shard_count=args.shard_count,
+                shard_index=args.shard_index,
+                candidate_scope=args.candidate_scope,
+                dry_run_selection=args.dry_run_selection,
+                include_profiled=args.include_profiled,
+                include_graph=not args.omit_graph,
+            )
+        except RuntimeError as exc:
+            if "blackbox provider unreachable" not in str(exc):
+                raise
+            print(str(exc), file=sys.stderr)
+            return 2
+        if args.output_json:
+            output_path = Path(args.output_json)
+            output_path.parent.mkdir(parents=True, exist_ok=True)
+            output_path.write_text(json.dumps(result, indent=2, sort_keys=True), encoding="utf-8")
+        stdout_payload = _blackbox_batch_summary(result) if args.summary_only else result
+        print(
+            json.dumps(
+                stdout_payload,
                 indent=2,
             )
         )
@@ -634,6 +812,59 @@ def main(argv: Optional[List[str]] = None) -> int:
         )
         print(json.dumps(result if args.full else result["summary"], indent=2))
         return 0
+    if args.command == "blackbox-ledger-qa":
+        result = run_blackbox_ledger_qa(
+            Path(args.db),
+            output_json=Path(args.output_json) if args.output_json else None,
+            output_md=Path(args.output_md) if args.output_md else None,
+            limits_config=Path(args.limits_config),
+        )
+        print(json.dumps(result if args.full else result["summary"], indent=2))
+        return 0
+    if args.command == "blackbox-coverage-qa":
+        result = run_blackbox_coverage_qa(
+            Path(args.db),
+            output_json=Path(args.output_json) if args.output_json else None,
+            output_md=Path(args.output_md) if args.output_md else None,
+            min_coverage=args.min_coverage,
+            missing_sample_limit=args.missing_sample_limit,
+        )
+        print(json.dumps(result if args.full else result["summary"], indent=2))
+        if args.require_pass and result.get("gate_status") != "pass":
+            return 2
+        return 0
+    if args.command == "blackbox-provider-gate":
+        result = run_blackbox_provider_gate(
+            Path(args.db),
+            output_json=Path(args.output_json) if args.output_json else None,
+            output_md=Path(args.output_md) if args.output_md else None,
+        )
+        print(json.dumps(result if args.full else result["summary"], indent=2))
+        if args.require_pass and result.get("gate_status") != "pass":
+            return 2
+        return 0
+    if args.command == "blackbox-residual-qa":
+        result = run_blackbox_residual_qa(
+            Path(args.db),
+            output_json=Path(args.output_json) if args.output_json else None,
+            output_md=Path(args.output_md) if args.output_md else None,
+            residual_limit=args.residual_limit,
+        )
+        print(json.dumps(result if args.full else result["summary"], indent=2))
+        if args.require_pass and result.get("gate_status") != "pass":
+            return 2
+        return 0
+    if args.command == "blackbox-residual-delta":
+        result = run_blackbox_residual_delta(
+            Path(args.before_json),
+            Path(args.after_json),
+            output_json=Path(args.output_json) if args.output_json else None,
+            output_md=Path(args.output_md) if args.output_md else None,
+            round_number=args.round,
+            scope=args.scope,
+        )
+        print(json.dumps(result if args.full else result["summary"], indent=2))
+        return 0
     if args.command == "completion-gate":
         result = run_completion_gate(
             Path(args.db),
@@ -650,9 +881,20 @@ def main(argv: Optional[List[str]] = None) -> int:
             hosted_openai_json=Path(args.hosted_openai_json) if args.hosted_openai_json else None,
             residual_acceptance_json=Path(args.residual_acceptance_json) if args.residual_acceptance_json else None,
             git_gate_json=Path(args.git_gate_json) if args.git_gate_json else None,
+            blackbox_provider_json=Path(args.blackbox_provider_json) if args.blackbox_provider_json else None,
+            blackbox_ledger_json=Path(args.blackbox_ledger_json) if args.blackbox_ledger_json else None,
+            blackbox_coverage_json=Path(args.blackbox_coverage_json) if args.blackbox_coverage_json else None,
+            blackbox_residual_json=Path(args.blackbox_residual_json) if args.blackbox_residual_json else None,
+            blackbox_full_generation_json=Path(args.blackbox_full_generation_json) if args.blackbox_full_generation_json else None,
             output_json=Path(args.output_json) if args.output_json else None,
             output_md=Path(args.output_md) if args.output_md else None,
             full_integrity_check=args.full_integrity_check,
+            require_blackbox_provider=args.require_blackbox_provider,
+            require_blackbox_ledger=args.require_blackbox_ledger,
+            require_blackbox_coverage=args.require_blackbox_coverage,
+            require_blackbox_residual=args.require_blackbox_residual,
+            require_blackbox_full_generation=args.require_blackbox_full_generation,
+            min_blackbox_coverage=args.min_blackbox_coverage,
         )
         print(json.dumps(result if args.full else result["summary"], indent=2))
         return 0
@@ -700,6 +942,27 @@ def main(argv: Optional[List[str]] = None) -> int:
         if args.require_pass and result["goal_status"] != "pass":
             return 2
         return 0
+    if args.command == "product-graph":
+        from .storage import AsipStore
+
+        store = AsipStore.connect(args.db)
+        result = store.project_to_product_graph(function_view=args.function_view)
+        nodes_by_kind = collections.Counter(node["kind"] for node in result["nodes"])
+        edges_by_relation = collections.Counter(edge["relation"] for edge in result["edges"])
+        edges_by_stage = collections.Counter(edge["stage"] for edge in result["edges"])
+        summary = {
+            "db": args.db,
+            "function_view": args.function_view,
+            "node_count": len(result["nodes"]),
+            "node_kind_breakdown": dict(nodes_by_kind),
+            "edge_count": len(result["edges"]),
+            "edge_relation_breakdown": dict(edges_by_relation),
+            "edge_stage_breakdown": dict(edges_by_stage),
+        }
+        if args.output_json:
+            Path(args.output_json).write_text(json.dumps(summary, indent=2), encoding="utf-8")
+        print(json.dumps(summary, indent=2))
+        return 0
     if args.command == "resolver-list":
         print(json.dumps({"profiles": list_resolver_profiles(Path(args.db))}, indent=2))
         return 0
@@ -725,6 +988,48 @@ def main(argv: Optional[List[str]] = None) -> int:
         print(json.dumps(validate_resolver_profile(Path(args.db), args.id, args.source), indent=2))
         return 0
     return 2
+
+
+def _blackbox_batch_summary(result: Mapping[str, object]) -> Dict[str, object]:
+    selection = result.get("selection_manifest") if isinstance(result.get("selection_manifest"), Mapping) else {}
+    summary: Dict[str, object] = {
+        "source": result.get("source"),
+        "db_path": result.get("db_path"),
+        "provider": result.get("provider"),
+        "model": result.get("model"),
+        "inventory_total": result.get("inventory_total"),
+        "selection_inventory_total": result.get("selection_inventory_total"),
+        "profiled_inventory_total": result.get("profiled_inventory_total"),
+        "terminal_inventory_total": result.get("terminal_inventory_total"),
+        "candidate_scope": result.get("candidate_scope"),
+        "candidate_count": result.get("candidate_count"),
+        "batch_size": result.get("batch_size"),
+        "requested_batch_size": result.get("requested_batch_size"),
+        "sample_count": result.get("sample_count"),
+        "retry_count": result.get("retry_count"),
+        "profile_count": result.get("profile_count"),
+        "edge_count": result.get("edge_count"),
+        "rejected_count": result.get("rejected_count"),
+        "failed_count": result.get("failed_count"),
+        "abstained_count": result.get("abstained_count"),
+        "job_id": result.get("job_id"),
+        "selection_manifest": {
+            "phase": selection.get("phase"),
+            "selection_seed": selection.get("selection_seed"),
+            "inventory_sha256": selection.get("inventory_sha256"),
+            "manifest_sha256": selection.get("manifest_sha256"),
+            "manifest_group_sha256": selection.get("manifest_group_sha256"),
+            "shard_count": selection.get("shard_count"),
+            "shard_index": selection.get("shard_index"),
+            "selected_count": selection.get("selected_count"),
+            "global_candidate_total": selection.get("global_candidate_total"),
+            "missing_candidate_total": selection.get("missing_candidate_total"),
+            "missing_shard_candidate_total": selection.get("missing_shard_candidate_total"),
+            "candidate_scope": selection.get("candidate_scope"),
+            "bucket_counts": selection.get("bucket_counts", {}),
+        },
+    }
+    return {key: value for key, value in summary.items() if value is not None}
 
 
 if __name__ == "__main__":

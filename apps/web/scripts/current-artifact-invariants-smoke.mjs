@@ -13,6 +13,11 @@ const defaultArtifacts = {
   callbackAuditJson: "docs/qa/2026-05-21-callback-edge-audit-current.json",
   acceptanceJson: "docs/qa/2026-05-21-acceptance-data-asip-live-web-current.json",
   webAcceptanceJson: "docs/qa/2026-05-21-acceptance-data-asip-live-web-current.json",
+  blackboxProviderJson: "",
+  blackboxLedgerJson: "",
+  blackboxCoverageJson: "",
+  blackboxResidualJson: "",
+  blackboxFullGenerationJson: "",
   completionJson: "docs/qa/2026-05-21-current-goal-completion-gate.json",
   webPackageJson: "apps/web/package.json"
 };
@@ -26,6 +31,11 @@ const optionToKey = {
   "--callback-audit-json": "callbackAuditJson",
   "--acceptance-json": "acceptanceJson",
   "--web-acceptance-json": "webAcceptanceJson",
+  "--blackbox-provider-json": "blackboxProviderJson",
+  "--blackbox-ledger-json": "blackboxLedgerJson",
+  "--blackbox-coverage-json": "blackboxCoverageJson",
+  "--blackbox-residual-json": "blackboxResidualJson",
+  "--blackbox-full-generation-json": "blackboxFullGenerationJson",
   "--completion-json": "completionJson",
   "--web-package-json": "webPackageJson"
 };
@@ -69,6 +79,11 @@ Options:
   --callback-audit-json <path>
   --acceptance-json <path>
   --web-acceptance-json <path>
+  --blackbox-provider-json <path>
+  --blackbox-ledger-json <path>
+  --blackbox-coverage-json <path>
+  --blackbox-residual-json <path>
+  --blackbox-full-generation-json <path>
   --completion-json <path>
   --web-package-json <path>
   --help
@@ -226,6 +241,51 @@ if (providerGate.gate_status === "pass") {
   assert.ok((providerGate.summary?.failed ?? 0) > 0 || (providerGate.summary?.partial ?? 0) > 0);
 }
 
+if (args.blackboxProviderJson) {
+  const blackboxProviderGate = readJson(args.blackboxProviderJson);
+  assert.equal(blackboxProviderGate.source, "asip.blackbox_provider_gate");
+  assert.ok(["pass", "blocked"].includes(blackboxProviderGate.gate_status));
+  assert.ok(["pass", "fail"].includes(String(blackboxProviderGate.provider_check?.status ?? "")));
+}
+
+if (args.blackboxLedgerJson) {
+  const blackboxLedger = readJson(args.blackboxLedgerJson);
+  assert.equal(blackboxLedger.source, "asip.blackbox_ledger_qa");
+  assert.ok(["pass", "blocked"].includes(blackboxLedger.gate_status));
+  assert.ok(Number(blackboxLedger.inventory?.total ?? 0) > 0);
+  assert.ok(Number(blackboxLedger.ledger?.batch_count ?? 0) >= 0);
+  assert.ok(Number(blackboxLedger.entity_ledger?.manifest_count ?? 0) >= 0);
+}
+
+if (args.blackboxCoverageJson) {
+  const blackboxCoverage = readJson(args.blackboxCoverageJson);
+  assert.equal(blackboxCoverage.source, "asip.blackbox_coverage_qa");
+  assert.ok(["pass", "blocked"].includes(blackboxCoverage.gate_status));
+  assert.ok(Number(blackboxCoverage.coverage?.inventory_total ?? 0) > 0);
+  assert.ok(Number(blackboxCoverage.coverage?.covered_count ?? -1) >= 0);
+  assert.ok(Number(blackboxCoverage.coverage?.missing_count ?? -1) >= 0);
+}
+
+if (args.blackboxResidualJson) {
+  const blackboxResidual = readJson(args.blackboxResidualJson);
+  assert.equal(blackboxResidual.source, "asip.blackbox_residual_qa");
+  assert.ok(["pass", "blocked"].includes(blackboxResidual.gate_status));
+  assert.ok(Number(blackboxResidual.coverage?.inventory_total ?? 0) > 0);
+  assert.ok(Number(blackboxResidual.residuals?.pending_count ?? -1) >= 0);
+  assert.ok(Number(blackboxResidual.residuals?.terminal_count ?? -1) >= 0);
+}
+
+if (args.blackboxFullGenerationJson) {
+  const blackboxFullGeneration = readJson(args.blackboxFullGenerationJson);
+  assert.equal(blackboxFullGeneration.source, "asip.blackbox_full_generation_run");
+  assert.ok(["pass", "blocked"].includes(blackboxFullGeneration.gate_status));
+  assert.ok(blackboxFullGeneration.db_sha256);
+  assert.ok(blackboxFullGeneration.artifacts?.blackbox_provider_gate?.path);
+  assert.ok(blackboxFullGeneration.artifacts?.blackbox_ledger_qa?.path);
+  assert.ok(blackboxFullGeneration.artifacts?.blackbox_coverage_qa?.path);
+  assert.ok(blackboxFullGeneration.artifacts?.blackbox_residual_qa?.path);
+}
+
 const runtimeSemanticFreshness = readJson(args.runtimeSemanticJson);
 assert.equal(runtimeSemanticFreshness.source, "asip.runtime_semantic_freshness_qa");
 assert.equal(runtimeSemanticFreshness.gate_status, "pass");
@@ -279,7 +339,7 @@ assertProviderChecks(
 
 const completionGate = readJson(args.completionJson);
 assert.equal(completionGate.source, "asip.completion_gate");
-assert.equal(completionGate.summary?.total, 20);
+assert.equal(completionGate.summary?.total, 21);
 assert.equal(completionGate.summary?.missing ?? 0, 0);
 assert.equal(completionGate.artifacts?.runtime_semantic_freshness?.status, "loaded");
 assert.equal(completionGate.artifacts?.runtime_semantic_freshness?.source, "asip.runtime_semantic_freshness_qa");
@@ -295,6 +355,26 @@ assert.equal(completionGate.artifacts?.residual_acceptance?.status, "loaded");
 assert.equal(completionGate.artifacts?.residual_acceptance?.source, "asip.residual_acceptance");
 assert.equal(completionGate.artifacts?.git_gate?.status, "loaded");
 assert.equal(completionGate.artifacts?.git_gate?.source, "asip.git_gate");
+if (args.blackboxProviderJson) {
+  assert.equal(completionGate.artifacts?.blackbox_provider_gate?.status, "loaded");
+  assert.equal(completionGate.artifacts?.blackbox_provider_gate?.source, "asip.blackbox_provider_gate");
+}
+if (args.blackboxLedgerJson) {
+  assert.equal(completionGate.artifacts?.blackbox_ledger_qa?.status, "loaded");
+  assert.equal(completionGate.artifacts?.blackbox_ledger_qa?.source, "asip.blackbox_ledger_qa");
+}
+if (args.blackboxCoverageJson) {
+  assert.equal(completionGate.artifacts?.blackbox_coverage_qa?.status, "loaded");
+  assert.equal(completionGate.artifacts?.blackbox_coverage_qa?.source, "asip.blackbox_coverage_qa");
+}
+if (args.blackboxResidualJson) {
+  assert.equal(completionGate.artifacts?.blackbox_residual_qa?.status, "loaded");
+  assert.equal(completionGate.artifacts?.blackbox_residual_qa?.source, "asip.blackbox_residual_qa");
+}
+if (args.blackboxFullGenerationJson) {
+  assert.equal(completionGate.artifacts?.blackbox_full_generation_run?.status, "loaded");
+  assert.equal(completionGate.artifacts?.blackbox_full_generation_run?.source, "asip.blackbox_full_generation_run");
+}
 const completionRequirements = new Map(
   (completionGate.requirements ?? []).map((requirement) => [requirement.id, requirement])
 );
@@ -319,6 +399,7 @@ for (const requirementId of [
   "performance_smoke",
   "residual_acceptance",
   "git_gate",
+  "product_graph",
 ]) {
   assert.ok(completionRequirements.has(requirementId), `missing completion requirement ${requirementId}`);
 }
@@ -340,6 +421,7 @@ if (completionGate.gate_status === "pass") {
   assert.equal(completionRequirements.get("real_index_db")?.status, "pass");
   assert.equal(completionRequirements.get("artifact_binding")?.status, "pass");
   assert.equal(completionRequirements.get("stage1_deterministic_graph")?.status, "pass");
+  assert.equal(completionRequirements.get("product_graph")?.status, "pass");
   assert.equal(completionRequirements.get("api_live_surface")?.status, "pass");
   assert.equal(completionRequirements.get("mcp_protocol_surface")?.status, "pass");
   assert.equal(completionRequirements.get("runtime_semantic_freshness")?.status, "pass");

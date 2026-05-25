@@ -21,6 +21,8 @@ type WeightedGraphEdge = {
   confidence?: number;
   weight?: number;
   stage?: string;
+  layer?: string;
+  provenance_type?: string;
   source?: string;
   sources?: Array<string | Record<string, unknown>>;
   attr?: Record<string, unknown>;
@@ -29,6 +31,11 @@ type WeightedGraphEdge = {
 export type WeightedGraphPayload = {
   nodes: WeightedGraphNode[];
   edges: WeightedGraphEdge[];
+  meta?: {
+    layers?: Record<string, number>;
+    provenance_types?: Record<string, number>;
+    function_view?: string;
+  };
 };
 
 type ProductGraphKind = "function" | "register" | "doc";

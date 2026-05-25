@@ -6,6 +6,7 @@
     "dev": "pnpm --filter web dev",
     "dev:api": "PYTHONPATH=packages/core/src:. python3 -m uvicorn apps.api.main:app --host 127.0.0.1 --port ${PORT:-8000} --ws none",
     "build": "pnpm --filter web build",
+    "blackbox:full": "bash scripts/blackbox_full_generation.sh",
     "gate:postpush": "bash scripts/postpush_completion_gate.sh",
     "lint": "pnpm --filter web lint",
     "test:ui": "pnpm --filter web test:ui",

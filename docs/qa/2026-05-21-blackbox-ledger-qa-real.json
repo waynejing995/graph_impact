@@ -1,0 +1,160 @@
+{
+  "source": "asip.blackbox_ledger_qa",
+  "generated_at": "2026-05-21T16:16:33.741978+00:00",
+  "repo_head": "b37d2dfe77d89f1a75634aa08c75a716791c1ca0",
+  "db_path": "/Volumes/data/User/wayne/Code/graph_impact/data/asip.db",
+  "db_sha256": "44b580fa50e0fc12343453812627e58b738dab33922a2378543072ea8094b4c4",
+  "limits_config_path": "/Users/chenjingwen/.codex/worktrees/039b/graph_impact/configs/workbench-limits.json",
+  "limits_config_sha256": "e8134baea819d2924dcd4add7c4a40bbf204f3f3e23a8896f62a88667cc976f7",
+  "provider_settings": {
+    "edge": {
+      "provider": "ollama",
+      "base_url": "http://localhost:11434",
+      "api_path": "/api/chat",
+      "model": "gemma4:e4b",
+      "fallback_model": "",
+      "extra_headers": {},
+      "think": false,
+      "timeout_seconds": 900,
+      "num_ctx": 2048,
+      "num_predict": 1024,
+      "temperature": 0
+    },
+    "embedding": {
+      "provider": "ollama",
+      "base_url": "http://localhost:11434",
+      "api_path": "/api/embeddings",
+      "model": "nomic-embed-text:latest",
+      "extra_headers": {},
+      "timeout_seconds": 900
+    }
+  },
+  "latest_jobs": {
+    "latest_index_job_id": 10,
+    "latest_graph_rebuild_job_id": 50,
+    "latest_blackbox_profiles_job_id": 60
+  },
+  "inventory": {
+    "total": 19429,
+    "sha256": "ed788763a676e0693f501ffb4a5af9e6fdf6ab07224f5d63afe5843eb87b4f45",
+    "counts": {
+      "by_kind": {
+        "function": 17779,
+        "register": 1650
+      },
+      "by_view": {
+        "concept": 8398,
+        "implementation": 11031
+      },
+      "by_bucket": {
+        "deterministic:function": 17779,
+        "deterministic:register": 1650
+      }
+    }
+  },
+  "ledger": {
+    "batch_count": 1,
+    "attempt_count": 2,
+    "attempted_count": 2,
+    "attempt_status_counts": {
+      "accepted": 2
+    },
+    "validator_status_counts": {
+      "repaired": 2
+    },
+    "reason_code_counts": {
+      "repaired_legacy_evidence_refs": 2,
+      "repaired_empty_io_from_neighbors": 2
+    },
+    "manifest_sha256_values": [
+      "9e2cae1acadc927ee85806a9275ab0e625caadc8e3543e76325616afe8f4c34e"
+    ]
+  },
+  "profiles": {
+    "storage_mode": "canonical_table_with_self_edge_projection",
+    "profile_table_count": 2,
+    "stored_edge_count": 5,
+    "all_stored_edge_count": 22,
+    "profile_edge_count": 2,
+    "relationship_edge_count": 3,
+    "runtime_visible_count": 5,
+    "stale_filtered_count": 3,
+    "provenance_failure_count": 0,
+    "provenance_failures": [],
+    "content_grounded_count": 2,
+    "profile_table_failures": []
+  },
+  "surface_results": [
+    {
+      "surface": "storage",
+      "transport": "sqlite",
+      "dbPath": "/Volumes/data/User/wayne/Code/graph_impact/data/asip.db",
+      "status": "pass",
+      "schema_checks": [
+        "llm_batches",
+        "llm_attempts",
+        "blackbox_profiles",
+        "edges.provenance_json"
+      ]
+    },
+    {
+      "surface": "cli",
+      "transport": "python -m asip.cli blackbox-ledger-qa",
+      "dbPath": "/Volumes/data/User/wayne/Code/graph_impact/data/asip.db",
+      "status": "pass"
+    }
+  ],
+  "gate_status": "pass",
+  "summary": {
+    "checks": 9,
+    "passed": 9,
+    "failed": 0
+  },
+  "checks": [
+    {
+      "id": "blackbox_job_present",
+      "status": "pass",
+      "evidence": "latest job id=60"
+    },
+    {
+      "id": "inventory_non_empty",
+      "status": "pass",
+      "evidence": "inventory_total=19429"
+    },
+    {
+      "id": "ledger_present",
+      "status": "pass",
+      "evidence": "batch_count=1"
+    },
+    {
+      "id": "ledger_completeness",
+      "status": "pass",
+      "evidence": "attempted=2; terminal=2; statuses={'accepted': 2}"
+    },
+    {
+      "id": "profile_edges_persisted",
+      "status": "pass",
+      "evidence": "profile_edges=2"
+    },
+    {
+      "id": "profile_table_persisted",
+      "status": "pass",
+      "evidence": "profile_table_rows=2"
+    },
+    {
+      "id": "content_validator_present",
+      "status": "pass",
+      "evidence": "grounded=2; profile_table_rows=2; reasons={'repaired_legacy_evidence_refs': 2, 'repaired_empty_io_from_neighbors': 2}"
+    },
+    {
+      "id": "blackbox_provenance_backrefs",
+      "status": "pass",
+      "evidence": "checked_edges=5; failures=0"
+    },
+    {
+      "id": "runtime_freshness_visible",
+      "status": "pass",
+      "evidence": "visible=5; latest_stored=5; stale_filtered=3"
+    }
+  ]
+}

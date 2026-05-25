@@ -1,0 +1,130 @@
+- generic [active] [ref=e1]:
+  - generic [ref=e2]:
+    - banner [ref=e3]:
+      - generic [ref=e5]: ASIP Evidence Workbench
+      - generic [ref=e6]:
+        - img
+        - textbox "Global symbol search" [ref=e7]:
+          - /placeholder: Search indexed symbols
+      - generic "Workbench status" [ref=e8]:
+        - generic [ref=e9]: "Provider: unverified"
+        - generic [ref=e11]: "Edge: Ollama / gemma4:e4b"
+        - generic [ref=e12]: "Index: ready"
+      - button "Switch to light theme" [ref=e13] [cursor=pointer]:
+        - img
+        - text: Light
+    - main [ref=e14]:
+      - navigation "ASIP sections" [ref=e15]:
+        - link "Evidence Search" [ref=e16] [cursor=pointer]:
+          - /url: /
+        - link "Graph Explorer" [ref=e17] [cursor=pointer]:
+          - /url: /graph
+        - link "Corpus" [ref=e18] [cursor=pointer]:
+          - /url: /corpus
+        - link "Resolver Profiles" [ref=e19] [cursor=pointer]:
+          - /url: /resolver-profiles
+        - link "Acceptance Tests" [ref=e20] [cursor=pointer]:
+          - /url: /acceptance
+        - link "Settings" [ref=e21] [cursor=pointer]:
+          - /url: /settings
+      - region "Graph relationship workspace" [ref=e22]:
+        - generic [ref=e23]:
+          - generic [ref=e24]:
+            - img
+            - textbox "Evidence query" [ref=e25]:
+              - /placeholder: Query live evidence
+          - textbox "IP block filter" [ref=e27]:
+            - /placeholder: IP
+          - textbox "ASIC or generation filter" [ref=e29]:
+            - /placeholder: ASIC
+          - button "Run query" [ref=e30] [cursor=pointer]
+        - generic "Page metrics" [ref=e31]:
+          - generic [ref=e32]: "matches: 0"
+          - generic [ref=e33]: "graph edges: 0"
+          - generic [ref=e34]: "query: live"
+        - generic "Evidence source filters" [ref=e35]:
+          - button "Source filter 1 hop" [ref=e36] [cursor=pointer]:
+            - img
+            - text: 1 hop
+          - button "Source filter 2 hops" [ref=e37] [cursor=pointer]:
+            - img
+            - text: 2 hops
+          - button "Source filter writes" [ref=e38] [cursor=pointer]:
+            - img
+            - text: writes
+          - button "Source filter has_field" [ref=e39] [cursor=pointer]:
+            - img
+            - text: has_field
+        - generic [ref=e40]:
+          - generic [ref=e41]:
+            - generic [ref=e42]: Global Relation Graph
+            - generic [ref=e43]: weighted connections
+          - generic "Graph display controls" [ref=e44]:
+            - generic [ref=e45]:
+              - generic [ref=e46]: Function view
+              - combobox "Function view" [ref=e47]:
+                - generic: Concept
+                - img
+            - generic [ref=e49]:
+              - generic [ref=e50]: Loaded edge budget
+              - strong [ref=e51]: 3000 / 20000
+              - generic "Loaded edge budget" [ref=e52]:
+                - slider "Loaded edge budget" [ref=e112]
+            - generic [ref=e54]:
+              - generic [ref=e55]: Minimum edge weight
+              - strong [ref=e56]: "0.00"
+              - generic "Minimum edge weight" [ref=e57]:
+                - slider "Minimum edge weight" [ref=e114]
+            - generic [ref=e59]:
+              - generic: Visible nodes
+              - strong [ref=e60]: 1000 visible / 0 loaded
+              - generic "Visible nodes" [ref=e61]:
+                - slider "Visible nodes" [ref=e117]
+            - generic [ref=e63]:
+              - generic: Visible edges
+              - strong [ref=e64]: 3000 visible / 0 loaded
+              - generic "Visible edges" [ref=e65]:
+                - slider "Visible edges" [ref=e120]
+          - status [ref=e67]:
+            - code [ref=e68]: No graph data returned.
+        - table "Evidence results" [ref=e72]:
+          - rowgroup [ref=e73]:
+            - row "Type Symbol Source Relation Score Location" [ref=e74]:
+              - columnheader "Type" [ref=e75]
+              - columnheader "Symbol" [ref=e76]
+              - columnheader "Source" [ref=e77]
+              - columnheader "Relation" [ref=e78]
+              - columnheader "Score" [ref=e79]
+              - columnheader "Location" [ref=e80]
+          - rowgroup [ref=e81]:
+            - row "No evidence matched this query. empty empty 0 live SQLite query returned no rows" [ref=e82]:
+              - cell [ref=e83]
+              - cell "No evidence matched this query." [ref=e84]:
+                - code [ref=e85]: No evidence matched this query.
+              - cell "empty" [ref=e86]:
+                - generic [ref=e87]: empty
+              - cell "empty" [ref=e88]:
+                - generic [ref=e89]: empty
+              - cell "0" [ref=e90]
+              - cell "live SQLite query returned no rows" [ref=e91]
+      - complementary [ref=e92]:
+        - generic [ref=e93]:
+          - heading "Global Graph" [level=2] [ref=e94]
+          - generic [ref=e95]:
+            - img
+            - text: live / run 1
+        - heading "Relationship Panel" [level=3] [ref=e97]
+        - paragraph [ref=e99]:
+          - code [ref=e100]: No graph relationships returned.
+        - button "Generate semantic edges" [ref=e101] [cursor=pointer]
+        - button "Generate batch semantic edges" [ref=e102] [cursor=pointer]
+        - button "Extract document nodes" [ref=e103] [cursor=pointer]
+        - button "Generate blackbox profiles" [ref=e104] [cursor=pointer]
+        - generic "Semantic generation controls" [ref=e105]:
+          - generic [ref=e106]:
+            - text: Semantic candidate limit
+            - spinbutton "Semantic candidate limit" [ref=e107]
+          - generic [ref=e108]:
+            - text: Semantic batch size
+            - spinbutton "Semantic batch size" [ref=e109]
+  - alert [ref=e121]

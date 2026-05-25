@@ -23,7 +23,11 @@ class RuntimeSemanticFreshnessTests(unittest.TestCase):
             self.assertEqual(payload["latest_graph_rebuild_job_id"], job_ids["graph"])
             self.assertEqual(payload["latest_semantic_edges_job_id"], job_ids["semantic"])
             self.assertEqual(payload["latest_doc_nodes_job_id"], job_ids["doc_nodes"])
-            self.assertEqual(payload["db_semantic_edge_counts"], {"doc_nodes": 1, "semantic_edges": 1})
+            self.assertEqual(payload["latest_blackbox_profiles_job_id"], job_ids["blackbox"])
+            self.assertEqual(
+                payload["db_semantic_edge_counts"],
+                {"blackbox_profiles": 1, "doc_nodes": 1, "semantic_edges": 1},
+            )
             self.assertGreater(payload["query_graph_probe"]["row_count"], 0)
             self.assertGreater(
                 payload["query_graph_probe"]["stage_counts"].get("semantic", 0)
@@ -74,6 +78,12 @@ class RuntimeSemanticFreshnessTests(unittest.TestCase):
             metadata={"provider_settings": settings},
         )
         store.finish_job(doc_node_job, "generated", "generated fresh doc-node edges")
+        blackbox_job = store.start_job(
+            "blackbox_profiles_batch",
+            "generated fresh blackbox profiles",
+            metadata={"provider_settings": settings},
+        )
+        store.finish_job(blackbox_job, "generated", "generated fresh blackbox profiles")
         document_id = store.add_document("linux-amdgpu", "code", "drivers/gpu/drm/amd/amdgpu/gfx.c")
         chunk_id = store.add_chunk(
             document_id,
@@ -147,10 +157,45 @@ class RuntimeSemanticFreshnessTests(unittest.TestCase):
                 "box_node_id": "docs/guide.md#box-cache-policy",
             },
         )
+        function_id = "function:linux-amdgpu:drivers/gpu/drm/amd/amdgpu/gfx.c:gfx_v10_0_program_cache"
+        store.add_edge(
+            function_id,
+            function_id,
+            "relates_to",
+            0.86,
+            stage="semantic",
+            source="ollama",
+            path="drivers/gpu/drm/amd/amdgpu/gfx.c",
+            provenance={
+                "extractor": "blackbox_profiles",
+                "provider": "ollama",
+                "model": "gemma4:e4b",
+                "job_id": blackbox_job,
+                "batch_id": 1,
+                "attempt_id": 1,
+                "candidate_id": f"concept:{function_id}",
+                "prompt_sha256": "a" * 64,
+                "response_sha256": "b" * 64,
+                "validator_version": "blackbox_profiles_v1",
+                "endpoint_id": function_id,
+                "endpoint_kind": "function",
+                "function": "gfx_v10_0_program_cache",
+                "function_name": "gfx_v10_0_program_cache",
+                "corpus_id": "linux-amdgpu",
+                "repo": "linux",
+                "blackbox": {
+                    "method": "blackbox_io",
+                    "inputs": ["GCVM_L2_CNTL"],
+                    "outputs": ["writes GCVM_L2_CNTL"],
+                    "observed_behavior": "writes the L2 control register",
+                },
+            },
+        )
         store.con.close()
         return {
             "index": index_job,
             "graph": graph_job,
             "semantic": semantic_job,
             "doc_nodes": doc_node_job,
+            "blackbox": blackbox_job,
         }

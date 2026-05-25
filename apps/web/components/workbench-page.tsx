@@ -806,7 +806,8 @@ export function WorkbenchPage({ pageId }: WorkbenchPageProps) {
   }, [apiGraph, selectedGraphNodeId]);
   const inspectorTitle = useMemo(() => {
     if (selectedGraphNode) {
-      return `Graph Node: ${selectedGraphNode.label ?? selectedGraphNode.id}`;
+      const label = selectedGraphNode.label ?? selectedGraphNode.id;
+      return graphNodeHasBlackboxProfile(selectedGraphNode) ? `Opened Blackbox: ${label}` : `System Boundary: ${label}`;
     }
     if (selectedEvidence) {
       return `Resolved Evidence: ${selectedEvidence.symbol}`;
@@ -1024,7 +1025,7 @@ export function WorkbenchPage({ pageId }: WorkbenchPageProps) {
     }
   }
 
-  async function runPageAction(options: { semanticMode?: "query" | "batch" | "doc-nodes" } = {}) {
+  async function runPageAction(options: { semanticMode?: "query" | "batch" | "doc-nodes" | "blackbox-profiles" } = {}) {
     if (config.id === "corpus") {
       const selectedIds = selectedCorpusIds.filter((id) => corpora.some((corpus) => corpus.id === id));
       const enabledResolverIds = resolverProfiles.filter((profile) => profile.enabled).map((profile) => profile.id);
@@ -1147,6 +1148,49 @@ export function WorkbenchPage({ pageId }: WorkbenchPageProps) {
             );
           } catch (error) {
             setActionMessage(error instanceof Error ? error.message : "document node extraction failed");
+          }
+          return;
+        }
+        if (options.semanticMode === "blackbox-profiles") {
+          setActionMessage("Generating blackbox profiles...");
+          try {
+            const blackboxPayload = {
+              mode: "blackbox-profiles",
+              ...workbenchDbPathPayload(),
+              ...semanticGenerationLimits("blackbox-profiles")
+            };
+            const response = await fetch("/api/workbench/semantic-edges", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify(blackboxPayload)
+            });
+            const payload = (await response.json()) as {
+              inventory_total?: number;
+              candidate_count?: number;
+              profile_count?: number;
+              edge_count?: number;
+              graph?: GraphPayload;
+              error?: string;
+            };
+            if (!response.ok) {
+              throw new Error(payload.error ?? `Blackbox profile API returned ${response.status}`);
+            }
+            if (payload.graph) {
+              const graphPayload = sanitizeGraphPayload(payload.graph) ?? { nodes: [], edges: [] };
+              setApiGraph(graphPayload);
+              setGraphEmptyMessage(
+                graphPayload.nodes.length || graphPayload.edges.length
+                  ? ""
+                  : "Blackbox profile job returned no graph data"
+              );
+            }
+            setActionMessage(
+              `Blackbox profiles generated: ${payload.profile_count ?? 0} profiles, ${
+                payload.edge_count ?? 0
+              } edges from ${payload.candidate_count ?? 0}/${payload.inventory_total ?? 0} candidates`
+            );
+          } catch (error) {
+            setActionMessage(error instanceof Error ? error.message : "blackbox profile generation failed");
           }
           return;
         }
@@ -1536,13 +1580,14 @@ export function WorkbenchPage({ pageId }: WorkbenchPageProps) {
     );
   }
 
-  function semanticGenerationLimits(mode: "query" | "batch" | "doc-nodes") {
+  function semanticGenerationLimits(mode: "query" | "batch" | "doc-nodes" | "blackbox-profiles") {
     const parsedLimit = Number(semanticLimitDraft);
     const parsedBatchSize = Number(semanticBatchSizeDraft);
     const configuredLimit =
       mode === "query"
         ? workbenchLimits.semantic?.queryLimit
         : workbenchLimits.semantic?.batchCandidateLimit;
+    const configuredBatchSize = mode === "blackbox-profiles" ? 1 : workbenchLimits.semantic?.batchSize;
     return {
       ...(Number.isFinite(parsedLimit) && parsedLimit > 0
         ? { limit: parsedLimit }
@@ -1551,8 +1596,8 @@ export function WorkbenchPage({ pageId }: WorkbenchPageProps) {
           : {}),
       ...(Number.isFinite(parsedBatchSize) && parsedBatchSize > 0
         ? { batchSize: parsedBatchSize }
-        : workbenchLimits.semantic?.batchSize !== undefined
-          ? { batchSize: workbenchLimits.semantic.batchSize }
+        : configuredBatchSize !== undefined
+          ? { batchSize: configuredBatchSize }
           : {})
     };
   }
@@ -1803,7 +1848,7 @@ export function WorkbenchPage({ pageId }: WorkbenchPageProps) {
               )}
             </section>
           ))}
-          <h3>Relationship Panel</h3>
+          <h3>Evidence Trail</h3>
           <div className="chain" data-testid="relationship-panel">
             {inspectorRelationshipLines.map((line) => (
               <p key={line}>
@@ -1836,6 +1881,14 @@ export function WorkbenchPage({ pageId }: WorkbenchPageProps) {
                 variant="secondary"
               >
                 Extract document nodes
+              </Button>
+              <Button
+                className="settings-button"
+                onClick={() => void runPageAction({ semanticMode: "blackbox-profiles" })}
+                type="button"
+                variant="secondary"
+              >
+                Generate blackbox profiles
               </Button>
             </>
           ) : null}
@@ -2873,7 +2926,7 @@ function buildGraphNodeInspectorSections(node: WeightedGraphNode): InspectorDeta
   const attr = isObjectRecord(node.attr) ? node.attr : {};
   const sections: InspectorDetailSection[] = [
     {
-      title: "Node Detail",
+      title: "System Boundary",
       body: [
         `kind=${node.kind ?? "unknown"}`,
         `weight=${formatNodeWeight(node.weight)}`,
@@ -2889,10 +2942,17 @@ function buildGraphNodeInspectorSections(node: WeightedGraphNode): InspectorDeta
       lines: conceptImplementations
     });
   }
+  const blackboxProfile = blackboxProfileLines(attr);
+  if (blackboxProfile.length) {
+    sections.push({
+      title: "Opened Blackbox",
+      lines: blackboxProfile
+    });
+  }
   const sources = sourceRecordLines(attr.source);
   if (sources.length) {
     sections.push({
-      title: "Source Records",
+      title: "Evidence Trail",
       lines: sources
     });
   }
@@ -2908,11 +2968,16 @@ function buildGraphNodeInspectorSections(node: WeightedGraphNode): InspectorDeta
   ]);
   if (metadata.length) {
     sections.push({
-      title: "Metadata",
+      title: "Raw Metadata",
       lines: metadata
     });
   }
   return sections;
+}
+
+function graphNodeHasBlackboxProfile(node: WeightedGraphNode): boolean {
+  const attr = isObjectRecord(node.attr) ? node.attr : {};
+  return isObjectRecord(attr.blackbox);
 }
 
 function buildLiveRelationshipLines(row: EvidenceRow, graph: GraphPayload | null): string[] {
@@ -2953,6 +3018,74 @@ function buildSelectedNodeRelationshipLines(node: WeightedGraphNode, graph: Grap
 function isConceptFunctionNode(node: WeightedGraphNode): boolean {
   const attr = isObjectRecord(node.attr) ? node.attr : {};
   return node.kind === "function" && attr.is_concept === true;
+}
+
+function blackboxProfileLines(attr: Record<string, unknown>): string[] {
+  const profile = isObjectRecord(attr.blackbox) ? attr.blackbox : {};
+  if (Object.keys(profile).length === 0) {
+    return [];
+  }
+  const lines: string[] = [];
+  const inputs = arrayOfStrings(profile.inputs);
+  if (inputs.length) {
+    lines.push(`Inputs: ${inputs.join(", ")}`);
+  }
+  const behavior = String(profile.observed_behavior ?? "").trim();
+  if (behavior) {
+    lines.push(`Behavior: ${behavior}`);
+  }
+  const outputs = arrayOfStrings(profile.outputs);
+  if (outputs.length) {
+    lines.push(`Outputs: ${outputs.join(", ")}`);
+  }
+  const explanation = String(profile.explanation_layer ?? "").trim();
+  if (explanation) {
+    lines.push(`Explains: ${explanation}`);
+  }
+  const evidence = String(profile.evidence ?? "").trim();
+  if (evidence) {
+    lines.push(`Evidence: ${evidence}`);
+  }
+  const generatedBy = [
+    ...arrayOfStrings(attr.providers),
+    ...arrayOfStrings(attr.models),
+    ...arrayOfStrings(attr.job_ids).map((jobId) => `job ${jobId}`)
+  ];
+  const rounds = blackboxGenerationRoundLine(attr);
+  if (rounds) {
+    lines.push(rounds);
+  }
+  const validation = blackboxGenerationValidationLine(attr);
+  if (validation) {
+    lines.push(validation);
+  }
+  if (generatedBy.length) {
+    lines.push(`Generated By: ${generatedBy.join(" ")}`);
+  }
+  return lines;
+}
+
+function blackboxGenerationRoundLine(attr: Record<string, unknown>): string {
+  const generation = isObjectRecord(attr.blackbox_generation) ? attr.blackbox_generation : {};
+  const sampleCount = Number(generation.sample_count ?? 0);
+  const required = Number(generation.required_agreeing_samples ?? 0);
+  const accepted = Number(generation.accepted_sample_count ?? 0);
+  const parts = [
+    Number.isFinite(sampleCount) && sampleCount > 0 ? `${sampleCount} samples` : "",
+    Number.isFinite(required) && required > 0 ? `${required} required` : "",
+    Number.isFinite(accepted) && accepted > 0 ? `${accepted} accepted` : ""
+  ].filter(Boolean);
+  return parts.length ? `Rounds: ${parts.join(", ")}` : "";
+}
+
+function blackboxGenerationValidationLine(attr: Record<string, unknown>): string {
+  const generation = isObjectRecord(attr.blackbox_generation) ? attr.blackbox_generation : {};
+  const status = String(generation.validator_status ?? "").trim();
+  const reasons = arrayOfStrings(generation.reason_codes).slice(0, 3);
+  if (!status && reasons.length === 0) {
+    return "";
+  }
+  return `Validation: ${[status, ...reasons].filter(Boolean).join(" ")}`;
 }
 
 function conceptImplementationLines(attr: Record<string, unknown>): string[] {
@@ -3740,13 +3873,13 @@ function GlobalNetworkGraph({
   const effectiveMaxNodes = maxNodes ?? limits.graph?.visibleNodeBudget ?? filteredGraphData.nodes.length;
   const effectiveMaxEdges = maxEdges ?? limits.graph?.visibleEdgeBudget ?? filteredGraphData.edges.length;
   const summaryLimit = Math.max(1, limits.graph?.accessibilitySummaryLimit ?? (filteredGraphData.nodes.length || 1));
-  const layerSummary = graphLayerSummary(filteredGraphData.edges);
+  const layerSummary = graphLayerSummary(filteredGraphData);
   const provenanceSummary = graphProvenanceSummary(filteredGraphData.edges);
 
   return (
     <div className="network-preview network-preview--global" data-testid={testId}>
       <div className="network-preview__header">
-        <span>Global Relation Graph</span>
+        <span>System Boundary Graph</span>
         <ToneBadge tone="code">weighted connections</ToneBadge>
         {layerSummary ? <ToneBadge tone="success">layers {layerSummary}</ToneBadge> : null}
         {provenanceSummary ? <ToneBadge tone="code">provenance {provenanceSummary}</ToneBadge> : null}
@@ -3798,16 +3931,61 @@ function GlobalNetworkGraph({
   );
 }
 
-function graphLayerSummary(edges: Array<{ stage?: string }>): string {
+function graphLayerSummary(graph: GraphPayload): string {
   const counts = new Map<string, number>();
-  for (const edge of edges) {
-    const stage = graphEdgeStage(edge);
-    counts.set(stage, (counts.get(stage) ?? 0) + 1);
+  for (const edge of graph.edges) {
+    incrementGraphOption(counts, graphEdgeLayer(edge));
+  }
+  for (const node of graph.nodes) {
+    const attr = isObjectRecord(node.attr) ? node.attr : {};
+    if (isObjectRecord(attr.blackbox)) {
+      incrementGraphOption(counts, "blackbox_profile");
+    }
+    if (attr.is_concept === true) {
+      incrementGraphOption(counts, "concept_merge");
+    }
   }
   return Array.from(counts.entries())
     .sort(([left], [right]) => left.localeCompare(right))
-    .map(([stage, count]) => `${stage}: ${count}`)
+    .map(([layer, count]) => `${layer}: ${count}`)
     .join(" ");
+}
+
+function graphEdgeLayer(edge: GraphPayload["edges"][number]): string {
+  const attr = isObjectRecord(edge.attr) ? edge.attr : {};
+  const explicit = typeof edge.layer === "string" ? edge.layer.trim() : "";
+  if (explicit) {
+    return explicit;
+  }
+  const extractors = dedupeStrings(
+    stringValuesFromUnknown(
+      attr.extractor,
+      attr.extractors,
+      ...recordValuesFromUnknown(attr.source, attr.sources).flatMap((source) => [source.extractor, source.extractors])
+    )
+  );
+  const relationshipSources = dedupeStrings(
+    stringValuesFromUnknown(attr.relationship_source, attr.relationship_sources)
+  );
+  const sources = graphEdgeSourceValues(edge);
+  const stage = graphEdgeStage(edge);
+  if (
+    extractors.includes("blackbox_profiles") ||
+    sources.includes("blackbox_profiles") ||
+    relationshipSources.includes("blackbox_profile_boundary")
+  ) {
+    return "blackbox_relationship";
+  }
+  if (extractors.includes("doc_nodes")) {
+    return "semantic_doc_node";
+  }
+  if (stage === "deterministic") {
+    return "deterministic_ast";
+  }
+  if (stage === "semantic") {
+    return "semantic_edge";
+  }
+  return stage;
 }
 
 function graphProvenanceSummary(edges: GraphPayload["edges"]): string {
@@ -3859,7 +4037,8 @@ function filterGraphDataByControls(
   const nodeIds = new Set(edges.flatMap((edge) => [edge.src, edge.dst]));
   return {
     nodes: edges.length ? graph.nodes.filter((node) => nodeIds.has(node.id)) : graph.nodes,
-    edges
+    edges,
+    meta: graph.meta
   };
 }
 
@@ -3927,6 +4106,7 @@ function graphEdgeSourceValues(edge: GraphPayload["edges"][number]): string[] {
 
 function graphEdgeProvenanceLabel(edge: GraphPayload["edges"][number]): string {
   const attr = isObjectRecord(edge.attr) ? edge.attr : {};
+  const provenanceType = typeof edge.provenance_type === "string" ? edge.provenance_type : "";
   const sourceRecords = recordValuesFromUnknown(attr.source, attr.sources);
   const providers = dedupeStrings(
     stringValuesFromUnknown(
@@ -3958,7 +4138,7 @@ function graphEdgeProvenanceLabel(edge: GraphPayload["edges"][number]): string {
   const dispatchLabel = dispatch
     ? `${dispatch === "ambiguous" ? "dynamic dispatch" : dispatch}${candidateCount > 0 ? ` ${candidateCount} candidates` : ""}`
     : "";
-  return [providerModel, jobIds[0] ? `job ${jobIds[0]}` : "", source ? `source ${source}` : "", dispatchLabel]
+  return [providerModel, jobIds[0] ? `job ${jobIds[0]}` : "", source ? `source ${source}` : "", provenanceType, dispatchLabel]
     .filter(Boolean)
     .join(" ");
 }
@@ -4239,7 +4419,8 @@ function sanitizeGraphPayload(graph: GraphPayload | null | undefined): GraphPayl
       }
     }];
   });
-  return { nodes, edges };
+  const meta = isObjectRecord(graph.meta) ? graph.meta : undefined;
+  return meta ? { nodes, edges, meta } : { nodes, edges };
 }
 
 function normalizeGraphKind(rawKind: string | undefined) {
